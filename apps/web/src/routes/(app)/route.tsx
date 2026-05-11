@@ -1,13 +1,10 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/(app)')({
-	beforeLoad: ({ context, location }) => {
+	beforeLoad: ({ context }) => {
 		if (!context.session) {
 			throw redirect({
-				to: '/sign-in',
-				search: {
-					redirect: location.href
-				}
+				to: '/sign-in'
 			});
 		}
 	},
