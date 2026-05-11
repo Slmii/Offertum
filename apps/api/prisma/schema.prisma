@@ -4,14 +4,54 @@
 // - pg driver adapter wires up the actual connection in src/prisma/prisma.service.ts.
 
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "cjs"
+    provider     = "prisma-client"
+    output       = "../src/generated/prisma"
+    moduleFormat = "cjs"
 }
 
 datasource db {
-  provider = "postgresql"
+    provider = "postgresql"
 }
 
-// Models intentionally left empty for the scaffolding step.
-// First real model lands in W1.4 (User, Organization, Membership).
+// W1.4 — Initial tenancy schema.
+// Single owner + single teammate per org enforced in application logic
+// (Prisma can't express "max N rows by FK"; see OrganizationsService).
+
+enum MembershipRole {
+    OWNER
+    TEAMMATE
+}
+
+model User {
+    id        String   @id @default(uuid()) @db.Uuid
+    email     String   @unique
+    name      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    memberships Membership[]
+}
+
+model Organization {
+    id        String   @id @default(uuid()) @db.Uuid
+    name      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    memberships Membership[]
+}
+
+model Membership {
+    id             String         @id @default(uuid()) @db.Uuid
+    userId         String         @db.Uuid
+    organizationId String         @db.Uuid
+    role           MembershipRole
+    createdAt      DateTime       @default(now())
+    updatedAt      DateTime       @updatedAt
+
+    user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, organizationId])
+    @@index([organizationId])
+}

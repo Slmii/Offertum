@@ -43,22 +43,22 @@ cd ../.. && npm run dev
 
 Root (runs across all apps via turbo):
 
-| Script | What |
-|---|---|
-| `npm run dev` | api + web in watch mode |
-| `npm run build` | builds both apps |
-| `npm run typecheck` | tsc on both |
-| `npm run lint` | eslint on both |
-| `npm run format` | prettier --write |
+| Script              | What                    |
+| ------------------- | ----------------------- |
+| `npm run dev`       | api + web in watch mode |
+| `npm run build`     | builds both apps        |
+| `npm run typecheck` | tsc on both             |
+| `npm run lint`      | eslint on both          |
+| `npm run format`    | prettier --write        |
 
 `apps/api`:
 
-| Script | What |
-|---|---|
+| Script              | What                      |
+| ------------------- | ------------------------- |
 | `db:up` / `db:down` | start/stop local Postgres |
-| `db:generate` | regenerate Prisma client |
-| `db:migrate` | run dev migration |
-| `db:studio` | open Prisma Studio |
+| `db:generate`       | regenerate Prisma client  |
+| `db:migrate`        | run dev migration         |
+| `db:studio`         | open Prisma Studio        |
 
 ## Deployment
 

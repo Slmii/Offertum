@@ -1,4 +1,6 @@
 import { AppModule } from '@/app.module';
+import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { config } from 'dotenv';
@@ -16,6 +18,16 @@ async function bootstrap() {
 		credentials: true
 	});
 	app.setGlobalPrefix('api');
+
+	app.useGlobalPipes(
+		new ValidationPipe({
+			whitelist: true,
+			forbidNonWhitelisted: true,
+			transform: true,
+			transformOptions: { enableImplicitConversion: true }
+		})
+	);
+	app.useGlobalFilters(new AllExceptionsFilter());
 
 	const swaggerConfig = new DocumentBuilder()
 		.setTitle('Quoteom API')

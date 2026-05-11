@@ -1,0 +1,18 @@
+# Prisma generated client
+apps/api/src/generated/
+
+# TanStack Router auto-generated route tree
+apps/web/src/routeTree.gen.ts
+
+# Build outputs
+**/dist/
+**/.output/
+**/.nitro/
+**/.tanstack/
+**/.turbo/
+
+# Dependencies
+**/node_modules/
+
+# Lockfiles
+package-lock.json
