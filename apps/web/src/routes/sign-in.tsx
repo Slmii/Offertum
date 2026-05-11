@@ -1,4 +1,4 @@
-import { useSignInWithEmail } from '@/lib/hooks/auth.hooks';
+import { useSignInWithEmail } from '@/lib/queries/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';

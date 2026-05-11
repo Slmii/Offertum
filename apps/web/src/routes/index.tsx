@@ -1,4 +1,4 @@
-import { useSession, useSignOut } from '@/lib/hooks/auth.hooks';
+import { useSignOut } from '@/lib/queries/auth';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
@@ -12,18 +12,11 @@ export const Route = createFileRoute('/')({
 
 function HomePage() {
 	const navigate = useNavigate();
-	const session = useSession();
+	// Session is populated by __root.tsx's beforeLoad and flowed down as route context.
+	const { session } = Route.useRouteContext();
 	const signOut = useSignOut();
 
-	if (session.isLoading) {
-		return (
-			<Container maxWidth='sm' sx={{ py: 8 }}>
-				<Typography color='text.secondary'>Loading...</Typography>
-			</Container>
-		);
-	}
-
-	const user = session.data?.user;
+	const user = session?.user;
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>

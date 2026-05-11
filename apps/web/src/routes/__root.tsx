@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { sessionQueryOptions } from '@/lib/queries/auth';
 import { theme } from '@/lib/utils/theme.utils';
 import createCache from '@emotion/cache';
 import { CacheProvider } from '@emotion/react';
@@ -6,17 +7,18 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
 export const Route = createRootRouteWithContext<{
 	queryClient: QueryClient;
 }>()({
-	// beforeLoad: async ({ context }) => {
-	// 	const user = await context.queryClient.ensureQueryData(authQueryOptions);
-	// 	return { userId: user.userId };
-	// },
+	beforeLoad: async ({ context }) => {
+		const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
+		console.log('Session loaded in beforeLoad:', session); // Debug log to verify session data
+		return { session };
+	},
 	head: () => ({
 		meta: [
 			{

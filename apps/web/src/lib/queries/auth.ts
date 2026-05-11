@@ -1,5 +1,6 @@
 import { api, postForm } from '@/lib/api/client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 
 export interface Session {
 	user?: {
@@ -17,15 +18,19 @@ const AuthKeys = {
 	csrf: ['auth', 'csrf'] as const
 };
 
+async function fetchSession(): Promise<Session | null> {
+	const session = await api<Session>('/api/auth/session');
+	// Auth.js returns `{}` when there's no session; normalize to null.
+	return session?.user ? session : null;
+}
+
+export const sessionQueryOptions = queryOptions({
+	queryKey: AuthKeys.session,
+	queryFn: fetchSession
+});
+
 export function useSession() {
-	return useQuery({
-		queryKey: AuthKeys.session,
-		queryFn: async () => {
-			const session = await api<Session>('/api/auth/session');
-			// Auth.js returns `{}` when there's no session; normalize to null.
-			return 'user' in session && session.user ? session : null;
-		}
-	});
+	return useQuery(sessionQueryOptions);
 }
 
 async function getCsrfToken(): Promise<string> {
@@ -44,13 +49,16 @@ export function useSignInWithEmail() {
 
 export function useSignOut() {
 	const queryClient = useQueryClient();
+	const router = useRouter();
 	return useMutation({
 		mutationFn: async () => {
 			const csrfToken = await getCsrfToken();
 			await postForm('/api/auth/signout', { csrfToken });
 		},
-		onSuccess: () => {
+		onSuccess: async () => {
 			queryClient.setQueryData(AuthKeys.session, null);
+			// Re-runs the route tree's beforeLoad → new context flows to all routes.
+			await router.invalidate();
 		}
 	});
 }
