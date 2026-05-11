@@ -1,8 +1,14 @@
 import type { EnvSchema } from '@/config/env.schema';
-import { LOCAL_TRIAL_MS } from '@/modules/billing/billing.constants';
+import {
+	LIVE_SUBSCRIPTION_STATUSES,
+	LOCAL_TRIAL_MS,
+	PER_SEAT_OVERAGE_CENTS,
+	SEATS_INCLUDED,
+	SEAT_SYNC_STATUSES
+} from '@/modules/billing/billing.constants';
 import type { BillingState, BillingStatusResponseDto } from '@/modules/billing/dto/billing-status.response.dto';
 import { PrismaService } from '@/modules/prisma/prisma.service';
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 
@@ -136,13 +142,32 @@ export class BillingService {
 			throw new InternalServerErrorException('STRIPE_PRICE_ID is not configured');
 		}
 
+		// Enforce one live subscription per org. The UI hides the Subscribe button in these
+		// states (so this path is normally unreachable), but a direct POST would otherwise
+		// create a duplicate Stripe sub on the same customer. Direct the user to the Portal
+		// to manage what they already have.
+		const existing = await this.prisma.subscription.findUnique({
+			where: { organizationId },
+			select: { status: true }
+		});
+
+		if (existing?.status && LIVE_SUBSCRIPTION_STATUSES.includes(existing.status)) {
+			throw new ConflictException(
+				`Organization already has an active subscription (${existing.status}). Use the Customer Portal to manage it.`
+			);
+		}
+
 		const customerId = await this.getOrCreateCustomer(organizationId);
 		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
+		// Initial seat count = current active memberships. The Stripe Price is tiered, so
+		// passing `quantity: N` lets Stripe compute base + overage automatically. A subsequent
+		// invitation will call `syncSeatCount` to bump the quantity mid-cycle (prorated).
+		const seatCount = await this.countActiveSeats(organizationId);
 
 		const session = await this.stripe.checkout.sessions.create({
 			customer: customerId,
 			mode: 'subscription',
-			line_items: [{ price: priceId, quantity: 1 }],
+			line_items: [{ price: priceId, quantity: seatCount }],
 			// Payment methods are configured in the Stripe Dashboard (Payment Method
 			// Configurations) — DO NOT pass `payment_method_types` here. Letting Stripe
 			// pick dynamically maximizes conversion + lets you enable iDEAL/SEPA/cards
@@ -258,13 +283,20 @@ export class BillingService {
 	 * notice. No Stripe calls — pure DB read.
 	 */
 	async getStatus(organizationId: string): Promise<BillingStatusResponseDto> {
-		const [sub, org] = await Promise.all([
+		const [sub, org, seatsUsed] = await Promise.all([
 			this.prisma.subscription.findUnique({ where: { organizationId } }),
 			this.prisma.organization.findUniqueOrThrow({
 				where: { id: organizationId },
 				select: { createdAt: true }
-			})
+			}),
+			this.countActiveSeats(organizationId)
 		]);
+
+		const seats = {
+			used: seatsUsed,
+			included: SEATS_INCLUDED,
+			overagePerSeatCents: PER_SEAT_OVERAGE_CENTS
+		};
 
 		// Stripe-tracked path: status is the source of truth.
 		if (sub?.status) {
@@ -273,7 +305,8 @@ export class BillingService {
 				currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
 				cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
 				paymentMethodBrand: sub.paymentMethodBrand,
-				paymentMethodLast4: sub.paymentMethodLast4
+				paymentMethodLast4: sub.paymentMethodLast4,
+				seats
 			};
 		}
 
@@ -286,8 +319,69 @@ export class BillingService {
 			currentPeriodEnd: localTrialEnd.toISOString(),
 			cancelAtPeriodEnd: false,
 			paymentMethodBrand: null,
-			paymentMethodLast4: null
+			paymentMethodLast4: null,
+			seats
 		};
+	}
+
+	/**
+	 * Reconcile Stripe's billed seat count with the org's current membership count.
+	 * Called after any membership change (invitation accepted, member removed). Idempotent.
+	 *
+	 *  - No Stripe subscription yet → no-op (the seat count will be picked up at Checkout).
+	 *  - Status not in SEAT_SYNC_STATUSES → no-op (canceled / unpaid / expired).
+	 *  - Stripe already shows the right quantity → no-op (avoid pointless API calls + proration noise).
+	 *  - Otherwise → `subscriptions.update` with `proration_behavior: 'create_prorations'`.
+	 *
+	 * Failures are logged but not rethrown — the caller (e.g. invitation acceptance) should
+	 * not be rolled back just because Stripe was unreachable. A subsequent change re-runs sync.
+	 */
+	async syncSeatCount(organizationId: string): Promise<void> {
+		const sub = await this.prisma.subscription.findUnique({
+			where: { organizationId },
+			select: { stripeSubscriptionId: true, status: true }
+		});
+
+		if (!sub?.stripeSubscriptionId || !sub.status || !SEAT_SYNC_STATUSES.includes(sub.status)) {
+			return;
+		}
+
+		const desiredQuantity = await this.countActiveSeats(organizationId);
+
+		try {
+			const remote = await this.stripe.subscriptions.retrieve(sub.stripeSubscriptionId, {
+				expand: ['items']
+			});
+
+			const item = remote.items.data[0];
+			if (!item) {
+				this.logger.warn(`Subscription ${sub.stripeSubscriptionId} has no items — cannot sync seats`);
+				return;
+			}
+
+			if (item.quantity === desiredQuantity) {
+				return;
+			}
+
+			await this.stripe.subscriptions.update(sub.stripeSubscriptionId, {
+				items: [{ id: item.id, quantity: desiredQuantity }],
+				proration_behavior: 'create_prorations'
+			});
+
+			this.logger.log(
+				`Seat sync for org ${organizationId}: ${item.quantity ?? '?'} → ${desiredQuantity} on ${sub.stripeSubscriptionId}`
+			);
+		} catch (error) {
+			this.logger.error(
+				`Seat sync failed for org ${organizationId}: ${error instanceof Error ? error.message : 'unknown'}`
+			);
+		}
+	}
+
+	private async countActiveSeats(organizationId: string): Promise<number> {
+		// Active membership = a row in Membership. We don't soft-delete; if it exists, the
+		// user has access and should count toward the seat bill.
+		return this.prisma.membership.count({ where: { organizationId } });
 	}
 
 	/**

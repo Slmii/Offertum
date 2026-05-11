@@ -9,6 +9,22 @@
 export const ENTITLED_STRIPE_STATUSES: ReadonlyArray<string> = ['trialing', 'active', 'past_due'];
 
 /**
+ * Stripe Subscription statuses that should block a new Checkout session. We allow at most
+ * one live subscription per org — if the org is in any of these states, send them to the
+ * Customer Portal to manage the existing sub instead of letting them create a second one.
+ *
+ * `incomplete` is included because Stripe still considers the row live until it expires;
+ * starting a new Checkout would leave two subscriptions on the customer.
+ */
+export const LIVE_SUBSCRIPTION_STATUSES: ReadonlyArray<string> = [
+	'trialing',
+	'active',
+	'past_due',
+	'paused',
+	'incomplete'
+];
+
+/**
  * Length of the local-grace trial that starts on org creation. Distinct from Stripe's
  * `subscription_data.trial_period_days` (which only starts once the user has gone through
  * Checkout and attached a payment method). This window lets a brand-new org explore the
@@ -29,3 +45,44 @@ export const READ_METHODS: ReadonlyArray<string> = ['GET', 'HEAD', 'OPTIONS'];
  * to redirect to /billing instead of showing a generic error.
  */
 export const BILLING_REQUIRED_CODE = 'billing_required';
+
+/**
+ * Seats included in the €149 base price. Any additional active membership beyond this
+ * gets billed at `PER_SEAT_OVERAGE_CENTS` per month via Stripe's graduated tier 2.
+ *
+ * MUST match the Stripe Price's `tiers` configuration. If you change either of these
+ * constants, update the Stripe Price (Dashboard → Products → Quoteom monthly).
+ */
+export const SEATS_INCLUDED = 3;
+export const PER_SEAT_OVERAGE_CENTS = 3000;
+
+/**
+ * States in which we cap orgs at `SEATS_INCLUDED` seats. Prevents a trial user from
+ * inviting an unbounded team and then being surprised by a large first invoice when
+ * the trial ends. Once they actually subscribe (`active | past_due | paused`), they can
+ * grow past the included tier and pay overage.
+ */
+export const TRIAL_STATES: ReadonlyArray<string> = ['local_trial', 'trialing'];
+
+/**
+ * Error code surfaced when an invitation is rejected because the org is at its trial
+ * seat cap. Web client switches on this to show "upgrade to invite more" inline rather
+ * than auto-redirecting like the `billing_required` 402 does.
+ */
+export const TRIAL_SEAT_LIMIT_CODE = 'trial_seat_limit';
+
+/**
+ * Stripe Subscription statuses where it's safe to call `subscriptions.update` to change
+ * the seat quantity. `canceled | incomplete_expired | unpaid` either don't have an
+ * updateable sub or are in a state where Stripe will reject quantity changes.
+ *
+ * `past_due` is included by user policy: invites stay open during dunning so the org
+ * doesn't lose the ability to add a teammate while their card is being retried.
+ */
+export const SEAT_SYNC_STATUSES: ReadonlyArray<string> = [
+	'trialing',
+	'active',
+	'past_due',
+	'paused',
+	'incomplete'
+];

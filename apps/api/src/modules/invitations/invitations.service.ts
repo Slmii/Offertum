@@ -8,9 +8,18 @@ import {
 } from '@/lib/errors';
 import { buildInviteEmail } from '@/lib/mails/invite.email';
 import { sendEmail } from '@/lib/mails/send';
+import { SEATS_INCLUDED, TRIAL_SEAT_LIMIT_CODE, TRIAL_STATES } from '@/modules/billing/billing.constants';
+import { BillingService } from '@/modules/billing/billing.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import { ConflictException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+	ConflictException,
+	GoneException,
+	HttpException,
+	HttpStatus,
+	Injectable,
+	NotFoundException
+} from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 
 const INVITATION_TTL_DAYS = 7;
@@ -33,7 +42,8 @@ export interface AcceptResult {
 export class InvitationsService {
 	constructor(
 		private readonly prisma: PrismaService,
-		private readonly config: ConfigService<EnvSchema, true>
+		private readonly config: ConfigService<EnvSchema, true>,
+		private readonly billing: BillingService
 	) {}
 
 	async create(input: CreateInvitationInput): Promise<{ id: string; token: string }> {
@@ -44,6 +54,8 @@ export class InvitationsService {
 		if (!organization) {
 			throw new NotFoundException(ORGANIZATION_NOT_FOUND);
 		}
+
+		await this.assertSeatBudget(input.organizationId);
 
 		const token = randomBytes(INVITATION_TOKEN_BYTES).toString('hex');
 		const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -140,6 +152,51 @@ export class InvitationsService {
 			};
 		});
 
+		// Reconcile Stripe's billed quantity with the new membership count. Best-effort: if
+		// the API is unreachable, the invitation already committed — we log and move on.
+		// A subsequent sync (next invite, or a webhook-driven re-sync) will fix the drift.
+		await this.billing.syncSeatCount(result.organizationId);
+
 		return result;
+	}
+
+	/**
+	 * Block new invitations once a trial org reaches `SEATS_INCLUDED`. Counts both active
+	 * memberships and pending (un-accepted, un-expired) invitations — otherwise an owner
+	 * could fan out 20 invites during trial and let each accept push the count past 3.
+	 *
+	 * Skipped for paying orgs (`active | past_due | paused | incomplete`): they pay overage
+	 * for any seat beyond the included tier.
+	 */
+	private async assertSeatBudget(organizationId: string): Promise<void> {
+		const status = await this.billing.getStatus(organizationId);
+		if (!TRIAL_STATES.includes(status.state)) {
+			return;
+		}
+
+		const [memberCount, pendingInvites] = await Promise.all([
+			this.prisma.membership.count({ where: { organizationId } }),
+			this.prisma.invitation.count({
+				where: {
+					organizationId,
+					acceptedAt: null,
+					expiresAt: { gt: new Date() }
+				}
+			})
+		]);
+
+		if (memberCount + pendingInvites < SEATS_INCLUDED) {
+			return;
+		}
+
+		throw new HttpException(
+			{
+				statusCode: HttpStatus.PAYMENT_REQUIRED,
+				code: TRIAL_SEAT_LIMIT_CODE,
+				message: `Trial accounts are limited to ${SEATS_INCLUDED} seats. Subscribe to invite more teammates.`,
+				billingPath: '/billing'
+			},
+			HttpStatus.PAYMENT_REQUIRED
+		);
 	}
 }

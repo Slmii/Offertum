@@ -1,8 +1,7 @@
-import { api } from '@/lib/api/client';
 import { getBillingStatusServer } from '@/lib/api/billing.api';
+import { api } from '@/lib/api/client';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-
-export type { BillingState, BillingStatus } from '@/lib/api/billing.api';
+export type { BillingSeats, BillingState, BillingStatus } from '@/lib/api/billing.api';
 
 interface CheckoutSessionResponse {
 	url: string;

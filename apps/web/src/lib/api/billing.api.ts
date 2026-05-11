@@ -13,12 +13,19 @@ export type BillingState =
 	| 'incomplete'
 	| 'incomplete_expired';
 
+export interface BillingSeats {
+	used: number;
+	included: number;
+	overagePerSeatCents: number;
+}
+
 export interface BillingStatus {
 	state: BillingState;
 	currentPeriodEnd: string | null;
 	cancelAtPeriodEnd: boolean;
 	paymentMethodBrand: string | null;
 	paymentMethodLast4: string | null;
+	seats: BillingSeats;
 }
 
 /**

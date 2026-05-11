@@ -108,6 +108,9 @@ function StatusPanel({ status }: { status: BillingStatus }) {
 				</Alert>
 			)}
 
+			<Divider sx={{ my: 2 }} />
+			<SeatsLine seats={status.seats} state={state} />
+
 			{paymentMethodBrand && paymentMethodLast4 && (
 				<>
 					<Divider sx={{ my: 2 }} />
@@ -118,6 +121,53 @@ function StatusPanel({ status }: { status: BillingStatus }) {
 			)}
 		</Box>
 	);
+}
+
+function SeatsLine({ seats, state }: { seats: BillingStatus['seats']; state: BillingStatus['state'] }) {
+	const isTrial = state === 'local_trial' || state === 'trialing';
+	const overage = Math.max(0, seats.used - seats.included);
+	const overageCents = overage * seats.overagePerSeatCents;
+	const remaining = Math.max(0, seats.included - seats.used);
+
+	return (
+		<Box>
+			<Typography variant='body2'>
+				<strong>Seats:</strong> {seats.used} used · {seats.included}{' '}
+				{isTrial ? 'max during trial' : 'included in base price'}
+			</Typography>
+
+			{isTrial && (
+				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
+					{remaining > 0
+						? `You can invite ${remaining} more teammate${remaining === 1 ? '' : 's'} during the trial. Subscribe to grow past ${seats.included} seats.`
+						: `Trial seat limit reached. Subscribe to invite more teammates.`}
+				</Typography>
+			)}
+
+			{!isTrial && overage > 0 && (
+				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
+					{overage} extra seat{overage === 1 ? '' : 's'} ×{' '}
+					{formatEuros(seats.overagePerSeatCents)}/mo = <strong>{formatEuros(overageCents)}/mo overage</strong>
+				</Typography>
+			)}
+
+			{!isTrial && overage === 0 && remaining > 0 && (
+				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
+					Invite up to {remaining} more without overage charges.
+				</Typography>
+			)}
+		</Box>
+	);
+}
+
+function formatEuros(cents: number): string {
+	// Deterministic across SSR/client — same reasoning as formatDate.
+	const whole = Math.floor(cents / 100);
+	const remainder = cents % 100;
+	if (remainder === 0) {
+		return `€${whole}`;
+	}
+	return `€${whole}.${remainder.toString().padStart(2, '0')}`;
 }
 
 function stateChip(state: BillingStatus['state']): {

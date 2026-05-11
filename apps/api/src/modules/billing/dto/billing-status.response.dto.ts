@@ -16,6 +16,15 @@ export type BillingState =
 	| 'incomplete'
 	| 'incomplete_expired';
 
+export class BillingSeatsDto {
+	/** Active memberships on the org right now. */
+	used!: number;
+	/** Seats included in the base price (graduated tier 1). */
+	included!: number;
+	/** Per-seat price for seats beyond `included`, in cents (EUR). */
+	overagePerSeatCents!: number;
+}
+
 export class BillingStatusResponseDto {
 	state!: BillingState;
 
@@ -32,4 +41,6 @@ export class BillingStatusResponseDto {
 
 	paymentMethodBrand!: string | null;
 	paymentMethodLast4!: string | null;
+
+	seats!: BillingSeatsDto;
 }

@@ -335,6 +335,69 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] Hit the write route.
 - [ ] **Expect** HTTP 2xx. Stripe dunning is handling the retry; we don't lock the customer out mid-retry.
 
+### BILLING-16: Per-seat — invite within included tier
+- [ ] Fresh org with 1 member (owner). Run BILLING-01 → status `trialing`, Stripe sub `quantity = 1`.
+- [ ] Send 2 invitations and accept both → org now has 3 active memberships.
+- [ ] **Expect** `stripe listen` shows `customer.subscription.updated` events on each accept (quantity bumps).
+- [ ] **Expect** in Stripe Dashboard: subscription `quantity` = 3.
+- [ ] **Expect** Stripe upcoming invoice: 1 × tier-1 line item = €149.00 (no overage line). Verify via `stripe invoices upcoming --subscription <sub_id>`.
+- [ ] **Expect** `/billing` UI shows "Seats: 3 used · 3 included in base price" with no overage line.
+
+### BILLING-17: Per-seat — invite past included tier
+- [ ] Continuing from BILLING-16 (org at 3 seats). Send + accept a 4th invitation.
+- [ ] **Expect** `stripe listen` shows another `customer.subscription.updated`; Stripe sub `quantity = 4`.
+- [ ] **Expect** Stripe upcoming invoice shows two line items: tier-1 flat €149.00, tier-2 1 × €30.00 = €30.00, plus a proration credit/charge for the partial period.
+- [ ] **Expect** `/billing` UI shows "Seats: 4 used · 3 included" + "1 extra seat × €30/mo = €30/mo overage".
+- [ ] Add a 5th member → overage line becomes "2 extra seats × €30/mo = €60/mo overage".
+
+### BILLING-18: Per-seat — seat sync during trialing
+- [ ] During the 14-day Stripe trial (BILLING-01), invite a 4th member.
+- [ ] **Expect** `stripe listen` shows `customer.subscription.updated` with `quantity: 4`, **no** invoice yet (still trialing).
+- [ ] **Expect** advancing past the trial end via test clock: the first real invoice charges €149 base + €30 overage = €179 (plus tax if applicable).
+
+### BILLING-19: Per-seat — sync skipped during local trial
+- [ ] Brand-new org, never hit Checkout. Invite + accept a 2nd member.
+- [ ] **Expect** no Stripe API calls (`stripe listen` shows nothing); API logs do **not** include a "Seat sync" line.
+- [ ] **Expect** `/billing` shows local_trial state + accurate seat count.
+
+### BILLING-22: Trial seat cap — block invites past included tier
+- [ ] Fresh org, no Subscription yet (local_trial). Owner = 1 active member.
+- [ ] Invite teammate 1 (2 members total once accepted) → succeeds.
+- [ ] Invite teammate 2 (3 members) → succeeds.
+- [ ] Send a 3rd invitation (4th seat) → **expect** HTTP 402 with body `{ statusCode: 402, code: 'trial_seat_limit', message: 'Trial accounts are limited to 3 seats. Subscribe to invite more teammates.', billingPath: '/billing' }`.
+- [ ] **Expect** no `Invitation` row created; no email sent.
+- [ ] **Expect** `/billing` UI seats line reads "3 used · 3 max during trial — Trial seat limit reached. Subscribe to invite more teammates."
+
+### BILLING-23: Trial seat cap — pending invitations count toward the cap
+- [ ] Fresh org, owner = 1 active member. Send 2 invitations but **do not accept** them yet.
+- [ ] Send a 3rd invitation → **expect** HTTP 402 `trial_seat_limit` (1 active + 2 pending = 3, at cap).
+- [ ] **Expect** `/billing` UI still shows `seats.used = 1` (UI only counts accepted memberships) but the API correctly enforces the combined count.
+
+### BILLING-24: Seat cap stays during Stripe trial, lifts at `active`
+- [ ] Continuing from BILLING-22 (org at 3 seats, local_trial), run BILLING-01 (subscribe with `4242…`).
+- [ ] Status flips to `trialing`. **Stripe trial is still a "trial state"** per `TRIAL_STATES = ['local_trial', 'trialing']`. Re-attempting a 4th invitation → still HTTP 402 `trial_seat_limit`. By design — the user said "no more seats before the trial has ended".
+- [ ] Use a Stripe test clock to advance past trial end → status webhook flips to `active`.
+- [ ] Send a 4th invitation → **expect** HTTP 200; invitation row created; on accept, `syncSeatCount` bumps Stripe quantity to 4 and the next invoice carries a €30 proration line.
+- [ ] **Expect** `/billing` UI now shows "1 extra seat × €30/mo = €30/mo overage" instead of the trial seat-cap copy.
+
+### BILLING-25: Trial seat cap — expired pending invites don't count
+- [ ] Set up an org with 2 active members + 1 invitation whose `expiresAt < NOW()` (manually backdate via psql).
+- [ ] Send a new invitation → **expect** HTTP 200 (2 active + 0 valid pending = 2, below cap of 3). Expired invitations are correctly excluded from the budget.
+
+### BILLING-21: One live subscription per org (defensive backend check)
+- [ ] Complete BILLING-01 so the org has `status = 'trialing'`.
+- [ ] In a terminal: `curl -i -X POST http://localhost:3001/api/billing/checkout-session -b "auth-cookie-jar.txt"` (or replay the request from DevTools Network with the UI button hidden).
+- [ ] **Expect** HTTP `409 Conflict` with body containing `"Organization already has an active subscription (trialing). Use the Customer Portal to manage it."`.
+- [ ] **Expect** Stripe Dashboard: **no** new subscription created on the customer; the existing one stands alone.
+- [ ] Repeat with `status` manually set in psql to each of `active`, `past_due`, `paused`, `incomplete` — same 409 response.
+- [ ] Manually set `status = 'canceled'` → Checkout proceeds (canceled isn't a live state, customer can re-subscribe).
+
+### BILLING-20: Per-seat — sync skipped after cancellation
+- [ ] Run BILLING-07b (immediate Dashboard cancel) → status `canceled`.
+- [ ] Invite + accept a new member.
+- [ ] **Expect** no Stripe API calls (`SEAT_SYNC_STATUSES` excludes `canceled`); API logs do not include a "Seat sync" line.
+- [ ] **Expect** `/billing` shows "Seats: N used · 3 included" using the local membership count, regardless of Stripe state.
+
 ---
 
 ## How to maintain this doc
