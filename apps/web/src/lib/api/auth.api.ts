@@ -1,5 +1,5 @@
+import { serverFetch } from '@/lib/api/server-fetch';
 import { createServerFn } from '@tanstack/react-start';
-import { getRequestHeader } from '@tanstack/react-start/server';
 
 export interface Session {
 	user?: {
@@ -12,14 +12,8 @@ export interface Session {
 	expires: string;
 }
 
-const API_URL = `${import.meta.env.VITE_API_URL}`;
-
 export const getSessionServer = createServerFn({ method: 'GET' }).handler(async () => {
-	const cookie = getRequestHeader('cookie');
-	const response = await fetch(`${API_URL}/api/auth/session`, {
-		headers: cookie ? { cookie } : {}
-	});
-
+	const response = await serverFetch('/api/auth/session');
 	if (!response.ok) {
 		return null;
 	}

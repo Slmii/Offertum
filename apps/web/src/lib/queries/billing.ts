@@ -1,5 +1,8 @@
 import { api } from '@/lib/api/client';
-import { useMutation } from '@tanstack/react-query';
+import { getBillingStatusServer } from '@/lib/api/billing.api';
+import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
+
+export type { BillingState, BillingStatus } from '@/lib/api/billing.api';
 
 interface CheckoutSessionResponse {
 	url: string;
@@ -9,6 +12,21 @@ interface BillingSyncResponse {
 	ok: boolean;
 	status: string | null;
 }
+
+const BillingKeys = {
+	status: ['billing', 'status'] as const
+};
+
+/**
+ * GET /api/billing/status — single code path for SSR + client via `createServerFn`.
+ * Use with `loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions)`
+ * and read in the component via `useSuspenseQuery(billingStatusQueryOptions)`.
+ */
+export const billingStatusQueryOptions = queryOptions({
+	queryKey: BillingKeys.status,
+	queryFn: getBillingStatusServer,
+	staleTime: 30_000
+});
 
 /** Hit POST /api/billing/checkout-session, then redirect the browser to Stripe Checkout. */
 export function useStartCheckout() {
@@ -36,11 +54,14 @@ export function useOpenPortal() {
 
 /** Force a re-sync of subscription state from Stripe. Called from /billing/success. */
 export function useSyncBilling() {
+	const queryClient = useQueryClient();
+
 	return useMutation({
 		mutationFn: () => {
 			return api<BillingSyncResponse>('/api/billing/sync', {
 				method: 'POST'
 			});
-		}
+		},
+		onSettled: () => queryClient.invalidateQueries({ queryKey: BillingKeys.status })
 	});
 }

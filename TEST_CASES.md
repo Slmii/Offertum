@@ -280,11 +280,19 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] **Expect** `stripe listen` shows `customer.subscription.trial_will_end` (3 days before end) and then `customer.subscription.updated` with `status: 'active'` after the trial expires.
 - [ ] **Expect** DB `Subscription.status` transitions `trialing → active` and `currentPeriodEnd` jumps to ~30 days after trial end.
 
-### BILLING-07: Cancellation via Customer Portal
+### BILLING-07: Cancellation via Customer Portal (scheduled at period end)
 - [ ] On `/billing` → **Manage subscription** → in Portal, click **Cancel subscription** → confirm "at period end".
 - [ ] **Expect** `stripe listen` shows `customer.subscription.updated` with `cancel_at_period_end: true`.
 - [ ] **Expect** DB `Subscription.cancelAtPeriodEnd = true`, status still `trialing` or `active` (cancellation is scheduled, not immediate).
-- [ ] **Resume:** in Portal, click **Renew subscription** → DB `cancelAtPeriodEnd` flips back to `false` via the next `customer.subscription.updated` webhook.
+- [ ] **Expect** `/billing` UI: status chip unchanged; orange "Cancellation scheduled for {date}" Alert appears.
+- [ ] **Resume:** in Portal, click **Renew subscription** → DB `cancelAtPeriodEnd` flips back to `false` via the next `customer.subscription.updated` webhook; the Alert disappears on next status fetch.
+
+### BILLING-07b: Immediate cancellation via Stripe Dashboard
+- [ ] In Stripe Dashboard (test mode), open the customer → click **Cancel subscription** → leave the "Cancel at end of billing period" checkbox **unchecked** → confirm.
+- [ ] **Expect** `stripe listen` shows `customer.subscription.deleted`.
+- [ ] **Expect** DB `Subscription.status = 'canceled'`, `cancelAtPeriodEnd = false` (the field resets — there is no "scheduled" cancellation, it's already applied), `stripeSubscriptionId` still populated until the next `syncFromStripe` finds zero subscriptions.
+- [ ] **Expect** `/billing` UI: red "Inactive" chip, "Subscription canceled." primary line, Subscribe button visible, **no** orange banner (the cancellation isn't scheduled — it's done).
+- [ ] **Common confusion:** `cancelAtPeriodEnd` only means "a cancel is queued but not yet applied". Once Stripe applies the cancel (immediate cancel, or auto-apply at period end), the field is `false`. Don't add a banner for `status='canceled'`; the chip + line already communicate it.
 
 ### BILLING-08: 3DS authentication required
 - [ ] Run BILLING-01 with card `4000 0027 6000 3184` (requires 3DS).
@@ -298,6 +306,34 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 ### BILLING-10: Eager sync race vs. webhook
 - [ ] In BILLING-01, watch the API logs: the `POST /api/billing/sync` from `/billing/success` and the webhook-driven `syncFromStripe` will run within a second of each other.
 - [ ] **Expect** both succeed; final DB state is identical regardless of which won (the function is idempotent).
+
+### BILLING-11: Trial gate — fresh org, within local 14-day window
+- [ ] Create a brand-new org (sign up via invitation flow). Do **not** click Subscribe.
+- [ ] Hit any tenant write route protected by `@TenantWrite()` (e.g. a future `POST /api/opportunities`). For now, smoke this by adding `@UseGuards(OrganizationGuard, TrialGateGuard)` to a throwaway POST route or by manually invoking the guard in a unit test.
+- [ ] **Expect** the request succeeds (HTTP 2xx). The local trial window keeps writes open until `org.createdAt + 14d`.
+
+### BILLING-12: Trial gate — local trial expired, no Stripe subscription
+- [ ] In Prisma Studio or psql: backdate the org row — `UPDATE "Organization" SET "createdAt" = NOW() - INTERVAL '15 days' WHERE id = '<org-uuid>';`
+- [ ] Hit the same write route.
+- [ ] **Expect** HTTP `402` with body `{ statusCode: 402, code: 'billing_required', message: 'Your trial has ended. Subscribe to continue.', billingPath: '/billing' }`.
+- [ ] **Expect** any **read** route on the same org still returns 200 (e.g. `GET /api/me/memberships`).
+- [ ] On the web client, calling a write mutation against this org auto-redirects the browser to `/billing`.
+
+### BILLING-13: Trial gate — entitled via Stripe subscription
+- [ ] Complete BILLING-01 so `Subscription.status = 'trialing'`.
+- [ ] Backdate `Organization.createdAt` to 30 days ago (force the local-grace window to be expired).
+- [ ] Hit the same write route.
+- [ ] **Expect** HTTP 2xx — the Stripe-managed entitlement (`trialing | active | past_due`) overrides the local window.
+
+### BILLING-14: Trial gate — Stripe subscription canceled
+- [ ] Complete BILLING-07 (cancel via Portal) and wait until the period ends (or force via test clock + advance).
+- [ ] **Expect** `Subscription.status` flips to `canceled` after the webhook syncs.
+- [ ] Hit the write route → HTTP `402`. **Critical:** even if `org.createdAt + 14d > now`, the local-grace window is **not** re-granted once the org has held a Stripe subscription (`stripeSubscriptionId` is non-null on the Subscription row, even with status=canceled — the guard's `!sub?.stripeSubscriptionId` check fails closed). If the row was fully cleared by `syncFromStripe`'s "no subscriptions" branch, the local-grace window may re-engage — that's by design for "deleted in Stripe" cleanup paths.
+
+### BILLING-15: Trial gate — past_due grace
+- [ ] Set `Subscription.status = 'past_due'` in psql (simulating a failed retry).
+- [ ] Hit the write route.
+- [ ] **Expect** HTTP 2xx. Stripe dunning is handling the retry; we don't lock the customer out mid-retry.
 
 ---
 

@@ -1,4 +1,6 @@
 import type { EnvSchema } from '@/config/env.schema';
+import { LOCAL_TRIAL_MS } from '@/modules/billing/billing.constants';
+import type { BillingState, BillingStatusResponseDto } from '@/modules/billing/dto/billing-status.response.dto';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -248,6 +250,44 @@ export class BillingService {
 
 		this.logger.log(`Synced subscription ${sub.id} (${sub.status}) for customer ${customerId}`);
 		return { status: sub.status };
+	}
+
+	/**
+	 * Read-only snapshot of the org's billing state for the UI. Returns a DTO that the
+	 * client switches on to render the trial banner / next-billing-date / cancellation
+	 * notice. No Stripe calls — pure DB read.
+	 */
+	async getStatus(organizationId: string): Promise<BillingStatusResponseDto> {
+		const [sub, org] = await Promise.all([
+			this.prisma.subscription.findUnique({ where: { organizationId } }),
+			this.prisma.organization.findUniqueOrThrow({
+				where: { id: organizationId },
+				select: { createdAt: true }
+			})
+		]);
+
+		// Stripe-tracked path: status is the source of truth.
+		if (sub?.status) {
+			return {
+				state: sub.status as BillingState,
+				currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+				cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+				paymentMethodBrand: sub.paymentMethodBrand,
+				paymentMethodLast4: sub.paymentMethodLast4
+			};
+		}
+
+		// No Stripe subscription yet — fall back to the local 14-day window.
+		const localTrialEnd = new Date(org.createdAt.getTime() + LOCAL_TRIAL_MS);
+		const inWindow = localTrialEnd.getTime() > Date.now();
+
+		return {
+			state: inWindow ? 'local_trial' : 'expired',
+			currentPeriodEnd: localTrialEnd.toISOString(),
+			cancelAtPeriodEnd: false,
+			paymentMethodBrand: null,
+			paymentMethodLast4: null
+		};
 	}
 
 	/**

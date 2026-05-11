@@ -10,20 +10,28 @@
  */
 
 interface ApiError {
-	code: number;
+	statusCode?: number;
+	code?: string;
 	// API may return either a single string or class-validator array of messages.
 	message: string | string[];
+	billingPath?: string;
 }
 
 export class WrapperApiError extends Error {
 	code: number;
+	apiCode?: string;
+	billingPath?: string;
 
-	constructor(error: { code: number; message: string }) {
+	constructor(error: { code: number; message: string; apiCode?: string; billingPath?: string }) {
 		super(error.message);
 		this.code = error.code;
+		this.apiCode = error.apiCode;
+		this.billingPath = error.billingPath;
 		this.name = 'WrapperApiError';
 	}
 }
+
+export const BILLING_REQUIRED_CODE = 'billing_required';
 
 function flattenMessage(input: string | string[] | undefined, fallback: string): string {
 	if (Array.isArray(input)) {
@@ -56,9 +64,25 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
 	if (!response.ok) {
 		const errorBody = (await response.json().catch(() => null)) as ApiError | null;
+
+		// 402 with code=billing_required is the structured "trial expired" signal from the
+		// API's TrialGateGuard. Auto-redirect to the subscribe page rather than surfacing
+		// a generic error — every caller would do the same redirect anyway. Skip if the
+		// user is already on the billing flow.
+		if (
+			response.status === 402 &&
+			errorBody?.code === BILLING_REQUIRED_CODE &&
+			typeof window !== 'undefined' &&
+			!window.location.pathname.startsWith('/billing')
+		) {
+			window.location.href = errorBody.billingPath ?? '/billing';
+		}
+
 		throw new WrapperApiError({
 			code: response.status,
-			message: flattenMessage(errorBody?.message, response.statusText || 'Unknown error')
+			message: flattenMessage(errorBody?.message, response.statusText || 'Unknown error'),
+			apiCode: errorBody?.code,
+			billingPath: errorBody?.billingPath
 		});
 	}
 

@@ -1,6 +1,7 @@
 import type { EnvSchema } from '@/config/env.schema';
 import { OrganizationGuard } from '@/modules/auth/organization.guard';
 import { BillingService } from '@/modules/billing/billing.service';
+import { BillingStatusResponseDto } from '@/modules/billing/dto/billing-status.response.dto';
 import {
 	BillingSyncResponseDto,
 	CheckoutSessionResponseDto
@@ -10,6 +11,7 @@ import type { RawBodyRequest } from '@nestjs/common';
 import {
 	BadRequestException,
 	Controller,
+	Get,
 	Headers,
 	HttpCode,
 	HttpStatus,
@@ -33,6 +35,14 @@ export class BillingController {
 		private readonly prisma: PrismaService,
 		private readonly config: ConfigService<EnvSchema, true>
 	) {}
+
+	@ApiOperation({ summary: 'Current billing state for the active organization' })
+	@ApiOkResponse({ type: BillingStatusResponseDto })
+	@UseGuards(OrganizationGuard)
+	@Get('status')
+	async getStatus(@Req() request: Request): Promise<BillingStatusResponseDto> {
+		return this.billing.getStatus(request.organizationId!);
+	}
 
 	@ApiOperation({ summary: 'Create a Stripe Checkout session for the active organization' })
 	@ApiOkResponse({ type: CheckoutSessionResponseDto })
@@ -78,6 +88,7 @@ export class BillingController {
 		if (!signature) {
 			throw new BadRequestException('Missing Stripe-Signature header');
 		}
+
 		if (!request.rawBody) {
 			throw new BadRequestException('Raw body unavailable — check rawBody option in main.ts');
 		}

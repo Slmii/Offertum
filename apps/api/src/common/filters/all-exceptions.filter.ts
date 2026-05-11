@@ -5,6 +5,8 @@ interface ErrorResponseBody {
 	statusCode: number;
 	message: string | string[];
 	error?: string;
+	code?: string;
+	billingPath?: string;
 }
 
 @Catch()
@@ -33,6 +35,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 			}
 			if (typeof r.error === 'string') {
 				body.error = r.error;
+			}
+			// Forward optional structured fields used by client error handlers (e.g. the
+			// trial-gate guard returns `code: 'billing_required'` + `billingPath` so the
+			// web app can redirect users to the subscribe page instead of showing a toast).
+			if (typeof r.code === 'string') {
+				body.code = r.code;
+			}
+			if (typeof r.billingPath === 'string') {
+				body.billingPath = r.billingPath;
 			}
 		}
 
