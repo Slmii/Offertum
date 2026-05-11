@@ -1,12 +1,17 @@
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+export const API_URL = `${import.meta.env.VITE_API_URL}`;
 
-export class ApiError extends Error {
-	constructor(
-		readonly status: number,
-		readonly body: unknown,
-		message?: string
-	) {
-		super(message ?? `API error ${status}`);
+interface ApiError {
+	code: number;
+	message: string;
+}
+
+export class WrapperApiError extends Error {
+	code: number;
+
+	constructor(error: ApiError) {
+		super(error.message);
+		this.code = error.code;
+		this.name = 'WrapperApiError';
 	}
 }
 
@@ -29,8 +34,12 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 	});
 
 	if (!response.ok) {
-		const errorBody = await response.json().catch(() => null);
-		throw new ApiError(response.status, errorBody);
+		const errorBody = (await response.json()) as ApiError;
+
+		throw new WrapperApiError({
+			code: response.status,
+			message: errorBody?.message ?? response.statusText ?? 'Unknown error'
+		});
 	}
 
 	if (response.status === 204) {
@@ -52,6 +61,12 @@ export async function postForm(path: string, fields: Record<string, string>): Pr
 	});
 
 	// `redirect: 'manual'` returns an opaque-redirect response on Auth.js's 302.
-	if (response.type === 'opaqueredirect' || response.ok) return;
-	throw new ApiError(response.status, await response.text().catch(() => null));
+	if (response.type === 'opaqueredirect' || response.ok) {
+		return;
+	}
+
+	throw new WrapperApiError({
+		code: response.status,
+		message: await response.text().catch(() => 'Unknown error')
+	});
 }

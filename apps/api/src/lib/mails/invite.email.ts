@@ -8,21 +8,21 @@ interface InviteEmail {
 
 export function buildInviteEmail(input: { url: string; organizationName: string }): InviteEmail {
 	const { url, organizationName } = input;
-	const subject = `Uitnodiging: ${organizationName} op Quoteom`;
+	const subject = `Invitation: ${organizationName} on Quoteom`;
 
 	const text = dedent`
-		Je bent uitgenodigd voor ${organizationName} op Quoteom.
+		You've been invited to join ${organizationName} on Quoteom.
 
-		Accepteer de uitnodiging via deze link:
+		Accept your invitation via this link:
 
 		${url}
 
-		Deze link verloopt over 7 dagen.
+		This link expires in 7 days.
 	`;
 
 	const html = dedent`
 		<!DOCTYPE html>
-		<html lang="nl">
+		<html lang="en">
 			<head>
 				<meta charset="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -36,33 +36,33 @@ export function buildInviteEmail(input: { url: string; organizationName: string 
 								<tr>
 									<td style="padding: 40px;">
 										<h1 style="margin: 0 0 16px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; color: #0f172a;">
-											Welkom bij ${organizationName}
+											Welcome to ${organizationName}
 										</h1>
 										<p style="margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #475569;">
-											Je bent uitgenodigd om bij <strong>${organizationName}</strong> op Quoteom samen te werken. Klik op de knop hieronder om je uitnodiging te accepteren.
+											You've been invited to join <strong>${organizationName}</strong> on Quoteom. Click the button below to accept your invitation.
 										</p>
 										<table role="presentation" cellpadding="0" cellspacing="0" border="0">
 											<tr>
 												<td style="background: #1e293b; border-radius: 6px;">
-													<a href="${url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 12px 28px; color: #ffffff; text-decoration: none; font-weight: 500; font-size: 15px;">Uitnodiging accepteren</a>
+													<a href="${url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 12px 28px; color: #ffffff; text-decoration: none; font-weight: 500; font-size: 15px;">Accept invitation</a>
 												</td>
 											</tr>
 										</table>
 										<p style="margin: 28px 0 0; font-size: 13px; line-height: 1.5; color: #64748b;">
-											Of kopieer deze link in je browser:
+											Or copy this link into your browser:
 										</p>
 										<p style="margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: #64748b; word-break: break-all;">
 											<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #d97706; text-decoration: none;">${url}</a>
 										</p>
 										<hr style="margin: 32px 0; border: 0; border-top: 1px solid #e7e5e0;" />
 										<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #64748b;">
-											Deze uitnodiging verloopt over 7 dagen. Heb je deze e-mail niet verwacht? Dan kun je hem negeren.
+											This invitation expires in 7 days. If you didn't expect this email, you can safely ignore it.
 										</p>
 									</td>
 								</tr>
 							</table>
 							<p style="margin: 24px 0 0; font-size: 12px; line-height: 1.4; color: #94a3b8;">
-								Quoteom &middot; offerte management voor MKB
+								Quoteom &middot; quote management for SMBs
 							</p>
 						</td>
 					</tr>

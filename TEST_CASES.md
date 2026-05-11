@@ -149,14 +149,14 @@ COOKIES=/tmp/quoteom.cookies
 - [ ] In the recipient inbox:
   - [ ] From header reads `Quoteom <…>`.
   - [ ] Subject: `Sign in to <host>`.
-  - [ ] HTML body: off-white background, slate "Inloggen" button, amber link below.
-  - [ ] Falling back to plain-text view shows readable Dutch copy.
+  - [ ] HTML body: off-white background, slate "Sign in" button, amber link below.
+  - [ ] Falling back to plain-text view shows readable plain-text copy.
 
 ### MAIL-02: Invite email uses branded template
 - [ ] Trigger INV-01 with `RESEND_API_KEY` set.
 - [ ] In the recipient inbox:
-  - [ ] Subject: `Uitnodiging: <Organization> op Quoteom`.
-  - [ ] HTML body: heading `Welkom bij <Organization>`, "Uitnodiging accepteren" CTA.
+  - [ ] Subject: `Invitation: <Organization> on Quoteom`.
+  - [ ] HTML body: heading `Welcome to <Organization>`, "Accept invitation" CTA.
 
 ### MAIL-03: Dev fallback (no API key)
 - [ ] Remove `RESEND_API_KEY` from `apps/api/.env`, restart.
@@ -183,28 +183,28 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 
 ### WEB-01: Anonymous home page
 - [ ] Open `http://localhost:3000/` in a fresh browser / incognito.
-- [ ] **Expect** "Quoteom" heading + "Je bent niet ingelogd" + an "Inloggen" button.
-- [ ] Click "Inloggen".
+- [ ] **Expect** "Quoteom" heading + "You're not signed in" + an "Sign in" button.
+- [ ] Click "Sign in".
 - [ ] **Expect** navigation to `/sign-in`.
 
 ### WEB-02: Sign-in form — happy path
 - [ ] On `/sign-in`, enter `alice@quoteom.dev`.
-- [ ] Click "Magic link sturen".
+- [ ] Click "Send magic link".
 - [ ] **Expect** browser navigates to `/verify-request?email=alice@quoteom.dev`.
-- [ ] **Expect** "Check je inbox" page shows Alice's email address.
+- [ ] **Expect** "Check your inbox" page shows Alice's email address.
 - [ ] In the API console (dev) or Alice's inbox (prod): the magic link.
 - [ ] Click the magic link.
-- [ ] **Expect** redirect back to `http://localhost:3000/` showing "Ingelogd als alice@quoteom.dev" + the active org ID + an "Uitloggen" button.
+- [ ] **Expect** redirect back to `http://localhost:3000/` showing "Signed in as alice@quoteom.dev" + the active org ID + an "Sign out" button.
 
 ### WEB-03: Sign-in form — validation
 - [ ] On `/sign-in`, leave the email field empty, click submit.
-- [ ] **Expect** inline error: `Geef een geldig e-mailadres op`.
+- [ ] **Expect** inline error: `Please enter a valid email address`.
 - [ ] Enter `not-an-email`, submit.
 - [ ] **Expect** same inline error. No request to the API.
 
 ### WEB-04: Sign-out
 - [ ] Signed in as in WEB-02.
-- [ ] Click "Uitloggen" on the home page.
+- [ ] Click "Sign out" on the home page.
 - [ ] **Expect** the page re-renders to the anonymous view (no full reload needed — TanStack Query invalidates the session cache).
 - [ ] Refresh the page; **expect** still anonymous (cookie was actually cleared).
 
@@ -212,19 +212,19 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] Mint an invite for a fresh email: `npm run invite -- --email newperson@example.com --org 00000000-0000-0000-0000-000000000001` (from `apps/api/`).
 - [ ] Grab the URL from the dev console (or inbox).
 - [ ] Open the URL in browser. URL shape: `http://localhost:3000/accept-invite?token=...`.
-- [ ] **Expect** brief "Bezig met accepteren..." spinner, then:
-  - "Welkom bij Acme Installaties" heading.
-  - "Je account is aangemaakt. Log nu in om verder te gaan."
-  - "Inloggen" button.
-- [ ] Click "Inloggen" → goes to `/sign-in`.
+- [ ] **Expect** brief "Accepting invitation..." spinner, then:
+  - "Welcome to Acme Installaties" heading.
+  - "Your account has been created. Sign in to continue."
+  - "Sign in" button.
+- [ ] Click "Sign in" → goes to `/sign-in`.
 
 ### WEB-06: Accept-invite page — already-accepted
 - [ ] Replay WEB-05 with the same token (e.g., open the same URL again).
-- [ ] **Expect** error alert: "Deze uitnodiging is al geaccepteerd."
+- [ ] **Expect** error alert: "This invitation has already been accepted."
 
 ### WEB-07: Accept-invite page — bad token
 - [ ] Visit `http://localhost:3000/accept-invite?token=doesnotexist`.
-- [ ] **Expect** error alert: "Deze uitnodiging bestaat niet."
+- [ ] **Expect** error alert: "This invitation doesn't exist."
 
 ### WEB-08: Accept-invite page — missing token
 - [ ] Visit `http://localhost:3000/accept-invite` (no `?token=`).

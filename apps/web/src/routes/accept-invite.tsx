@@ -1,4 +1,4 @@
-import { api, ApiError } from '@/lib/api/client';
+import { useAcceptInvitation } from '@/lib/hooks/invitation.hooks';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -6,17 +6,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { z } from 'zod';
-
-interface AcceptInvitationResponse {
-	userId: string;
-	email: string;
-	organizationId: string;
-	organizationName: string;
-}
 
 const SearchSchema = z.object({
 	token: z.string().min(1)
@@ -31,19 +23,11 @@ function AcceptInvitePage() {
 	const { token } = Route.useSearch();
 	const navigate = useNavigate();
 
-	const accept = useMutation({
-		mutationFn: async () => {
-			return api<AcceptInvitationResponse>('/api/invitations/accept', {
-				method: 'POST',
-				body: { token }
-			});
-		}
-	});
+	const accept = useAcceptInvitation();
 
 	// Fire the accept call once on mount.
 	useEffect(() => {
-		accept.mutate();
-		// Intentionally only on mount.
+		accept.mutateAsync(token);
 	}, []);
 
 	return (
@@ -53,23 +37,23 @@ function AcceptInvitePage() {
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
 						<Typography variant='body2' color='text.secondary'>
-							Bezig met accepteren...
+							Accepting invitation...
 						</Typography>
 					</Box>
 				)}
 
-				{accept.isError && <InviteError error={accept.error} />}
+				{accept.isError && <InviteError error={accept.error.message} />}
 
 				{accept.isSuccess && accept.data && (
 					<Box>
 						<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-							Welkom bij {accept.data.organizationName}
+							Welcome to {accept.data.organizationName}
 						</Typography>
 						<Typography variant='body1' color='text.secondary' sx={{ mb: 3 }}>
-							Je account is aangemaakt. Log nu in om verder te gaan.
+							Your account has been created. Sign in to continue.
 						</Typography>
 						<Button variant='contained' size='large' fullWidth onClick={() => navigate({ to: '/sign-in' })}>
-							Inloggen
+							Sign in
 						</Button>
 					</Box>
 				)}
@@ -78,21 +62,10 @@ function AcceptInvitePage() {
 	);
 }
 
-function InviteError({ error }: { error: unknown }) {
-	const status = error instanceof ApiError ? error.status : 0;
-
-	const message =
-		status === 404
-			? 'Deze uitnodiging bestaat niet.'
-			: status === 409
-				? 'Deze uitnodiging is al geaccepteerd.'
-				: status === 410
-					? 'Deze uitnodiging is verlopen.'
-					: 'Er ging iets mis bij het accepteren van de uitnodiging.';
-
+function InviteError({ error }: { error: string }) {
 	return (
 		<Alert severity='error' sx={{ mb: 2 }}>
-			{message}
+			{error}
 		</Alert>
 	);
 }

@@ -1,4 +1,4 @@
-import { useSignInWithEmail } from '@/lib/auth/queries';
+import { useSignInWithEmail } from '@/lib/hooks/auth.hooks';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 const SignInSchema = z.object({
-	email: z.string().email('Geef een geldig e-mailadres op')
+	email: z.string().email('Please enter a valid email address')
 });
 type SignInForm = z.infer<typeof SignInSchema>;
 
@@ -38,17 +38,17 @@ function SignInPage() {
 		<Container maxWidth='xs' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-					Inloggen
+					Sign in
 				</Typography>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-					Vul je e-mailadres in. Je krijgt een magic link toegestuurd.
+					Enter your email address. We'll send you a magic link to sign in.
 				</Typography>
 
 				<Box component='form' onSubmit={onSubmit} noValidate>
 					<TextField
 						{...form.register('email')}
 						type='email'
-						label='E-mailadres'
+						label='Email address'
 						autoComplete='email'
 						autoFocus
 						fullWidth
@@ -59,7 +59,7 @@ function SignInPage() {
 
 					{signIn.isError && (
 						<Alert severity='error' sx={{ mt: 2 }}>
-							Er ging iets mis. Probeer het opnieuw.
+							Something went wrong. Please try again.
 						</Alert>
 					)}
 
@@ -71,7 +71,7 @@ function SignInPage() {
 						disabled={signIn.isPending}
 						sx={{ mt: 3 }}
 					>
-						{signIn.isPending ? 'Bezig...' : 'Magic link sturen'}
+						{signIn.isPending ? 'Sending...' : 'Send magic link'}
 					</Button>
 				</Box>
 			</Paper>

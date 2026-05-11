@@ -20,20 +20,18 @@ function VerifyRequestPage() {
 		<Container maxWidth='xs' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				<Typography variant='h1' sx={{ fontSize: 28, mb: 2 }}>
-					Check je inbox
+					Check your inbox
 				</Typography>
 				<Typography variant='body1' color='text.secondary' sx={{ mb: 1 }}>
-					{email
-						? `We hebben een magic link gestuurd naar ${email}.`
-						: 'We hebben een magic link gestuurd.'}
+					{email ? `We sent a magic link to ${email}.` : 'We sent a magic link.'}
 				</Typography>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Klik op de link in de e-mail om in te loggen. De link verloopt over 24 uur.
+					Click the link in the email to sign in. The link expires in 24 hours.
 				</Typography>
 				<Typography variant='caption' color='text.secondary'>
-					Niets ontvangen?{' '}
+					Didn't receive it?{' '}
 					<Link to='/sign-in' style={{ color: 'inherit' }}>
-						Probeer opnieuw
+						Try again
 					</Link>
 				</Typography>
 			</Paper>

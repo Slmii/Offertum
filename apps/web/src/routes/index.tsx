@@ -1,4 +1,4 @@
-import { useSession, useSignOut } from '@/lib/auth/queries';
+import { useSession, useSignOut } from '@/lib/hooks/auth.hooks';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
@@ -15,12 +15,10 @@ function HomePage() {
 	const session = useSession();
 	const signOut = useSignOut();
 
-	console.log('Session data:', session.data);
-
 	if (session.isLoading) {
 		return (
 			<Container maxWidth='sm' sx={{ py: 8 }}>
-				<Typography color='text.secondary'>Bezig met laden...</Typography>
+				<Typography color='text.secondary'>Loading...</Typography>
 			</Container>
 		);
 	}
@@ -34,29 +32,29 @@ function HomePage() {
 					Quoteom
 				</Typography>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Offerte management voor MKB
+					Quote management for SMBs
 				</Typography>
 
 				{user ? (
 					<Box>
 						<Typography variant='body1' sx={{ mb: 1 }}>
-							Ingelogd als <strong>{user.email}</strong>
+							Signed in as <strong>{user.email}</strong>
 						</Typography>
 						<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-							Actieve organisatie: <code>{user.organizationId ?? '— geen actieve organisatie —'}</code>
+							Active organization: <code>{user.organizationId ?? '— no active organization —'}</code>
 						</Typography>
 
 						<Button variant='outlined' onClick={() => signOut.mutate()} disabled={signOut.isPending}>
-							{signOut.isPending ? 'Uitloggen...' : 'Uitloggen'}
+							{signOut.isPending ? 'Signing out...' : 'Sign out'}
 						</Button>
 					</Box>
 				) : (
 					<Box>
 						<Typography variant='body1' sx={{ mb: 3 }}>
-							Je bent niet ingelogd.
+							You're not signed in.
 						</Typography>
 						<Button variant='contained' size='large' onClick={() => navigate({ to: '/sign-in' })}>
-							Inloggen
+							Sign in
 						</Button>
 					</Box>
 				)}

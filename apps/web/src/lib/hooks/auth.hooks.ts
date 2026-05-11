@@ -12,16 +12,16 @@ export interface Session {
 	expires: string;
 }
 
-const queryKeys = {
+const AuthKeys = {
 	session: ['auth', 'session'] as const,
 	csrf: ['auth', 'csrf'] as const
 };
 
 export function useSession() {
 	return useQuery({
-		queryKey: queryKeys.session,
+		queryKey: AuthKeys.session,
 		queryFn: async () => {
-			const session = await api<Session | Record<string, never>>('/api/auth/session');
+			const session = await api<Session>('/api/auth/session');
 			// Auth.js returns `{}` when there's no session; normalize to null.
 			return 'user' in session && session.user ? session : null;
 		}
@@ -50,7 +50,7 @@ export function useSignOut() {
 			await postForm('/api/auth/signout', { csrfToken });
 		},
 		onSuccess: () => {
-			queryClient.setQueryData(queryKeys.session, null);
+			queryClient.setQueryData(AuthKeys.session, null);
 		}
 	});
 }

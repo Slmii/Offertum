@@ -1,4 +1,10 @@
 import { MembershipRole } from '@/generated/prisma/client';
+import {
+	INVITATION_ALREADY_ACCEPTED,
+	INVITATION_EXPIRED,
+	INVITATION_NOT_FOUND,
+	ORGANIZATION_NOT_FOUND
+} from '@/lib/errors';
 import { buildInviteEmail } from '@/lib/mails/invite.email';
 import { sendEmail } from '@/lib/mails/send';
 import { PrismaService } from '@/modules/prisma/prisma.service';
@@ -29,8 +35,9 @@ export class InvitationsService {
 		const organization = await this.prisma.organization.findUnique({
 			where: { id: input.organizationId }
 		});
+
 		if (!organization) {
-			throw new NotFoundException(`Organization ${input.organizationId} not found`);
+			throw new NotFoundException(ORGANIZATION_NOT_FOUND);
 		}
 
 		const token = randomBytes(INVITATION_TOKEN_BYTES).toString('hex');
@@ -71,16 +78,18 @@ export class InvitationsService {
 		});
 
 		if (!invitation) {
-			throw new NotFoundException('Invitation not found');
-		}
-		if (invitation.acceptedAt) {
-			throw new ConflictException('Invitation has already been accepted');
-		}
-		if (invitation.expiresAt < new Date()) {
-			throw new GoneException('Invitation has expired');
+			throw new NotFoundException(INVITATION_NOT_FOUND);
 		}
 
-		return this.prisma.$transaction(async tx => {
+		if (invitation.acceptedAt) {
+			throw new ConflictException(INVITATION_ALREADY_ACCEPTED);
+		}
+
+		if (invitation.expiresAt < new Date()) {
+			throw new GoneException(INVITATION_EXPIRED);
+		}
+
+		const result = await this.prisma.$transaction(async tx => {
 			const user = await tx.user.upsert({
 				where: { email: invitation.email },
 				update: {},
@@ -125,5 +134,7 @@ export class InvitationsService {
 				organizationName: invitation.organization.name
 			};
 		});
+
+		return result;
 	}
 }
