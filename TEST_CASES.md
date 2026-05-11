@@ -177,6 +177,61 @@ COOKIES=/tmp/quoteom.cookies
 
 ---
 
+## Web — sign-in / verify-request / accept-invite (W2.3)
+
+Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd apps/web && npm run dev`). Visit `http://localhost:3000`.
+
+### WEB-01: Anonymous home page
+- [ ] Open `http://localhost:3000/` in a fresh browser / incognito.
+- [ ] **Expect** "Quoteom" heading + "Je bent niet ingelogd" + an "Inloggen" button.
+- [ ] Click "Inloggen".
+- [ ] **Expect** navigation to `/sign-in`.
+
+### WEB-02: Sign-in form — happy path
+- [ ] On `/sign-in`, enter `alice@quoteom.dev`.
+- [ ] Click "Magic link sturen".
+- [ ] **Expect** browser navigates to `/verify-request?email=alice@quoteom.dev`.
+- [ ] **Expect** "Check je inbox" page shows Alice's email address.
+- [ ] In the API console (dev) or Alice's inbox (prod): the magic link.
+- [ ] Click the magic link.
+- [ ] **Expect** redirect back to `http://localhost:3000/` showing "Ingelogd als alice@quoteom.dev" + the active org ID + an "Uitloggen" button.
+
+### WEB-03: Sign-in form — validation
+- [ ] On `/sign-in`, leave the email field empty, click submit.
+- [ ] **Expect** inline error: `Geef een geldig e-mailadres op`.
+- [ ] Enter `not-an-email`, submit.
+- [ ] **Expect** same inline error. No request to the API.
+
+### WEB-04: Sign-out
+- [ ] Signed in as in WEB-02.
+- [ ] Click "Uitloggen" on the home page.
+- [ ] **Expect** the page re-renders to the anonymous view (no full reload needed — TanStack Query invalidates the session cache).
+- [ ] Refresh the page; **expect** still anonymous (cookie was actually cleared).
+
+### WEB-05: Accept-invite page — happy path (new user)
+- [ ] Mint an invite for a fresh email: `npm run invite -- --email newperson@example.com --org 00000000-0000-0000-0000-000000000001` (from `apps/api/`).
+- [ ] Grab the URL from the dev console (or inbox).
+- [ ] Open the URL in browser. URL shape: `http://localhost:3000/accept-invite?token=...`.
+- [ ] **Expect** brief "Bezig met accepteren..." spinner, then:
+  - "Welkom bij Acme Installaties" heading.
+  - "Je account is aangemaakt. Log nu in om verder te gaan."
+  - "Inloggen" button.
+- [ ] Click "Inloggen" → goes to `/sign-in`.
+
+### WEB-06: Accept-invite page — already-accepted
+- [ ] Replay WEB-05 with the same token (e.g., open the same URL again).
+- [ ] **Expect** error alert: "Deze uitnodiging is al geaccepteerd."
+
+### WEB-07: Accept-invite page — bad token
+- [ ] Visit `http://localhost:3000/accept-invite?token=doesnotexist`.
+- [ ] **Expect** error alert: "Deze uitnodiging bestaat niet."
+
+### WEB-08: Accept-invite page — missing token
+- [ ] Visit `http://localhost:3000/accept-invite` (no `?token=`).
+- [ ] **Expect** TanStack Router validation rejects the search params (currently 404 or error boundary). Future: friendly empty-state page.
+
+---
+
 ## How to maintain this doc
 
 - **Adding a feature** → add a new `## Section` with `### XXX-01:` test cases. Use a short uppercase prefix per area (`AUTH`, `INV`, `TEN`, `LOG`, `MAIL`, `DB`, then `OPP` for opportunities, `QUO` for quotes, etc.).

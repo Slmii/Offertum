@@ -1,45 +1,66 @@
-import { createFileRoute } from '@tanstack/react-router';
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
-
-interface HelloResponse {
-	message: string;
-	timestamp: string;
-}
+import { useSession, useSignOut } from '@/lib/auth/queries';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Container from '@mui/material/Container';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/')({
-	loader: async (): Promise<HelloResponse> => {
-		const res = await fetch(`${API_URL}/api/hello`);
-		if (!res.ok) {
-			throw new Error(`API responded with ${res.status}`);
-		}
-
-		return (await res.json()) as HelloResponse;
-	},
-	component: IndexComponent
+	component: HomePage
 });
 
-function IndexComponent() {
-	const data = Route.useLoaderData();
+function HomePage() {
+	const navigate = useNavigate();
+	const session = useSession();
+	const signOut = useSignOut();
+
+	console.log('Session data:', session.data);
+
+	if (session.isLoading) {
+		return (
+			<Container maxWidth='sm' sx={{ py: 8 }}>
+				<Typography color='text.secondary'>Bezig met laden...</Typography>
+			</Container>
+		);
+	}
+
+	const user = session.data?.user;
 
 	return (
-		<main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '60ch' }}>
-			<h1>Quoteom</h1>
-			<p>Stack check — response from the API:</p>
-			<pre
-				style={{
-					background: '#f4f4f5',
-					padding: '1rem',
-					borderRadius: '0.5rem',
-					overflowX: 'auto'
-				}}
-			>
-				{JSON.stringify(data, null, 2)}
-			</pre>
-			<p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-				If you can read this with a JSON payload above, the full stack is wired up: TanStack Start SSR → fetch →
-				NestJS API → JSON response → hydration.
-			</p>
-		</main>
+		<Container maxWidth='sm' sx={{ py: 8 }}>
+			<Paper variant='outlined' sx={{ p: 5 }}>
+				<Typography variant='h1' sx={{ fontSize: 32, mb: 1 }}>
+					Quoteom
+				</Typography>
+				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
+					Offerte management voor MKB
+				</Typography>
+
+				{user ? (
+					<Box>
+						<Typography variant='body1' sx={{ mb: 1 }}>
+							Ingelogd als <strong>{user.email}</strong>
+						</Typography>
+						<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
+							Actieve organisatie: <code>{user.organizationId ?? '— geen actieve organisatie —'}</code>
+						</Typography>
+
+						<Button variant='outlined' onClick={() => signOut.mutate()} disabled={signOut.isPending}>
+							{signOut.isPending ? 'Uitloggen...' : 'Uitloggen'}
+						</Button>
+					</Box>
+				) : (
+					<Box>
+						<Typography variant='body1' sx={{ mb: 3 }}>
+							Je bent niet ingelogd.
+						</Typography>
+						<Button variant='contained' size='large' onClick={() => navigate({ to: '/sign-in' })}>
+							Inloggen
+						</Button>
+					</Box>
+				)}
+			</Paper>
+		</Container>
 	);
 }

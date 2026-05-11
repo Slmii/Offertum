@@ -44,7 +44,7 @@ export function buildInviteEmail(input: { url: string; organizationName: string 
 										<table role="presentation" cellpadding="0" cellspacing="0" border="0">
 											<tr>
 												<td style="background: #1e293b; border-radius: 6px;">
-													<a href="${url}" style="display: inline-block; padding: 12px 28px; color: #ffffff; text-decoration: none; font-weight: 500; font-size: 15px;">Uitnodiging accepteren</a>
+													<a href="${url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 12px 28px; color: #ffffff; text-decoration: none; font-weight: 500; font-size: 15px;">Uitnodiging accepteren</a>
 												</td>
 											</tr>
 										</table>
@@ -52,7 +52,7 @@ export function buildInviteEmail(input: { url: string; organizationName: string 
 											Of kopieer deze link in je browser:
 										</p>
 										<p style="margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: #64748b; word-break: break-all;">
-											<a href="${url}" style="color: #d97706; text-decoration: none;">${url}</a>
+											<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #d97706; text-decoration: none;">${url}</a>
 										</p>
 										<hr style="margin: 32px 0; border: 0; border-top: 1px solid #e7e5e0;" />
 										<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #64748b;">
