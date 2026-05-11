@@ -1,6 +1,6 @@
+import { LogLevel as PrismaLogLevel } from '@/generated/prisma/client';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ConsoleLogger, Injectable } from '@nestjs/common';
-import { LogLevel as PrismaLogLevel } from '@/generated/prisma/client';
 
 type Loggable = unknown;
 
@@ -38,11 +38,7 @@ export class LogService extends ConsoleLogger {
 		return { context: typeof last === 'string' ? last : undefined };
 	}
 
-	private async persist(
-		level: PrismaLogLevel,
-		message: Loggable,
-		options: PersistOptions
-	): Promise<void> {
+	private async persist(level: PrismaLogLevel, message: Loggable, options: PersistOptions): Promise<void> {
 		try {
 			await this.prisma.log.create({
 				data: {
@@ -60,8 +56,14 @@ export class LogService extends ConsoleLogger {
 	}
 
 	private serialize(message: Loggable): string {
-		if (typeof message === 'string') return message;
-		if (message instanceof Error) return message.message;
+		if (typeof message === 'string') {
+			return message;
+		}
+
+		if (message instanceof Error) {
+			return message.message;
+		}
+
 		try {
 			return JSON.stringify(message);
 		} catch {

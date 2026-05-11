@@ -21,10 +21,11 @@ function AcceptInvitePage() {
 
 	const accept = useAcceptInvitation();
 
-	// Fire the accept call once on mount.
 	useEffect(() => {
 		accept.mutate(token);
-	}, []);
+
+		// We only want to run this effect once on mount, so we can ignore the exhaustive-deps rule here.
+	}, [accept, token]);
 
 	return (
 		<Container maxWidth='xs' sx={{ py: 8 }}>

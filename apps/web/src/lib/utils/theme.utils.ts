@@ -1,4 +1,4 @@
-import { createTheme, Theme } from '@mui/material/styles';
+import { createTheme, type Theme } from '@mui/material/styles';
 
 const fonts = {
 	body: '"Inter", system-ui, -apple-system, sans-serif',
@@ -18,7 +18,7 @@ export const theme = createTheme({
 	},
 	components: {
 		MuiCssBaseline: {
-			styleOverrides: theme => ({
+			styleOverrides: () => ({
 				html: {
 					scrollBehavior: 'smooth',
 					WebkitFontSmoothing: 'antialiased',

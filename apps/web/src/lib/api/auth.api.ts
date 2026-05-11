@@ -20,7 +20,9 @@ export const getSessionServer = createServerFn({ method: 'GET' }).handler(async 
 		headers: cookie ? { cookie } : {}
 	});
 
-	if (!response.ok) return null;
+	if (!response.ok) {
+		return null;
+	}
 
 	const session = (await response.json()) as Session | null;
 	return session?.user ? session : null;

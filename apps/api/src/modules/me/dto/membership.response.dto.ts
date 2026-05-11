@@ -1,4 +1,4 @@
-import { MembershipRole } from '@/generated/prisma/client';
+import type { MembershipRole } from '@/generated/prisma/client';
 
 export class MembershipUserDto {
 	id!: string;
