@@ -2,8 +2,7 @@ import { serverFetch } from '@/lib/api/server-fetch';
 import { createServerFn } from '@tanstack/react-start';
 
 export type BillingState =
-	| 'local_trial'
-	| 'expired'
+	| 'none'
 	| 'trialing'
 	| 'active'
 	| 'past_due'

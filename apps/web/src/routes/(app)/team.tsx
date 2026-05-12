@@ -62,16 +62,14 @@ function TeamPage() {
 	const [role, setRole] = useState<MembershipRole>('MEMBER');
 
 	const isOwner = me.role === 'OWNER';
-	const isTrial = status.state === 'local_trial' || status.state === 'trialing';
+	const isTrial = status.state === 'trialing';
 	const seatsTaken = memberships.length + invitations.length;
 	const trialCapReached = isTrial && seatsTaken >= status.seats.included;
-	// Mirror the API's trial-gate entitlement set. Any state outside this list will 402
-	// at submission time, so disable the invite form proactively.
+	// Mirror the API's EntitlementGuard set. Any state outside this list will 402 at
+	// submission time, so disable the invite form proactively. A brand-new org with
+	// state='none' falls into the disabled branch — they need to Checkout first.
 	const billingEntitled =
-		status.state === 'local_trial' ||
-		status.state === 'trialing' ||
-		status.state === 'active' ||
-		status.state === 'past_due';
+		status.state === 'trialing' || status.state === 'active' || status.state === 'past_due';
 
 	const handleSubmit = (event: React.FormEvent) => {
 		event.preventDefault();
@@ -272,8 +270,8 @@ function TeamPage() {
 
 function billingBlockedCopy(state: BillingState): string {
 	switch (state) {
-		case 'expired':
-			return 'Your free trial has ended. Subscribe to invite more teammates.';
+		case 'none':
+			return 'Start your 14-day free trial to invite teammates.';
 		case 'canceled':
 			return 'Your subscription has been canceled. Subscribe again to invite teammates.';
 		case 'unpaid':

@@ -435,30 +435,26 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] In BILLING-01, watch the API logs: the `POST /api/billing/sync` from `/billing/success` and the webhook-driven `syncFromStripe` will run within a second of each other.
 - [ ] **Expect** both succeed; final DB state is identical regardless of which won (the function is idempotent).
 
-### BILLING-11: Trial gate — fresh org, within local 14-day window
-- [ ] Create a brand-new org (sign up via invitation flow). Do **not** click Subscribe.
-- [ ] Hit any tenant write route protected by `@TenantWrite()` (e.g. a future `POST /api/opportunities`). For now, smoke this by adding `@UseGuards(OrganizationGuard, EntitlementGuard)` to a throwaway POST route or by manually invoking the guard in a unit test.
-- [ ] **Expect** the request succeeds (HTTP 2xx). The local trial window keeps writes open until `org.createdAt + 14d`.
-
-### BILLING-12: Trial gate — local trial expired, no Stripe subscription
-- [ ] In Prisma Studio or psql: backdate the org row — `UPDATE "Organization" SET "createdAt" = NOW() - INTERVAL '15 days' WHERE id = '<org-uuid>';`
-- [ ] Hit the same write route.
-- [ ] **Expect** HTTP `402` with body `{ statusCode: 402, code: 'billing_required', message: 'Your trial has ended. Subscribe to continue.', billingPath: '/billing' }`.
-- [ ] **Expect** any **read** route on the same org still returns 200 (e.g. `GET /api/me/memberships`).
+### BILLING-11: Entitlement gate — fresh org, no Subscription row
+- [ ] Create a brand-new org via self-signup. Do **not** click Subscribe.
+- [ ] **Expect** `GET /api/billing/status` returns `state: 'none'`, `currentPeriodEnd: null`. No Subscription row exists.
+- [ ] Hit any tenant write route protected by `@TenantWrite()` (e.g. `POST /api/invitations`).
+- [ ] **Expect** HTTP `402` with body `{ statusCode: 402, code: 'billing_required', message: 'Your trial has ended. Subscribe to continue.', billingPath: '/billing' }`. The only path to write entitlement is Stripe Checkout.
+- [ ] **Expect** any **read** route on the same org still returns 200 (e.g. `GET /api/me/memberships`, `GET /api/billing/status`).
 - [ ] On the web client, calling a write mutation against this org auto-redirects the browser to `/billing`.
+- [ ] `/billing` UI shows: chip **"No plan"**, primary line **"You haven't started your trial yet."**, single CTA button **"Start your 14-day free trial"**, no Manage button.
 
-### BILLING-13: Trial gate — entitled via Stripe subscription
+### BILLING-12: Entitlement gate — entitled via Stripe subscription
 - [ ] Complete BILLING-01 so `Subscription.status = 'trialing'`.
-- [ ] Backdate `Organization.createdAt` to 30 days ago (force the local-grace window to be expired).
 - [ ] Hit the same write route.
-- [ ] **Expect** HTTP 2xx — the Stripe-managed entitlement (`trialing | active | past_due`) overrides the local window.
+- [ ] **Expect** HTTP 2xx. Stripe-managed entitlement (`trialing | active | past_due`) is the only path to writes.
 
-### BILLING-14: Trial gate — Stripe subscription canceled
+### BILLING-13: Entitlement gate — Stripe subscription canceled
 - [ ] Complete BILLING-07 (cancel via Portal) and wait until the period ends (or force via test clock + advance).
 - [ ] **Expect** `Subscription.status` flips to `canceled` after the webhook syncs.
-- [ ] Hit the write route → HTTP `402`. **Critical:** even if `org.createdAt + 14d > now`, the local-grace window is **not** re-granted once the org has held a Stripe subscription (`stripeSubscriptionId` is non-null on the Subscription row, even with status=canceled — the guard's `!sub?.stripeSubscriptionId` check fails closed). If the row was fully cleared by `syncFromStripe`'s "no subscriptions" branch, the local-grace window may re-engage — that's by design for "deleted in Stripe" cleanup paths.
+- [ ] Hit the write route → HTTP `402`. **There is no local-grace re-engagement** — once an org has been through Checkout, the only way back to write access is a new Checkout / Portal renewal.
 
-### BILLING-15: Trial gate — past_due grace
+### BILLING-15: Entitlement gate — past_due grace
 - [ ] Set `Subscription.status = 'past_due'` in psql (simulating a failed retry).
 - [ ] Hit the write route.
 - [ ] **Expect** HTTP 2xx. Stripe dunning is handling the retry; we don't lock the customer out mid-retry.
@@ -483,10 +479,10 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] **Expect** `stripe listen` shows `customer.subscription.updated` with `quantity: 4`, **no** invoice yet (still trialing).
 - [ ] **Expect** advancing past the trial end via test clock: the first real invoice charges €149 base + €30 overage = €179 (plus tax if applicable).
 
-### BILLING-19: Per-seat — sync skipped during local trial
-- [ ] Brand-new org, never hit Checkout. Invite + accept a 2nd member.
-- [ ] **Expect** no Stripe API calls (`stripe listen` shows nothing); API logs do **not** include a "Seat sync" line.
-- [ ] **Expect** `/billing` shows local_trial state + accurate seat count.
+### BILLING-19: Per-seat — pre-Checkout invitations are blocked outright
+- [ ] Brand-new org, never hit Checkout (state `'none'`). Try to send an invitation.
+- [ ] **Expect** HTTP 402 `billing_required` from `EntitlementGuard` — the request never reaches `syncSeatCount`. No Stripe API calls; no Invitation row created.
+- [ ] **Expect** `/billing` UI seats line reads `"Seats: 1 used · 3 included in base price — Start your trial to invite teammates…"`.
 
 ### BILLING-OWNER-01: Non-owners cannot access billing actions
 - [ ] Sign in as a `MEMBER` (or `EXTERNAL`) of an org.
@@ -502,7 +498,7 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] On `/billing` with `Subscription.status = 'active'` or `'trialing'`: button reads **"Manage subscription"**.
 - [ ] Cancel the sub immediately (BILLING-07b) → status flips to `canceled`. Button now reads **"View past invoices"** (no active sub to manage, only invoice history).
 - [ ] Same for `unpaid` and `incomplete_expired` (force via psql).
-- [ ] For `local_trial` / `expired`: the button is hidden entirely (no Stripe customer yet).
+- [ ] For `'none'`: the Portal/Manage button is hidden entirely (no Stripe customer yet). Only the **"Start your 14-day free trial"** CTA shows.
 
 ### BILLING-PORTAL-02: Cancellation banner has a one-click Resume action
 - [ ] As owner with active sub: open Customer Portal → "Cancel subscription" → confirm "at period end".
@@ -515,8 +511,8 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] Sign in as the org `OWNER`. Home page shows the Billing button. Visit `/billing` → loads normally.
 - [ ] `curl -i http://localhost:3001/api/billing/status -b cookies-of-owner.txt` → HTTP 200 with the full status DTO.
 
-### BILLING-22: Trial seat cap — block invites past included tier
-- [ ] Fresh org, no Subscription yet (local_trial). Owner = 1 active member.
+### BILLING-22: Trial seat cap — block invites past included tier (during Stripe trial)
+- [ ] Fresh org, run BILLING-01 to enter `trialing`. Owner = 1 active member.
 - [ ] Invite teammate 1 (2 members total once accepted) → succeeds.
 - [ ] Invite teammate 2 (3 members) → succeeds.
 - [ ] Send a 3rd invitation (4th seat) → **expect** HTTP 402 with body `{ statusCode: 402, code: 'trial_seat_limit', message: 'Trial accounts are limited to 3 seats. Subscribe to invite more teammates.', billingPath: '/billing' }`.
@@ -524,14 +520,12 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 - [ ] **Expect** `/billing` UI seats line reads "3 used · 3 max during trial — Trial seat limit reached. Subscribe to invite more teammates."
 
 ### BILLING-23: Trial seat cap — pending invitations count toward the cap
-- [ ] Fresh org, owner = 1 active member. Send 2 invitations but **do not accept** them yet.
+- [ ] Org in `trialing`, owner = 1 active member. Send 2 invitations but **do not accept** them yet.
 - [ ] Send a 3rd invitation → **expect** HTTP 402 `trial_seat_limit` (1 active + 2 pending = 3, at cap).
 - [ ] **Expect** `/billing` UI still shows `seats.used = 1` (UI only counts accepted memberships) but the API correctly enforces the combined count.
 
-### BILLING-24: Seat cap stays during Stripe trial, lifts at `active`
-- [ ] Continuing from BILLING-22 (org at 3 seats, local_trial), run BILLING-01 (subscribe with `4242…`).
-- [ ] Status flips to `trialing`. **Stripe trial is still a "trial state"** per `TRIAL_STATES = ['local_trial', 'trialing']`. Re-attempting a 4th invitation → still HTTP 402 `trial_seat_limit`. By design — the user said "no more seats before the trial has ended".
-- [ ] Use a Stripe test clock to advance past trial end → status webhook flips to `active`.
+### BILLING-24: Seat cap lifts at `active`
+- [ ] Continuing from BILLING-22 (org at 3 seats, `trialing`), use a Stripe test clock to advance past trial end → status webhook flips to `active`.
 - [ ] Send a 4th invitation → **expect** HTTP 200; invitation row created; on accept, `syncSeatCount` bumps Stripe quantity to 4 and the next invoice carries a €30 proration line.
 - [ ] **Expect** `/billing` UI now shows "1 extra seat × €30/mo = €30/mo overage" instead of the trial seat-cap copy.
 

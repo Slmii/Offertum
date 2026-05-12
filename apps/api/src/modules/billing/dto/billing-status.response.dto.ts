@@ -1,12 +1,11 @@
 /**
  * Discriminator the UI switches on. Values mirror Stripe's Subscription.status enum
- * plus two non-Stripe states for the period before a customer has ever subscribed:
- *  - `local_trial`: no Stripe subscription yet; org is within its 14-day local grace.
- *  - `expired`: no Stripe subscription yet; local grace has lapsed (writes are gated).
+ * plus one non-Stripe state for orgs that have never reached Checkout:
+ *  - `none`: no Subscription row yet. Writes are gated; user must Checkout to start
+ *    the 14-day Stripe-managed trial.
  */
 export type BillingState =
-	| 'local_trial'
-	| 'expired'
+	| 'none'
 	| 'trialing'
 	| 'active'
 	| 'past_due'
@@ -30,7 +29,7 @@ export class BillingStatusResponseDto {
 
 	/**
 	 * ISO timestamp of when the current period ends.
-	 *  - `local_trial` / `expired`: `Organization.createdAt + 14d`.
+	 *  - `none`: `null` (no period — the user hasn't started a trial yet).
 	 *  - `trialing`: end of trial (also the date Stripe makes the first charge).
 	 *  - `active`: next renewal date.
 	 *  - terminal states (canceled with no remaining period): `null`.

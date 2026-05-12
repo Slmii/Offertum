@@ -26,8 +26,6 @@ function BillingPage() {
 	const startCheckout = useStartCheckout();
 	const openPortal = useOpenPortal();
 
-	console.log('Billing status:', status);
-
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
@@ -149,7 +147,8 @@ function StatusPanel({
 }
 
 function SeatsLine({ seats, state }: { seats: BillingStatus['seats']; state: BillingStatus['state'] }) {
-	const isTrial = state === 'local_trial' || state === 'trialing';
+	const isTrial = state === 'trialing';
+	const isUnsubscribed = state === 'none';
 	const overage = Math.max(0, seats.used - seats.included);
 	const overageCents = overage * seats.overagePerSeatCents;
 	const remaining = Math.max(0, seats.included - seats.used);
@@ -161,6 +160,13 @@ function SeatsLine({ seats, state }: { seats: BillingStatus['seats']; state: Bil
 				{isTrial ? 'max during trial' : 'included in base price'}
 			</Typography>
 
+			{isUnsubscribed && (
+				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
+					Start your trial to invite teammates. The first {seats.included} seats are included in the base
+					price; additional seats are {formatEuros(seats.overagePerSeatCents)}/month each.
+				</Typography>
+			)}
+
 			{isTrial && (
 				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
 					{remaining > 0
@@ -169,14 +175,14 @@ function SeatsLine({ seats, state }: { seats: BillingStatus['seats']; state: Bil
 				</Typography>
 			)}
 
-			{!isTrial && overage > 0 && (
+			{!isTrial && !isUnsubscribed && overage > 0 && (
 				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
 					{overage} extra seat{overage === 1 ? '' : 's'} × {formatEuros(seats.overagePerSeatCents)}/mo ={' '}
 					<strong>{formatEuros(overageCents)}/mo overage</strong>
 				</Typography>
 			)}
 
-			{!isTrial && overage === 0 && remaining > 0 && (
+			{!isTrial && !isUnsubscribed && overage === 0 && remaining > 0 && (
 				<Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
 					Invite up to {remaining} more without overage charges.
 				</Typography>
@@ -200,7 +206,8 @@ function stateChip(state: BillingStatus['state']): {
 	label: string;
 } {
 	switch (state) {
-		case 'local_trial':
+		case 'none':
+			return { color: 'default', label: 'No plan' };
 		case 'trialing':
 			return { color: 'primary', label: 'Trial' };
 		case 'active':
@@ -213,8 +220,6 @@ function stateChip(state: BillingStatus['state']): {
 		case 'unpaid':
 		case 'incomplete_expired':
 			return { color: 'error', label: 'Inactive' };
-		case 'expired':
-			return { color: 'error', label: 'Trial expired' };
 		case 'incomplete':
 			return { color: 'warning', label: 'Incomplete' };
 	}
@@ -222,8 +227,8 @@ function stateChip(state: BillingStatus['state']): {
 
 function primaryLine(state: BillingStatus['state'], endDate: Date | null): string {
 	switch (state) {
-		case 'local_trial':
-			return `Free trial — ends ${formatDate(endDate)}`;
+		case 'none':
+			return "You haven't started your trial yet.";
 		case 'trialing':
 			return `Free trial — first charge on ${formatDate(endDate)}`;
 		case 'active':
@@ -240,19 +245,15 @@ function primaryLine(state: BillingStatus['state'], endDate: Date | null): strin
 			return 'Subscription setup incomplete.';
 		case 'incomplete_expired':
 			return 'Subscription setup expired.';
-		case 'expired':
-			return 'Your free trial has ended.';
 	}
 }
 
 function secondaryLine(state: BillingStatus['state']): string | null {
 	switch (state) {
-		case 'local_trial':
-			return 'Subscribe any time to unlock full access after the trial.';
+		case 'none':
+			return 'Start your 14-day free trial. A card is required at signup, but you won’t be charged for 14 days. Cancel any time before then.';
 		case 'past_due':
 			return 'Update your payment method to keep your subscription active.';
-		case 'expired':
-			return 'Subscribe to keep using Quoteom.';
 		case 'canceled':
 			return 'Subscribe again to restore access.';
 		default:
@@ -281,8 +282,7 @@ function formatPaymentMethod(brand: string): string {
 }
 
 const SUBSCRIBE_STATES: ReadonlyArray<BillingStatus['state']> = [
-	'local_trial',
-	'expired',
+	'none',
 	'canceled',
 	'incomplete_expired',
 	'unpaid'
@@ -295,12 +295,12 @@ function shouldShowSubscribe(status: BillingStatus): boolean {
 function shouldShowManage(status: BillingStatus): boolean {
 	// Anyone with a Stripe customer record can open the Portal — even canceled customers
 	// may want to see past invoices. Only hide it before they've ever subscribed.
-	return status.state !== 'local_trial' && status.state !== 'expired';
+	return status.state !== 'none';
 }
 
 function subscribeLabel(state: BillingStatus['state']): string {
-	if (state === 'local_trial') {
-		return 'Start your 14-day trial';
+	if (state === 'none') {
+		return 'Start your 14-day free trial';
 	}
 	return 'Subscribe';
 }

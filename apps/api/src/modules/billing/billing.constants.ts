@@ -25,18 +25,9 @@ export const LIVE_SUBSCRIPTION_STATUSES: ReadonlyArray<string> = [
 ];
 
 /**
- * Length of the local-grace trial that starts on org creation. Distinct from Stripe's
- * `subscription_data.trial_period_days` (which only starts once the user has gone through
- * Checkout and attached a payment method). This window lets a brand-new org explore the
- * product before being asked for a card.
- */
-export const LOCAL_TRIAL_DAYS = 14;
-export const LOCAL_TRIAL_MS = LOCAL_TRIAL_DAYS * 24 * 60 * 60 * 1000;
-
-/**
- * HTTP methods that count as "reads" and bypass the trial gate. Even an expired org should
- * be able to list their data, view their dashboard, etc. — they just can't make changes
- * until they subscribe.
+ * HTTP methods that count as "reads" and bypass the entitlement gate. Even an unsubscribed
+ * or canceled org can still list their data and view their dashboard — they just can't
+ * make changes until they have a live subscription.
  */
 export const READ_METHODS: ReadonlyArray<string> = ['GET', 'HEAD', 'OPTIONS'];
 
@@ -61,8 +52,12 @@ export const PER_SEAT_OVERAGE_CENTS = 3000;
  * inviting an unbounded team and then being surprised by a large first invoice when
  * the trial ends. Once they actually subscribe (`active | past_due | paused`), they can
  * grow past the included tier and pay overage.
+ *
+ * Note: only Stripe's `trialing` state qualifies — a brand-new org with no Subscription
+ * row at all is in state `'none'` and `EntitlementGuard` blocks the invitation write before
+ * this cap is ever evaluated.
  */
-export const TRIAL_STATES: ReadonlyArray<string> = ['local_trial', 'trialing'];
+export const TRIAL_STATES: ReadonlyArray<string> = ['trialing'];
 
 /**
  * Error code surfaced when an invitation is rejected because the org is at its trial

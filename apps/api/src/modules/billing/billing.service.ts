@@ -8,7 +8,6 @@ import {
 } from '@/lib/errors';
 import {
 	LIVE_SUBSCRIPTION_STATUSES,
-	LOCAL_TRIAL_MS,
 	PER_SEAT_OVERAGE_CENTS,
 	SEATS_INCLUDED,
 	SEAT_SYNC_STATUSES
@@ -288,12 +287,8 @@ export class BillingService {
 	 * notice. No Stripe calls — pure DB read.
 	 */
 	async getStatus(organizationId: string): Promise<BillingStatusResponseDto> {
-		const [sub, org, seatsUsed] = await Promise.all([
+		const [sub, seatsUsed] = await Promise.all([
 			this.prisma.subscription.findUnique({ where: { organizationId } }),
-			this.prisma.organization.findUniqueOrThrow({
-				where: { id: organizationId },
-				select: { createdAt: true }
-			}),
 			this.countActiveSeats(organizationId)
 		]);
 
@@ -315,13 +310,13 @@ export class BillingService {
 			};
 		}
 
-		// No Stripe subscription yet — fall back to the local 14-day window.
-		const localTrialEnd = new Date(org.createdAt.getTime() + LOCAL_TRIAL_MS);
-		const inWindow = localTrialEnd.getTime() > Date.now();
-
+		// No Subscription row → the org has never reached Checkout. Writes are gated by
+		// EntitlementGuard; the UI surfaces a single "Start your 14-day free trial" CTA
+		// that routes through Stripe Checkout (which captures the card and creates the
+		// `trialing` Stripe sub — that's the only trial in this model).
 		return {
-			state: inWindow ? 'local_trial' : 'expired',
-			currentPeriodEnd: localTrialEnd.toISOString(),
+			state: 'none',
+			currentPeriodEnd: null,
 			cancelAtPeriodEnd: false,
 			paymentMethodBrand: null,
 			paymentMethodLast4: null,

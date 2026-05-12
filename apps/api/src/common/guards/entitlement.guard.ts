@@ -1,10 +1,5 @@
 import { MISSING_ORG_CONTEXT, SUBSCRIPTION_REQUIRED } from '@/lib/errors';
-import {
-	BILLING_REQUIRED_CODE,
-	ENTITLED_STRIPE_STATUSES,
-	LOCAL_TRIAL_MS,
-	READ_METHODS
-} from '@/modules/billing/billing.constants';
+import { BILLING_REQUIRED_CODE, ENTITLED_STRIPE_STATUSES, READ_METHODS } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
@@ -12,17 +7,18 @@ import type { Request } from 'express';
 /**
  * Gates write routes (POST/PATCH/PUT/DELETE) behind subscription entitlement. Despite the
  * name, this is NOT only for trials — it's the general "is this org allowed to make
- * changes right now" check, covering trial, paying, past-due, canceled, expired, etc.
+ * changes right now" check, covering trial, paying, past-due, canceled, etc.
  *
  * Must run AFTER OrganizationGuard so that `request.organizationId` is populated.
  * Compose via the `@TenantWrite()` / `@OwnerWrite()` decorators (recommended) or with
  * `@UseGuards(OrganizationGuard, EntitlementGuard)` directly.
  *
- * Entitled paths:
- *  - Subscription.status ∈ {trialing, active, past_due}  → Stripe-managed entitlement.
- *  - No Stripe subscription yet AND org is younger than LOCAL_TRIAL_DAYS  → local grace.
+ * Entitled path: Subscription.status ∈ {trialing, active, past_due}. Stripe is the only
+ * source of trial entitlement — a brand-new org with no Subscription row at all gets a
+ * 402 on writes and must Checkout (which captures a card and starts Stripe's 14-day trial)
+ * before it can do anything.
  *
- * Everything else (canceled, unpaid, expired, incomplete_expired, paused, incomplete) →
+ * Everything else (no sub, canceled, unpaid, incomplete_expired, paused, incomplete) →
  * 402 with `{ code: 'billing_required' }`.
  */
 @Injectable()
@@ -46,24 +42,11 @@ export class EntitlementGuard implements CanActivate {
 
 		const sub = await this.prisma.subscription.findUnique({
 			where: { organizationId },
-			select: { status: true, stripeSubscriptionId: true }
+			select: { status: true }
 		});
 
 		if (sub?.status && ENTITLED_STRIPE_STATUSES.includes(sub.status)) {
 			return true;
-		}
-
-		// Local grace window only applies before the org has ever held a Stripe subscription.
-		// Once they've had one and it lapsed, they don't get the new-org grace back.
-		if (!sub?.stripeSubscriptionId) {
-			const org = await this.prisma.organization.findUnique({
-				where: { id: organizationId },
-				select: { createdAt: true }
-			});
-
-			if (org && Date.now() - org.createdAt.getTime() < LOCAL_TRIAL_MS) {
-				return true;
-			}
 		}
 
 		throw this.billingRequired(SUBSCRIPTION_REQUIRED);
