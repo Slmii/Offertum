@@ -1,6 +1,6 @@
+import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { MembershipRole } from '@/generated/prisma/client';
 import { OWNER_ROLE_REQUIRED } from '@/lib/errors';
-import { OrganizationGuard } from '@/modules/auth/organization.guard';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
@@ -12,8 +12,8 @@ import type { Request } from 'express';
  * destructive admin actions, ownership transfer, etc. For tenant-scoped reads/writes that
  * any member can perform, use `OrganizationGuard` instead.
  *
- * Composes with `TrialGateGuard` if needed (write entitlement + role). They check different
- * dimensions so order doesn't matter.
+ * Composes with `EntitlementGuard` if needed (write entitlement + role). They check
+ * different dimensions so order doesn't matter.
  */
 @Injectable()
 export class OwnerGuard extends OrganizationGuard {

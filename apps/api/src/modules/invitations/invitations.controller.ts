@@ -1,5 +1,5 @@
-import { OrganizationGuard } from '@/modules/auth/organization.guard';
-import { OwnerWrite } from '@/modules/billing/owner-write.decorator';
+import { OwnerWrite } from '@/common/decorators/owner-write.decorator';
+import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { AcceptInvitationDto } from '@/modules/invitations/dto/accept-invitation.dto';
 import { AcceptInvitationResponseDto } from '@/modules/invitations/dto/accept-invitation.response.dto';
 import { CreateInvitationDto } from '@/modules/invitations/dto/create-invitation.dto';

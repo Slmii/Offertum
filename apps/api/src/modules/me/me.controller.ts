@@ -1,5 +1,5 @@
 import { MEMBERSHIP_NOT_FOUND } from '@/lib/errors';
-import { OrganizationGuard } from '@/modules/auth/organization.guard';
+import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Controller, Get, NotFoundException, Req, UseGuards } from '@nestjs/common';

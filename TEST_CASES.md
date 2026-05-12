@@ -120,6 +120,13 @@ COOKIES=/tmp/quoteom.cookies
 - [ ] **Expect** HTTP 409 with message `This person is already a member of the organization`; UI shows the error in an error Alert.
 - [ ] Try with `ALICE@example.com` (different case) → same 409 (comparison is case-insensitive).
 
+### INV-17: Owner with no entitlement can't invite (canceled / expired / unpaid)
+- [ ] As the owner of an org where `Subscription.status = 'canceled'` (e.g. ran BILLING-07b or `stripe subscriptions cancel`), navigate to `/team`.
+- [ ] **Expect** the invite form is **not** rendered. Instead a warning Alert shows: `Your subscription has been canceled. Subscribe again to invite teammates.` with a **Subscribe** action button linking to `/billing`.
+- [ ] Repeat with `status` set in psql to each of `expired`, `unpaid`, `paused`, `incomplete`, `incomplete_expired` → the banner copy matches the state (see `billingBlockedCopy` in `team.tsx`).
+- [ ] Revoke (×) button on existing pending invitations is **hidden** when not entitled — matches the backend, which 402s revoke via `@OwnerWrite()` → `EntitlementGuard`. Owner must resubscribe before cleaning up dangling invites.
+- [ ] As a non-owner in the same canceled org: same "Only the organization owner can invite teammates" caption, no banner (the entitlement copy is owner-targeted).
+
 ### INV-16: Only owners can create or revoke invitations
 - [ ] Sign in as a `MEMBER` of an org. Visit `/team`.
 - [ ] **Expect** the page loads (memberships + pending invitations + status all visible).
@@ -364,7 +371,7 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 
 ### BILLING-11: Trial gate — fresh org, within local 14-day window
 - [ ] Create a brand-new org (sign up via invitation flow). Do **not** click Subscribe.
-- [ ] Hit any tenant write route protected by `@TenantWrite()` (e.g. a future `POST /api/opportunities`). For now, smoke this by adding `@UseGuards(OrganizationGuard, TrialGateGuard)` to a throwaway POST route or by manually invoking the guard in a unit test.
+- [ ] Hit any tenant write route protected by `@TenantWrite()` (e.g. a future `POST /api/opportunities`). For now, smoke this by adding `@UseGuards(OrganizationGuard, EntitlementGuard)` to a throwaway POST route or by manually invoking the guard in a unit test.
 - [ ] **Expect** the request succeeds (HTTP 2xx). The local trial window keeps writes open until `org.createdAt + 14d`.
 
 ### BILLING-12: Trial gate — local trial expired, no Stripe subscription

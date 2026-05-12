@@ -1,19 +1,19 @@
 import { AuthModule } from '@/modules/auth/auth.module';
 import { BillingController } from '@/modules/billing/billing.controller';
 import { BillingService } from '@/modules/billing/billing.service';
-import { TrialGateGuard } from '@/modules/billing/trial-gate.guard';
+import { EntitlementGuard } from '@/common/guards/entitlement.guard';
 import { Global, Module } from '@nestjs/common';
 
 /**
- * Marked @Global so TrialGateGuard is resolvable by other modules' controllers via
- * `@UseGuards(TrialGateGuard)` or the `@TenantWrite()` composite decorator without
- * each module having to re-import BillingModule.
+ * Marked @Global so EntitlementGuard is resolvable by other modules' controllers via
+ * `@UseGuards(EntitlementGuard)` or the `@TenantWrite()` / `@OwnerWrite()` composite
+ * decorators without each module having to re-import BillingModule.
  */
 @Global()
 @Module({
 	imports: [AuthModule],
 	controllers: [BillingController],
-	providers: [BillingService, TrialGateGuard],
-	exports: [BillingService, TrialGateGuard]
+	providers: [BillingService, EntitlementGuard],
+	exports: [BillingService, EntitlementGuard]
 })
 export class BillingModule {}

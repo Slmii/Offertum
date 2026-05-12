@@ -1,5 +1,5 @@
 import { AppService } from '@/app.service';
-import { HealthResponseDto, HelloResponseDto } from '@/dto/hello.response.dto';
+import { HealthResponseDto, HelloResponseDto } from '@/common/dto/hello.response.dto';
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 

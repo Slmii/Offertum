@@ -1,4 +1,4 @@
-import { HelloResponseDto } from '@/dto/hello.response.dto';
+import { HelloResponseDto } from '@/common/dto/hello.response.dto';
 import { Injectable, Logger } from '@nestjs/common';
 
 @Injectable()

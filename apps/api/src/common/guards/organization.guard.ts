@@ -1,5 +1,5 @@
+import { AuthGuard } from '@/common/guards/auth.guard';
 import { NO_ACTIVE_ORGANIZATION } from '@/lib/errors';
-import { AuthGuard } from '@/modules/auth/auth.guard';
 import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
 

@@ -61,7 +61,10 @@ export const noStripeCustomerForOrg = (organizationId: string) =>
 // ────────────────────────────────────────────────────────────────────────────
 // Billing — entitlement (User-facing — paired with structured `code` fields)
 // ────────────────────────────────────────────────────────────────────────────
-export const TRIAL_ENDED = 'Your trial has ended. Subscribe to continue.';
+// Generic message returned by EntitlementGuard for all non-entitled write attempts
+// (trial expired, canceled, unpaid, etc.). The web client renders state-specific copy
+// via `billingBlockedCopy()`; this string is the fallback for non-web callers.
+export const SUBSCRIPTION_REQUIRED = 'An active subscription is required to make changes.';
 export const MISSING_ORG_CONTEXT = 'Missing organization context.';
 export const subscriptionAlreadyActive = (status: string) =>
 	`Organization already has an active subscription (${status}). Use the Customer Portal to manage it.`;

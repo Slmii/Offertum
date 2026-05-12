@@ -1,5 +1,6 @@
 import { WrapperApiError } from '@/lib/api/client';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
+import type { BillingState } from '@/lib/queries/billing.queries';
 import {
 	invitationsQueryOptions,
 	membershipsQueryOptions,
@@ -64,6 +65,13 @@ function TeamPage() {
 	const isTrial = status.state === 'local_trial' || status.state === 'trialing';
 	const seatsTaken = memberships.length + invitations.length;
 	const trialCapReached = isTrial && seatsTaken >= status.seats.included;
+	// Mirror the API's trial-gate entitlement set. Any state outside this list will 402
+	// at submission time, so disable the invite form proactively.
+	const billingEntitled =
+		status.state === 'local_trial' ||
+		status.state === 'trialing' ||
+		status.state === 'active' ||
+		status.state === 'past_due';
 
 	const handleSubmit = (event: React.FormEvent) => {
 		event.preventDefault();
@@ -125,7 +133,7 @@ function TeamPage() {
 									key={inv.id}
 									disableGutters
 									secondaryAction={
-										isOwner ? (
+										isOwner && billingEntitled ? (
 											<IconButton
 												edge='end'
 												size='small'
@@ -172,7 +180,21 @@ function TeamPage() {
 					</Alert>
 				)}
 
-				{isOwner ? (
+				{isOwner && !billingEntitled && (
+					<Alert
+						severity='warning'
+						sx={{ mb: 2 }}
+						action={
+							<Button color='inherit' size='small' onClick={() => navigate({ to: '/billing' })}>
+								Subscribe
+							</Button>
+						}
+					>
+						{billingBlockedCopy(status.state)}
+					</Alert>
+				)}
+
+				{isOwner && billingEntitled && (
 					<>
 						<Typography variant='overline' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
 							Invite a teammate
@@ -236,7 +258,9 @@ function TeamPage() {
 							</Typography>
 						</Box>
 					</>
-				) : (
+				)}
+
+				{!isOwner && (
 					<Typography variant='caption' color='text.secondary'>
 						Only the organization owner can invite teammates.
 					</Typography>
@@ -244,6 +268,25 @@ function TeamPage() {
 			</Paper>
 		</Container>
 	);
+}
+
+function billingBlockedCopy(state: BillingState): string {
+	switch (state) {
+		case 'expired':
+			return 'Your free trial has ended. Subscribe to invite more teammates.';
+		case 'canceled':
+			return 'Your subscription has been canceled. Subscribe again to invite teammates.';
+		case 'unpaid':
+			return 'Your subscription is unpaid. Update your payment to invite teammates.';
+		case 'paused':
+			return 'Your subscription is paused. Resume it to invite teammates.';
+		case 'incomplete':
+			return 'Your subscription setup is incomplete. Complete checkout to invite teammates.';
+		case 'incomplete_expired':
+			return 'Your subscription setup expired. Subscribe again to invite teammates.';
+		default:
+			return 'Your subscription is inactive. Subscribe to invite teammates.';
+	}
 }
 
 function formatEuros(cents: number): string {

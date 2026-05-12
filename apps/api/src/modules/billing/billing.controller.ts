@@ -5,8 +5,8 @@ import {
 	STRIPE_SIGNATURE_INVALID,
 	STRIPE_WEBHOOK_SECRET_MISSING
 } from '@/lib/errors';
-import { OrganizationGuard } from '@/modules/auth/organization.guard';
-import { OwnerGuard } from '@/modules/auth/owner.guard';
+import { OrganizationGuard } from '@/common/guards/organization.guard';
+import { OwnerGuard } from '@/common/guards/owner.guard';
 import { BillingService } from '@/modules/billing/billing.service';
 import { BillingStatusResponseDto } from '@/modules/billing/dto/billing-status.response.dto';
 import {

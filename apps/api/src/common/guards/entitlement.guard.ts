@@ -1,4 +1,4 @@
-import { MISSING_ORG_CONTEXT, TRIAL_ENDED } from '@/lib/errors';
+import { MISSING_ORG_CONTEXT, SUBSCRIPTION_REQUIRED } from '@/lib/errors';
 import {
 	BILLING_REQUIRED_CODE,
 	ENTITLED_STRIPE_STATUSES,
@@ -10,20 +10,23 @@ import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } 
 import type { Request } from 'express';
 
 /**
- * Gates write routes (POST/PATCH/PUT/DELETE) behind subscription entitlement.
+ * Gates write routes (POST/PATCH/PUT/DELETE) behind subscription entitlement. Despite the
+ * name, this is NOT only for trials — it's the general "is this org allowed to make
+ * changes right now" check, covering trial, paying, past-due, canceled, expired, etc.
  *
  * Must run AFTER OrganizationGuard so that `request.organizationId` is populated.
- * Compose via the `@TenantWrite()` decorator (recommended) or with
- * `@UseGuards(OrganizationGuard, TrialGateGuard)` directly.
+ * Compose via the `@TenantWrite()` / `@OwnerWrite()` decorators (recommended) or with
+ * `@UseGuards(OrganizationGuard, EntitlementGuard)` directly.
  *
  * Entitled paths:
  *  - Subscription.status ∈ {trialing, active, past_due}  → Stripe-managed entitlement.
  *  - No Stripe subscription yet AND org is younger than LOCAL_TRIAL_DAYS  → local grace.
  *
- * Everything else returns 402 with `{ code: 'billing_required' }`.
+ * Everything else (canceled, unpaid, expired, incomplete_expired, paused, incomplete) →
+ * 402 with `{ code: 'billing_required' }`.
  */
 @Injectable()
-export class TrialGateGuard implements CanActivate {
+export class EntitlementGuard implements CanActivate {
 	constructor(private readonly prisma: PrismaService) {}
 
 	async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -63,7 +66,7 @@ export class TrialGateGuard implements CanActivate {
 			}
 		}
 
-		throw this.billingRequired(TRIAL_ENDED);
+		throw this.billingRequired(SUBSCRIPTION_REQUIRED);
 	}
 
 	private billingRequired(message: string): HttpException {
