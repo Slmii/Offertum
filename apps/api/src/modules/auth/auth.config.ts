@@ -2,6 +2,7 @@ import { PrismaClient } from '@/generated/prisma/client';
 import { SELF_SIGNUP_DISABLED } from '@/lib/errors';
 import { buildMagicLinkEmail } from '@/lib/mails/magic-link.email';
 import { sendEmail } from '@/lib/mails/send';
+import { withEncryptedAccountTokens } from '@/modules/auth/encrypted-account-adapter';
 import type { ExpressAuthConfig } from '@auth/express';
 import GoogleProvider from '@auth/express/providers/google';
 import MicrosoftEntra from '@auth/express/providers/microsoft-entra-id';
@@ -25,17 +26,17 @@ const WEB_ORIGIN = `${process.env.WEB_ORIGIN}`;
 // Block Auth.js from auto-creating users. Sign-in is for already-provisioned accounts only;
 // new users must arrive via an Invitation (created by Quoteom admin).
 const baseAdapter = PrismaAdapter(authPrisma as never);
-const adapter: typeof baseAdapter = {
+const adapter = withEncryptedAccountTokens({
 	...baseAdapter,
 	createUser: () => {
 		throw new Error(SELF_SIGNUP_DISABLED);
 	}
-};
+});
 
 const providers: ExpressAuthConfig['providers'] = [
 	ResendProvider({
-		apiKey: process.env.RESEND_API_KEY ?? 'placeholder',
-		from: process.env.RESEND_EMAIL_FROM ?? 'onboarding@resend.dev',
+		apiKey: `${process.env.RESEND_API_KEY}`,
+		from: `${process.env.RESEND_EMAIL_FROM}`,
 		sendVerificationRequest: async ({ identifier: to, url }) => {
 			// First gate: only send to addresses that already have a User row.
 			// Unknown addresses silently succeed (no email, no error) so attackers can't

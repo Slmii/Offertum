@@ -5,10 +5,11 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
+import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 
 export const Route = createFileRoute('/(auth)/sign-in')({
@@ -69,6 +70,13 @@ function SignInPage() {
 						{signIn.isPending ? 'Sending...' : 'Send magic link'}
 					</Button>
 				</Box>
+
+				<Typography variant='body2' color='text.secondary' sx={{ mt: 3, textAlign: 'center' }}>
+					Don't have an account?{' '}
+					<Link component={RouterLink} to='/sign-up'>
+						Create one
+					</Link>
+				</Typography>
 			</Paper>
 		</Container>
 	);

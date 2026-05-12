@@ -27,6 +27,11 @@ async function bootstrap() {
 
 	const config = app.get(ConfigService<EnvSchema, true>);
 
+	// Behind App Platform's load balancer the real client IP arrives in `X-Forwarded-For`.
+	// Without this, `req.ip` is the LB's IP and per-IP rate limits become per-app limits.
+	// `1` = trust the single proxy hop in front of us (App Platform). Bump if more layers.
+	app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
 	app.enableCors({
 		origin: config.get('WEB_ORIGIN', { infer: true }),
 		credentials: true

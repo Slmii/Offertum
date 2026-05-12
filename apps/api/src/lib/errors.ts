@@ -34,8 +34,13 @@ export const OWNER_ROLE_NOT_INVITABLE =
 // User-facing
 export const NOT_AUTHENTICATED = 'Not authenticated';
 export const OWNER_ROLE_REQUIRED = 'Only the organization owner can access this resource';
-// Dev-facing (raised inside Auth.js signIn callback; never surfaces in a response)
-export const SELF_SIGNUP_DISABLED = 'User self-signup is disabled. Users must be invited.';
+// User-facing — surfaced when /api/signup hits a duplicate email
+export const ACCOUNT_ALREADY_EXISTS = 'An account with this email already exists. Sign in instead.';
+export const DISPOSABLE_EMAIL_NOT_ALLOWED = 'Disposable email addresses are not allowed. Please use a work email.';
+// Dev-facing — Auth.js's OAuth (Google/Microsoft) createUser path stays blocked.
+// Self-signup goes through the explicit POST /api/signup endpoint with company name;
+// OAuth providers are sign-in-only for already-provisioned users.
+export const SELF_SIGNUP_DISABLED = 'OAuth self-signup is disabled. Use the email signup form.';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Billing — config errors (Dev-facing; should never reach production)

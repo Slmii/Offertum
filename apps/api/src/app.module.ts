@@ -10,6 +10,8 @@ import { PrismaModule } from '@/modules/prisma/prisma.module';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
 	imports: [
@@ -20,6 +22,16 @@ import { ConfigModule } from '@nestjs/config';
 			validate: validateEnv,
 			cache: true
 		}),
+
+		// Per-IP rate limiting. Defaults are deliberately loose — only abuse-prone routes
+		// (signup, magic-link request) tighten via `@Throttle()`. Stripe's webhook is
+		// `@SkipThrottle()`-ed below since Stripe retries aggressively on transient failures.
+		// `trust proxy` is set in main.ts so request IPs come from X-Forwarded-For in prod
+		// (App Platform load balancer).
+		ThrottlerModule.forRoot([
+			{ name: 'default', ttl: 60_000, limit: 60 } // 60 requests / minute / IP, global
+		]),
+
 		PrismaModule,
 		LogModule,
 		AuthModule,
@@ -28,6 +40,6 @@ import { ConfigModule } from '@nestjs/config';
 		BillingModule
 	],
 	controllers: [AppController],
-	providers: [AppService, PrismaService]
+	providers: [AppService, PrismaService, { provide: APP_GUARD, useClass: ThrottlerGuard }]
 })
 export class AppModule {}

@@ -23,6 +23,14 @@ export const envSchema = z.object({
 	AUTH_URL: z.url(),
 	AUTH_TRUST_HOST: z.coerce.boolean().default(true),
 
+	// Encryption key for OAuth tokens stored on Account rows. 32 bytes hex-encoded.
+	// Generate with: `openssl rand -hex 32`. NEVER reuse across environments — leaking
+	// it from staging would let staging readers decrypt prod tokens if you copy DB dumps.
+	TOKEN_ENCRYPTION_KEY: z
+		.string()
+		.length(64, 'must be 64 hex chars (32 bytes — generate with `openssl rand -hex 32`)')
+		.regex(/^[0-9a-fA-F]+$/, 'must be hex'),
+
 	// Resend (email)
 	RESEND_API_KEY: z.string().optional(),
 	RESEND_EMAIL_FROM: z.string().email().default('onboarding@resend.dev'),

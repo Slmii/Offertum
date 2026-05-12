@@ -32,6 +32,36 @@ export function useSignInWithEmail() {
 	});
 }
 
+interface SignupInput {
+	email: string;
+	companyName: string;
+}
+
+interface SignupResponse {
+	ok: boolean;
+	email: string;
+}
+
+/**
+ * Self-signup. Two-step:
+ *  1. POST /api/signup → creates User + Organization + OWNER Membership in a transaction.
+ *  2. POST /api/auth/signin/resend → Auth.js sees the now-existing User and emails the
+ *     magic link via the standard signin flow (reuses the same code path as /sign-in).
+ * Caller redirects to /verify-request on success.
+ */
+export function useSignUp() {
+	return useMutation({
+		mutationFn: async ({ email, companyName }: SignupInput) => {
+			const { email: normalized } = await api<SignupResponse>('/api/signup', {
+				method: 'POST',
+				body: { email, companyName }
+			});
+			const csrfToken = await getCsrfToken();
+			await postForm('/api/auth/signin/resend', { email: normalized, csrfToken });
+		}
+	});
+}
+
 export function useSignOut() {
 	const queryClient = useQueryClient();
 	const router = useRouter();

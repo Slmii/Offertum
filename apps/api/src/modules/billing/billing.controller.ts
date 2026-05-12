@@ -29,6 +29,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
 
@@ -87,6 +88,9 @@ export class BillingController {
 		return { ok: true, status: result.status };
 	}
 
+	// Stripe retries webhooks aggressively on any non-2xx; throttling them would just
+	// cascade into more retries. Signature verification is the real auth on this route.
+	@SkipThrottle()
 	@ApiExcludeEndpoint()
 	@HttpCode(HttpStatus.OK)
 	@Post('webhook')

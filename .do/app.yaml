@@ -66,6 +66,13 @@ services:
             scope: RUN_AND_BUILD_TIME
             type: SECRET
 
+          # OAuth-token-at-rest encryption key — generate with `openssl rand -hex 32`.
+          # Different key per env (staging ≠ prod). Losing it makes every encrypted
+          # token unreadable; leaking it makes them readable to anyone with DB access.
+          - key: TOKEN_ENCRYPTION_KEY
+            scope: RUN_AND_BUILD_TIME
+            type: SECRET
+
           # Stripe.
           - key: STRIPE_SECRET_KEY
             scope: RUN_AND_BUILD_TIME

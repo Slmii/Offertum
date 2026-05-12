@@ -29,6 +29,14 @@ COOKIES=/tmp/quoteom.cookies
 
 ## Authentication (W2.1)
 
+### AUTH-ENC-01: OAuth tokens encrypted at rest in `Account` rows
+- [ ] Sign in via Google (with `GOOGLE_CLIENT_ID/SECRET` set). The `Account` row is created.
+- [ ] Inspect the row (Prisma Studio or `SELECT * FROM "Account"`): `access_token`, `refresh_token`, `id_token` columns should start with `v1:` and contain base64 ciphertext — **not** the plain JWT/opaque-token shape.
+- [ ] In a Node REPL: `import { decrypt } from '@/lib/crypto/token-encryption'; decrypt('v1:...')` returns the plaintext.
+- [ ] Tamper with one column (`UPDATE "Account" SET refresh_token = 'v1:tampered' WHERE …;`) → `decrypt(...)` throws (GCM auth tag fails).
+- [ ] Run `npx jest src/lib/crypto/token-encryption.spec.ts` → 9 tests pass.
+- [ ] Boot the API with `TOKEN_ENCRYPTION_KEY` unset → `ConfigModule` rejects startup with a clear "must be 64 hex chars" message.
+
 ### AUTH-01: Magic-link sign-in for an existing user
 - [ ] Visit `http://localhost:3001/api/auth/signin` in browser.
 - [ ] Enter `alice@quoteom.dev`, submit.
@@ -38,6 +46,45 @@ COOKIES=/tmp/quoteom.cookies
 - [ ] **Expect** browser redirected to `http://localhost:3000/` (web app, not API root).
 - [ ] `curl -b $COOKIES http://localhost:3001/api/auth/session` returns `{ user: { id, email, name, organizationId } }`.
 - [ ] `user.organizationId` matches Alice's `currentOrganizationId` (`…001` for Acme).
+
+### AUTH-SIGNUP-01: Self-signup creates User + Organization + OWNER Membership
+- [ ] Visit `http://localhost:3000/sign-up`. Fill `Company name = "Sometestbedrijf BV"` and `Email = new-owner@example.com`. Submit.
+- [ ] **Expect** UI redirects to `/verify-request?email=new-owner@example.com`.
+- [ ] **Expect** in API console: `Magic link for new-owner@example.com: …` (dev mode without Resend).
+- [ ] **Expect** in DB: a new `Organization` row with `name = "Sometestbedrijf BV"`; a new `User` row with `email = new-owner@example.com` (lowercased) and `currentOrganizationId` pointing at the new org; a `Membership` row with `role = OWNER` linking them.
+- [ ] Click the magic link → land on `/` → home page shows "Active organization: Sometestbedrijf BV" (single-org user, no switcher).
+
+### AUTH-SIGNUP-02: Duplicate email rejected
+- [ ] After AUTH-SIGNUP-01 succeeds: try to sign up *again* with the same email.
+- [ ] **Expect** HTTP 409 from `POST /api/signup` with `message: "An account with this email already exists. Sign in instead."`; UI shows error Alert.
+- [ ] No second Organization or User row is created.
+
+### AUTH-SIGNUP-03: Validation rejects bad inputs
+- [ ] Submit `Email = "not-an-email"` → class-validator returns `email must be an email`; UI shows the error inline.
+- [ ] Submit `Company name = "X"` (1 char) → returns `Company name must be at least 2 characters`.
+- [ ] Submit `Company name = ""` empty → validation rejects.
+
+### AUTH-SIGNUP-05: Disposable email is rejected at the DTO layer
+- [ ] On `/sign-up`, submit `Email = "burner@mailinator.com"` (or any throwaway domain — `10minutemail.com`, `tempmail.org`, etc.).
+- [ ] **Expect** HTTP 400 from `POST /api/signup` with class-validator message `Disposable email addresses are not allowed. Please use a work email.`
+- [ ] **Expect** no `User` or `Organization` row created.
+- [ ] Real corporate email (e.g. `@quoteom.com`) passes through to the happy path (AUTH-SIGNUP-01).
+
+### AUTH-SIGNUP-06: Signup is rate-limited to 5 per IP per hour
+- [ ] From one client (one IP), submit 5 unique-email signups in a row. All succeed.
+- [ ] On the 6th attempt within the same hour: **expect** HTTP 429 (`Too Many Requests`) with a `Retry-After` header indicating when to retry.
+- [ ] No 6th `User` or `Organization` is created.
+- [ ] After the TTL window (1 hour), the counter resets and signup works again.
+- [ ] **Verify proxy header handling:** behind a load balancer (App Platform / nginx / cloudflare), throttling counts per **`X-Forwarded-For`** IP, not the LB's IP. Test by sending requests with different `X-Forwarded-For` values from a single TCP connection — each should have its own counter. (`trust proxy: 1` is set in `main.ts`.)
+
+### AUTH-SIGNUP-07: Stripe webhook is exempt from rate limiting
+- [ ] `for i in {1..120}; do stripe trigger payment_intent.succeeded; done` (or similar burst).
+- [ ] **Expect** the webhook handler 200s every one — no 429. Confirmed via `@SkipThrottle()` decorator on `POST /api/billing/webhook`.
+
+### AUTH-SIGNUP-04: OAuth providers stay sign-in-only
+- [ ] With `GOOGLE_CLIENT_ID` set, click "Sign in with Google" using a Google account that has **no** existing `User` row in our DB.
+- [ ] **Expect** server log warning + Auth.js error redirect to `/sign-in?error=...` (Auth.js's `createUser` throws `SELF_SIGNUP_DISABLED`). OAuth is for already-provisioned users only.
+- [ ] To onboard a new Google-only user: they must first signup via the form (using their Google email), then the next sign-in via Google links the OAuth provider to the existing User row.
 
 ### AUTH-02: Self-signup is blocked (unknown email)
 - [ ] Submit `nobody@example.com` at `/api/auth/signin`.
