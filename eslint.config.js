@@ -69,7 +69,8 @@ export default tseslint.config(
 			'apps/api/**/*.pipe.ts',
 			'apps/api/**/*.filter.ts',
 			'apps/api/**/*.middleware.ts',
-			'apps/api/**/*.gateway.ts'
+			'apps/api/**/*.gateway.ts',
+			'apps/api/**/*.function.ts'
 		],
 		rules: {
 			'@typescript-eslint/consistent-type-imports': 'off'

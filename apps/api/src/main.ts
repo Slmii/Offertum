@@ -7,14 +7,15 @@ import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter';
 import type { EnvSchema } from '@/config/env.schema';
 import { authConfig } from '@/modules/auth/auth.config';
 import { inngestFunctions } from '@/modules/inngest/functions';
+import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfill.function';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { LogService } from '@/modules/logger/log.service';
 import { ExpressAuth } from '@auth/express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json as expressJson } from 'express';
 import { serve as inngestServe } from 'inngest/express';
 import 'reflect-metadata';
 
@@ -22,12 +23,23 @@ async function bootstrap() {
 	// `rawBody: true` exposes `request.rawBody` so the Stripe webhook handler can verify
 	// the signature header against the unparsed request body. Without it Stripe's
 	// `constructEvent()` always throws.
-	const app = await NestFactory.create(AppModule, {
+	const app = await NestFactory.create<NestExpressApplication>(AppModule, {
 		bufferLogs: true,
 		rawBody: true
 	});
 
 	app.useLogger(app.get(LogService));
+
+	// Register NestJS's JSON body parser EXPLICITLY — and BEFORE any `app.use()` calls
+	// below. Without this, NestJS registers its parsers lazily during `app.init()`,
+	// which fires AFTER the `app.use('/api/inngest', ...)` mount — leaving Inngest with
+	// no body to read (it 401s; we saw this before this fix). The path-scoped
+	// `expressJson()` workaround had a side effect of breaking body parsing on OTHER
+	// routes (e.g. POST /api/me/switch-organization), so we do it the right way per
+	// Inngest's NestJS docs: tell Nest to install its parsers now.
+	//
+	// 10mb limit covers Gmail's larger full-message payloads on the webhook path (W3.5).
+	app.useBodyParser('json', { limit: '10mb' });
 
 	const config = app.get(ConfigService<EnvSchema, true>);
 
@@ -53,16 +65,20 @@ async function bootstrap() {
 	// Like Auth.js, Inngest's serve() owns the response — keep it before global pipes.
 	// Signing key is auto-read from `INNGEST_SIGNING_KEY` env (handled by the SDK).
 	//
-	// `expressJson()` is mounted ONLY on this path because NestJS's global body parser
-	// runs after `app.use()` middleware in this lifecycle position, and Inngest's serve()
-	// expects a pre-parsed JSON body on POST. We can't enable JSON parsing globally — that
-	// would break Stripe's webhook signature verification, which needs the raw bytes.
+	// JSON body parsing happens upstream of this mount via `app.useBodyParser(...)` above —
+	// no path-scoped `expressJson()` workaround needed. Stripe's webhook still gets `rawBody`
+	// because `NestFactory.create({ rawBody: true })` instructs the parser to capture both.
+	//
+	// Function list combines:
+	//   - free-function smoke functions (no Nest DI) from `functions/index.ts`
+	//   - DI-aware `@Injectable()` wrappers — each exposes `.inngestFn`. New wrappers add
+	//     a class entry to `InngestModule` providers + a `.get()` line here.
+	const gmailBackfill = app.get(GmailBackfillFunction);
 	app.use(
 		'/api/inngest',
-		expressJson(),
 		inngestServe({
 			client: inngest,
-			functions: inngestFunctions
+			functions: [...inngestFunctions, gmailBackfill.inngestFn]
 		})
 	);
 

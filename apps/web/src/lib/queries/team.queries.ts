@@ -51,11 +51,12 @@ export function useSwitchOrganization() {
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	return useMutation({
-		mutationFn: (organizationId: string) =>
-			api<Membership>('/api/me/switch-organization', {
+		mutationFn: (organizationId: string) => {
+			return api<Membership>('/api/me/switch-organization', {
 				method: 'POST',
 				body: { organizationId }
-			}),
+			});
+		},
 		onSuccess: async () => {
 			// Active-org context changed: every cached query is potentially stale.
 			// Cheapest correct thing is to nuke the cache + force the router to refetch

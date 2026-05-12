@@ -648,6 +648,37 @@ Setup once: in Google Cloud Console, register an OAuth client with TWO authorize
 - [ ] **Expect** Runs tab: a completed run with output `{ ok: true, at: "<iso>" }`. API logs include `[InngestFn:heartbeat] heartbeat tick at ...`.
 - [ ] Leave the dev server running across an hour boundary — at `:00` UTC a fresh run appears automatically. (For faster verification, edit the cron temporarily to `* * * * *` and reload — restore before committing.)
 
+### EMAIL-BACKFILL-01: Happy path — connect Gmail, last 30 days arrive in DB
+- [ ] Inngest dev server running (`npx inngest-cli@latest dev`). API running. Org in `trialing` state.
+- [ ] Connect Gmail (EMAIL-01). Page lands on `/settings/email?connected=1`.
+- [ ] **Expect** UI shows "Importing your last 30 days... this usually takes under a minute." + the list auto-refreshes every 5s.
+- [ ] **Expect** Inngest dev UI Runs tab: a `gmail-backfill` run completes within ~30 s for a typical inbox. Output is shaped like `{ emailAccountId, pagesFetched, messagesInserted, messagesSkipped, historyId }`.
+- [ ] **Expect** DB: `SELECT count(*) FROM "RawMessage";` returns the same number as `messagesInserted` in the Inngest output.
+- [ ] **Expect** DB: `SELECT "historyId" FROM "EmailAccount";` is a non-null string (used by W3.5 push delta sync later).
+- [ ] **Expect** UI: messages list updates from "Importing..." → showing 10 most recent (the smoke list endpoint is capped at 10; full inbox arrives in DB regardless).
+- [ ] **Expect** every `RawMessage.raw` is a JSON object containing `payload.headers[]` etc.
+
+### EMAIL-BACKFILL-02: Re-running is idempotent
+- [ ] After EMAIL-BACKFILL-01 completes: in the Inngest dev UI, **Invoke** the `gmail-backfill` function manually with payload `{"emailAccountId": "<id from EmailAccount>"}`.
+- [ ] **Expect** the run completes with `messagesInserted = 0` and `messagesSkipped = <total backfilled>`. No duplicate rows.
+- [ ] **Expect** DB: `SELECT count(*) FROM "RawMessage";` unchanged from EMAIL-BACKFILL-01.
+
+### EMAIL-BACKFILL-03: Disconnect + reconnect kicks off a fresh backfill
+- [ ] After EMAIL-BACKFILL-01: click **Disconnect** → DB cleared (cascade drops `EmailAccount` + all `RawMessage` rows).
+- [ ] Reconnect via the Connect Gmail flow → new `EmailAccount` row → backfill fires again.
+- [ ] **Expect** `messagesInserted` matches the count from the original run (no leftover `RawMessage` rows; cascade worked).
+
+### EMAIL-BACKFILL-04: Stale/missing EmailAccount mid-flight
+- [ ] Connect Gmail. Immediately (within the 30 s backfill window) **Disconnect** so the row is deleted.
+- [ ] **Expect** the in-flight backfill either (a) succeeds against the pre-deletion ID then the cascade trims its outputs OR (b) fails with `EMAIL_ACCOUNT_NOT_FOUND` after the deletion happens. Either is acceptable — the DB ends consistent (no orphan `RawMessage` rows pointing at a deleted `EmailAccount`).
+- [ ] **Expect** Inngest dev UI: if (b), the run shows the `NotFoundException` and Inngest does NOT retry it (the exception is terminal — we should add a Non-retriable wrapper later).
+
+### EMAIL-BACKFILL-05: Backfill on a freshly-revoked account
+- [ ] Connect Gmail. While backfill is running (immediately after `?connected=1` lands), revoke the app at https://myaccount.google.com/permissions.
+- [ ] **Expect**: the first Gmail API call mid-backfill returns 401 → `withFreshAccessToken` force-refreshes → `invalid_grant` → `EmailAccountsService` deletes the row + throws `NotFoundException`. Backfill function surfaces the error.
+- [ ] **Expect** DB: zero `EmailAccount` + zero `RawMessage` rows for this user (cascade).
+- [ ] **Expect** UI: chip flips to **Not connected** within 5 s thanks to the 5 s polling refetch — no manual refresh needed.
+
 ### INNGEST-04: Auth.js + Inngest don't collide on /api/* mounting
 - [ ] Confirm `GET /api/auth/session` still returns the session (Auth.js) and `GET /api/inngest` returns the function list (Inngest). Both are app-level Express middleware mounted before NestJS pipes — order in `main.ts` is `/api/auth` then `/api/inngest`. Adding a NestJS controller for either prefix would shadow them and break this test.
 

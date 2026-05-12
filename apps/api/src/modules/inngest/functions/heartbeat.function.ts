@@ -1,4 +1,5 @@
 import { inngest } from '@/modules/inngest/inngest.client';
+import { InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
 import { Logger } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
@@ -16,12 +17,12 @@ const logger = new Logger('InngestFn:heartbeat');
  */
 export const heartbeatFn: InngestFunction.Any = inngest.createFunction(
 	{
-		id: 'heartbeat',
+		id: InngestFunctionIds.Heartbeat,
 		name: 'Heartbeat (scheduled smoke)',
 		triggers: [{ cron: '0 * * * *' }] // Top of every hour, UTC
 	},
 	async ({ step }) => {
-		const at = await step.run('record-tick', () => new Date().toISOString());
+		const at = await step.run(InngestSteps.Heartbeat.RecordTick, () => new Date().toISOString());
 		logger.log(`heartbeat tick at ${at}`);
 		return { ok: true, at };
 	}

@@ -3,6 +3,8 @@ import { decrypt, encrypt } from '@/lib/crypto/token-encryption';
 import { EMAIL_ACCOUNT_NOT_FOUND } from '@/lib/errors';
 import { GoogleOAuthService, type TokenSet } from '@/modules/gmail/google-oauth.service';
 import { GmailUnauthorizedException, OAuthRefreshTokenInvalidException } from '@/modules/gmail/oauth-errors';
+import { inngest } from '@/modules/inngest/inngest.client';
+import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
@@ -104,6 +106,23 @@ export class EmailAccountsService {
 		});
 
 		this.logger.log(`Gmail ${input.email} connected to org ${input.organizationId} by user ${input.userId}`);
+
+		// Fire-and-forget the W3.4 backfill. We catch + log because a failure to enqueue
+		// shouldn't fail the connect handshake — the user already finished the OAuth flow
+		// and the row is saved. Worst case: no backfill, and they'd need to disconnect +
+		// reconnect to retry. In production we'd want a separate retry/backfill-status UI
+		// surface for this; for now logging is sufficient.
+		try {
+			await inngest.send({
+				name: InngestEvents.GmailAccountConnected,
+				data: { emailAccountId: row.id }
+			});
+		} catch (error) {
+			this.logger.error(
+				`Failed to enqueue backfill for ${row.id}: ${error instanceof Error ? error.message : 'unknown'}`
+			);
+		}
+
 		return row;
 	}
 

@@ -170,9 +170,7 @@ function EmailSettingsPage() {
 							Recent messages
 						</Typography>
 						{messages.messages.length === 0 ? (
-							<Typography variant='body2' color='text.secondary'>
-								No messages found in the connected mailbox.
-							</Typography>
+							<BackfillPlaceholder justConnected={search.connected === '1'} />
 						) : (
 							<List dense disablePadding>
 								{messages.messages.map(m => (
@@ -180,10 +178,12 @@ function EmailSettingsPage() {
 								))}
 							</List>
 						)}
-						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
-							Smoke-test view of the {messages.messages.length} most recent messages — proves the OAuth
-							handshake works. Full inbox sync arrives in week 3.4.
-						</Typography>
+						{messages.messages.length > 0 && (
+							<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
+								Showing your {messages.messages.length} most recent messages. Full inbox import runs in
+								the background once you connect.
+							</Typography>
+						)}
 					</>
 				)}
 
@@ -193,6 +193,48 @@ function EmailSettingsPage() {
 				</Typography>
 			</Paper>
 		</Container>
+	);
+}
+
+/**
+ * Shown when the mailbox is connected but the smoke endpoint returned zero messages.
+ * Two cases:
+ *  1. The user JUST connected (search param `connected=1`) — backfill is almost certainly
+ *     in flight. Show "Importing..." + auto-refetch the messages query every 5s. We
+ *     deliberately do NOT use React Query's `refetchInterval` here because that polls
+ *     forever; this useEffect tears down once the user navigates away.
+ *  2. The mailbox is genuinely empty (or backfill failed without our knowing). Show a
+ *     friendlier "No messages yet" rather than a stuck loading state.
+ *
+ * Cleanest signal would be a real "backfill-status" endpoint, but it's overkill for
+ * W3.4's MVP scope — the visible-message count is a fine proxy.
+ */
+function BackfillPlaceholder({ justConnected }: { justConnected: boolean }) {
+	const queryClient = useQueryClient();
+	useEffect(() => {
+		if (!justConnected) {
+			return;
+		}
+		const id = setInterval(() => {
+			void queryClient.invalidateQueries({ queryKey: EmailKeys.gmailMessages });
+		}, 5_000);
+		return () => clearInterval(id);
+	}, [justConnected, queryClient]);
+
+	if (justConnected) {
+		return (
+			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+				<Typography variant='body2' color='text.secondary'>
+					Importing your last 30 days... this usually takes under a minute.
+				</Typography>
+			</Box>
+		);
+	}
+
+	return (
+		<Typography variant='body2' color='text.secondary'>
+			No messages yet. New mail will appear here automatically.
+		</Typography>
 	);
 }
 
