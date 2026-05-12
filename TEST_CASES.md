@@ -549,6 +549,103 @@ Pre-requisite: API running (`cd apps/api && npm run dev`) AND web running (`cd a
 
 ---
 
+## Gmail / inbox connection (W3.1)
+
+Setup once: in Google Cloud Console, register an OAuth client with TWO authorized redirect URIs — `http://localhost:3000/api/auth/callback/google` (sign-in) and `http://localhost:3000/api/email/gmail/callback` (this feature). Paste the client ID + secret into `apps/api/.env`. Enable the Gmail API for the project.
+
+### EMAIL-01: Happy path — owner connects Gmail and sees 10 messages
+- [ ] Sign in as the org `OWNER`. Visit `/settings/email` → chip reads **"Not connected"** + **"Connect Gmail"** button is visible.
+- [ ] Click **"Connect Gmail"** → browser bounces to `accounts.google.com/o/oauth2/v2/auth?...`. Consent screen lists exactly two non-OIDC scopes: **"Read your Gmail messages"** + **"Send email on your behalf"** (no `gmail.modify`).
+- [ ] Grant consent → browser returns to `/settings/email?connected=1`.
+- [ ] **Expect** success Alert; chip flips to **"Connected"**; "Connected as `<your-email>`" + "Linked on `<today>`"; the 10 most recent messages render below with subject + from + timestamp.
+- [ ] DB check: one `EmailAccount` row with `provider = 'GMAIL'`, the right `organizationId` and `userId`, `email` matches the connected mailbox, `scope` contains both `gmail.readonly` + `gmail.send`. `accessToken` + `refreshToken` both start with `v1:` (encrypted).
+- [ ] API check: `curl -i http://localhost:3001/api/email/gmail/status -b $COOKIES` returns `{ connected: true, email: '<mailbox>', connectedAt: '<iso>' }`.
+
+### EMAIL-02: Disconnect + reconnect re-prompts consent
+- [ ] After EMAIL-01: click **"Disconnect"** → button label changes to "Disconnecting..." then page updates: chip flips to **"Not connected"**.
+- [ ] DB check: the `EmailAccount` row is gone. Any cascaded `RawMessage` rows are also gone.
+- [ ] At `myaccount.google.com/permissions`: the app no longer appears (revocation succeeded).
+- [ ] Click **"Connect Gmail"** again → consent screen appears (not silently re-authorized), confirming `prompt=consent` is doing its job.
+- [ ] Grant consent → land back on `/settings/email?connected=1`; new `EmailAccount` row created with a FRESH refresh token (different ciphertext than the one EMAIL-01 stored).
+
+### EMAIL-03: State CSRF guard rejects mismatched callbacks
+- [ ] Start `/api/email/gmail/connect` and capture the `q_gmail_oauth_state` cookie set on the response.
+- [ ] Manually hit `/api/email/gmail/callback?code=fake&state=tampered_state` (where `tampered_state` is the cookie value modified at any byte).
+- [ ] **Expect** HTTP 400 with message `OAuth state mismatch — possible CSRF, restart the connect flow.`
+- [ ] Same call without the cookie at all → also HTTP 400.
+- [ ] Expired state cookie (wait 11 minutes or jump system clock forward) → HTTP 400.
+
+### EMAIL-04: User clicks "Cancel" on the Google consent screen
+- [ ] Start the connect flow, then click "Cancel" on Google's screen → redirected to `/api/email/gmail/callback?error=access_denied&state=...`.
+- [ ] **Expect** the callback bounces to `/settings/email?error=access_denied`.
+- [ ] UI shows error Alert: *"Google returned an error: **access_denied**. Try connecting again."*
+- [ ] **Expect** no `EmailAccount` row created.
+
+### EMAIL-05: EXTERNAL collaborators cannot connect (any role can be a primary member)
+- [ ] Sign in as a `MEMBER` of an org → can visit `/settings/email`, see status, click **Connect Gmail** → flow succeeds. Their `EmailAccount` row is independent of any OWNER's connection.
+- [ ] Sign in as an `OWNER` of the same org → can also connect their own mailbox; status page shows the owner's own connection, not the member's.
+- [ ] Sign in as an `EXTERNAL` user. Visit `/settings/email` → router's `beforeLoad` redirects to `/`. Home page does NOT show the **Email** button.
+- [ ] `curl -i http://localhost:3001/api/email/gmail/connect -b cookies-of-external.txt` → HTTP **403** from `TenantMemberGuard` with message `External collaborators cannot perform this action.`
+- [ ] Same 403 for `GET /status`, `GET /messages`, `POST /disconnect`.
+
+### EMAIL-05b: Per-user isolation — members can't see each other's mailboxes
+- [ ] Member A connects their Gmail. Member B (different user, same org) signs in.
+- [ ] Member B's `/settings/email` page shows **Not connected** with the Connect CTA. They cannot see Member A's mailbox address or any of A's recent messages.
+- [ ] Member B connects their own Gmail. DB now has 2 `EmailAccount` rows for the org, each scoped to its own `userId`.
+- [ ] Member B's `/settings/email` page shows B's mailbox only.
+- [ ] Member A logs back in → still sees A's mailbox, unchanged.
+- [ ] Member B clicks **Disconnect** → only B's row is removed; A's row is untouched.
+
+### EMAIL-05c: Entitlement required to connect (same gate as invitations)
+- [ ] Sign in as a MEMBER of an org with state `'none'` (no Subscription row yet). Click **Connect Gmail**.
+- [ ] **Expect** HTTP **402** from `EntitlementGuard` on the redirect-to-Google call (`GET /api/email/gmail/connect`). Body: `{ code: 'billing_required', billingPath: '/billing', message: 'An active subscription is required to make changes.' }`.
+- [ ] Web client auto-redirects to `/billing` instead of bouncing to Google.
+- [ ] Subscribe (BILLING-01) → status flips to `trialing` → retry **Connect Gmail** → succeeds. Inverse direction: cancel the subscription mid-trial → status goes `canceled` → trying to connect a *new* mailbox returns 402 again. Already-connected mailboxes keep working (status/messages reads are not gated by entitlement; existing tokens remain in DB).
+
+### EMAIL-06: Token refresh is lazy + transparent
+- [ ] Connect Gmail (EMAIL-01). Manually backdate the `accessTokenExpiresAt` column to `NOW() - INTERVAL '5 minutes'` in psql.
+- [ ] Hit `/api/email/gmail/messages` → succeeds; messages return.
+- [ ] DB check: `accessTokenExpiresAt` is now ~1 h in the future and `accessToken` has a new ciphertext (different from the original).
+- [ ] **Expect** in API logs: no error lines; one outbound POST to `oauth2.googleapis.com/token`.
+
+### EMAIL-07: Disconnected org renders the CTA cleanly (no 404 error)
+- [ ] Sign in as the owner of an org that has NEVER connected Gmail. Visit `/settings/email`.
+- [ ] **Expect** chip **"Not connected"**, "No mailbox connected yet.", **"Connect Gmail"** button — no error Alert, no "0 messages" residue, no console errors.
+- [ ] Network tab: `GET /api/email/gmail/messages` returns 404 (no `EmailAccount`), which the web layer maps to `{ messages: [] }` — surfaced as nothing rather than a thrown error.
+
+### EMAIL-08: Encryption at rest is enforced
+- [ ] Connect Gmail. `SELECT "accessToken", "refreshToken" FROM "EmailAccount" LIMIT 1;` — both values must start with `v1:` followed by base64. NEVER raw `ya29.…` or `1//…` shapes.
+- [ ] Tamper with one ciphertext byte: `UPDATE "EmailAccount" SET "refreshToken" = 'v1:tampered…' WHERE …;` Now hit `/api/email/gmail/messages` after waiting for the access token to expire → GCM auth tag fails on decrypt → request errors out (rather than silently sending garbage to Google).
+
+### EMAIL-09: Boot fails fast without GOOGLE_CLIENT_ID/SECRET when needed
+- [ ] Comment out `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` (they're declared `.optional()` so boot will succeed).
+- [ ] Click **"Connect Gmail"** → API responds with HTTP 500 + message `Google OAuth is not configured (set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET).`
+- [ ] Restore the env vars; restart API; flow works again.
+
+### EMAIL-10: Self-heal when user revokes app at Google (cached token already expired)
+- [ ] Connect Gmail (EMAIL-01). Confirm a fresh `EmailAccount` row + 10 messages render.
+- [ ] In a separate browser tab visit https://myaccount.google.com/permissions → find the Quoteom app → **Remove access**.
+- [ ] In Quoteom, force the access token to look expired: `UPDATE "EmailAccount" SET "accessTokenExpiresAt" = NOW() - INTERVAL '5 minutes';`
+- [ ] Refresh `/settings/email`.
+- [ ] **Expect**: chip flips to **Not connected** + Connect CTA reappears. The `EmailAccount` row is gone (`SELECT count(*) FROM "EmailAccount";` returns 0). Cascade also cleared any `RawMessage` rows for that account.
+- [ ] **Expect** in API logs: one `WARN` line containing `refresh token rejected by Google — deleting row for org ...`, no `ERROR` lines.
+- [ ] **Counter-test:** simulate a non-`invalid_grant` 400 by setting `GOOGLE_CLIENT_SECRET` to a wrong value briefly + repeating the steps. The row should NOT be deleted (the body says `invalid_client`, not `invalid_grant`); status read 500s instead. Restore the correct secret afterwards.
+
+### EMAIL-10b: Self-heal when user revokes app at Google (cached token still "fresh")
+The scenario EMAIL-10 misses: the user revokes our app within the access-token's 1 h cache window, so our `accessTokenExpiresAt` doesn't trigger a refresh attempt. The first signal is a 401 from the Gmail API itself.
+- [ ] Connect Gmail (EMAIL-01). Verify `SELECT "accessTokenExpiresAt" FROM "EmailAccount";` is ~1 h in the future — do **not** force-expire it.
+- [ ] Revoke the app at https://myaccount.google.com/permissions.
+- [ ] Immediately refresh `/settings/email` (or hit `GET /api/email/gmail/messages` directly).
+- [ ] **Expect** in API logs:
+   - `WARN [GmailApiService] messages.list failed: 401 ... Invalid Credentials` (or no error log — depends on the path that hit 401 first; the typed exception bypasses the generic error logging).
+   - `WARN [EmailAccountsService] Gmail returned 401 for org <id> / user <id> — forcing refresh + retry`.
+   - `WARN [EmailAccountsService] Gmail <email> refresh token rejected by Google — deleting row for org <id> / user <id>`.
+- [ ] **Expect** in DB: `EmailAccount` row gone; cascade cleared `RawMessage` rows.
+- [ ] **Expect** UI: chip **Not connected**, Connect CTA visible, no 500 error Alert. (The page now treats the request as "mailbox not connected" — same shape as EMAIL-07.)
+- [ ] Click **Connect Gmail** → consent screen appears again → reconnect succeeds. New `EmailAccount` row with fresh tokens.
+
+---
+
 ## How to maintain this doc
 
 - **Adding a feature** → add a new `## Section` with `### XXX-01:` test cases. Use a short uppercase prefix per area (`AUTH`, `INV`, `TEN`, `LOG`, `MAIL`, `DB`, `WEB`, `BILLING`, then `OPP` for opportunities, `QUO` for quotes, etc.).

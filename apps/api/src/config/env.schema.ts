@@ -35,7 +35,11 @@ export const envSchema = z.object({
 	RESEND_API_KEY: z.string().optional(),
 	RESEND_EMAIL_FROM: z.string().email().default('onboarding@resend.dev'),
 
-	// Google OAuth — optional, only enabled when both are set
+	// Google OAuth — optional, only enabled when both are set. Serves TWO purposes from
+	// the same Google Cloud OAuth client:
+	//   1. Auth.js sign-in (scopes: openid email profile) → callback /api/auth/callback/google.
+	//   2. Gmail inbox connect (scopes: gmail.readonly + gmail.send) → callback /api/email/gmail/callback.
+	// Both redirect URIs must be registered in the Google Cloud Console for this client.
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
 

@@ -89,6 +89,11 @@ function HomePage() {
 								Billing
 							</Button>
 						)}
+						{me.role !== 'EXTERNAL' && (
+							<Button variant='contained' onClick={() => navigate({ to: '/settings/email' })}>
+								Email
+							</Button>
+						)}
 						<Button variant='outlined' onClick={() => signOut.mutate()} disabled={signOut.isPending}>
 							{signOut.isPending ? 'Signing out...' : 'Sign out'}
 						</Button>

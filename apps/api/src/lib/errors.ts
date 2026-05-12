@@ -34,6 +34,9 @@ export const OWNER_ROLE_NOT_INVITABLE =
 // User-facing
 export const NOT_AUTHENTICATED = 'Not authenticated';
 export const OWNER_ROLE_REQUIRED = 'Only the organization owner can access this resource';
+// User-facing — surfaced when an EXTERNAL-role user hits a route that's reserved for
+// primary members (OWNER/MEMBER). EXTERNAL is a consumer role, not a contributor.
+export const MEMBER_ROLE_REQUIRED = 'External collaborators cannot perform this action.';
 // User-facing — surfaced when /api/signup hits a duplicate email
 export const ACCOUNT_ALREADY_EXISTS = 'An account with this email already exists. Sign in instead.';
 export const DISPOSABLE_EMAIL_NOT_ALLOWED = 'Disposable email addresses are not allowed. Please use a work email.';
@@ -75,3 +78,14 @@ export const subscriptionAlreadyActive = (status: string) =>
 	`Organization already has an active subscription (${status}). Use the Customer Portal to manage it.`;
 export const trialSeatLimitReached = (cap: number) =>
 	`Trial accounts are limited to ${cap} seats. Subscribe to invite more teammates.`;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Gmail / email connection (Dev-facing config + User-facing OAuth failures)
+// ────────────────────────────────────────────────────────────────────────────
+export const GOOGLE_OAUTH_NOT_CONFIGURED =
+	'Google OAuth is not configured (set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET).';
+export const OAUTH_STATE_INVALID = 'OAuth state mismatch — possible CSRF, restart the connect flow.';
+export const OAUTH_CODE_MISSING = 'OAuth callback is missing the authorization code.';
+export const OAUTH_TOKEN_EXCHANGE_FAILED = 'Failed to exchange OAuth code for tokens.';
+export const OAUTH_USERINFO_FAILED = 'Failed to fetch user info from the OAuth provider.';
+export const EMAIL_ACCOUNT_NOT_FOUND = 'No connected mail account for this organization.';
