@@ -20,7 +20,12 @@ export const InngestEvents = {
 	/** Fired by `EmailAccountsService.upsertEmailAccount` after a successful Gmail OAuth handshake. */
 	GmailAccountConnected: 'gmail/account.connected',
 	/** Fired by `EmailAccountsService.upsertEmailAccount` after a successful Microsoft OAuth handshake. */
-	MicrosoftAccountConnected: 'microsoft/account.connected'
+	MicrosoftAccountConnected: 'microsoft/account.connected',
+	/**
+	 * Fired by the Gmail webhook controller (W3.5) when Gmail's Pub/Sub push tells us the
+	 * mailbox changed. Payload: `{ emailAccountId }`. Triggers `GmailDeltaSyncFunction`.
+	 */
+	GmailHistoryChanged: 'gmail/history.changed'
 } as const;
 
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];
@@ -33,7 +38,11 @@ export const InngestFunctionIds = {
 	/** W3.4 backfill — fetches last 90 days into `RawMessage` on `GmailAccountConnected`. */
 	GmailBackfill: 'gmail-backfill',
 	/** W3.2 backfill — same shape as Gmail's, against Microsoft Graph. */
-	MicrosoftBackfill: 'microsoft-backfill'
+	MicrosoftBackfill: 'microsoft-backfill',
+	/** W3.5 delta-sync — runs `users.history.list` from the stored cursor on push. */
+	GmailDeltaSync: 'gmail-delta-sync',
+	/** W3.5 renewal cron — re-calls `users.watch` on rows nearing the 7-day expiry. */
+	GmailWatchRenewal: 'gmail-watch-renewal'
 } as const;
 
 /**
@@ -50,9 +59,20 @@ export const InngestSteps = {
 	},
 	GmailBackfill: {
 		/** The whole 90-day fetch + persist loop. One step today; split later if it timeouts. */
-		Backfill: 'backfill'
+		Backfill: 'backfill',
+		/** Watch-start runs as a separate Inngest step after backfill completes so Inngest's
+		 * retry on a watch failure doesn't re-run the backfill. */
+		StartWatch: 'start-watch'
 	},
 	MicrosoftBackfill: {
 		Backfill: 'backfill'
+	},
+	GmailDeltaSync: {
+		/** Single step: walk history, fetch payloads, persist. */
+		Sync: 'sync'
+	},
+	GmailWatchRenewal: {
+		/** Single step: scan, re-watch, persist new expiry. */
+		Renew: 'renew'
 	}
 } as const;

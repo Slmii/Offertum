@@ -42,6 +42,21 @@ export const envSchema = z.object({
 	// Both redirect URIs must be registered in the Google Cloud Console for this client.
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
+	// W3.5 — Pub/Sub topic Gmail pushes notifications to. Full resource name:
+	// `projects/<gcp-project>/topics/<topic>`. Optional: when unset (typical local dev
+	// without GCP setup), GmailWatchService no-ops watch start + renewal so the rest of
+	// the inbox flow still works. Set this once you've provisioned the topic in step 2
+	// of the W3.5 staged execution plan.
+	GOOGLE_PUBSUB_TOPIC: z.string().optional(),
+	// W3.5 — Expected `aud` claim on the JWT Pub/Sub signs and sends with every push
+	// delivery. Set when creating the push subscription. Typically the full webhook URL
+	// (e.g. `https://app.quoteom.com/api/email/gmail/webhook`). Optional in dev — if
+	// unset the webhook returns 503 so misconfigured-prod doesn't silently swallow pushes.
+	GOOGLE_PUBSUB_AUDIENCE: z.string().optional(),
+	// W3.5 — `email` claim on the JWT. Pub/Sub's service account for the GCP project,
+	// e.g. `service-NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com`. Pin it to prevent any
+	// other Google-signed JWT with our audience from being accepted. Optional in dev.
+	GOOGLE_PUBSUB_SERVICE_ACCOUNT: z.string().optional(),
 
 	// Microsoft Entra — optional
 	MICROSOFT_CLIENT_ID: z.string().optional(),

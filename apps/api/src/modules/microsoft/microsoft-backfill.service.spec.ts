@@ -6,6 +6,11 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { describe, expect, it, jest } from '@jest/globals';
 import { NotFoundException } from '@nestjs/common';
 
+// LogService stub — same rationale as gmail-backfill.service.spec.ts.
+const logServiceStub = { logAction: () => undefined } as unknown as ConstructorParameters<
+	typeof MicrosoftBackfillService
+>[3];
+
 interface FakePrisma {
 	emailAccount: { findUnique: jest.Mock };
 	rawMessage: {
@@ -88,7 +93,8 @@ describe('MicrosoftBackfillService.run', () => {
 		const service = new MicrosoftBackfillService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),
-			makeApi({ pages: [] })
+			makeApi({ pages: [] }),
+			logServiceStub
 		);
 		await expect(service.run('ea-missing')).rejects.toBeInstanceOf(NotFoundException);
 	});
@@ -98,7 +104,8 @@ describe('MicrosoftBackfillService.run', () => {
 		const service = new MicrosoftBackfillService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),
-			makeApi({ pages: [] })
+			makeApi({ pages: [] }),
+			logServiceStub
 		);
 		await expect(service.run('ea-1')).rejects.toBeInstanceOf(NotFoundException);
 	});
@@ -108,7 +115,8 @@ describe('MicrosoftBackfillService.run', () => {
 		const service = new MicrosoftBackfillService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),
-			makeApi({ pages: [] })
+			makeApi({ pages: [] }),
+			logServiceStub
 		);
 		const result = await service.run('ea-1');
 		expect(result.pagesFetched).toBe(0);
@@ -131,7 +139,7 @@ describe('MicrosoftBackfillService.run', () => {
 				]
 			]
 		});
-		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 		expect(result.messagesInserted).toBe(2);
@@ -147,7 +155,7 @@ describe('MicrosoftBackfillService.run', () => {
 				[{ id: 'm-3', conversationId: 'c-3', subject: 'C' }]
 			]
 		});
-		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 		expect(result.pagesFetched).toBe(3);
@@ -165,7 +173,7 @@ describe('MicrosoftBackfillService.run', () => {
 				]
 			]
 		});
-		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 		expect(result.messagesInserted).toBe(1);
@@ -191,7 +199,7 @@ describe('MicrosoftBackfillService.run', () => {
 				]
 			]
 		});
-		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		await service.run('ea-1');
 		const insertCall = prisma.rawMessage.createMany.mock.calls[0]?.[0] as {
@@ -206,7 +214,7 @@ describe('MicrosoftBackfillService.run', () => {
 		const api = makeApi({
 			pages: [[{ id: 'm-1', conversationId: 'c-1', subject: 'No sender' }]]
 		});
-		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		await service.run('ea-1');
 		const insertCall = prisma.rawMessage.createMany.mock.calls[0]?.[0] as {
@@ -218,7 +226,7 @@ describe('MicrosoftBackfillService.run', () => {
 	it('handles a zero-message inbox without crashing', async () => {
 		const prisma = makePrisma(SCOPE_ROW, []);
 		const api = makeApi({ pages: [[]] });
-		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new MicrosoftBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 		expect(result.pagesFetched).toBe(1);

@@ -3,8 +3,9 @@ import { EMAIL_ACCOUNT_NOT_FOUND } from '@/lib/errors';
 import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
 import type { GmailFullMessage } from '@/modules/gmail/gmail-api.service';
 import { GmailApiService } from '@/modules/gmail/gmail-api.service';
+import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 /**
  * W3.4 — how far back we fetch on initial connect.
@@ -50,12 +51,11 @@ interface ParsedFrom {
  */
 @Injectable()
 export class GmailBackfillService {
-	private readonly logger = new Logger(GmailBackfillService.name);
-
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly accounts: EmailAccountsService,
-		private readonly api: GmailApiService
+		private readonly api: GmailApiService,
+		private readonly logService: LogService
 	) {}
 
 	async run(emailAccountId: string): Promise<BackfillResult> {
@@ -69,7 +69,13 @@ export class GmailBackfillService {
 		if (!account.userId) {
 			// userId is nullable on the schema only because of `onDelete: SetNull`. Without it,
 			// `withFreshAccessToken` has no scope. Treat as a no-op (the row got orphaned).
-			this.logger.warn(`EmailAccount ${emailAccountId} has no userId — skipping backfill`);
+			this.logService.logAction({
+				action: 'email.backfill.orphaned',
+				message: `EmailAccount ${emailAccountId} has no userId — skipping backfill`,
+				metadata: { provider: account.provider, emailAccountId },
+				level: 'warn',
+				context: 'GmailBackfillService'
+			});
 			return { emailAccountId, pagesFetched: 0, messagesInserted: 0, messagesSkipped: 0, historyId: null };
 		}
 
@@ -131,9 +137,19 @@ export class GmailBackfillService {
 			data: { historyId: result }
 		});
 
-		this.logger.log(
-			`Backfill complete for ${account.email}: ${pagesFetched} pages, ${messagesInserted} new, ${messagesSkipped} already present, historyId=${result}`
-		);
+		this.logService.logAction({
+			action: 'email.backfill.completed',
+			message: `Backfill complete for ${account.email}: ${pagesFetched} pages, ${messagesInserted} new, ${messagesSkipped} already present`,
+			metadata: {
+				provider: account.provider,
+				emailAccountId,
+				pagesFetched,
+				messagesInserted,
+				messagesSkipped,
+				historyId: result
+			},
+			context: 'GmailBackfillService'
+		});
 
 		return {
 			emailAccountId,

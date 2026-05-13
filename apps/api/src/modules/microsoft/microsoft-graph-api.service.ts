@@ -1,6 +1,7 @@
 import { MailboxUnauthorizedException } from '@/lib/oauth/oauth-errors';
 import { MICROSOFT_GRAPH_BASE } from '@/modules/microsoft/microsoft.constants';
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { LogService } from '@/modules/logger/log.service';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 
 export interface MicrosoftMessageStub {
 	id: string;
@@ -57,7 +58,18 @@ export interface MicrosoftProfile {
  */
 @Injectable()
 export class MicrosoftGraphApiService {
-	private readonly logger = new Logger(MicrosoftGraphApiService.name);
+	constructor(private readonly logService: LogService) {}
+
+	private logApiError(operation: string, status: number, body: string): void {
+		this.logService.logAction({
+			action: 'microsoft.graph.api.error',
+			message: `Microsoft Graph ${operation} failed: HTTP ${status}`,
+			metadata: { operation, status, body: body.slice(0, 500) },
+			level: 'error',
+			context: 'MicrosoftGraphApiService'
+		});
+	}
+
 
 	/**
 	 * List the N most recent inbox messages (W3.2 smoke). Uses `$top` + `$select` to
@@ -124,7 +136,7 @@ export class MicrosoftGraphApiService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`messages.list failed: ${response.status} ${text}`);
+			this.logApiError('messages.list', response.status, text);
 			throw new InternalServerErrorException('Microsoft Graph messages.list failed');
 		}
 
@@ -150,7 +162,7 @@ export class MicrosoftGraphApiService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`${opName} failed: ${response.status} ${text}`);
+			this.logApiError(opName, response.status, text);
 			throw new InternalServerErrorException(`Microsoft Graph ${opName} failed`);
 		}
 

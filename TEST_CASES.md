@@ -747,6 +747,46 @@ The scenario EMAIL-10 misses: the user revokes our app within the access-token's
 - [ ] **Expect** UI: chip **Not connected**, Connect CTA visible, no 500 error Alert. (The page now treats the request as "mailbox not connected" — same shape as EMAIL-07.)
 - [ ] Click **Connect Gmail** → consent screen appears again → reconnect succeeds. New `EmailAccount` row with fresh tokens.
 
+## Gmail push notifications (W3.5)
+
+### EMAIL-PUSH-01: Pure-code unit coverage
+The W3.5 staged execution plan (`~/.claude/plans/toasty-herding-giraffe.md`) splits W3.5 into pure-code (Phase A+B, no GCP) and tunnel-smoke (Phase C). This entry covers the Phase A+B unit + integration story.
+- [ ] `pnpm --filter @quoteom/api exec jest src/modules/gmail/gmail-delta-sync.service.spec.ts` — 8 tests pass (not-found, orphaned, no-cursor, single page, dedup, idempotency, history-expired recovery, empty delta).
+- [ ] `pnpm --filter @quoteom/api exec jest src/lib/oauth/pubsub-jwt-verifier.spec.ts` — 12 tests pass (happy path + 11 rejection paths including tampered signature, expired, wrong issuer, wrong audience, wrong service-account email, email_verified false, unsupported alg, unknown kid, malformed forms).
+
+### EMAIL-PUSH-02: GOOGLE_PUBSUB_TOPIC unset → watch start is a structured no-op
+- [ ] With no `GOOGLE_PUBSUB_TOPIC` in `apps/api/.env`, run EMAIL-BACKFILL-01 (connect Gmail). Backfill completes successfully.
+- [ ] In the Inngest dev UI, the `gmail-backfill` run shows 2 steps: `backfill` succeeded, `start-watch` succeeded.
+- [ ] DB check: `SELECT * FROM "Log" WHERE metadata->>'action' = 'email.watch.skipped_no_topic'` returns 1 row.
+- [ ] DB check: `SELECT "watchExpiresAt" FROM "EmailAccount"` still NULL.
+- [ ] The cron `gmail-watch-renewal` registered in the dev UI. Manually invoking it produces `email.watch.renewal.skipped_no_topic` and zero updates.
+
+### EMAIL-PUSH-03: Webhook rejects requests without GOOGLE_PUBSUB_AUDIENCE / SERVICE_ACCOUNT
+- [ ] With `GOOGLE_PUBSUB_AUDIENCE` / `GOOGLE_PUBSUB_SERVICE_ACCOUNT` unset, `curl -sX POST -H 'authorization: Bearer x.y.z' http://localhost:3001/api/email/gmail/webhook -H 'content-type: application/json' -d '{"message":{"data":""},"subscription":""}'` returns 503.
+- [ ] DB check: `Log` row with `action = 'gmail.webhook.not_configured'`, level = ERROR.
+
+### EMAIL-PUSH-04: Webhook rejects requests with no Authorization header → 401
+- [ ] With both env vars set (any valid-looking value works), POST without an Authorization header returns 401 + body containing "Missing or malformed Authorization header".
+- [ ] Same for `Authorization: foo` (not Bearer-shaped) → 401.
+
+### EMAIL-PUSH-05: Webhook acknowledges pushes for unknown mailboxes with 204 + skip
+- [ ] Send a valid signed Pub/Sub push (requires running ngrok + actual Pub/Sub — covered in Phase C). The push body must include a base64-encoded `{ emailAddress: "<not-connected@example.com>", historyId: 1 }`.
+- [ ] **Expect** API responds 204 (Pub/Sub stops retrying).
+- [ ] DB check: `Log` row `gmail.webhook.unknown_mailbox` at WARN level, no `gmail/history.changed` event fired in the Inngest dev UI.
+
+### EMAIL-PUSH-06: Phase C — end-to-end smoke via ngrok (deferred until GCP setup)
+The ngrok-based smoke story. Setup steps (run once per dev machine):
+1. Create Pub/Sub topic `projects/<your-project>/topics/quoteom-gmail` in GCP.
+2. Grant `gmail-api-push@system.gserviceaccount.com` the `roles/pubsub.publisher` role on the topic.
+3. Register a push subscription pointing at `https://<your-ngrok-domain>/api/email/gmail/webhook` with audience `https://<your-ngrok-domain>/api/email/gmail/webhook` and a service account email; set `GOOGLE_PUBSUB_AUDIENCE` / `GOOGLE_PUBSUB_SERVICE_ACCOUNT` to match.
+4. `GOOGLE_PUBSUB_TOPIC=projects/<your-project>/topics/quoteom-gmail` in `apps/api/.env`.
+5. `pnpm dev` + `ngrok http 3000 --domain=<your-reserved-domain>`.
+
+- [ ] Connect Gmail. Backfill runs. The `start-watch` step succeeds — DB `watchExpiresAt` is ~7 days in the future.
+- [ ] From a different account, send a test email to the connected mailbox.
+- [ ] Within 60s, the `gmail-delta-sync` Inngest function fires. DB has a new `RawMessage` row for that test email; `EmailAccount.historyId` advanced.
+- [ ] Log table shows `gmail.webhook.received` followed by `email.delta_sync.completed`.
+
 ---
 
 ## How to maintain this doc

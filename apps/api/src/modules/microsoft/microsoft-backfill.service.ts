@@ -1,10 +1,11 @@
 import { EmailProvider } from '@/generated/prisma/enums';
 import { EMAIL_ACCOUNT_NOT_FOUND } from '@/lib/errors';
 import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
+import { LogService } from '@/modules/logger/log.service';
 import type { MicrosoftFullMessage } from '@/modules/microsoft/microsoft-graph-api.service';
 import { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 /**
  * W3.2 — same backfill window as Gmail. See `gmail-backfill.service.ts` for rationale.
@@ -39,12 +40,11 @@ export interface MicrosoftBackfillResult {
  */
 @Injectable()
 export class MicrosoftBackfillService {
-	private readonly logger = new Logger(MicrosoftBackfillService.name);
-
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly accounts: EmailAccountsService,
-		private readonly api: MicrosoftGraphApiService
+		private readonly api: MicrosoftGraphApiService,
+		private readonly logService: LogService
 	) {}
 
 	async run(emailAccountId: string): Promise<MicrosoftBackfillResult> {
@@ -56,7 +56,13 @@ export class MicrosoftBackfillService {
 			throw new NotFoundException(EMAIL_ACCOUNT_NOT_FOUND);
 		}
 		if (!account.userId) {
-			this.logger.warn(`EmailAccount ${emailAccountId} has no userId — skipping backfill`);
+			this.logService.logAction({
+				action: 'email.backfill.orphaned',
+				message: `EmailAccount ${emailAccountId} has no userId — skipping backfill`,
+				metadata: { provider: account.provider, emailAccountId },
+				level: 'warn',
+				context: 'MicrosoftBackfillService'
+			});
 			return { emailAccountId, pagesFetched: 0, messagesInserted: 0, messagesSkipped: 0 };
 		}
 
@@ -99,9 +105,18 @@ export class MicrosoftBackfillService {
 			}
 		});
 
-		this.logger.log(
-			`Backfill complete for ${account.email}: ${pagesFetched} pages, ${messagesInserted} new, ${messagesSkipped} already present`
-		);
+		this.logService.logAction({
+			action: 'email.backfill.completed',
+			message: `Backfill complete for ${account.email}: ${pagesFetched} pages, ${messagesInserted} new, ${messagesSkipped} already present`,
+			metadata: {
+				provider: account.provider,
+				emailAccountId,
+				pagesFetched,
+				messagesInserted,
+				messagesSkipped
+			},
+			context: 'MicrosoftBackfillService'
+		});
 
 		return {
 			emailAccountId,

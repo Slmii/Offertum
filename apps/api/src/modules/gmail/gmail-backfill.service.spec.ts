@@ -6,6 +6,12 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { describe, expect, it, jest } from '@jest/globals';
 import { NotFoundException } from '@nestjs/common';
 
+// LogService stub — backfill emits action logs (orphaned, completed) which these tests
+// don't assert on; a no-op stub keeps the assertion surface unchanged.
+const logServiceStub = { logAction: () => undefined } as unknown as ConstructorParameters<
+	typeof GmailBackfillService
+>[3];
+
 interface FakePrisma {
 	emailAccount: {
 		findUnique: jest.Mock;
@@ -126,7 +132,8 @@ describe('GmailBackfillService.run', () => {
 		const service = new GmailBackfillService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),
-			makeApi({ pages: [] })
+			makeApi({ pages: [] }),
+			logServiceStub
 		);
 		await expect(service.run('ea-missing')).rejects.toBeInstanceOf(NotFoundException);
 	});
@@ -136,7 +143,8 @@ describe('GmailBackfillService.run', () => {
 		const service = new GmailBackfillService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),
-			makeApi({ pages: [] })
+			makeApi({ pages: [] }),
+			logServiceStub
 		);
 
 		const result = await service.run('ea-1');
@@ -156,7 +164,7 @@ describe('GmailBackfillService.run', () => {
 			],
 			historyId: 'history-99'
 		});
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 
@@ -182,7 +190,7 @@ describe('GmailBackfillService.run', () => {
 				[{ id: 'g-3', threadId: 't-3', subject: 'C' }]
 			]
 		});
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 
@@ -202,7 +210,7 @@ describe('GmailBackfillService.run', () => {
 				]
 			]
 		});
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 
@@ -227,7 +235,7 @@ describe('GmailBackfillService.run', () => {
 				]
 			]
 		});
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		await service.run('ea-1');
 
@@ -247,7 +255,7 @@ describe('GmailBackfillService.run', () => {
 				[{ id: 'g-1', threadId: 't-1', subject: 'Test', from: 'lone@example.com' }]
 			]
 		});
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		await service.run('ea-1');
 
@@ -265,7 +273,7 @@ describe('GmailBackfillService.run', () => {
 		const api = makeApi({
 			pages: [[{ id: 'g-1', threadId: 't-1', subject: 'No sender' }]]
 		});
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		await service.run('ea-1');
 
@@ -278,7 +286,7 @@ describe('GmailBackfillService.run', () => {
 	it('handles a zero-message inbox without crashing', async () => {
 		const prisma = makePrisma(SCOPE_ROW, []);
 		const api = makeApi({ pages: [[]] });
-		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api);
+		const service = new GmailBackfillService(prisma as unknown as PrismaService, makeAccounts(), api, logServiceStub);
 
 		const result = await service.run('ea-1');
 

@@ -1,6 +1,7 @@
 import { MailboxUnauthorizedException } from '@/lib/oauth/oauth-errors';
 import { GMAIL_API_BASE } from '@/modules/gmail/gmail.constants';
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { LogService } from '@/modules/logger/log.service';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 
 export interface GmailMessageHeader {
 	name: string;
@@ -57,6 +58,42 @@ export interface GmailProfile {
 }
 
 /**
+ * One entry from `users.history.list`. `messagesAdded` is the only field we use today —
+ * `messagesDeleted` / `labelsAdded` / `labelsRemoved` are also returned but ignored.
+ * Defer if we ever need to track read-state changes (probably never for Quoteom).
+ */
+export interface GmailHistoryRecord {
+	id: string;
+	messagesAdded?: { message: GmailMessageStub }[];
+}
+
+export interface GmailHistoryPage {
+	history: GmailHistoryRecord[];
+	/** Present when there's another page. */
+	nextPageToken: string | null;
+	/** Mailbox's current historyId at the time of the response. Used to advance the cursor. */
+	historyId: string;
+}
+
+/**
+ * Thrown when Gmail returns 404 from `users.history.list` because the requested
+ * `startHistoryId` is too old (Gmail retains only ~7 days of history). Recovery path:
+ * trigger a fresh backfill so we re-acquire a current cursor.
+ */
+export class GmailHistoryExpiredException extends Error {
+	constructor(message = 'Gmail history cursor expired (>7 days old)') {
+		super(message);
+		this.name = 'GmailHistoryExpiredException';
+	}
+}
+
+export interface GmailWatchResponse {
+	historyId: string;
+	/** Epoch milliseconds (as a string per Gmail's API). Typically ~7 days in the future. */
+	expiration: string;
+}
+
+/**
  * Minimal Gmail v1 client. Direct fetch wrappers — no `googleapis` dep.
  *
  * 401 handling: every method throws `MailboxUnauthorizedException` on a 401 so the caller
@@ -65,7 +102,21 @@ export interface GmailProfile {
  */
 @Injectable()
 export class GmailApiService {
-	private readonly logger = new Logger(GmailApiService.name);
+	constructor(private readonly logService: LogService) {}
+
+	/** Persist a low-level HTTP failure with structured context. Used by every method below
+	 * before throwing the generic 500 so the audit trail has the actual failure detail.
+	 */
+	private logApiError(operation: string, status: number, body: string): void {
+		this.logService.logAction({
+			action: 'gmail.api.error',
+			message: `Gmail API ${operation} failed: HTTP ${status}`,
+			metadata: { operation, status, body: body.slice(0, 500) },
+			level: 'error',
+			context: 'GmailApiService'
+		});
+	}
+
 
 	/** List the N most recent message IDs (W3.1 smoke). No filter, no pagination. */
 	async listRecentMessages(accessToken: string, maxResults: number): Promise<GmailMessageStub[]> {
@@ -147,6 +198,121 @@ export class GmailApiService {
 		return this.fetchOne<GmailProfile>(accessToken, url, 'getProfile');
 	}
 
+	/**
+	 * Walk the history since a previously-stored cursor. Used by the W3.5 push-handler's
+	 * delta-sync — for each `messagesAdded` entry, we then `getMessageFull` to fetch the
+	 * payload and persist a `RawMessage`.
+	 *
+	 * Gmail only retains ~7 days of history. If `startHistoryId` is older we get a 404
+	 * with `errors[0].reason = 'notFound'`. We surface this as `GmailHistoryExpiredException`
+	 * so the caller can fall back to a fresh backfill instead of a half-broken sync.
+	 *
+	 * `historyTypes=messageAdded` filters the response server-side — we don't care about
+	 * label changes / deletions, and asking only for what we use keeps the payload small.
+	 */
+	async listHistoryPage(
+		accessToken: string,
+		opts: { startHistoryId: string; pageToken?: string; maxResults?: number }
+	): Promise<GmailHistoryPage> {
+		const params = new URLSearchParams();
+		params.set('startHistoryId', opts.startHistoryId);
+		params.set('historyTypes', 'messageAdded');
+		if (opts.pageToken) {
+			params.set('pageToken', opts.pageToken);
+		}
+		if (opts.maxResults) {
+			params.set('maxResults', String(opts.maxResults));
+		}
+		const url = `${GMAIL_API_BASE}/users/me/history?${params.toString()}`;
+
+		const response = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			// startHistoryId older than Gmail's ~7-day retention window. Caller must
+			// re-establish a cursor (typically by re-backfilling).
+			throw new GmailHistoryExpiredException();
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('history.list', response.status, text);
+			throw new InternalServerErrorException('Gmail API history.list failed');
+		}
+
+		const data = (await response.json()) as {
+			history?: GmailHistoryRecord[];
+			nextPageToken?: string;
+			historyId: string;
+		};
+
+		return {
+			history: data.history ?? [],
+			nextPageToken: data.nextPageToken ?? null,
+			historyId: data.historyId
+		};
+	}
+
+	/**
+	 * Start a Pub/Sub push subscription for this mailbox. Gmail delivers a notification
+	 * to the configured Pub/Sub topic whenever the mailbox changes; the topic forwards
+	 * to our HTTPS webhook.
+	 *
+	 * `labelIds: ['INBOX']` scopes the trigger to inbox-bound mail only — outgoing mail,
+	 * drafts, etc. don't fire pushes. Matches the backfill's `in:inbox` filter so the
+	 * push + backfill corpora stay consistent.
+	 *
+	 * Watch subscriptions expire after 7 days. The renewal cron re-calls this method on
+	 * any row with `watchExpiresAt < NOW() + 24h`.
+	 */
+	async startWatch(accessToken: string, topicName: string): Promise<GmailWatchResponse> {
+		const url = `${GMAIL_API_BASE}/users/me/watch`;
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				topicName,
+				labelIds: ['INBOX']
+			})
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('users.watch', response.status, text);
+			throw new InternalServerErrorException('Gmail API users.watch failed');
+		}
+
+		return (await response.json()) as GmailWatchResponse;
+	}
+
+	/**
+	 * Stop the Pub/Sub push subscription. Best-effort — used by disconnect. Gmail
+	 * returns 204 No Content on success.
+	 */
+	async stopWatch(accessToken: string): Promise<void> {
+		const url = `${GMAIL_API_BASE}/users/me/stop`;
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${accessToken}` }
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (!response.ok && response.status !== 204) {
+			const text = await response.text();
+			this.logApiError('users.stop', response.status, text);
+			throw new InternalServerErrorException('Gmail API users.stop failed');
+		}
+	}
+
 	private async fetchMessagesList(accessToken: string, url: string): Promise<GmailListPage> {
 		const response = await fetch(url, {
 			headers: { authorization: `Bearer ${accessToken}` }
@@ -158,7 +324,7 @@ export class GmailApiService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`messages.list failed: ${response.status} ${text}`);
+			this.logApiError('messages.list', response.status, text);
 			throw new InternalServerErrorException('Gmail API messages.list failed');
 		}
 
@@ -186,7 +352,7 @@ export class GmailApiService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`${opName} failed: ${response.status} ${text}`);
+			this.logApiError(opName, response.status, text);
 			throw new InternalServerErrorException(`Gmail API ${opName} failed`);
 		}
 

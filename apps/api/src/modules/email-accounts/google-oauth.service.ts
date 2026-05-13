@@ -8,7 +8,8 @@ import {
 	GOOGLE_OAUTH_USERINFO_URL
 } from '@/modules/gmail/gmail.constants';
 import { OAuthRefreshTokenInvalidException } from '@/lib/oauth/oauth-errors';
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { LogService } from '@/modules/logger/log.service';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface TokenSet {
@@ -34,9 +35,10 @@ export interface GoogleUserInfo {
  */
 @Injectable()
 export class GoogleOAuthService {
-	private readonly logger = new Logger(GoogleOAuthService.name);
-
-	constructor(private readonly config: ConfigService<EnvSchema, true>) {}
+	constructor(
+		private readonly config: ConfigService<EnvSchema, true>,
+		private readonly logService: LogService
+	) {}
 
 	private credentials(): { clientId: string; clientSecret: string; redirectUri: string } {
 		const clientId = this.config.get('GOOGLE_CLIENT_ID', { infer: true });
@@ -96,7 +98,13 @@ export class GoogleOAuthService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`Token exchange failed: ${response.status} ${text}`);
+			this.logService.logAction({
+				action: 'oauth.google.token_exchange_failed',
+				message: `Google token exchange failed: HTTP ${response.status}`,
+				metadata: { status: response.status, body: text.slice(0, 500) },
+				level: 'error',
+				context: 'GoogleOAuthService'
+			});
 			throw new InternalServerErrorException(OAUTH_TOKEN_EXCHANGE_FAILED);
 		}
 
@@ -146,7 +154,13 @@ export class GoogleOAuthService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`Refresh failed: ${response.status} ${text}`);
+			this.logService.logAction({
+				action: 'oauth.google.refresh_failed',
+				message: `Google token refresh failed: HTTP ${response.status}`,
+				metadata: { status: response.status, body: text.slice(0, 500) },
+				level: 'error',
+				context: 'GoogleOAuthService'
+			});
 
 			// Google encodes "the refresh token itself is no longer valid" as
 			// `error: invalid_grant` in a 400 response. Match on the body, not just the
@@ -205,10 +219,23 @@ export class GoogleOAuthService {
 				body: new URLSearchParams({ token })
 			});
 			if (!response.ok) {
-				this.logger.warn(`Token revoke returned ${response.status} — proceeding anyway`);
+				this.logService.logAction({
+					action: 'oauth.google.revoke_warn',
+					message: `Google token revoke returned HTTP ${response.status} — proceeding anyway`,
+					metadata: { status: response.status },
+					level: 'warn',
+					context: 'GoogleOAuthService'
+				});
 			}
 		} catch (error) {
-			this.logger.warn(`Token revoke failed: ${error instanceof Error ? error.message : 'unknown'}`);
+			this.logService.logAction({
+				action: 'oauth.google.revoke_warn',
+				message: `Google token revoke failed: ${error instanceof Error ? error.message : 'unknown'}`,
+				metadata: { reason: error instanceof Error ? error.message : 'unknown' },
+				level: 'warn',
+				stack: error instanceof Error ? error.stack : undefined,
+				context: 'GoogleOAuthService'
+			});
 		}
 	}
 }

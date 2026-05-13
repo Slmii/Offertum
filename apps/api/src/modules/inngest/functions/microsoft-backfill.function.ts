@@ -1,7 +1,8 @@
 import { MicrosoftBackfillService } from '@/modules/microsoft/microsoft-backfill.service';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents, InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
-import { Injectable, Logger } from '@nestjs/common';
+import { LogService } from '@/modules/logger/log.service';
+import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 interface MicrosoftAccountConnectedData {
@@ -17,9 +18,11 @@ interface MicrosoftAccountConnectedData {
 @Injectable()
 export class MicrosoftBackfillFunction {
 	readonly inngestFn: InngestFunction.Any;
-	private readonly logger = new Logger('InngestFn:microsoft-backfill');
 
-	constructor(private readonly backfill: MicrosoftBackfillService) {
+	constructor(
+		private readonly backfill: MicrosoftBackfillService,
+		private readonly logService: LogService
+	) {
 		this.inngestFn = inngest.createFunction(
 			{
 				id: InngestFunctionIds.MicrosoftBackfill,
@@ -30,7 +33,13 @@ export class MicrosoftBackfillFunction {
 			async ({ event, step }) => {
 				const data = event.data as MicrosoftAccountConnectedData;
 				if (!data?.emailAccountId) {
-					this.logger.warn(`Missing emailAccountId in event: ${JSON.stringify(event.data)}`);
+					this.logService.logAction({
+						action: 'inngest.event.invalid_payload',
+						message: 'microsoft/account.connected event missing emailAccountId',
+						metadata: { event: InngestEvents.MicrosoftAccountConnected, payload: event.data },
+						level: 'warn',
+						context: 'InngestFn:microsoft-backfill'
+					});
 					return { skipped: true };
 				}
 

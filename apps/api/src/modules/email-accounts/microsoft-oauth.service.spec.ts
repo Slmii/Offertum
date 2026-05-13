@@ -8,7 +8,12 @@ function makeService(env: Partial<Record<keyof EnvSchema, string>>): MicrosoftOA
 	// ConfigService accepts a typed `get(key)` — a plain object whose keys match the env
 	// schema is enough to satisfy `config.get('FOO', { infer: true })` in the service.
 	const config = { get: (key: keyof EnvSchema) => env[key] } as unknown as ConfigService<EnvSchema, true>;
-	return new MicrosoftOAuthService(config);
+	// LogService stub — buildAdminConsentUrl doesn't log anything; other methods do, but
+	// those aren't exercised here.
+	const logService = { logAction: () => undefined } as unknown as ConstructorParameters<
+		typeof MicrosoftOAuthService
+	>[1];
+	return new MicrosoftOAuthService(config, logService);
 }
 
 describe('MicrosoftOAuthService.buildAdminConsentUrl', () => {

@@ -6,13 +6,14 @@ import {
 	OAUTH_USERINFO_FAILED
 } from '@/lib/errors';
 import { OAuthRefreshTokenInvalidException } from '@/lib/oauth/oauth-errors';
+import { LogService } from '@/modules/logger/log.service';
 import {
 	MICROSOFT_GRAPH_BASE,
 	MICROSOFT_OAUTH_AUTHORIZE_URL,
 	MICROSOFT_OAUTH_SCOPES,
 	MICROSOFT_OAUTH_TOKEN_URL
 } from '@/modules/microsoft/microsoft.constants';
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface TokenSet {
@@ -50,9 +51,10 @@ export interface MicrosoftUserInfo {
  */
 @Injectable()
 export class MicrosoftOAuthService {
-	private readonly logger = new Logger(MicrosoftOAuthService.name);
-
-	constructor(private readonly config: ConfigService<EnvSchema, true>) {}
+	constructor(
+		private readonly config: ConfigService<EnvSchema, true>,
+		private readonly logService: LogService
+	) {}
 
 	private credentials(): {
 		clientId: string;
@@ -127,7 +129,13 @@ export class MicrosoftOAuthService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`Token exchange failed: ${response.status} ${text}`);
+			this.logService.logAction({
+				action: 'oauth.microsoft.token_exchange_failed',
+				message: `Microsoft token exchange failed: HTTP ${response.status}`,
+				metadata: { status: response.status, body: text.slice(0, 500) },
+				level: 'error',
+				context: 'MicrosoftOAuthService'
+			});
 			throw new InternalServerErrorException(OAUTH_TOKEN_EXCHANGE_FAILED);
 		}
 
@@ -174,7 +182,13 @@ export class MicrosoftOAuthService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logger.error(`Refresh failed: ${response.status} ${text}`);
+			this.logService.logAction({
+				action: 'oauth.microsoft.refresh_failed',
+				message: `Microsoft token refresh failed: HTTP ${response.status}`,
+				metadata: { status: response.status, body: text.slice(0, 500) },
+				level: 'error',
+				context: 'MicrosoftOAuthService'
+			});
 
 			// Microsoft returns `error: invalid_grant` for dead refresh tokens (revoked,
 			// expired, password change, etc.) — same exception as the Google path.
@@ -227,6 +241,8 @@ export class MicrosoftOAuthService {
 	 * self-heal path deletes the row anyway.
 	 */
 	async revoke(_token: string): Promise<void> {
-		this.logger.log('Microsoft has no programmatic revoke — relying on local row delete.');
+		// No-op for interface parity with GoogleOAuthService.revoke(). The disconnect path's
+		// `email.disconnect` action log already records what happened — no per-call noise
+		// needed here.
 	}
 }
