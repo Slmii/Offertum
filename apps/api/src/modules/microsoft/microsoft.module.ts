@@ -2,7 +2,10 @@ import { AuthModule } from '@/modules/auth/auth.module';
 import { EmailAccountsModule } from '@/modules/email-accounts/email-accounts.module';
 import { MicrosoftBackfillService } from '@/modules/microsoft/microsoft-backfill.service';
 import { MicrosoftController } from '@/modules/microsoft/microsoft.controller';
+import { MicrosoftDeltaSyncService } from '@/modules/microsoft/microsoft-delta-sync.service';
 import { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
+import { MicrosoftSubscriptionService } from '@/modules/microsoft/microsoft-subscription.service';
+import { MicrosoftWebhookController } from '@/modules/microsoft/microsoft-webhook.controller';
 import { Module } from '@nestjs/common';
 
 /**
@@ -16,8 +19,18 @@ import { Module } from '@nestjs/common';
  */
 @Module({
 	imports: [AuthModule, EmailAccountsModule],
-	controllers: [MicrosoftController],
-	providers: [MicrosoftGraphApiService, MicrosoftBackfillService],
-	exports: [MicrosoftGraphApiService, MicrosoftBackfillService]
+	controllers: [MicrosoftController, MicrosoftWebhookController],
+	providers: [
+		MicrosoftGraphApiService,
+		MicrosoftBackfillService,
+		MicrosoftDeltaSyncService,
+		MicrosoftSubscriptionService
+	],
+	exports: [
+		MicrosoftGraphApiService,
+		MicrosoftBackfillService,
+		MicrosoftDeltaSyncService,
+		MicrosoftSubscriptionService
+	]
 })
 export class MicrosoftModule {}

@@ -25,7 +25,12 @@ export const InngestEvents = {
 	 * Fired by the Gmail webhook controller (W3.5) when Gmail's Pub/Sub push tells us the
 	 * mailbox changed. Payload: `{ emailAccountId }`. Triggers `GmailDeltaSyncFunction`.
 	 */
-	GmailHistoryChanged: 'gmail/history.changed'
+	GmailHistoryChanged: 'gmail/history.changed',
+	/**
+	 * Fired by the Microsoft webhook controller (W3.6) when Graph pushes a `created`
+	 * notification. Payload: `{ emailAccountId }`. Triggers `MicrosoftDeltaSyncFunction`.
+	 */
+	MicrosoftDeltaChanged: 'microsoft/delta.changed'
 } as const;
 
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];
@@ -42,7 +47,11 @@ export const InngestFunctionIds = {
 	/** W3.5 delta-sync — runs `users.history.list` from the stored cursor on push. */
 	GmailDeltaSync: 'gmail-delta-sync',
 	/** W3.5 renewal cron — re-calls `users.watch` on rows nearing the 7-day expiry. */
-	GmailWatchRenewal: 'gmail-watch-renewal'
+	GmailWatchRenewal: 'gmail-watch-renewal',
+	/** W3.6 delta-sync — walks `/me/messages/delta` from the stored cursor on Graph push. */
+	MicrosoftDeltaSync: 'microsoft-delta-sync',
+	/** W3.6 renewal cron — PATCHes Graph subscriptions nearing the 3-day expiry. */
+	MicrosoftSubscriptionRenewal: 'microsoft-subscription-renewal'
 } as const;
 
 /**
@@ -65,7 +74,11 @@ export const InngestSteps = {
 		StartWatch: 'start-watch'
 	},
 	MicrosoftBackfill: {
-		Backfill: 'backfill'
+		Backfill: 'backfill',
+		/** Step 2 — register the Graph subscription so future arrivals fire push pings.
+		 * Separate step so an Inngest retry on a subscription failure doesn't re-run the
+		 * (expensive, idempotent-but-slow) backfill. */
+		StartSubscription: 'start-subscription'
 	},
 	GmailDeltaSync: {
 		/** Single step: walk history, fetch payloads, persist. */
@@ -73,6 +86,14 @@ export const InngestSteps = {
 	},
 	GmailWatchRenewal: {
 		/** Single step: scan, re-watch, persist new expiry. */
+		Renew: 'renew'
+	},
+	MicrosoftDeltaSync: {
+		/** Single step: walk `/me/messages/delta` from cursor, persist new rows. */
+		Sync: 'sync'
+	},
+	MicrosoftSubscriptionRenewal: {
+		/** Single step: scan rows, PATCH subscriptions, persist new expiry. */
 		Renew: 'renew'
 	}
 } as const;

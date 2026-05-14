@@ -20,6 +20,7 @@ import {
 } from '@/modules/microsoft/dto/microsoft-messages.response.dto';
 import { MicrosoftStatusResponseDto } from '@/modules/microsoft/dto/microsoft-status.response.dto';
 import { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
+import { MicrosoftSubscriptionService } from '@/modules/microsoft/microsoft-subscription.service';
 import { MICROSOFT_STATE_COOKIE } from '@/modules/microsoft/microsoft.constants';
 import {
 	BadRequestException,
@@ -85,6 +86,7 @@ export class MicrosoftController {
 		private readonly oauth: MicrosoftOAuthService,
 		private readonly api: MicrosoftGraphApiService,
 		private readonly accounts: EmailAccountsService,
+		private readonly subscriptions: MicrosoftSubscriptionService,
 		private readonly config: ConfigService<EnvSchema, true>,
 		private readonly logService: LogService
 	) {}
@@ -256,6 +258,11 @@ export class MicrosoftController {
 	@Post('disconnect')
 	async disconnect(@Req() request: Request): Promise<MicrosoftDisconnectResponseDto> {
 		const scope = scopeFromRequest(request);
+		// Stop the Graph subscription BEFORE the row is deleted — once `disconnectEmail
+		// Account` revokes + drops the row, we lose `subscriptionId` and can't DELETE the
+		// upstream subscription. `stopSubscriptionForScope` is best-effort and swallows
+		// failures so a transient Graph hiccup never blocks disconnect.
+		await this.subscriptions.stopSubscriptionForScope(scope);
 		await this.accounts.disconnectEmailAccount(scope);
 		return { ok: true };
 	}

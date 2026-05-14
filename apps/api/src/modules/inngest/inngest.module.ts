@@ -4,6 +4,8 @@ import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfil
 import { GmailDeltaSyncFunction } from '@/modules/inngest/functions/gmail-delta-sync.function';
 import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-watch-renewal.function';
 import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft-backfill.function';
+import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
+import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { Module } from '@nestjs/common';
 
 /**
@@ -19,7 +21,21 @@ import { Module } from '@nestjs/common';
  */
 @Module({
 	imports: [GmailModule, MicrosoftModule],
-	providers: [GmailBackfillFunction, GmailDeltaSyncFunction, GmailWatchRenewalFunction, MicrosoftBackfillFunction],
-	exports: [GmailBackfillFunction, GmailDeltaSyncFunction, GmailWatchRenewalFunction, MicrosoftBackfillFunction]
+	providers: [
+		GmailBackfillFunction,
+		GmailDeltaSyncFunction,
+		GmailWatchRenewalFunction,
+		MicrosoftBackfillFunction,
+		MicrosoftDeltaSyncFunction,
+		MicrosoftSubscriptionRenewalFunction
+	],
+	exports: [
+		GmailBackfillFunction,
+		GmailDeltaSyncFunction,
+		GmailWatchRenewalFunction,
+		MicrosoftBackfillFunction,
+		MicrosoftDeltaSyncFunction,
+		MicrosoftSubscriptionRenewalFunction
+	]
 })
 export class InngestModule {}

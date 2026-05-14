@@ -1,6 +1,6 @@
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
-import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
+import { EmailAccountsService, type MailboxScope } from '@/modules/email-accounts/email-accounts.service';
 import { GmailApiService } from '@/modules/gmail/gmail-api.service';
 import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
@@ -107,6 +107,27 @@ export class GmailWatchService {
 	 * disconnect BEFORE we delete the row, so disconnect still completes even if Gmail's
 	 * stop call hiccups.
 	 */
+	/**
+	 * Scope-based variant: looks up the row by `(org, user, provider)` and delegates to
+	 * `stopWatchForAccount`. Lets disconnect handlers stop the watch without first reading
+	 * the EmailAccount ID themselves (which would otherwise require a duplicate lookup or
+	 * `EmailAccountsService.findEmailAccount`'s token-refresh side effect).
+	 */
+	async stopWatchForScope(scope: MailboxScope): Promise<void> {
+		const row = await this.prisma.emailAccount.findFirst({
+			where: {
+				organizationId: scope.organizationId,
+				userId: scope.userId,
+				provider: scope.provider
+			},
+			select: { id: true }
+		});
+		if (!row) {
+			return;
+		}
+		await this.stopWatchForAccount(row.id);
+	}
+
 	async stopWatchForAccount(emailAccountId: string): Promise<void> {
 		const account = await this.prisma.emailAccount.findUnique({
 			where: { id: emailAccountId },

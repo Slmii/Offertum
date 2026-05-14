@@ -48,6 +48,67 @@ export interface MicrosoftProfile {
 }
 
 /**
+ * One page of `/me/messages/delta` results.
+ *
+ * Graph's delta endpoint returns either:
+ *  - `@odata.nextLink` — mid-walk, pass back to fetch the next page
+ *  - `@odata.deltaLink` — end of walk, save this as the cursor for the next call
+ *
+ * Exactly one of the two is present on any given response (per Graph spec). We surface
+ * both as nullable so the caller can branch.
+ */
+export interface MicrosoftDeltaPage {
+	messages: MicrosoftFullMessage[];
+	nextLink: string | null;
+	deltaLink: string | null;
+}
+
+/**
+ * Thrown when Graph returns 410 Gone on a delta query — means our stored `deltaLink`
+ * has aged out (Graph retains them for ~30 days but reserves the right to invalidate
+ * earlier). Recovery: re-acquire via a fresh `/me/messages/delta` (without a cursor),
+ * which gives us a new starting point. Parallel to `GmailHistoryExpiredException`.
+ */
+export class MicrosoftDeltaTokenExpiredException extends Error {
+	constructor(message = 'Microsoft Graph deltaLink expired (>30 days or invalidated)') {
+		super(message);
+		this.name = 'MicrosoftDeltaTokenExpiredException';
+	}
+}
+
+/**
+ * Thrown when Graph returns 404 on a `/subscriptions/{id}` PATCH or DELETE — means the
+ * subscription was already deleted upstream (user revoked Quoteom, Graph aged it out, or
+ * it never registered). Lets the renewal flow recover by recreating instead of bubbling
+ * a generic InternalServerErrorException that the duck-typed sniffer would catch with
+ * false positives.
+ */
+export class MicrosoftSubscriptionNotFoundException extends Error {
+	constructor(subscriptionId: string) {
+		super(`Microsoft Graph subscription not found: ${subscriptionId}`);
+		this.name = 'MicrosoftSubscriptionNotFoundException';
+	}
+}
+
+/** Body shape Graph requires when creating a `/me/messages` subscription. */
+export interface CreateSubscriptionParams {
+	notificationUrl: string;
+	expirationDateTime: string; // ISO 8601 — max ~4230 minutes from now for `messages`
+	clientState: string;
+	resource?: string; // defaults to `/me/messages` if omitted
+}
+
+/**
+ * Subscription resource shape from Graph. We pull only the fields we persist; Graph
+ * returns more (resource, changeType, etc.) but we don't need them downstream.
+ */
+export interface MicrosoftSubscription {
+	id: string;
+	expirationDateTime: string;
+	clientState?: string;
+}
+
+/**
  * Minimal Microsoft Graph client. Direct fetch wrappers — no Graph SDK dep.
  *
  * 401 handling: every method throws `MailboxUnauthorizedException` on a 401 so the caller
@@ -124,6 +185,172 @@ export class MicrosoftGraphApiService {
 	async getProfile(accessToken: string): Promise<MicrosoftProfile> {
 		const url = `${MICROSOFT_GRAPH_BASE}/me`;
 		return this.fetchOne<MicrosoftProfile>(accessToken, url, 'me');
+	}
+
+	/**
+	 * Walk `/me/messages/delta` from a stored `deltaLink`, OR start a fresh delta walk if
+	 * no cursor exists yet. Used by the W3.6 push-handler's delta-sync.
+	 *
+	 * Three modes by `cursor` shape:
+	 *  - `null` / undefined: start fresh — Graph returns a `deltaLink` immediately for an
+	 *    empty inbox, or a `nextLink` to paginate through current state.
+	 *  - A `@odata.nextLink` URL: mid-walk pagination.
+	 *  - A `@odata.deltaLink` URL: changes since the last walk completed.
+	 *
+	 * Graph returns 410 Gone when the cursor has expired (~30 day retention). We surface
+	 * this as `MicrosoftDeltaTokenExpiredException` so the caller can re-acquire by
+	 * calling again with no cursor.
+	 *
+	 * `$select` requests the same fields as backfill so the persisted RawMessage rows
+	 * have a consistent payload shape regardless of which path created them.
+	 */
+	async getDelta(accessToken: string, cursor: string | null = null): Promise<MicrosoftDeltaPage> {
+		const url = cursor ?? this.buildInitialDeltaUrl();
+		const response = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 410) {
+			throw new MicrosoftDeltaTokenExpiredException();
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('messages.delta', response.status, text);
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('messages.delta'));
+		}
+
+		const data = (await response.json()) as {
+			value?: MicrosoftFullMessage[];
+			'@odata.nextLink'?: string;
+			'@odata.deltaLink'?: string;
+		};
+
+		return {
+			messages: data.value ?? [],
+			nextLink: data['@odata.nextLink'] ?? null,
+			deltaLink: data['@odata.deltaLink'] ?? null
+		};
+	}
+
+	/**
+	 * Create a Graph subscription for `/me/messages` `created` notifications. The caller
+	 * passes a freshly-generated `clientState` (stored encrypted on our side), which Graph
+	 * echoes back on every push delivery so we can authenticate them.
+	 *
+	 * Graph's expiration ceiling for messages is ~4230 minutes (~2.94 days). The caller
+	 * computes the desired expiration and passes it in; Graph rejects out-of-bounds values
+	 * with 400.
+	 *
+	 * Validation gotcha (W3.6 staged plan): Graph synchronously calls `notificationUrl`
+	 * with `?validationToken=<random>` during this POST and expects the plaintext echoed
+	 * back within ~5 seconds. The webhook handler MUST short-circuit on that query param
+	 * before any auth/parsing logic, or subscription creation fails outright with 400 here.
+	 */
+	async createSubscription(
+		accessToken: string,
+		params: CreateSubscriptionParams
+	): Promise<MicrosoftSubscription> {
+		const url = `${MICROSOFT_GRAPH_BASE}/subscriptions`;
+		const body = {
+			changeType: 'created',
+			notificationUrl: params.notificationUrl,
+			resource: params.resource ?? '/me/messages',
+			expirationDateTime: params.expirationDateTime,
+			clientState: params.clientState
+		};
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify(body)
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('subscriptions.create', response.status, text);
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('subscriptions.create'));
+		}
+
+		return (await response.json()) as MicrosoftSubscription;
+	}
+
+	/**
+	 * Renew an existing subscription by pushing its `expirationDateTime` further out.
+	 * Graph's renewal is a PATCH (vs Gmail's "call users.watch again" idempotent shape).
+	 *
+	 * If the subscription was already deleted upstream (user revoked our app at
+	 * account.microsoft.com, or it aged out), Graph returns 404. Caller decides whether
+	 * to recreate or log + drop.
+	 */
+	async renewSubscription(
+		accessToken: string,
+		subscriptionId: string,
+		expirationDateTime: string
+	): Promise<MicrosoftSubscription> {
+		const url = `${MICROSOFT_GRAPH_BASE}/subscriptions/${subscriptionId}`;
+		const response = await fetch(url, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({ expirationDateTime })
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			throw new MicrosoftSubscriptionNotFoundException(subscriptionId);
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('subscriptions.renew', response.status, text);
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('subscriptions.renew'));
+		}
+
+		return (await response.json()) as MicrosoftSubscription;
+	}
+
+	/**
+	 * Delete a subscription. Best-effort — caller decides whether to throw on 404 (the
+	 * subscription was already gone) or treat as "already disconnected, fine."
+	 */
+	async deleteSubscription(accessToken: string, subscriptionId: string): Promise<void> {
+		const url = `${MICROSOFT_GRAPH_BASE}/subscriptions/${subscriptionId}`;
+		const response = await fetch(url, {
+			method: 'DELETE',
+			headers: { authorization: `Bearer ${accessToken}` }
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			// Already gone — caller can treat as success.
+			return;
+		}
+		if (!response.ok && response.status !== 204) {
+			const text = await response.text();
+			this.logApiError('subscriptions.delete', response.status, text);
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('subscriptions.delete'));
+		}
+	}
+
+	private buildInitialDeltaUrl(): string {
+		const params = new URLSearchParams();
+		params.set(
+			'$select',
+			'id,conversationId,internetMessageId,subject,from,toRecipients,receivedDateTime,bodyPreview,body'
+		);
+		return `${MICROSOFT_GRAPH_BASE}/me/mailFolders/Inbox/messages/delta?${params.toString()}`;
 	}
 
 	private async fetchListUrl(accessToken: string, url: string): Promise<MicrosoftListPage> {

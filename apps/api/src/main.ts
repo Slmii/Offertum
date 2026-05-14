@@ -12,6 +12,8 @@ import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfil
 import { GmailDeltaSyncFunction } from '@/modules/inngest/functions/gmail-delta-sync.function';
 import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-watch-renewal.function';
 import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft-backfill.function';
+import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
+import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { LogService } from '@/modules/logger/log.service';
 import { ExpressAuth } from '@auth/express';
@@ -88,6 +90,8 @@ async function bootstrap() {
 	const gmailDeltaSync = app.get(GmailDeltaSyncFunction);
 	const gmailWatchRenewal = app.get(GmailWatchRenewalFunction);
 	const microsoftBackfill = app.get(MicrosoftBackfillFunction);
+	const microsoftDeltaSync = app.get(MicrosoftDeltaSyncFunction);
+	const microsoftSubscriptionRenewal = app.get(MicrosoftSubscriptionRenewalFunction);
 	app.use(
 		'/api/inngest',
 		inngestServe({
@@ -97,7 +101,9 @@ async function bootstrap() {
 				gmailBackfill.inngestFn,
 				gmailDeltaSync.inngestFn,
 				gmailWatchRenewal.inngestFn,
-				microsoftBackfill.inngestFn
+				microsoftBackfill.inngestFn,
+				microsoftDeltaSync.inngestFn,
+				microsoftSubscriptionRenewal.inngestFn
 			]
 		})
 	);

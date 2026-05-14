@@ -63,6 +63,12 @@ export const envSchema = z.object({
 	MICROSOFT_CLIENT_ID: z.string().optional(),
 	MICROSOFT_CLIENT_SECRET: z.string().optional(),
 	MICROSOFT_TENANT_ID: z.string().default('common'),
+	// Public URL Microsoft Graph posts push notifications to. Mirrors the
+	// `GOOGLE_PUBSUB_TOPIC` env in role: when unset (typical local dev without ngrok),
+	// `MicrosoftSubscriptionService` no-ops subscription start + renewal so the rest of
+	// the inbox flow still works. Full URL including scheme + path, e.g.
+	// `https://app.quoteom.com/api/email/microsoft/webhook`.
+	MICROSOFT_GRAPH_NOTIFICATION_URL: z.string().optional(),
 
 	// Stripe billing
 	STRIPE_SECRET_KEY: z.string().optional(),

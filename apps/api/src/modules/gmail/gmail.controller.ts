@@ -9,6 +9,7 @@ import { GmailMessageDto, GmailMessagesResponseDto } from '@/modules/gmail/dto/g
 import { GmailStatusResponseDto } from '@/modules/gmail/dto/gmail-status.response.dto';
 import { EmailAccountsService, type MailboxScope } from '@/modules/email-accounts/email-accounts.service';
 import { GmailApiService } from '@/modules/gmail/gmail-api.service';
+import { GmailWatchService } from '@/modules/gmail/gmail-watch.service';
 import { GMAIL_STATE_COOKIE } from '@/modules/gmail/gmail.constants';
 import { GoogleOAuthService } from '@/modules/email-accounts/google-oauth.service';
 import {
@@ -76,6 +77,7 @@ export class GmailController {
 		private readonly oauth: GoogleOAuthService,
 		private readonly api: GmailApiService,
 		private readonly accounts: EmailAccountsService,
+		private readonly watch: GmailWatchService,
 		private readonly config: ConfigService<EnvSchema, true>
 	) {}
 
@@ -221,6 +223,11 @@ export class GmailController {
 	@Post('disconnect')
 	async disconnect(@Req() request: Request): Promise<GmailDisconnectResponseDto> {
 		const scope = scopeFromRequest(request);
+		// Stop the Pub/Sub watch at Google BEFORE the row is deleted — once `disconnectEmail
+		// Account` revokes the refresh token + drops the row, we lose the ID needed for the
+		// stop call. `stopWatchForScope` is best-effort and swallows failures so a transient
+		// Gmail hiccup never blocks disconnect.
+		await this.watch.stopWatchForScope(scope);
 		await this.accounts.disconnectEmailAccount(scope);
 		return { ok: true };
 	}

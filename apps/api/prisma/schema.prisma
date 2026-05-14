@@ -232,9 +232,30 @@ model EmailAccount {
     // Gmail's `historyId` from the last successful list/sync. Used in W3.5 for delta
     // sync via `users.history.list`. Null until W3.4 backfill records one.
     historyId            String?
-    // Gmail push subscription expiry (W3.5). Watch subscriptions expire after 7 days;
-    // a daily cron renews any with < 24 h remaining.
+    // Microsoft Graph's `@odata.deltaLink` from the last successful `/me/messages/delta`
+    // page walk (W3.6). Stored as the FULL URL Graph returns (includes a server-issued
+    // token), not a synthetic short form. Null until backfill records one. On Graph this
+    // serves the same purpose as `historyId` for Gmail — only one of the two will be set
+    // per row, based on `provider`.
+    deltaLink            String?       @db.Text
+    // Push subscription expiry — applies to BOTH providers but the TTLs differ:
+    //   - Gmail: 7-day TTL, daily cron renews rows with < 24 h remaining.
+    //   - Microsoft Graph: 3-day TTL, twice-daily cron with the same 24 h-remaining buffer.
+    // Renamed semantically from the W3.5-era "watchExpiresAt" since Graph uses
+    // "subscription" terminology, but keeping the column name avoids a destructive
+    // migration.
     watchExpiresAt       DateTime?
+    // Microsoft Graph subscription resource ID (W3.6). Returned by POST /subscriptions.
+    // Required for PATCH-based renewal and for DELETE on disconnect. Null when provider
+    // is GMAIL or before the subscription has been registered.
+    subscriptionId       String?
+    // Microsoft Graph `clientState` — shared secret echoed back on every push delivery.
+    // We generate it at subscription-create time (random 32 bytes hex), store encrypted
+    // here, and compare equality on every incoming push to authenticate it. Graph's
+    // equivalent of Pub/Sub's JWT (simpler, no JWKS/JWT crypto). Stored encrypted
+    // because leakage would let anyone post fake notifications and trigger delta-syncs.
+    // Null for Gmail rows.
+    subscriptionClientState String?    @db.Text
     createdAt            DateTime      @default(now())
     updatedAt            DateTime      @updatedAt
 
