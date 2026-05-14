@@ -1,3 +1,4 @@
+import { MICROSOFT_GRAPH_API_CALL_FAILED } from '@/lib/errors';
 import { MailboxUnauthorizedException } from '@/lib/oauth/oauth-errors';
 import { MICROSOFT_GRAPH_BASE } from '@/modules/microsoft/microsoft.constants';
 import { LogService } from '@/modules/logger/log.service';
@@ -137,7 +138,7 @@ export class MicrosoftGraphApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError('messages.list', response.status, text);
-			throw new InternalServerErrorException('Microsoft Graph messages.list failed');
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('messages.list'));
 		}
 
 		const data = (await response.json()) as {
@@ -163,7 +164,7 @@ export class MicrosoftGraphApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError(opName, response.status, text);
-			throw new InternalServerErrorException(`Microsoft Graph ${opName} failed`);
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED(opName));
 		}
 
 		return (await response.json()) as T;

@@ -33,11 +33,12 @@ export class SignupService {
 		const email = rawEmail.trim().toLowerCase();
 		const companyName = rawCompanyName.trim();
 
-		// Block before doing transaction work. Case-insensitive — the User.email column is
-		// case-sensitive in Postgres but Auth.js + our own InvitationsService both normalize
-		// to lowercase, so checking the normalized form is enough.
-		const existing = await this.prisma.user.findUnique({
-			where: { email },
+		// Fast-path duplicate check before doing transaction work. Case-INsensitive so
+		// legacy mixed-case rows (e.g. invitations accepted before normalization landed)
+		// still match. The pre-tx check is best-effort — the TOCTOU race below catches
+		// concurrent signups that both pass this gate.
+		const existing = await this.prisma.user.findFirst({
+			where: { email: { equals: email, mode: 'insensitive' } },
 			select: { id: true }
 		});
 		if (existing) {
@@ -51,28 +52,47 @@ export class SignupService {
 			throw new ConflictException(ACCOUNT_ALREADY_EXISTS);
 		}
 
-		const result = await this.prisma.$transaction(async tx => {
-			const organization = await tx.organization.create({
-				data: { name: companyName }
-			});
+		let result: SignupResult;
+		try {
+			result = await this.prisma.$transaction(async tx => {
+				const organization = await tx.organization.create({
+					data: { name: companyName }
+				});
 
-			const user = await tx.user.create({
-				data: {
-					email,
-					currentOrganizationId: organization.id
-				}
-			});
+				const user = await tx.user.create({
+					data: {
+						email,
+						currentOrganizationId: organization.id
+					}
+				});
 
-			await tx.membership.create({
-				data: {
-					userId: user.id,
-					organizationId: organization.id,
-					role: MembershipRole.OWNER
-				}
-			});
+				await tx.membership.create({
+					data: {
+						userId: user.id,
+						organizationId: organization.id,
+						role: MembershipRole.OWNER
+					}
+				});
 
-			return { userId: user.id, organizationId: organization.id, email };
-		});
+				return { userId: user.id, organizationId: organization.id, email };
+			});
+		} catch (error) {
+			// TOCTOU: two concurrent signups for the same email both pass the pre-tx
+			// findFirst check. The loser's `tx.user.create` trips the User.email unique
+			// constraint → Prisma P2002. Without this catch the user sees a 500 with a
+			// raw Prisma error message instead of the clean 409 ConflictException.
+			if (isUniqueConstraintError(error)) {
+				this.logService.logAction({
+					action: 'signup.rejected.duplicate_email',
+					message: `Signup race lost — duplicate email ${email} (P2002)`,
+					metadata: { email, reason: 'p2002_race' },
+					level: 'warn',
+					context: 'SignupService'
+				});
+				throw new ConflictException(ACCOUNT_ALREADY_EXISTS);
+			}
+			throw error;
+		}
 
 		this.logService.logAction({
 			action: 'signup.org_created',
@@ -88,4 +108,13 @@ export class SignupService {
 
 		return result;
 	}
+}
+
+/**
+ * Duck-typed check for Prisma's P2002 (Unique constraint failed). Avoids importing
+ * `Prisma.PrismaClientKnownRequestError` to keep the import surface aligned with the
+ * `isResourceMissingError` pattern used by `BillingService` for Stripe's `resource_missing`.
+ */
+function isUniqueConstraintError(error: unknown): boolean {
+	return error instanceof Error && 'code' in error && (error as { code?: unknown }).code === 'P2002';
 }

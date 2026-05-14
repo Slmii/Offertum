@@ -41,7 +41,15 @@ const providers: ExpressAuthConfig['providers'] = [
 			// First gate: only send to addresses that already have a User row.
 			// Unknown addresses silently succeed (no email, no error) so attackers can't
 			// enumerate registered accounts.
-			const existing = await authPrisma.user.findUnique({ where: { email: to } });
+			//
+			// Case-INsensitive match — Auth.js passes `identifier` exactly as the user typed.
+			// Our User rows are lowercased on write, but a user can type `JOHN@x.com` on the
+			// sign-in form. A case-sensitive lookup would silently drop the magic-link request.
+			// Mirrors the pattern in `InvitationsService.accept`.
+			const existing = await authPrisma.user.findFirst({
+				where: { email: { equals: to, mode: 'insensitive' } },
+				select: { id: true }
+			});
 			if (!existing) {
 				logger.warn(`Sign-in attempted for unknown email: ${to}`);
 				return;

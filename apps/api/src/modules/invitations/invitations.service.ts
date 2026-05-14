@@ -163,26 +163,31 @@ export class InvitationsService {
 	}
 
 	async accept(token: string): Promise<AcceptInvitationResponseDto> {
-		const invitation = await this.prisma.invitation.findUnique({
-			where: { token },
-			include: { organization: true }
-		});
-
-		if (!invitation) {
-			throw new NotFoundException(INVITATION_NOT_FOUND);
-		}
-
-		if (invitation.acceptedAt) {
-			throw new ConflictException(INVITATION_ALREADY_ACCEPTED);
-		}
-
-		if (invitation.expiresAt < new Date()) {
-			throw new GoneException(INVITATION_EXPIRED);
-		}
-
-		const normalizedEmail = invitation.email.trim().toLowerCase();
-
+		// Lookup + expiry/accepted checks are done inside the transaction so two concurrent
+		// `accept()` calls on the same token can't both pass — the second one's re-read
+		// inside the tx sees `acceptedAt` already set (or `expiresAt` past if the first
+		// caller's tx happened to nudge across the second boundary). Without this, two
+		// races at the exact expiry second could both complete.
 		const result = await this.prisma.$transaction(async tx => {
+			const invitation = await tx.invitation.findUnique({
+				where: { token },
+				include: { organization: true }
+			});
+
+			if (!invitation) {
+				throw new NotFoundException(INVITATION_NOT_FOUND);
+			}
+
+			if (invitation.acceptedAt) {
+				throw new ConflictException(INVITATION_ALREADY_ACCEPTED);
+			}
+
+			if (invitation.expiresAt < new Date()) {
+				throw new GoneException(INVITATION_EXPIRED);
+			}
+
+			const normalizedEmail = invitation.email.trim().toLowerCase();
+
 			// Case-insensitive lookup so legacy rows with mixed-case emails still match.
 			// `findUnique` is case-sensitive on a plain text unique index, so combine an
 			// insensitive `findFirst` (handles legacy data) with an explicit create when
@@ -232,7 +237,10 @@ export class InvitationsService {
 				userId: user.id,
 				email: normalizedEmail,
 				organizationId: invitation.organizationId,
-				organizationName: invitation.organization.name
+				organizationName: invitation.organization.name,
+				// Internal audit-only fields not on the public DTO — stripped before return.
+				_invitationId: invitation.id,
+				_invitationRole: invitation.role
 			};
 		});
 
@@ -246,15 +254,20 @@ export class InvitationsService {
 			message: `${result.email} joined ${result.organizationName}`,
 			metadata: {
 				organizationId: result.organizationId,
-				invitationId: invitation.id,
+				invitationId: result._invitationId,
 				userId: result.userId,
 				inviteeEmail: result.email,
-				role: invitation.role
+				role: result._invitationRole
 			},
 			context: 'InvitationsService'
 		});
 
-		return result;
+		return {
+			userId: result.userId,
+			email: result.email,
+			organizationId: result.organizationId,
+			organizationName: result.organizationName
+		};
 	}
 
 	/**

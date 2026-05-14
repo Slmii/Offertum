@@ -236,3 +236,60 @@ Adding a new function:
 1. Create `apps/api/src/modules/inngest/functions/<name>.function.ts` exporting an `InngestFunction.Any`-typed constant.
 2. Add the import + export to `functions/index.ts`.
 3. Reload the API — the dev UI picks it up on the next discovery poll.
+
+## Gmail push notifications dev workflow (W3.5)
+
+Pub/Sub push delivery requires a publicly-reachable HTTPS URL. Same shape as the Stripe webhook flow but heavier: instead of a single CLI you need an ngrok tunnel + a real GCP project. **Skip this section entirely for local-only dev** — `GmailWatchService` no-ops cleanly when `GOOGLE_PUBSUB_TOPIC` is unset, so the connect / backfill / disconnect flow works without any of this.
+
+Two ways to exercise the push pipeline locally:
+
+### Easy: simulate the push (no GCP, validates delta-sync only)
+
+Bypasses the webhook + JWT verification. Connect Gmail through the UI, copy the `EmailAccount.id` from `db:studio`, then in the Inngest dev UI (http://localhost:8288) fire:
+
+```json
+{ "name": "gmail/history.changed", "data": { "emailAccountId": "<paste>" } }
+```
+
+Sends a real `users.history.list` to Google with the stored cursor, persists new `RawMessage` rows, advances `historyId`. Good enough to verify the delta-sync code; doesn't exercise Pub/Sub or JWT verification.
+
+### Full: end-to-end via ngrok + GCP Pub/Sub
+
+One-time setup per dev machine:
+
+1. **Pub/Sub topic** in GCP — `projects/<gcp-project>/topics/quoteom-gmail-dev`. On the topic's Permissions tab, grant `gmail-api-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role (without this, `users.watch` 403s — the #1 Phase C gotcha).
+2. **Reserved ngrok domain** — free tier gives one. Run `ngrok http 3000 --domain=<your-domain>` pointing at the **web** port (3000), so `/api/*` proxies through to the API.
+3. **Push subscription** on the topic — Delivery type: **Push**; Endpoint URL: `https://<your-domain>/api/email/gmail/webhook`; Enable authentication: **ON**; Audience: same as the endpoint URL; pick or create a service account with `roles/iam.serviceAccountTokenCreator`.
+4. **Authorized redirect URIs** on the Google OAuth client — add `https://<your-domain>/api/email/gmail/callback` and `https://<your-domain>/api/auth/callback/google` so OAuth callbacks land on the tunnel domain during smoke testing.
+5. **`apps/api/.env`**:
+   ```bash
+   GOOGLE_PUBSUB_TOPIC=projects/<gcp-project>/topics/quoteom-gmail-dev
+   GOOGLE_PUBSUB_AUDIENCE=https://<your-domain>/api/email/gmail/webhook
+   GOOGLE_PUBSUB_SERVICE_ACCOUNT=<service-account-email-from-step-3>
+   ```
+   Restart `pnpm dev`.
+
+Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @quoteom/api inngest`, `ngrok ...`, `db:studio`):
+
+1. Sign in via the **ngrok URL** (not `localhost:3000` — OAuth callbacks need to land on the tunnel domain).
+2. Connect Gmail at `/settings/email`. The `gmail-backfill` Inngest run shows two steps: `backfill` then `start-watch`. After completion: `EmailAccount.historyId` set AND `watchExpiresAt` ~7 days out.
+3. Send yourself a test email from another account.
+4. Within 5–10 seconds:
+   - **ngrok inspector** (http://localhost:4040): POST to `/api/email/gmail/webhook` with a `Bearer eyJ...` JWT, response 204.
+   - **Inngest UI**: `gmail-delta-sync` fires (2 s debounce — wait a beat), run reports `messagesInserted: 1`.
+   - **`RawMessage`** in `db:studio`: the new row.
+
+Renewal cron is verifiable without waiting a week: in `db:studio` backdate `watchExpiresAt` to yesterday → in the Inngest UI click **Invoke** on `gmail-watch-renewal` → output reports `{ scanned: 1, renewed: 1, ... }` and `watchExpiresAt` jumps back to ~7 days out. Same path also verifies the orphan-row fix: NULL out `watchExpiresAt` (keep `historyId`) and Invoke again — orphan still gets picked up.
+
+Common Phase C gotchas:
+
+| Symptom | Fix |
+|---|---|
+| `users.watch` returns 403 / `Insufficient Permission` | `gmail-api-push@system.gserviceaccount.com` missing Publisher on topic (Step 1). |
+| Webhook 401 on every push | `GOOGLE_PUBSUB_AUDIENCE` doesn't match the subscription's audience exactly, OR `GOOGLE_PUBSUB_SERVICE_ACCOUNT` doesn't match the actual signer in the subscription's Auth section. The `gmail.webhook.jwt_invalid` action log says which check failed. |
+| Webhook 503 | One of the two new env vars is empty — by design (refuse to accept pushes when verification isn't configured). |
+| Push arrives but `gmail.webhook.unknown_mailbox` 204 | `EmailAccount.email` doesn't match Gmail's primary alias. Check `db:studio`. |
+| OAuth callback hits `localhost:3000` instead of the tunnel | You signed in via localhost; restart from the ngrok URL. |
+| Push body has empty `message.data` | Gmail occasionally fires heartbeat-style pushes with no data. Webhook returns 400 → Pub/Sub retries → eventually drops. Not blocking but noisy. |
+
+See `TEST_CASES.md` → EMAIL-PUSH-01..06 for the full test catalog.

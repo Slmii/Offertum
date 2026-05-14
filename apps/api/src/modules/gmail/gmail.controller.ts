@@ -2,7 +2,7 @@ import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { TenantMemberGuard } from '@/common/guards/tenant-member.guard';
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
-import { OAUTH_CODE_MISSING, OAUTH_STATE_INVALID } from '@/lib/errors';
+import { NOT_AUTHENTICATED, OAUTH_CODE_MISSING, OAUTH_STATE_INVALID } from '@/lib/errors';
 import { issueOAuthState, verifyOAuthState } from '@/lib/oauth/signed-state';
 import { GmailDisconnectResponseDto } from '@/modules/gmail/dto/disconnect.response.dto';
 import { GmailMessageDto, GmailMessagesResponseDto } from '@/modules/gmail/dto/gmail-messages.response.dto';
@@ -54,8 +54,9 @@ function scopeFromRequest(request: Request): MailboxScope {
 	const userId = request.authSession?.user?.id;
 	const organizationId = request.organizationId;
 	if (!userId || !organizationId) {
-		// Guards run before us, so this is a defensive narrowing assertion.
-		throw new UnauthorizedException();
+		// Guards run before us, so this is a defensive narrowing assertion that should
+		// never fire in practice. Surface a real message rather than a bare 401 body.
+		throw new UnauthorizedException(NOT_AUTHENTICATED);
 	}
 	return { provider: EmailProvider.GMAIL, organizationId, userId };
 }

@@ -5,6 +5,7 @@ import { EmailProvider } from '@/generated/prisma/enums';
 import {
 	MICROSOFT_ADMIN_CONSENT_ERROR_CODE_REGEX,
 	MICROSOFT_ADMIN_CONSENT_REQUIRED,
+	NOT_AUTHENTICATED,
 	OAUTH_CODE_MISSING,
 	OAUTH_STATE_INVALID
 } from '@/lib/errors';
@@ -63,7 +64,8 @@ function scopeFromRequest(request: Request): MailboxScope {
 	const userId = request.authSession?.user?.id;
 	const organizationId = request.organizationId;
 	if (!userId || !organizationId) {
-		throw new UnauthorizedException();
+		// Defensive narrowing — guards run before us, so this should never fire.
+		throw new UnauthorizedException(NOT_AUTHENTICATED);
 	}
 	return { provider: EmailProvider.MICROSOFT, organizationId, userId };
 }

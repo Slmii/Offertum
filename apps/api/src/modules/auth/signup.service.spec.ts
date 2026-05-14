@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ConflictException } from '@nestjs/common';
 
 interface FakePrisma {
-	user: { findUnique: jest.Mock };
+	user: { findFirst: jest.Mock };
 	$transaction: jest.Mock;
 }
 
@@ -26,7 +26,8 @@ function makePrisma(opts: {
 	};
 
 	const prisma: FakePrisma = {
-		user: { findUnique: jest.fn().mockReturnValue(Promise.resolve(opts.existingUser ?? null)) },
+		// Audit-fix #2: case-insensitive lookup via findFirst (was findUnique).
+		user: { findFirst: jest.fn().mockReturnValue(Promise.resolve(opts.existingUser ?? null)) },
 		$transaction: jest.fn().mockImplementation(async (cb: unknown) => {
 			return (cb as (t: typeof tx) => Promise<unknown>)(tx);
 		})
@@ -73,8 +74,8 @@ describe('SignupService', () => {
 		it('lowercases the email before persisting', async () => {
 			const result = await service.signup('Founder@Quoteom.Dev', 'Quoteom BV');
 
-			expect(prisma.user.findUnique).toHaveBeenCalledWith({
-				where: { email: 'founder@quoteom.dev' },
+			expect(prisma.user.findFirst).toHaveBeenCalledWith({
+				where: { email: { equals: 'founder@quoteom.dev', mode: 'insensitive' } },
 				select: { id: true }
 			});
 			expect(tx.user.create).toHaveBeenCalledWith({
@@ -114,9 +115,10 @@ describe('SignupService', () => {
 			const dupService = new SignupService(built.prisma as unknown as PrismaService, logServiceStub);
 
 			await expect(dupService.signup('TAKEN@quoteom.dev', 'New Co')).rejects.toBeInstanceOf(ConflictException);
-			// findUnique was called with the lowercased form — proves we did not skip normalization.
-			expect(built.prisma.user.findUnique).toHaveBeenCalledWith({
-				where: { email: 'taken@quoteom.dev' },
+			// findFirst called with the lowercased form AND insensitive mode — proves we
+			// did not skip normalization AND that legacy mixed-case rows would still match.
+			expect(built.prisma.user.findFirst).toHaveBeenCalledWith({
+				where: { email: { equals: 'taken@quoteom.dev', mode: 'insensitive' } },
 				select: { id: true }
 			});
 		});

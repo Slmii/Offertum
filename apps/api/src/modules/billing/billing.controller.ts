@@ -22,6 +22,7 @@ import {
 	Headers,
 	HttpCode,
 	HttpStatus,
+	InternalServerErrorException,
 	Logger,
 	Post,
 	Req,
@@ -108,7 +109,10 @@ export class BillingController {
 
 		const webhookSecret = this.config.get('STRIPE_WEBHOOK_SECRET', { infer: true });
 		if (!webhookSecret) {
-			throw new BadRequestException(STRIPE_WEBHOOK_SECRET_MISSING);
+			// 500 (server) not 400 (client): the secret being unset is a deploy-time misconfig
+			// on our side, not anything the caller did wrong. Also avoids leaking the env var
+			// name verbatim in a client-visible 400 body.
+			throw new InternalServerErrorException(STRIPE_WEBHOOK_SECRET_MISSING);
 		}
 
 		let event: ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;

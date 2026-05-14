@@ -1,11 +1,14 @@
 import { EmailProvider } from '@/generated/prisma/enums';
 import { decrypt, encrypt } from '@/lib/crypto/token-encryption';
-import { EMAIL_ACCOUNT_NOT_FOUND } from '@/lib/errors';
+import { EMAIL_ACCOUNT_NOT_FOUND, NO_REFRESH_TOKEN_AVAILABLE } from '@/lib/errors';
 import { MailboxUnauthorizedException, OAuthRefreshTokenInvalidException } from '@/lib/oauth/oauth-errors';
 import { GoogleOAuthService, type TokenSet as GoogleTokenSet } from '@/modules/email-accounts/google-oauth.service';
+import {
+	MicrosoftOAuthService,
+	type TokenSet as MicrosoftTokenSet
+} from '@/modules/email-accounts/microsoft-oauth.service';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
-import { MicrosoftOAuthService, type TokenSet as MicrosoftTokenSet } from '@/modules/email-accounts/microsoft-oauth.service';
 import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
@@ -115,7 +118,7 @@ export class EmailAccountsService {
 			: (existing?.refreshToken ?? null);
 
 		if (!refreshTokenCipher) {
-			throw new Error('No refresh token in token exchange response and no existing one on file');
+			throw new NotFoundException(NO_REFRESH_TOKEN_AVAILABLE);
 		}
 
 		const data = {

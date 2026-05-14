@@ -4,8 +4,8 @@ import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.se
 import {
 	GmailApiService,
 	GmailHistoryExpiredException,
-	GmailHistoryPage,
-	type GmailFullMessage
+	type GmailFullMessage,
+	type GmailHistoryPage
 } from '@/modules/gmail/gmail-api.service';
 import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
@@ -193,18 +193,11 @@ export class GmailDeltaSyncService {
 			}
 		};
 
-		try {
-			await this.accounts.withFreshAccessToken(scope, work);
-		} catch (error) {
-			if (!(error instanceof GmailHistoryExpiredException)) {
-				throw error;
-			}
-			// History expired on the FIRST listHistoryPage call (no pages collected yet).
-			// `work` propagates the exception because the inner try/catch sets
-			// `historyExpired = true` and breaks; this branch handles the very-first-call
-			// case where withFreshAccessToken's retry-on-401 unwound the inner try.
-			historyExpired = true;
-		}
+		// `GmailHistoryExpiredException` cannot propagate out of `work` — the inner try/catch
+		// around `listHistoryPage` catches it on every iteration (including the first call,
+		// the no-pages-yet case) and sets `historyExpired = true; break;`. Other exceptions
+		// (5xx, network errors) still propagate up to Inngest which retries the function.
+		await this.accounts.withFreshAccessToken(scope, work);
 
 		if (historyExpired) {
 			// Re-acquire a fresh cursor via getProfile so the next push has a valid

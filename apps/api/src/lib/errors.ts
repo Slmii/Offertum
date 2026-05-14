@@ -91,6 +91,13 @@ export const OAUTH_CODE_MISSING = 'OAuth callback is missing the authorization c
 export const OAUTH_TOKEN_EXCHANGE_FAILED = 'Failed to exchange OAuth code for tokens.';
 export const OAUTH_USERINFO_FAILED = 'Failed to fetch user info from the OAuth provider.';
 export const EMAIL_ACCOUNT_NOT_FOUND = 'No connected mail account for this organization.';
+// Dev-facing — surfaced as generic 500 when a Gmail or Graph API endpoint returns non-2xx.
+export const GMAIL_API_CALL_FAILED = (operation: string) => `Gmail API ${operation} failed`;
+export const MICROSOFT_GRAPH_API_CALL_FAILED = (operation: string) => `Microsoft Graph API ${operation} failed`;
+// Dev-facing — both Gmail + Microsoft. Should never reach a user; signals a refresh-token
+// disappeared between issue + reuse, which we don't expect outside a Prisma bug.
+export const NO_REFRESH_TOKEN_AVAILABLE =
+	'No refresh token in token exchange response and no existing one on file';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Microsoft Entra — admin-consent flow (User-facing — structured error code)

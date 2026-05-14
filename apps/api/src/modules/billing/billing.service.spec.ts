@@ -7,6 +7,9 @@ interface FakePrisma {
 	subscription: {
 		findUnique: jest.Mock;
 		update: jest.Mock;
+		// Audit-fix #3: `syncFromStripe` now uses `updateMany` to be idempotent against
+		// the customer-regeneration race. `update` is still mocked for any other call site.
+		updateMany: jest.Mock;
 		upsert: jest.Mock;
 	};
 	membership: { count: jest.Mock };
@@ -22,6 +25,7 @@ function makePrisma(overrides?: {
 		subscription: {
 			findUnique: jest.fn().mockReturnValue(Promise.resolve(null)),
 			update: jest.fn().mockReturnValue(Promise.resolve({})),
+			updateMany: jest.fn().mockReturnValue(Promise.resolve({ count: 1 })),
 			upsert: jest.fn().mockReturnValue(Promise.resolve({})),
 			...overrides?.subscription
 		},
@@ -186,7 +190,7 @@ describe('BillingService.syncFromStripe', () => {
 		const result = await service.syncFromStripe('cus_123');
 
 		expect(result.status).toBeNull();
-		expect(prisma.subscription.update).toHaveBeenCalledWith({
+		expect(prisma.subscription.updateMany).toHaveBeenCalledWith({
 			where: { stripeCustomerId: 'cus_123' },
 			data: {
 				stripeSubscriptionId: null,
@@ -235,7 +239,7 @@ describe('BillingService.syncFromStripe', () => {
 		const result = await service.syncFromStripe('cus_123');
 
 		expect(result.status).toBe('trialing');
-		expect(prisma.subscription.update).toHaveBeenCalledWith({
+		expect(prisma.subscription.updateMany).toHaveBeenCalledWith({
 			where: { stripeCustomerId: 'cus_123' },
 			data: {
 				stripeSubscriptionId: 'sub_1',
@@ -278,7 +282,7 @@ describe('BillingService.syncFromStripe', () => {
 
 		await service.syncFromStripe('cus_123');
 
-		const call = prisma.subscription.update.mock.calls[0]?.[0] as {
+		const call = prisma.subscription.updateMany.mock.calls[0]?.[0] as {
 			data: { paymentMethodBrand: string; paymentMethodLast4: string };
 		};
 		expect(call.data.paymentMethodBrand).toBe('card');
@@ -313,7 +317,7 @@ describe('BillingService.syncFromStripe', () => {
 
 		await service.syncFromStripe('cus_123');
 
-		const call = prisma.subscription.update.mock.calls[0]?.[0] as {
+		const call = prisma.subscription.updateMany.mock.calls[0]?.[0] as {
 			data: { paymentMethodBrand: string; paymentMethodLast4: string };
 		};
 		expect(call.data.paymentMethodBrand).toBe('sepa_debit');
@@ -345,7 +349,7 @@ describe('BillingService.syncFromStripe', () => {
 
 		await service.syncFromStripe('cus_123');
 
-		const call = prisma.subscription.update.mock.calls[0]?.[0] as { data: { cancelAtPeriodEnd: boolean } };
+		const call = prisma.subscription.updateMany.mock.calls[0]?.[0] as { data: { cancelAtPeriodEnd: boolean } };
 		expect(call.data.cancelAtPeriodEnd).toBe(true);
 	});
 
@@ -372,7 +376,7 @@ describe('BillingService.syncFromStripe', () => {
 
 		await service.syncFromStripe('cus_123');
 
-		const call = prisma.subscription.update.mock.calls[0]?.[0] as {
+		const call = prisma.subscription.updateMany.mock.calls[0]?.[0] as {
 			data: { priceId: string | null; currentPeriodStart: Date | null };
 		};
 		expect(call.data.priceId).toBeNull();

@@ -273,7 +273,12 @@ export class BillingService {
 		const organizationId = before?.organizationId ?? null;
 
 		if (subscriptions.data.length === 0) {
-			await this.prisma.subscription.update({
+			// `updateMany` (not `update`) is idempotent against the customer-regeneration
+			// race: if `getOrCreateCustomer` wiped + re-created the Subscription row mid-
+			// flight, `update` throws P2025 (Record not found). `updateMany` silently
+			// no-ops on 0 rows — same pattern we use in `EmailAccountsService` for the
+			// parallel-disconnect race.
+			await this.prisma.subscription.updateMany({
 				where: { stripeCustomerId: customerId },
 				data: {
 					stripeSubscriptionId: null,
@@ -301,7 +306,8 @@ export class BillingService {
 		const pm = sub.default_payment_method;
 		const paymentMethod = pm && typeof pm !== 'string' ? pm : null;
 
-		await this.prisma.subscription.update({
+		// `updateMany` for the same race-safety reason as the no-subscription branch above.
+		await this.prisma.subscription.updateMany({
 			where: { stripeCustomerId: customerId },
 			data: {
 				stripeSubscriptionId: sub.id,

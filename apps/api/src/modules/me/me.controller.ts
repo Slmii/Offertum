@@ -1,9 +1,9 @@
 import { OrganizationGuard } from '@/common/guards/organization.guard';
-import { MEMBERSHIP_NOT_FOUND } from '@/lib/errors';
+import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { SwitchOrganizationDto } from '@/modules/me/dto/switch-organization.dto';
 import { MeService } from '@/modules/me/me.service';
-import { Body, Controller, ForbiddenException, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -43,13 +43,16 @@ export class MeController {
 
 	/**
 	 * `OrganizationGuard` guarantees `authSession.user.id` is set; the narrowing here is
-	 * just to satisfy TypeScript. Throwing 403 is defensive — should never fire in
-	 * practice.
+	 * just to satisfy TypeScript. 401 is defensive — should never fire in practice. The
+	 * old code threw 403 with the `MEMBERSHIP_NOT_FOUND` message, which was incorrect on
+	 * both axes (different status code than `MeService.findMyMembership`'s 404 for the
+	 * same logical "membership missing" string, and the real condition here is "no session
+	 * user id", not "no membership").
 	 */
 	private userId(request: Request): string {
 		const id = request.authSession?.user?.id;
 		if (!id) {
-			throw new ForbiddenException(MEMBERSHIP_NOT_FOUND);
+			throw new UnauthorizedException(NOT_AUTHENTICATED);
 		}
 		return id;
 	}

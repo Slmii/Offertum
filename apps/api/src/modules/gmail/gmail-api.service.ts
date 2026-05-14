@@ -1,3 +1,4 @@
+import { GMAIL_API_CALL_FAILED } from '@/lib/errors';
 import { MailboxUnauthorizedException } from '@/lib/oauth/oauth-errors';
 import { GMAIL_API_BASE } from '@/modules/gmail/gmail.constants';
 import { LogService } from '@/modules/logger/log.service';
@@ -203,7 +204,7 @@ export class GmailApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError('messages.get(full)', response.status, text);
-			throw new InternalServerErrorException('Gmail API messages.get(full) failed');
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('messages.get(full)'));
 		}
 
 		return (await response.json()) as GmailFullMessage;
@@ -258,7 +259,7 @@ export class GmailApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError('history.list', response.status, text);
-			throw new InternalServerErrorException('Gmail API history.list failed');
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('history.list'));
 		}
 
 		const data = (await response.json()) as {
@@ -306,7 +307,7 @@ export class GmailApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError('users.watch', response.status, text);
-			throw new InternalServerErrorException('Gmail API users.watch failed');
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('users.watch'));
 		}
 
 		return (await response.json()) as GmailWatchResponse;
@@ -329,7 +330,7 @@ export class GmailApiService {
 		if (!response.ok && response.status !== 204) {
 			const text = await response.text();
 			this.logApiError('users.stop', response.status, text);
-			throw new InternalServerErrorException('Gmail API users.stop failed');
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('users.stop'));
 		}
 	}
 
@@ -345,7 +346,7 @@ export class GmailApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError('messages.list', response.status, text);
-			throw new InternalServerErrorException('Gmail API messages.list failed');
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('messages.list'));
 		}
 
 		const data = (await response.json()) as {
