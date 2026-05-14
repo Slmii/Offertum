@@ -183,10 +183,30 @@ export class GmailApiService {
 	 *
 	 * Quota cost is identical to `format=metadata` (5 units) — Google doesn't charge more
 	 * for a bigger response. We pay in bandwidth instead.
+	 *
+	 * Returns `null` on 404. Real scenario: between Gmail firing a history notification
+	 * and our delta-sync fetching the message, the user deletes it. Without this branch
+	 * the 404 would crash the whole batch, exhaust Inngest retries, and leave the
+	 * `EmailAccount.historyId` cursor permanently stuck at that delete point. Skipping
+	 * the deleted message keeps the cursor moving and the rest of the batch intact.
 	 */
-	async getMessageFull(accessToken: string, id: string): Promise<GmailFullMessage> {
+	async getMessageFull(accessToken: string, id: string): Promise<GmailFullMessage | null> {
 		const url = `${GMAIL_API_BASE}/users/me/messages/${id}?format=full`;
-		return this.fetchOne<GmailFullMessage>(accessToken, url, 'messages.get(full)');
+		const response = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			return null;
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('messages.get(full)', response.status, text);
+			throw new InternalServerErrorException('Gmail API messages.get(full) failed');
+		}
+
+		return (await response.json()) as GmailFullMessage;
 	}
 
 	/**

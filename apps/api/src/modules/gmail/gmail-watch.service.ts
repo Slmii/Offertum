@@ -166,7 +166,15 @@ export class GmailWatchService {
 		const candidates = await this.prisma.emailAccount.findMany({
 			where: {
 				provider: EmailProvider.GMAIL,
-				watchExpiresAt: { lt: cutoff }
+				OR: [
+					// Expiring within the renewal window.
+					{ watchExpiresAt: { lt: cutoff } },
+					// Orphaned rows: backfill completed (historyId set) but the post-backfill
+					// `start-watch` step failed, so watchExpiresAt was never written. Postgres
+					// 3VL excludes NULLs from `lt`, so these would never be picked up by the
+					// first branch — this OR-leg explicitly catches them.
+					{ watchExpiresAt: null, historyId: { not: null } }
+				]
 			},
 			select: { id: true },
 			take: 500

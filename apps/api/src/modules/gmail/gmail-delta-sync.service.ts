@@ -4,8 +4,8 @@ import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.se
 import {
 	GmailApiService,
 	GmailHistoryExpiredException,
-	type GmailFullMessage,
-	type GmailMessageStub
+	GmailHistoryPage,
+	type GmailFullMessage
 } from '@/modules/gmail/gmail-api.service';
 import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
@@ -81,7 +81,14 @@ export class GmailDeltaSyncService {
 				level: 'warn',
 				context: 'GmailDeltaSyncService'
 			});
-			return { emailAccountId, pagesFetched: 0, messagesInserted: 0, messagesSkipped: 0, historyId: null, historyExpired: false };
+			return {
+				emailAccountId,
+				pagesFetched: 0,
+				messagesInserted: 0,
+				messagesSkipped: 0,
+				historyId: null,
+				historyExpired: false
+			};
 		}
 		if (!account.historyId) {
 			// No starting cursor — backfill never completed (or never ran). Skip; on the
@@ -93,7 +100,14 @@ export class GmailDeltaSyncService {
 				level: 'warn',
 				context: 'GmailDeltaSyncService'
 			});
-			return { emailAccountId, pagesFetched: 0, messagesInserted: 0, messagesSkipped: 0, historyId: null, historyExpired: false };
+			return {
+				emailAccountId,
+				pagesFetched: 0,
+				messagesInserted: 0,
+				messagesSkipped: 0,
+				historyId: null,
+				historyExpired: false
+			};
 		}
 
 		const scope = {
@@ -102,32 +116,74 @@ export class GmailDeltaSyncService {
 			userId: account.userId
 		};
 
-		let pageToken: string | undefined;
+		// State declared in the outer scope so the post-loop log + the recovery branch can
+		// read it. Reset at the top of `work` because `withFreshAccessToken` re-runs the
+		// whole callback on a mid-call 401 — without reset, counters would compound across
+		// the failed attempt + the retry.
 		let pagesFetched = 0;
 		let messagesInserted = 0;
 		let messagesSkipped = 0;
 		let newHistoryId: string | null = null;
 		let historyExpired = false;
 
-		const collectedStubs: GmailMessageStub[] = [];
-
 		const work = async (accessToken: string): Promise<void> => {
+			pagesFetched = 0;
+			messagesInserted = 0;
+			messagesSkipped = 0;
+			newHistoryId = null;
+			historyExpired = false;
+			let pageToken: string | undefined;
+
 			while (pagesFetched < MAX_PAGES) {
-				const page = await this.api.listHistoryPage(accessToken, {
-					startHistoryId: account.historyId!,
-					pageToken
-				});
+				let page: GmailHistoryPage;
+
+				try {
+					page = await this.api.listHistoryPage(accessToken, {
+						startHistoryId: account.historyId!,
+						pageToken
+					});
+				} catch (error) {
+					if (!(error instanceof GmailHistoryExpiredException)) {
+						throw error;
+					}
+					// History expired MID-WALK after one or more pages already succeeded +
+					// persisted. Mark and break — earlier pages stay in DB; outer recovery
+					// re-acquires the cursor so the next push has a starting point. The
+					// gap between (last successful page's historyId) and (Gmail's current
+					// historyId) is still lost. Acceptable trade-off: we keep partial
+					// progress instead of throwing it away.
+					historyExpired = true;
+					break;
+				}
+
 				pagesFetched += 1;
 				newHistoryId = page.historyId;
 
 				// Flatten `messagesAdded` across all records on this page. A single history
-				// entry can contain multiple added messages (e.g. batch arrival), and
-				// the same message id can appear in multiple records if it had multiple
-				// `messagesAdded` events — `Set` below dedupes.
+				// entry can contain multiple added messages (e.g. batch arrival); the same
+				// message id can also appear in multiple records — `Set` dedupes.
+				const stubIds: string[] = [];
 				for (const record of page.history) {
 					for (const added of record.messagesAdded ?? []) {
-						collectedStubs.push(added.message);
+						stubIds.push(added.message.id);
 					}
+				}
+				const uniqueIds = Array.from(new Set(stubIds));
+
+				if (uniqueIds.length > 0) {
+					// Fetch + persist this page before moving to the next. Per-page commits
+					// mean a mid-walk failure (history expired, network error, etc.) leaves
+					// earlier pages safely in the DB rather than discarding the whole batch.
+					const fetched = await Promise.all(uniqueIds.map(id => this.api.getMessageFull(accessToken, id)));
+					// Filter nulls — `getMessageFull` returns null on 404 (message deleted
+					// between the history fire + our fetch). Treat as "skipped"; the cursor
+					// still advances past the deletion so we don't get stuck on it.
+					const messages = fetched.filter((m): m is NonNullable<typeof m> => m !== null);
+					messagesSkipped += fetched.length - messages.length;
+
+					const inserted = await this.persistBatch(emailAccountId, account.organizationId, messages);
+					messagesInserted += inserted;
+					messagesSkipped += messages.length - inserted;
 				}
 
 				if (!page.nextPageToken) {
@@ -135,20 +191,6 @@ export class GmailDeltaSyncService {
 				}
 				pageToken = page.nextPageToken;
 			}
-
-			// Dedup before fetching — saves quota when the same id appeared in multiple
-			// history records on different pages.
-			const uniqueIds = Array.from(new Set(collectedStubs.map(s => s.id)));
-			if (uniqueIds.length === 0) {
-				return;
-			}
-
-			// Fetch full payloads in parallel. Same QPS rationale as backfill — 100 in
-			// parallel is well under Gmail's per-user quota ceiling.
-			const messages = await Promise.all(uniqueIds.map(id => this.api.getMessageFull(accessToken, id)));
-			const inserted = await this.persistBatch(emailAccountId, account.organizationId, messages);
-			messagesInserted += inserted;
-			messagesSkipped += messages.length - inserted;
 		};
 
 		try {
@@ -157,14 +199,26 @@ export class GmailDeltaSyncService {
 			if (!(error instanceof GmailHistoryExpiredException)) {
 				throw error;
 			}
-
-			// Stored cursor is stale. Re-acquire a fresh one via getProfile so the NEXT
-			// push has a valid starting point. We don't replay the gap — see service docstring.
+			// History expired on the FIRST listHistoryPage call (no pages collected yet).
+			// `work` propagates the exception because the inner try/catch sets
+			// `historyExpired = true` and breaks; this branch handles the very-first-call
+			// case where withFreshAccessToken's retry-on-401 unwound the inner try.
 			historyExpired = true;
+		}
+
+		if (historyExpired) {
+			// Re-acquire a fresh cursor via getProfile so the next push has a valid
+			// starting point. The gap between our stale cursor and Gmail's current is lost
+			// (we don't replay) — acceptable for a rare path (cursor >7 days old).
 			this.logService.logAction({
 				action: 'email.delta_sync.history_expired',
 				message: `Gmail history cursor expired for ${account.email} — re-acquiring`,
-				metadata: { provider: account.provider, emailAccountId, previousHistoryId: account.historyId },
+				metadata: {
+					provider: account.provider,
+					emailAccountId,
+					previousHistoryId: account.historyId,
+					pagesPersistedBeforeExpiry: pagesFetched
+				},
 				level: 'warn',
 				context: 'GmailDeltaSyncService'
 			});

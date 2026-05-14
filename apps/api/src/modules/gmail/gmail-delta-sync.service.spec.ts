@@ -55,11 +55,18 @@ function makeApi(opts: {
 	historyPages: ReadonlyArray<HistoryStub>;
 	finalHistoryId?: string;
 	historyExpiredOnFirstCall?: boolean;
+	historyExpiredAfterPage?: number;
 	profileHistoryId?: string;
+	/** Message IDs that `getMessageFull` should return null for (simulating 404 — deleted). */
+	deletedIds?: ReadonlyArray<string>;
 }): GmailApiService {
 	const pageIterator = opts.historyPages.values();
+	let pageIndex = 0;
 	const listHistoryPage = jest.fn().mockImplementation(() => {
 		if (opts.historyExpiredOnFirstCall) {
+			throw new GmailHistoryExpiredException();
+		}
+		if (typeof opts.historyExpiredAfterPage === 'number' && pageIndex >= opts.historyExpiredAfterPage) {
 			throw new GmailHistoryExpiredException();
 		}
 		const next = pageIterator.next();
@@ -71,6 +78,7 @@ function makeApi(opts: {
 			});
 		}
 		const isLast = opts.historyPages.indexOf(next.value) === opts.historyPages.length - 1;
+		pageIndex += 1;
 		return Promise.resolve({
 			history: next.value.addedIds.map((id, i) => ({
 				id: `h-${id}`,
@@ -82,7 +90,11 @@ function makeApi(opts: {
 	});
 
 	const allIds = opts.historyPages.flatMap(p => p.addedIds);
+	const deleted = new Set(opts.deletedIds ?? []);
 	const getMessageFull = jest.fn().mockImplementation((_token: unknown, id: unknown) => {
+		if (deleted.has(id as string)) {
+			return Promise.resolve(null);
+		}
 		const known = allIds.includes(id as string);
 		if (!known) {
 			throw new Error(`stub message ${String(id)} not in test setup`);
@@ -252,6 +264,69 @@ describe('GmailDeltaSyncService.run', () => {
 		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
 			where: { id: 'ea-1' },
 			data: { historyId: 'history-recovered-7' }
+		});
+	});
+
+	it('preserves prior pages when history expires mid-walk (recovers cursor, keeps inserts)', async () => {
+		// Two pages — first succeeds + persists, second throws history-expired. We expect
+		// the first page's message to land in DB, the cursor to recover via getProfile.
+		const prisma = makePrisma(SCOPE_ROW, []);
+		const service = new GmailDeltaSyncService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			makeApi({
+				historyPages: [{ addedIds: ['g-1'] }, { addedIds: ['g-2'] }],
+				historyExpiredAfterPage: 1, // page 1 succeeds, page 2 throws
+				profileHistoryId: 'history-recovered-7'
+			}),
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		expect(result.historyExpired).toBe(true);
+		expect(result.pagesFetched).toBe(1);
+		expect(result.messagesInserted).toBe(1);
+		expect(result.historyId).toBe('history-recovered-7');
+		// page 1's message landed in DB before expiry was discovered
+		expect(prisma.rawMessage.createMany).toHaveBeenCalledTimes(1);
+		const createCall = prisma.rawMessage.createMany.mock.calls[0]?.[0] as {
+			data: Array<{ providerMessageId: string }>;
+		};
+		expect(createCall.data.map(d => d.providerMessageId)).toEqual(['g-1']);
+		// final cursor write uses the recovered profile historyId
+		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
+			where: { id: 'ea-1' },
+			data: { historyId: 'history-recovered-7' }
+		});
+	});
+
+	it('skips messages whose getMessageFull returns null (deleted-mid-fetch) without crashing', async () => {
+		const prisma = makePrisma(SCOPE_ROW, []);
+		const service = new GmailDeltaSyncService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			makeApi({
+				historyPages: [{ addedIds: ['g-1', 'g-deleted', 'g-2'] }],
+				finalHistoryId: 'history-100',
+				deletedIds: ['g-deleted']
+			}),
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		// Only g-1 and g-2 reached persistBatch; g-deleted counted as skipped.
+		expect(result.messagesInserted).toBe(2);
+		expect(result.messagesSkipped).toBe(1);
+		const createCall = prisma.rawMessage.createMany.mock.calls[0]?.[0] as {
+			data: Array<{ providerMessageId: string }>;
+		};
+		expect(createCall.data.map(d => d.providerMessageId).sort()).toEqual(['g-1', 'g-2']);
+		// Cursor still advances even though one message was unreachable.
+		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
+			where: { id: 'ea-1' },
+			data: { historyId: 'history-100' }
 		});
 	});
 

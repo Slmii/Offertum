@@ -30,7 +30,20 @@ export class GmailDeltaSyncFunction {
 				id: InngestFunctionIds.GmailDeltaSync,
 				name: 'Gmail delta sync (push notification)',
 				triggers: [{ event: InngestEvents.GmailHistoryChanged }],
-				retries: 3
+				retries: 3,
+				// Per-mailbox serialization: bursts of pushes (e.g. 10 emails arriving in
+				// 1 second) used to spawn 10 parallel delta-sync runs that all walk the
+				// same `historyId` cursor, all parallel-fetch the same messages from Gmail,
+				// all race to write the cursor back. Functionally correct (unique index
+				// dedupes inserts) but 10× wasted quota + cursor regression on every burst.
+				// `concurrency.limit: 1` keyed by mailbox serialises them.
+				concurrency: { limit: 1, key: 'event.data.emailAccountId' },
+				// Coalesce a burst of pushes for the same mailbox into a single run. Each
+				// new event within `period` resets the timer; the function fires once the
+				// burst settles. The first walk picks up the union of all changes anyway
+				// (since history.list returns everything since `startHistoryId`), so most
+				// pushes in a burst are redundant.
+				debounce: { period: '2s', key: 'event.data.emailAccountId' }
 			},
 			async ({ event, step }) => {
 				const data = event.data as GmailHistoryChangedData;

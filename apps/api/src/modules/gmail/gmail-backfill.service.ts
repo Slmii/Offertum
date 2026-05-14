@@ -111,9 +111,12 @@ export class GmailBackfillService {
 				// Fetch all messages on this page in parallel. Gmail's per-user QPS limit is
 				// generous (~250 quota units/sec, get costs 5). 100 parallel calls is well
 				// within bounds; bigger would risk rate-limit slowdowns from Google.
-				const full = await Promise.all(
+				const fetched = await Promise.all(
 					page.messages.map(stub => this.api.getMessageFull(accessToken, stub.id))
 				);
+				// Drop nulls — `getMessageFull` returns null on 404 (message deleted between
+				// list + get). Without this filter persistBatch would NPE on `.payload?.headers`.
+				const full = fetched.filter((m): m is NonNullable<typeof m> => m !== null);
 
 				const inserted = await this.persistBatch(emailAccountId, account.organizationId, full);
 				messagesInserted += inserted;
