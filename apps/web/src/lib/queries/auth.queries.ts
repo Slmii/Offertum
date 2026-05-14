@@ -32,6 +32,32 @@ export function useSignInWithEmail() {
 	});
 }
 
+export type OAuthProviderId = 'google' | 'microsoft-entra-id';
+
+export async function signInWithOAuth(providerId: OAuthProviderId): Promise<void> {
+	const csrfToken = await getCsrfToken();
+
+	const form = document.createElement('form');
+	form.method = 'POST';
+	form.action = `/api/auth/signin/${providerId}`;
+	form.style.display = 'none';
+
+	const csrfInput = document.createElement('input');
+	csrfInput.name = 'csrfToken';
+	csrfInput.value = csrfToken;
+	form.appendChild(csrfInput);
+
+	// Return the user to the home page after the OAuth callback succeeds. Auth.js reads
+	// `callbackUrl` to decide where to land. Defaults to /, but explicit is safer.
+	const callbackInput = document.createElement('input');
+	callbackInput.name = 'callbackUrl';
+	callbackInput.value = '/';
+	form.appendChild(callbackInput);
+
+	document.body.appendChild(form);
+	form.submit();
+}
+
 interface SignupInput {
 	email: string;
 	companyName: string;

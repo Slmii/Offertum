@@ -69,11 +69,30 @@ const providers: ExpressAuthConfig['providers'] = [
 	})
 ];
 
+// `allowDangerousEmailAccountLinking` invariant (applies to every provider below):
+// only set this to `true` on OAuth providers that GUARANTEE `email_verified: true` on
+// their userinfo response. With the flag, Auth.js auto-links a new Account row to an
+// existing User row sharing the same email — saves an `OAuthAccountNotLinked` error for
+// users who signed up via magic link and later try OAuth. Without it the user sees a
+// confusing "no account linked" page.
+//
+// Today's two providers both qualify:
+//  - Google verifies emails before issuing them (and won't let a third party claim a
+//    domain they don't own).
+//  - Microsoft Entra returns `email_verified: true` for both work/school accounts and
+//    consumer accounts; the same verification path our Pub/Sub JWT verifier already
+//    relies on for the inbox webhook (see `pubsub-jwt-verifier.ts`).
+//
+// Before adding a NEW provider here, check that its userinfo response includes
+// `email_verified: true`. If it doesn't (Apple Hide-My-Email, niche enterprise SSO,
+// Twitter/Reddit-style providers), leave the flag OFF for that one provider — Auth.js
+// scopes the setting per provider.
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 	providers.push(
 		GoogleProvider({
 			clientId: process.env.GOOGLE_CLIENT_ID,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+			allowDangerousEmailAccountLinking: true
 		})
 	);
 }
@@ -83,7 +102,8 @@ if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
 		MicrosoftEntra({
 			clientId: process.env.MICROSOFT_CLIENT_ID,
 			clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-			issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? 'common'}/v2.0`
+			issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? 'common'}/v2.0`,
+			allowDangerousEmailAccountLinking: true
 		})
 	);
 }
