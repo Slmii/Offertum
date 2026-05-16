@@ -1,5 +1,6 @@
 import type { EnvSchema } from '@/config/env.schema';
 import { MembershipRole } from '@/generated/prisma/client';
+import { isOrganizationEntitled } from '@/lib/billing/entitlement-check';
 import {
 	INVITATION_ALREADY_ACCEPTED,
 	INVITATION_ALREADY_PENDING,
@@ -7,12 +8,18 @@ import {
 	INVITATION_NOT_FOUND,
 	ORGANIZATION_NOT_FOUND,
 	OWNER_ROLE_NOT_INVITABLE,
+	SUBSCRIPTION_REQUIRED,
 	trialSeatLimitReached,
 	USER_ALREADY_MEMBER
 } from '@/lib/errors';
 import { buildInviteEmail } from '@/lib/mails/invite.email';
 import { sendEmail } from '@/lib/mails/send';
-import { SEATS_INCLUDED, TRIAL_SEAT_LIMIT_CODE, TRIAL_STATES } from '@/modules/billing/billing.constants';
+import {
+	BILLING_REQUIRED_CODE,
+	SEATS_INCLUDED,
+	TRIAL_SEAT_LIMIT_CODE,
+	TRIAL_STATES
+} from '@/modules/billing/billing.constants';
 import { BillingService } from '@/modules/billing/billing.service';
 import { AcceptInvitationResponseDto } from '@/modules/invitations/dto/accept-invitation.response.dto';
 import { InvitationResponseDto } from '@/modules/invitations/dto/invitation.response.dto';
@@ -28,10 +35,21 @@ import {
 	NotFoundException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 const INVITATION_TTL_DAYS = 7;
 const INVITATION_TOKEN_BYTES = 32;
+
+/**
+ * Hash the raw invitation token before it touches the DB. Same defense as password
+ * hashing: the token in the email link is the only redeemable form. A DB dump (backup
+ * exfil, read-replica leak, ORM injection finding rows) yields the hash, not the
+ * redeemable secret. SHA-256 (not bcrypt) is appropriate here because the input is a
+ * 256-bit random — there's no entropy to slow-hash and no human-typed prefix to brute.
+ */
+function hashInvitationToken(rawToken: string): string {
+	return createHash('sha256').update(rawToken).digest('hex');
+}
 
 interface CreateInvitationInput {
 	email: string;
@@ -85,12 +103,14 @@ export class InvitationsService {
 		await this.assertEmailNotTaken(email, input.organizationId);
 		await this.assertSeatBudget(input.organizationId);
 
-		const token = randomBytes(INVITATION_TOKEN_BYTES).toString('hex');
+		const rawToken = randomBytes(INVITATION_TOKEN_BYTES).toString('hex');
 		const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
+		// `Invitation.token` column stores the SHA-256 hash. The raw token ships in the
+		// magic-link URL only — never persisted, never logged.
 		const invitation = await this.prisma.invitation.create({
 			data: {
-				token,
+				token: hashInvitationToken(rawToken),
 				email,
 				organizationId: input.organizationId,
 				role: input.role ?? MembershipRole.MEMBER,
@@ -99,7 +119,7 @@ export class InvitationsService {
 		});
 
 		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
-		const url = `${webOrigin}/accept-invite?token=${token}`;
+		const url = `${webOrigin}/accept-invite?token=${rawToken}`;
 		const { subject, html, text } = buildInviteEmail({
 			url,
 			organizationName: organization.name
@@ -174,7 +194,11 @@ export class InvitationsService {
 		});
 	}
 
-	async accept(token: string): Promise<AcceptInvitationResponseDto> {
+	async accept(rawToken: string): Promise<AcceptInvitationResponseDto> {
+		// Tokens are hashed at rest — see `hashInvitationToken` above. Hash the incoming
+		// raw token from the URL and look up by the stored hash.
+		const tokenHash = hashInvitationToken(rawToken);
+
 		// Lookup + expiry/accepted checks live inside the tx so a concurrent accept on the
 		// same token can't both pass. The final invitation update uses a conditional
 		// `updateMany` (acceptedAt: null) so the gate is atomic at the DB layer regardless
@@ -182,7 +206,7 @@ export class InvitationsService {
 		// count=0 and aborts cleanly.
 		const txResult = await this.prisma.$transaction(async (tx): Promise<AcceptTxResult> => {
 			const invitation = await tx.invitation.findUnique({
-				where: { token },
+				where: { token: tokenHash },
 				include: { organization: true }
 			});
 
@@ -196,6 +220,23 @@ export class InvitationsService {
 
 			if (invitation.expiresAt < new Date()) {
 				throw new GoneException(INVITATION_EXPIRED);
+			}
+
+			// Block redemption when the inviting org has lost entitlement (canceled / unpaid)
+			// between issuance and acceptance. Without this, a pending token from a healthy
+			// trial could still seat a new user after the org's subscription ended — adding
+			// billable membership rows to a non-paying org. Same 402-shaped body as
+			// `EntitlementGuard` so the web client's auto-redirect handler treats it identically.
+			if (!(await isOrganizationEntitled(this.prisma, invitation.organizationId))) {
+				throw new HttpException(
+					{
+						statusCode: HttpStatus.PAYMENT_REQUIRED,
+						code: BILLING_REQUIRED_CODE,
+						message: SUBSCRIPTION_REQUIRED,
+						billingPath: '/billing'
+					},
+					HttpStatus.PAYMENT_REQUIRED
+				);
 			}
 
 			const normalizedEmail = invitation.email.trim().toLowerCase();

@@ -9,8 +9,10 @@ import {
 	OAUTH_CODE_MISSING,
 	OAUTH_STATE_INVALID
 } from '@/lib/errors';
+import { isOrganizationEntitled } from '@/lib/billing/entitlement-check';
 import { issueOAuthState, verifyOAuthState } from '@/lib/oauth/signed-state';
 import { EmailAccountsService, type MailboxScope } from '@/modules/email-accounts/email-accounts.service';
+import { PrismaService } from '@/modules/prisma/prisma.service';
 import { MicrosoftOAuthService } from '@/modules/email-accounts/microsoft-oauth.service';
 import { LogService } from '@/modules/logger/log.service';
 import { MicrosoftDisconnectResponseDto } from '@/modules/microsoft/dto/microsoft-disconnect.response.dto';
@@ -88,14 +90,24 @@ export class MicrosoftController {
 		private readonly accounts: EmailAccountsService,
 		private readonly subscriptions: MicrosoftSubscriptionService,
 		private readonly config: ConfigService<EnvSchema, true>,
-		private readonly logService: LogService
+		private readonly logService: LogService,
+		private readonly prisma: PrismaService
 	) {}
 
 	@ApiOperation({ summary: 'Start the Microsoft OAuth handshake (redirects to Entra).' })
 	@MemberWrite()
 	@Get('connect')
-	connect(@Req() request: Request, @Res() response: Response): void {
+	async connect(@Req() request: Request, @Res() response: Response): Promise<void> {
 		const { organizationId, userId } = scopeFromRequest(request);
+		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
+
+		// `EntitlementGuard` (mounted by `@MemberWrite()`) skips GETs by design, so this
+		// OAuth-initiate route would otherwise let canceled / unsubscribed orgs attach new
+		// mailboxes. Same check repeats in `callback` as defense-in-depth.
+		if (!(await isOrganizationEntitled(this.prisma, organizationId))) {
+			response.redirect(`${webOrigin}/billing?error=connect_requires_subscription`);
+			return;
+		}
 
 		const secret = this.config.get('AUTH_SECRET', { infer: true });
 		const state = issueOAuthState({ organizationId, userId }, secret);
@@ -190,6 +202,14 @@ export class MicrosoftController {
 		const { organizationId, userId } = scopeFromRequest(request);
 		if (payload.organizationId !== organizationId || payload.userId !== userId) {
 			throw new BadRequestException(OAUTH_STATE_INVALID);
+		}
+
+		// Defense-in-depth: entitlement can lapse between `connect` and `callback` (the user
+		// could cancel their subscription in another tab mid-flow). Stop before we exchange
+		// code → tokens, so we never persist credentials for an unbilled org.
+		if (!(await isOrganizationEntitled(this.prisma, organizationId))) {
+			response.redirect(`${webOrigin}/billing?error=connect_requires_subscription`);
+			return;
 		}
 
 		const tokens = await this.oauth.exchangeCode(code);

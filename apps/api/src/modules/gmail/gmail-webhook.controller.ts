@@ -124,14 +124,19 @@ export class GmailWebhookController {
 			throw new BadRequestException('Pub/Sub message.data is not valid base64 JSON');
 		}
 
-		const account = await this.prisma.emailAccount.findFirst({
+		// Fan-out: the same Gmail mailbox can be connected to multiple organizations
+		// (the EmailAccount @@unique constraint is `(organizationId, provider,
+		// providerAccountId)` — not on email alone). Each org gets its own delta-sync run
+		// so a push to a shared mailbox doesn't silently drop sync for every org except
+		// the first one returned.
+		const accounts = await this.prisma.emailAccount.findMany({
 			where: { provider: EmailProvider.GMAIL, email: payload.emailAddress },
 			select: { id: true, organizationId: true, userId: true }
 		});
 
-		// No matching account — typical "watch fired after disconnect" case. Acknowledge
+		// No matching accounts — typical "watch fired after disconnect" case. Acknowledge
 		// with 204 so Pub/Sub stops retrying; the watch will expire on its own within ~7d.
-		if (!account) {
+		if (accounts.length === 0) {
 			this.logService.logAction({
 				action: 'gmail.webhook.unknown_mailbox',
 				message: `Gmail push for unknown mailbox ${payload.emailAddress} — acknowledging + skipping`,
@@ -142,42 +147,44 @@ export class GmailWebhookController {
 			return;
 		}
 
-		try {
-			await inngest.send({
-				name: InngestEvents.GmailHistoryChanged,
-				data: { emailAccountId: account.id }
-			});
-		} catch (error) {
-			// Best-effort — if Inngest is temporarily unreachable, log + return 204 anyway.
-			// Pub/Sub retries on 5xx; in practice if Inngest is down for >1m we'd want
-			// alerting (W2.6 territory), not Pub/Sub spam.
-			this.logService.logAction({
-				action: 'gmail.webhook.enqueue_failed',
-				message: `Failed to enqueue delta sync for ${payload.emailAddress}: ${error instanceof Error ? error.message : 'unknown'}`,
-				metadata: {
-					emailAccountId: account.id,
-					emailAddress: payload.emailAddress,
-					messageId: body.message.messageId
-				},
-				level: 'error',
-				stack: error instanceof Error ? error.stack : undefined,
-				context: 'GmailWebhookController'
-			});
-			return;
+		// Enqueue one delta-sync per matched account. Failures on individual sends are
+		// logged but don't abort the batch — losing one org's sync is better than losing
+		// all of them.
+		for (const account of accounts) {
+			try {
+				await inngest.send({
+					name: InngestEvents.GmailHistoryChanged,
+					data: { emailAccountId: account.id }
+				});
+				this.logService.logAction({
+					action: 'gmail.webhook.received',
+					message: `Gmail push received for ${payload.emailAddress} — delta sync enqueued`,
+					metadata: {
+						emailAccountId: account.id,
+						organizationId: account.organizationId,
+						emailAddress: payload.emailAddress,
+						historyId: String(payload.historyId),
+						messageId: body.message.messageId
+					},
+					context: 'GmailWebhookController'
+				});
+			} catch (error) {
+				// Best-effort — if Inngest is temporarily unreachable, log + continue with
+				// the next account. Pub/Sub retries on 5xx; we 204 to avoid retry spam.
+				this.logService.logAction({
+					action: 'gmail.webhook.enqueue_failed',
+					message: `Failed to enqueue delta sync for ${payload.emailAddress}: ${error instanceof Error ? error.message : 'unknown'}`,
+					metadata: {
+						emailAccountId: account.id,
+						emailAddress: payload.emailAddress,
+						messageId: body.message.messageId
+					},
+					level: 'error',
+					stack: error instanceof Error ? error.stack : undefined,
+					context: 'GmailWebhookController'
+				});
+			}
 		}
-
-		this.logService.logAction({
-			action: 'gmail.webhook.received',
-			message: `Gmail push received for ${payload.emailAddress} — delta sync enqueued`,
-			metadata: {
-				emailAccountId: account.id,
-				organizationId: account.organizationId,
-				emailAddress: payload.emailAddress,
-				historyId: String(payload.historyId),
-				messageId: body.message.messageId
-			},
-			context: 'GmailWebhookController'
-		});
 	}
 }
 

@@ -76,12 +76,14 @@ const providers: ExpressAuthConfig['providers'] = [
 // users who signed up via magic link and later try OAuth. Without it the user sees a
 // confusing "no account linked" page.
 //
-// Today's two providers both qualify:
+// Today's two providers:
 //  - Google verifies emails before issuing them (and won't let a third party claim a
 //    domain they don't own).
-//  - Microsoft Entra returns `email_verified: true` for both work/school accounts and
-//    consumer accounts; the same verification path our Pub/Sub JWT verifier already
-//    relies on for the inbox webhook (see `pubsub-jwt-verifier.ts`).
+//  - Microsoft Entra: work-tenant administrators can mutate the user's `email` claim,
+//    so the address itself isn't an attestation. We compensate with the `signIn`
+//    callback below, which refuses any OAuth sign-in lacking `email_verified: true` on
+//    the profile. With that check in place, linking by email is still safe — but the
+//    guarantee comes from our callback, not from the provider's defaults.
 //
 // Before adding a NEW provider here, check that its userinfo response includes
 // `email_verified: true`. If it doesn't (Apple Hide-My-Email, niche enterprise SSO,
@@ -114,6 +116,36 @@ export const authConfig: ExpressAuthConfig = {
 	session: { strategy: 'jwt' },
 	providers,
 	callbacks: {
+		// Hard gate on OAuth sign-in: refuse any IdP profile that doesn't attest the email
+		// is verified. Without this, a Microsoft Entra work-tenant admin (who can edit the
+		// user's `email` claim) could re-point an existing email at a different user — and
+		// because `allowDangerousEmailAccountLinking: true` auto-links by email, that would
+		// hand them access to the matching Quoteom User row.
+		//
+		// The check only runs for OAuth providers (account.type === 'oauth' | 'oidc');
+		// magic-link sign-ins skip it because Resend deliver-to-inbox proves possession
+		// of the address. We refuse if `email_verified` is missing or falsy — neither true
+		// nor undefined is a pass. Returning false makes Auth.js route the browser to
+		// `pages.error` (= /sign-in) with `?error=AccessDenied`.
+		async signIn({ account, profile }) {
+			if (!account || (account.type !== 'oauth' && account.type !== 'oidc')) {
+				return true;
+			}
+
+			const verified =
+				profile && typeof profile === 'object' && 'email_verified' in profile
+					? profile.email_verified
+					: undefined;
+
+			if (verified !== true) {
+				logger.warn(
+					`OAuth sign-in refused (email_verified=${String(verified)}) for provider=${account.provider}`
+				);
+				return false;
+			}
+
+			return true;
+		},
 		// Auth.js defaults post-signin redirects to the auth handler's own origin (the API,
 		// which has nothing at `/`). Rewrite same-origin redirects to point at the web app.
 		async redirect({ url, baseUrl }) {

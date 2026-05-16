@@ -2,8 +2,10 @@ import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { TenantMemberGuard } from '@/common/guards/tenant-member.guard';
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
+import { isOrganizationEntitled } from '@/lib/billing/entitlement-check';
 import { NOT_AUTHENTICATED, OAUTH_CODE_MISSING, OAUTH_STATE_INVALID } from '@/lib/errors';
 import { issueOAuthState, verifyOAuthState } from '@/lib/oauth/signed-state';
+import { PrismaService } from '@/modules/prisma/prisma.service';
 import { GmailDisconnectResponseDto } from '@/modules/gmail/dto/disconnect.response.dto';
 import { GmailMessageDto, GmailMessagesResponseDto } from '@/modules/gmail/dto/gmail-messages.response.dto';
 import { GmailStatusResponseDto } from '@/modules/gmail/dto/gmail-status.response.dto';
@@ -78,14 +80,25 @@ export class GmailController {
 		private readonly api: GmailApiService,
 		private readonly accounts: EmailAccountsService,
 		private readonly watch: GmailWatchService,
-		private readonly config: ConfigService<EnvSchema, true>
+		private readonly config: ConfigService<EnvSchema, true>,
+		private readonly prisma: PrismaService
 	) {}
 
 	@ApiOperation({ summary: 'Start the Gmail OAuth handshake (redirects to Google).' })
 	@MemberWrite()
 	@Get('connect')
-	connect(@Req() request: Request, @Res() response: Response): void {
+	async connect(@Req() request: Request, @Res() response: Response): Promise<void> {
 		const { organizationId, userId } = scopeFromRequest(request);
+		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
+
+		// Block unsubscribed orgs before sending the user off to Google. The `@MemberWrite()`
+		// decorator above runs `EntitlementGuard`, but the guard skips GETs by design — so
+		// this OAuth-initiate route would otherwise slip through. Same check repeats in the
+		// callback as defense-in-depth (entitlement can lapse between consent + redirect).
+		if (!(await isOrganizationEntitled(this.prisma, organizationId))) {
+			response.redirect(`${webOrigin}/billing?error=connect_requires_subscription`);
+			return;
+		}
 
 		const secret = this.config.get('AUTH_SECRET', { infer: true });
 		const state = issueOAuthState({ organizationId, userId }, secret);
@@ -151,6 +164,14 @@ export class GmailController {
 		const { organizationId, userId } = scopeFromRequest(request);
 		if (payload.organizationId !== organizationId || payload.userId !== userId) {
 			throw new BadRequestException(OAUTH_STATE_INVALID);
+		}
+
+		// Defense-in-depth: entitlement can lapse between `connect` and `callback` (the user
+		// could cancel their subscription in another tab mid-flow). Stop before we exchange
+		// code → tokens, so we never persist credentials for an unbilled org.
+		if (!(await isOrganizationEntitled(this.prisma, organizationId))) {
+			response.redirect(`${webOrigin}/billing?error=connect_requires_subscription`);
+			return;
 		}
 
 		const tokens = await this.oauth.exchangeCode(code);

@@ -4,6 +4,7 @@ import '@/load-env';
 
 import { AppModule } from '@/app.module';
 import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter';
+import { authRateLimitMiddleware } from '@/common/middleware/auth-rate-limit.middleware';
 import { requestContextMiddleware } from '@/common/middleware/request-context.middleware';
 import type { EnvSchema } from '@/config/env.schema';
 import { authConfig } from '@/modules/auth/auth.config';
@@ -69,7 +70,9 @@ async function bootstrap() {
 
 	// Auth.js — mounted as Express middleware on /api/auth/*.
 	// Sits before global pipes/filters because it handles its own request/response lifecycle.
-	app.use('/api/auth', ExpressAuth(authConfig));
+	// The rate-limit middleware runs FIRST so abusive POSTs (magic-link emit, enumeration)
+	// get 429'd before ExpressAuth ever sees them.
+	app.use('/api/auth', authRateLimitMiddleware, ExpressAuth(authConfig));
 
 	// Inngest — mounted at /api/inngest. Handles 3 verbs internally:
 	//   - GET:  discovery + introspection (used by the dev UI to list functions)

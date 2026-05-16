@@ -41,7 +41,7 @@ services:
       routes:
           - path: /api
       health_check:
-          http_path: /api/healthz
+          http_path: /api/health
       envs:
           - key: NODE_ENV
             value: production

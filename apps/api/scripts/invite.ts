@@ -67,9 +67,9 @@ async function main() {
 
 		console.log(`Invitation created`);
 		console.log(`  id:    ${invitation.id}`);
-		console.log(`  token: ${invitation.token}`);
 		console.log(`  email: ${args.email}`);
 		console.log(`  org:   ${args.org}`);
+		console.log(`Magic link sent via Resend (or dev-logged by sendEmail).`);
 	} finally {
 		await app.close();
 	}

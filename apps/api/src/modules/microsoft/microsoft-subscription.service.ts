@@ -273,17 +273,25 @@ export class MicrosoftSubscriptionService {
 		}
 
 		const cutoff = new Date(Date.now() + RENEWAL_WINDOW_MS);
+		// Orphan-rescue window: any Microsoft EmailAccount created within the last 7 days
+		// that doesn't have a subscriptionId is presumed to have failed the post-backfill
+		// `start-subscription` step. Older rows without a subscriptionId are assumed to be
+		// permanently disconnected (user removed Quoteom from their account, or similar)
+		// and we don't want to repeatedly re-register subscriptions for those.
+		const orphanCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 		const candidates = await this.prisma.emailAccount.findMany({
 			where: {
 				provider: EmailProvider.MICROSOFT,
 				OR: [
 					// Expiring within the renewal window AND has a subscription id to PATCH.
 					{ watchExpiresAt: { lt: cutoff }, subscriptionId: { not: null } },
-					// Orphan: backfill completed (deltaLink set) but the post-backfill
-					// `start-subscription` step never persisted a subscription. Same shape
-					// as the Gmail orphan-row fix (audit round 2 #2) — Postgres 3VL excludes
-					// NULLs from `lt`, so the first branch can never catch this case.
-					{ watchExpiresAt: null, deltaLink: { not: null }, subscriptionId: null }
+					// Orphan: recently-created EmailAccount with no subscription. Originally
+					// keyed off `deltaLink != null` but the backfill never sets deltaLink
+					// (the cursor is captured on the FIRST delta-sync run, not at backfill).
+					// Switching to "recent + no subscription" catches the post-backfill-
+					// failure case without depending on a column that's never populated by
+					// the path we want to rescue. (2026-05-17 audit fix.)
+					{ subscriptionId: null, createdAt: { gt: orphanCutoff } }
 				]
 			},
 			select: { id: true, subscriptionId: true, organizationId: true, userId: true, email: true, provider: true },
