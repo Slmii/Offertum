@@ -15,6 +15,8 @@ Solo 14-week MVP build. The build plan lives at `~/.claude/plans/toasty-herding-
 - **API**: NestJS 11 (Express + CommonJS, plain `tsc`) + Prisma 7 (`prisma-client` generator + `@prisma/adapter-pg`) + Postgres 16 (Docker locally).
 - **Auth**: Auth.js v5 mounted as Express middleware at `/api/auth/*` (magic link via Resend + Google + Microsoft Entra). JWT sessions.
 - **Billing**: Stripe (API version `2026-04-22.dahlia` pinned) with graduated tiered pricing.
+- **AI**: OpenAI Responses API (`openai` SDK v6) — direct OpenAI or Azure OpenAI EU via env-var switch. Structured outputs via `zodTextFormat`. `store: false` on every call for GDPR data-minimization. Provider-swap seam (`AI_CLIENT` token in `AiModule`) ready for the W5.1 Mistral/Anthropic spike.
+- **Background jobs**: Inngest v4 mounted at `/api/inngest` (delta-sync workers, push handlers, scheduled crons).
 - **Deploy target**: DigitalOcean App Platform EU (not wired yet; W1.5 carryover).
 
 ## Commands
@@ -92,6 +94,16 @@ modules/
   billing/             # Stripe — controller / service / module / DTOs / constants
   invitations/
   me/
+  ai/                  # W4 — classifier + extractor + AIClient provider abstraction
+    clients/           # AIClient interface + OpenAIClient (covers OpenAI + AzureOpenAI)
+    classifier/        # ClassifierService + Dutch prompt + 43-fixture corpus + accuracy harness
+    extractor/         # ExtractorService + Dutch prompt + 23-fixture corpus + accuracy harness
+    logging/           # AICallLogger — persists every generate() call to AICall table
+    __test-utils/      # JSONL writer used by both accuracy harnesses for the local HTML report
+  gmail/               # Gmail OAuth + backfill + delta-sync + watch + webhook
+  microsoft/           # Microsoft Graph OAuth + backfill + delta-sync + subscription + webhook
+  inngest/             # Inngest function registrations + client
+  email-accounts/      # provider-agnostic EmailAccountsService + OAuth services
 ```
 
 Path aliases: `@/*` → `apps/api/src/*`. No `.js` suffixes in imports (NestJS = CommonJS in this project; SWC was tried and reverted in favor of plain `tsc`).
@@ -300,3 +312,80 @@ Common Phase C gotchas (in order of frequency):
 **`AUTH_URL` recommendation:** leave unset in dev. `trustHost: true` in `authConfig` makes Auth.js use the request Host header for URL detection, which works for both localhost AND ngrok without env churn. Only set `AUTH_URL` in production deploys where you want to pin the canonical URL against Host-header spoofing.
 
 See `TEST_CASES.md` → EMAIL-PUSH-01..06 for the full test catalog.
+
+## AI extraction pipeline (W4.1 + W4.2 + W4.3)
+
+OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in (W5.1 spike → final pick) is a one-line DI binding change in `AiModule`, not a service rewrite.
+
+### Layout
+
+```
+apps/api/src/modules/ai/
+├── ai.module.ts                            # DI wiring; binds AI_CLIENT → OpenAIClient via useExisting
+├── clients/
+│   ├── ai-client.interface.ts              # AIClient interface + AI_CLIENT symbol token + typed errors
+│   └── openai-client.service.ts            # Wraps `openai` SDK. Switches OpenAI direct vs AzureOpenAI on env.
+├── classifier/
+│   ├── classifier.types.ts                 # Zod schema: { isQuote, confidence, reason }
+│   ├── classifier.service.ts               # classify(input): wraps AIClient with the classifier prompt
+│   ├── prompts/nl.ts                       # Dutch-language prompt (D21 — sibling files for en/de/fr later)
+│   ├── fixtures/nl-quote-requests.fixtures.ts   # 43 hand-curated Dutch fixtures
+│   └── classifier.accuracy.spec.ts         # LIVE-API harness. Skipped without OPENAI_API_KEY.
+├── extractor/
+│   ├── extractor.types.ts                  # Zod schema: 8 fields (customerName, ..., customerAppointment)
+│   ├── extractor.service.ts                # extract(input, referenceDateIso): same shape as classifier
+│   ├── prompts/nl.ts                       # Dutch prompt — includes date resolution rules
+│   ├── fixtures/nl-extraction-expected.fixtures.ts   # 23 expected-extraction entries
+│   └── extractor.accuracy.spec.ts          # LIVE-API harness. Same gating as classifier.
+├── logging/
+│   └── ai-call-logger.service.ts           # Persists every generate() call to the AICall table
+└── __test-utils/
+    └── ai-report-writer.ts                 # Both accuracy specs append JSONL → consumed by build-ai-report
+```
+
+### Three patterns to know
+
+**1. The `AI_CLIENT` seam.** Downstream services (`ClassifierService`, `ExtractorService`, future `ReplyDraftService`, etc.) inject `@Inject(AI_CLIENT) private readonly ai: AIClient` — they don't know whether OpenAI, Mistral, or Anthropic is behind it. Swapping providers in W5.1 is a one-line change to `useExisting: OpenAIClient` in `ai.module.ts`. Caller code never sees it.
+
+**2. `AICall` is the single source of truth for AI activity.** Every `generate()` call writes one row: provider, model, purpose, prompt, response, parsed JSON, status (`SUCCESS | FAILED | SCHEMA_INVALID | TIMEOUT`), tokens, latency, requestId/userId/orgId from AsyncLocalStorage. Used for:
+- **Replay** when prompts iterate: rerun new prompt over historical AICall rows
+- **Cost tracking** per org per month (`promptTokens` + `completionTokens` sums)
+- **Debugging** schema failures (filter `status = SCHEMA_INVALID`)
+- **Year-2 self-improvement** — the whole reason `RawMessage` is unfiltered: re-classify negatives when the classifier improves
+
+`AICallLogger.record(...)` is best-effort: if persistence fails, the AI call's return value is still given to the caller (we don't drop a legitimate response over a Postgres hiccup).
+
+**3. `store: false` on every OpenAI call.** OpenAI's default is to retain prompt + response for 30 days for abuse monitoring. We opt out — Dutch SMB customer data shouldn't sit on US servers we don't control. Trade-off: can't use Responses-API chaining (`previous_response_id`), but we don't need it for one-shot classification + extraction. Documented in `openai-client.service.ts`.
+
+### Accuracy harness workflow (`pnpm test:ai`)
+
+The classifier + extractor each have a live-API accuracy spec. They're **skipped during normal `pnpm test`** because Jest doesn't auto-load `.env` — so unguarded `pnpm test` won't burn OpenAI credit.
+
+To run explicitly (from `apps/api/`):
+
+```bash
+pnpm test:ai                  # both harnesses, ~2 min, ~€0.15 of OpenAI credit
+pnpm test:ai:classifier       # classifier only
+pnpm test:ai:extractor        # extractor only
+```
+
+The launcher script (`scripts/run-jest-with-env.cjs`):
+1. Loads `apps/api/.env` (picks up `OPENAI_API_KEY`)
+2. Sets `AI_REPORT_RUN_ID` env so both specs' results share one run ID
+3. Spawns Jest as a child process (so the post-step can run after Jest exits)
+4. After Jest exits, calls `scripts/build-ai-report.cjs` → rebuilds `apps/api/.ai-reports/index.html`
+
+**Result:** a fresh HTML report you can open in a browser, grouped by date → run → unified per-fixture row (classifier + extractor combined, with the email body + per-field pass/fail visible on expand). Failing fixtures auto-open; passing ones collapse.
+
+`apps/api/.ai-reports/` is gitignored. Safe to `rm -rf` between iterations.
+
+### Gotchas
+
+| Symptom | Fix |
+|---|---|
+| `pnpm test:ai` says "skipping live accuracy test" even though `.env` has `OPENAI_API_KEY` | `apps/api/.env` not loaded by Jest. Run via `pnpm test:ai` (not `pnpm exec jest accuracy`); the launcher script does the `dotenv` load. |
+| Azure OpenAI returns 400 on every call | `AZURE_OPENAI_API_VERSION` predates Responses API. Bump to ≥ `2025-03-01-preview`. |
+| Classifier reasoning is always 3 sentences | The schema field is `reason` (not `reasoning`) — the name primes the model toward a one-liner. If you renamed it back, output grows. |
+| Extractor returns the same `customerDeadline` value as `customerAppointment` | The prompt rule for `customerDeadline` says "inspection dates do NOT go here." Verify the model isn't conflating; the rule is enforced by prompt text, not the schema. |
+
+See `TEST_CASES.md` once W4.4 lands for the user-observable behavior catalog (currently W4 has no user surface — just internal services consumed by W4.4's Opportunity pipeline).

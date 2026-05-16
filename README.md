@@ -6,6 +6,8 @@ AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote req
 
 - **Frontend**: TanStack Start (React 19) + MUI v9 + TanStack Query
 - **Backend**: NestJS 11 + Prisma 7 + Postgres 16
+- **AI**: OpenAI Responses API via the official `openai` SDK (direct OpenAI or Azure OpenAI EU). Provider-swap seam in place for the W5.1 spike against Mistral / Anthropic.
+- **Background jobs**: Inngest (delta-sync workers, push handlers, scheduled crons)
 - **Build**: Turborepo + pnpm workspaces
 - **Deploy**: DigitalOcean App Platform (EU)
 
@@ -38,6 +40,8 @@ cd ../.. && pnpm dev
 
 - API: http://localhost:3001 (Swagger at `/docs`)
 - Web: http://localhost:3000
+
+**Optional — enable AI features locally:** drop `OPENAI_API_KEY=sk-...` into `apps/api/.env`. The classifier / extractor accuracy harnesses (`pnpm test:ai` from `apps/api/`) skip silently without it; with it, you get the live-API harness + an HTML report under `apps/api/.ai-reports/index.html`.
 
 ## Scripts
 
