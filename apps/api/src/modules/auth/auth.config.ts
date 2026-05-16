@@ -166,8 +166,16 @@ export const authConfig: ExpressAuthConfig = {
 		// On sign-in, enrich the JWT with `userId` so we don't have to hit the DB to look it
 		// up by email on every request. Active organization is NOT cached here — it's read
 		// fresh from `User.currentOrganizationId` by OrganizationGuard so switch-org takes
-		// effect immediately. On subsequent requests `user` is undefined and we just pass
-		// the existing token through.
+		// effect immediately.
+		//
+		// On every subsequent request, re-verify the `userId` still points at a live row.
+		// Returning `null` from this callback makes Auth.js treat the session as invalid
+		// and clear the cookie. Without this check, JWT sessions survive User-row deletion
+		// for up to the cookie's 30-day lifetime — the user appears "logged in" to the web
+		// shell (the session endpoint returns the JWT contents verbatim) and only the first
+		// DB-backed API call (e.g. `OrganizationGuard`) surfaces the inconsistency, with a
+		// confusing 403. The cost is one indexed point-lookup per request — same shape as
+		// `OrganizationGuard`'s existing membership re-verification.
 		async jwt({ token, user }) {
 			if (user?.email) {
 				const dbUser = await authPrisma.user.findUnique({
@@ -175,10 +183,25 @@ export const authConfig: ExpressAuthConfig = {
 					select: { id: true }
 				});
 
-				if (dbUser) {
-					token.userId = dbUser.id;
+				if (!dbUser) {
+					return null;
+				}
+
+				token.userId = dbUser.id;
+				return token;
+			}
+
+			if (token.userId) {
+				const stillExists = await authPrisma.user.findUnique({
+					where: { id: token.userId as string },
+					select: { id: true }
+				});
+
+				if (!stillExists) {
+					return null;
 				}
 			}
+
 			return token;
 		},
 		// Copy JWT-side custom claims to the session payload exposed via /api/auth/session.
