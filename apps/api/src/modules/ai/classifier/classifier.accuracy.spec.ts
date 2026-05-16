@@ -5,6 +5,7 @@ import { AI_CLIENT } from '@/modules/ai/clients/ai-client.interface';
 import { OpenAIClient } from '@/modules/ai/clients/openai-client.service';
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
 import { LogService } from '@/modules/logger/log.service';
+import { appendAiReportEntry } from '@/modules/ai/__test-utils/ai-report-writer';
 import { describe, expect, it, jest } from '@jest/globals';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -137,6 +138,35 @@ describeIfKey('ClassifierService — live OpenAI accuracy', () => {
 			console.log(`  ${name.padEnd(8)}: ${((c.correct / c.total) * 100).toFixed(1)}% (${c.correct}/${c.total})`);
 		}
 		console.log('');
+
+		// Persist results for the local HTML report (no-op when AI_REPORT_RUN_ID is unset).
+		appendAiReportEntry({
+			kind: 'classifier',
+			summary: {
+				overall,
+				correct: results.filter(r => r.correct).length,
+				total: results.length,
+				byCategory: Object.fromEntries(
+					Object.entries(byCategory).map(([k, v]) => [k, { correct: v.correct, total: v.total }])
+				)
+			},
+			fixtures: results.map(r => ({
+				category: r.fixture.category,
+				subject: r.fixture.input.subject,
+				notes: r.fixture.notes,
+				input: {
+					subject: r.fixture.input.subject,
+					fromName: r.fixture.input.fromName,
+					fromEmail: r.fixture.input.fromEmail,
+					bodyText: r.fixture.input.bodyText
+				},
+				expected: r.fixture.expectedIsQuote,
+				got: r.result?.isQuote ?? null,
+				confidence: r.result?.confidence ?? null,
+				reason: r.result?.reason ?? r.error ?? null,
+				correct: r.correct
+			}))
+		});
 
 		expect(overall).toBeGreaterThanOrEqual(MIN_ACCURACY);
 	});

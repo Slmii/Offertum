@@ -13,6 +13,7 @@ import {
 } from '@/modules/ai/extractor/fixtures/nl-extraction-expected.fixtures';
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
 import { LogService } from '@/modules/logger/log.service';
+import { appendAiReportEntry } from '@/modules/ai/__test-utils/ai-report-writer';
 import { describe, expect, it, jest } from '@jest/globals';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -90,13 +91,47 @@ describeIfKey('ExtractorService — live OpenAI accuracy', () => {
 		);
 
 		let passed = 0;
+		const fixturePayloads: Array<{
+			subject: string | null;
+			notes: string | undefined;
+			input: { subject: string | null; fromName: string | null; fromEmail: string | null; bodyText: string };
+			fieldsPassing: number;
+			totalFields: number;
+			acceptable: boolean;
+			error: string | null;
+			fields: Array<{ name: string; ok: boolean; actual: unknown; expected: unknown }>;
+		}> = [];
+
 		console.log(`\n${'─'.repeat(80)}`);
 		console.log('Extractor accuracy — per-fixture results');
 		console.log('─'.repeat(80));
 
+		// Source fixtures keyed by subject so we can pull the original input for the report.
+		const fixtureBySubject = new Map(NL_CLASSIFIER_FIXTURES.map(f => [f.input.subject, f]));
+
 		for (const r of results) {
+			const sourceFixture = fixtureBySubject.get(r.subject ?? '');
+			const inputForReport = sourceFixture
+				? {
+						subject: sourceFixture.input.subject,
+						fromName: sourceFixture.input.fromName,
+						fromEmail: sourceFixture.input.fromEmail,
+						bodyText: sourceFixture.input.bodyText
+					}
+				: { subject: r.subject, fromName: null, fromEmail: null, bodyText: '' };
+
 			if (!r.result) {
 				console.log(`❌ "${r.subject}" — extraction failed: ${r.error}`);
+				fixturePayloads.push({
+					subject: r.subject,
+					notes: sourceFixture?.notes,
+					input: inputForReport,
+					fieldsPassing: 0,
+					totalFields: FIELDS_PER_FIXTURE,
+					acceptable: false,
+					error: r.error,
+					fields: []
+				});
 				continue;
 			}
 			const grade = gradeExtraction(r.result, r.expected.expected);
@@ -122,6 +157,16 @@ describeIfKey('ExtractorService — live OpenAI accuracy', () => {
 					);
 				}
 			}
+			fixturePayloads.push({
+				subject: r.subject,
+				notes: sourceFixture?.notes,
+				input: inputForReport,
+				fieldsPassing: grade.fieldsPassing,
+				totalFields: FIELDS_PER_FIXTURE,
+				acceptable,
+				error: null,
+				fields: grade.fields
+			});
 		}
 
 		const accuracy = passed / results.length;
@@ -129,6 +174,19 @@ describeIfKey('ExtractorService — live OpenAI accuracy', () => {
 		console.log('Summary');
 		console.log('─'.repeat(80));
 		console.log(`  Overall: ${(accuracy * 100).toFixed(1)}% (${passed}/${results.length} fixtures passed)\n`);
+
+		// Persist results for the local HTML report (no-op when AI_REPORT_RUN_ID is unset).
+		appendAiReportEntry({
+			kind: 'extractor',
+			summary: {
+				overall: accuracy,
+				passed,
+				total: results.length,
+				fieldsPerFixture: FIELDS_PER_FIXTURE,
+				minFieldsPassing: MIN_FIELDS_PASSING
+			},
+			fixtures: fixturePayloads
+		});
 
 		expect(accuracy).toBeGreaterThanOrEqual(MIN_OVERALL_ACCURACY);
 	});

@@ -51,11 +51,20 @@ export function buildExtractorPromptNL(input: ExtractorInput, referenceDateIso: 
 		## Velden
 
 		### customerName (string | null)
-		Gebruik \`fromName\` uit het invoerobject als het een persoonsnaam lijkt. Als er
-		geen persoonsnaam beschikbaar is, gebruik dan een duidelijke bedrijfs-, team- of
-		afdelingsnaam uit \`fromName\` of de ondertekening (bijv. "Facility Team",
-		"Marketing — Atlas Verzekeringen"). Bewaar de oorspronkelijke hoofdletter-
-		schrijfwijze. Null alleen als er geen bruikbare afzenderidentiteit is.
+		Drie-staps voorkeursvolgorde:
+		1. \`fromName\` uit het invoerobject — gebruik dit ALS het een persoonsnaam lijkt
+		   (voor- en/of achternaam van een individu).
+		2. Als \`fromName\` geen persoonsnaam is (bijv. "Marketing — Atlas Verzekeringen",
+		   "Facility Team", "Info"), zoek dan een persoonsnaam in de ondertekening
+		   onderaan de e-mail (bijv. "Met vriendelijke groet, [Naam]", "Mvg, [Naam]",
+		   "-- [Naam]"). Een persoon in de ondertekening krijgt voorrang boven een
+		   team-/afdelingsnaam in \`fromName\` — de mens achter het info@-adres is
+		   meestal de werkelijke contactpersoon.
+		3. Als er ook in de ondertekening geen persoonsnaam staat, gebruik dan de
+		   bedrijfs-/team-/afdelingsnaam uit \`fromName\` (bijv. "Facility Team",
+		   "Marketing — Atlas Verzekeringen").
+		Bewaar de oorspronkelijke hoofdletterschrijfwijze. Null alleen als er geen
+		bruikbare afzenderidentiteit te vinden is.
 
 		### customerEmail (string | null)
 		Het e-mailadres van de afzender, in kleine letters. Gebruik \`fromEmail\` uit het
