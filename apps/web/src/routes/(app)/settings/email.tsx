@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries/email.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { EmailSettingsSearchSchema } from '@/lib/schemas/email.schema';
+import { toReadableDate } from '@/lib/utils/date.utils';
 import { getEmailConnectErrorCopy } from '@/lib/utils/email-connect-error';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -27,7 +28,6 @@ import Typography from '@mui/material/Typography';
 import type { BillingState, GmailMessage, MailboxStatus, MicrosoftMessage } from '@quoteom/shared';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 
 export const Route = createFileRoute('/(app)/settings/email')({
@@ -301,7 +301,7 @@ function ProviderPanel({
 					</Typography>
 					{status.connectedAt && (
 						<Typography variant='body2' color='text.secondary'>
-							Linked on {dayjs(status.connectedAt).format('D MMM YYYY')}
+							Linked on {toReadableDate(status.connectedAt, 'D MMM YYYY')}
 						</Typography>
 					)}
 
@@ -399,7 +399,7 @@ function MessageRow({ message }: { message: UnifiedMessage }) {
 						</Typography>
 						{' · '}
 						<Typography component='span' variant='caption' color='text.secondary'>
-							{dayjs(message.dateIso).format('D MMM YYYY HH:mm')}
+							{toReadableDate(message.dateIso, 'D MMM YYYY HH:mm')}
 						</Typography>
 					</>
 				}

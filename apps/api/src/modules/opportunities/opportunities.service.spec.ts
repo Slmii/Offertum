@@ -22,7 +22,17 @@ type FakeRepository = Pick<
 	| 'findByIdForOrganization'
 	| 'updateStatus'
 	| 'listByOrganization'
+	| 'countByStatusForOrganization'
 >;
+
+const EMPTY_STATUS_COUNTS = {
+	NEW: 0,
+	REPLIED: 0,
+	WAITING: 0,
+	COLD: 0,
+	WON: 0,
+	LOST: 0
+};
 
 function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Mock>> = {}): FakeRepository {
 	return {
@@ -32,6 +42,7 @@ function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Moc
 		findByIdForOrganization: jest.fn().mockReturnValue(Promise.resolve(null)),
 		updateStatus: jest.fn(),
 		listByOrganization: jest.fn().mockReturnValue(Promise.resolve([])),
+		countByStatusForOrganization: jest.fn().mockReturnValue(Promise.resolve(EMPTY_STATUS_COUNTS)),
 		...overrides
 	} as unknown as FakeRepository;
 }
@@ -271,13 +282,18 @@ describe('OpportunitiesService.list pagination', () => {
 		});
 		const service = makeService({ repository });
 
-		const list = await service.list('org-1', { cursor: null, limit: 2 });
+		const list = await service.list('org-1', { cursor: null, limit: 2, status: null, search: null });
 
 		expect(list.opportunities).toHaveLength(2);
 		expect(list.opportunities[0]?.id).toBe('opp-1');
 		expect(list.opportunities[1]?.id).toBe('opp-2');
 		expect(list.nextCursor).not.toBeNull();
-		expect(repository.listByOrganization).toHaveBeenCalledWith('org-1', { take: 3, cursor: null });
+		expect(repository.listByOrganization).toHaveBeenCalledWith('org-1', {
+			take: 3,
+			cursor: null,
+			status: null,
+			search: null
+		});
 	});
 
 	it('returns null nextCursor when the page is not full', async () => {
@@ -287,7 +303,7 @@ describe('OpportunitiesService.list pagination', () => {
 		});
 		const service = makeService({ repository });
 
-		const list = await service.list('org-1', { cursor: null, limit: 25 });
+		const list = await service.list('org-1', { cursor: null, limit: 25, status: null, search: null });
 
 		expect(list.opportunities).toHaveLength(1);
 		expect(list.nextCursor).toBeNull();

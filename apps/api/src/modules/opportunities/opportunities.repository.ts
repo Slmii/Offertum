@@ -154,27 +154,75 @@ export class OpportunitiesRepository {
 
 	async listByOrganization(
 		organizationId: string,
-		options: { take: number; cursor: { createdAt: Date; id: string } | null }
+		options: {
+			take: number;
+			cursor: { createdAt: Date; id: string } | null;
+			status: PrismaOpportunityStatus | null;
+			search: string | null;
+		}
 	): Promise<OpportunityRecord[]> {
 		// Keyset pagination on (createdAt DESC, id DESC) — id breaks createdAt ties so the
 		// cursor is stable across rows created in the same millisecond. We over-fetch by 1
 		// row so the service can tell whether a next page exists without a separate count.
+		// Status filter + search OR-clause (optional) apply at SQL level so cursor + filters
+		// cohabit cleanly. The two OR-clauses (search + keyset) live under `AND` so neither
+		// overwrites the other in Prisma's where-shape merge.
+		const search = options.search?.trim();
+		const conditions: Prisma.OpportunityWhereInput[] = [];
+		if (search) {
+			conditions.push({
+				OR: [
+					{ customerName: { contains: search, mode: 'insensitive' } },
+					{ address: { contains: search, mode: 'insensitive' } },
+					{ requestType: { contains: search, mode: 'insensitive' } },
+					{ rawMessage: { is: { fromName: { contains: search, mode: 'insensitive' } } } },
+					{ rawMessage: { is: { subject: { contains: search, mode: 'insensitive' } } } }
+				]
+			});
+		}
+		if (options.cursor) {
+			conditions.push({
+				OR: [
+					{ createdAt: { lt: options.cursor.createdAt } },
+					{ createdAt: options.cursor.createdAt, id: { lt: options.cursor.id } }
+				]
+			});
+		}
+
 		return this.prisma.opportunity.findMany({
 			where: {
 				organizationId,
-				...(options.cursor
-					? {
-							OR: [
-								{ createdAt: { lt: options.cursor.createdAt } },
-								{ createdAt: options.cursor.createdAt, id: { lt: options.cursor.id } }
-							]
-						}
-					: {})
+				...(options.status ? { status: options.status } : {}),
+				...(conditions.length > 0 ? { AND: conditions } : {})
 			},
 			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 			take: options.take,
 			include: OPPORTUNITY_INCLUDE
 		});
+	}
+
+	/**
+	 * Per-status counts for the org. Drives the segmented filter tabs ("New (12) ·
+	 * Replied (8) · ..."). Single SQL aggregation across all 6 statuses.
+	 */
+	async countByStatusForOrganization(organizationId: string): Promise<Record<PrismaOpportunityStatus, number>> {
+		const rows = await this.prisma.opportunity.groupBy({
+			by: ['status'],
+			where: { organizationId },
+			_count: { _all: true }
+		});
+		const result = {
+			[PrismaOpportunityStatus.NEW]: 0,
+			[PrismaOpportunityStatus.REPLIED]: 0,
+			[PrismaOpportunityStatus.WAITING]: 0,
+			[PrismaOpportunityStatus.COLD]: 0,
+			[PrismaOpportunityStatus.WON]: 0,
+			[PrismaOpportunityStatus.LOST]: 0
+		};
+		for (const row of rows) {
+			result[row.status] = row._count._all;
+		}
+		return result;
 	}
 
 	async findByIdForOrganization(organizationId: string, id: string): Promise<OpportunityRecord | null> {

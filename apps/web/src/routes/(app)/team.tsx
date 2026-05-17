@@ -8,7 +8,7 @@ import {
 	useRemoveMember,
 	useRevokeInvitation
 } from '@/lib/queries/team.queries';
-import type { BillingState, MembershipRole } from '@quoteom/shared';
+import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -24,9 +24,9 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import type { BillingState, MembershipRole } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import dayjs from 'dayjs';
 import { useState } from 'react';
 
 // OWNER is omitted intentionally — every org has exactly one owner, set at org creation.
@@ -179,7 +179,7 @@ function TeamPage() {
 								>
 									<ListItemText
 										primary={inv.email}
-										secondary={`expires ${dayjs(inv.expiresAt).format('D MMM YYYY')}`}
+										secondary={`expires ${toReadableDate(inv.expiresAt, 'D MMM YYYY')}`}
 									/>
 								</ListItem>
 							))}

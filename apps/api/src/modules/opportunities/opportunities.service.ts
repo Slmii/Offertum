@@ -10,6 +10,7 @@ import {
 	decodeOpportunityListCursor,
 	encodeOpportunityListCursor
 } from '@/modules/opportunities/opportunity-list-cursor';
+import { OpportunityStatus as PrismaOpportunityStatus } from '@/generated/prisma/enums';
 import {
 	OPPORTUNITY_STATUS_FROM_WIRE,
 	OPPORTUNITY_STATUS_TO_WIRE,
@@ -72,16 +73,29 @@ export class OpportunitiesService {
 
 	async list(
 		organizationId: string,
-		options: { cursor: string | null; limit: number | null } = { cursor: null, limit: null }
+		options: {
+			cursor: string | null;
+			limit: number | null;
+			status: WireOpportunityStatus | null;
+			search: string | null;
+		} = { cursor: null, limit: null, status: null, search: null }
 	): Promise<OpportunityListResponseDto> {
 		const limit = clampLimit(options.limit);
 		const decodedCursor = decodeOpportunityListCursor(options.cursor);
+		const statusFilter = options.status ? OPPORTUNITY_STATUS_FROM_WIRE[options.status] : null;
 
 		// Over-fetch by one row to detect a next page without a follow-up count query.
-		const rows = await this.repository.listByOrganization(organizationId, {
-			take: limit + 1,
-			cursor: decodedCursor
-		});
+		// `statusCounts` runs in parallel so the segmented filter tabs render with their
+		// (N) numbers without a second round-trip from the web.
+		const [rows, statusCounts] = await Promise.all([
+			this.repository.listByOrganization(organizationId, {
+				take: limit + 1,
+				cursor: decodedCursor,
+				status: statusFilter,
+				search: options.search
+			}),
+			this.repository.countByStatusForOrganization(organizationId)
+		]);
 
 		const hasMore = rows.length > limit;
 		const page = hasMore ? rows.slice(0, limit) : rows;
@@ -91,7 +105,15 @@ export class OpportunitiesService {
 
 		return {
 			opportunities: page.map(toOpportunityResponseDto),
-			nextCursor
+			nextCursor,
+			statusCounts: {
+				new: statusCounts[PrismaOpportunityStatus.NEW],
+				replied: statusCounts[PrismaOpportunityStatus.REPLIED],
+				waiting: statusCounts[PrismaOpportunityStatus.WAITING],
+				cold: statusCounts[PrismaOpportunityStatus.COLD],
+				won: statusCounts[PrismaOpportunityStatus.WON],
+				lost: statusCounts[PrismaOpportunityStatus.LOST]
+			}
 		};
 	}
 

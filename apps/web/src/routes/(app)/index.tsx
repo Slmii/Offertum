@@ -81,6 +81,9 @@ function HomePage() {
 					</TextField>
 
 					<Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+						<Button variant='contained' onClick={() => navigate({ to: '/opportunities' })}>
+							Opportunities
+						</Button>
 						<Button variant='contained' onClick={() => navigate({ to: '/team' })}>
 							Team
 						</Button>
@@ -92,6 +95,11 @@ function HomePage() {
 						{me.role !== 'EXTERNAL' && (
 							<Button variant='contained' onClick={() => navigate({ to: '/settings/email' })}>
 								Email
+							</Button>
+						)}
+						{me.user.isAdmin && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/admin/ai-usage' })}>
+								AI usage (dev)
 							</Button>
 						)}
 						<Button variant='outlined' onClick={() => signOut.mutate()} disabled={signOut.isPending}>

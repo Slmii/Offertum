@@ -1,9 +1,14 @@
+import { OPPORTUNITY_STATUSES, OPPORTUNITY_SORTS, type OpportunitySort, type OpportunityStatus } from '@quoteom/shared';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /**
- * Query params for `GET /api/opportunities`. `cursor` is an opaque base64url-encoded
- * string from a prior page's `nextCursor`. `limit` clamps server-side to [1, 100].
+ * Query params for `GET /api/opportunities`.
+ * - `cursor`: opaque base64url cursor from a prior page's `nextCursor`.
+ * - `limit`: server-clamped to [1, 100], default 25.
+ * - `status`: optional filter on `OpportunityStatus`. Cursor pagination respects it.
+ * - `sort`: optional ordering. Cursor pagination is only stable when paired with the
+ *   matching sort field — see `OpportunityListCursor` for the keyset shape.
  */
 export class ListOpportunitiesQueryDto {
 	@IsOptional()
@@ -17,4 +22,23 @@ export class ListOpportunitiesQueryDto {
 	@Min(1)
 	@Max(100)
 	limit?: number;
+
+	@IsOptional()
+	@IsIn(OPPORTUNITY_STATUSES)
+	status?: OpportunityStatus;
+
+	@IsOptional()
+	@IsIn(OPPORTUNITY_SORTS)
+	sort?: OpportunitySort;
+
+	/**
+	 * Free-text search across `customerName`, `address`, `requestType`, `fromName`, and
+	 * `subject` via case-insensitive `ILIKE`. Empty/whitespace-only is ignored. Capped
+	 * server-side to 80 chars to bound the query plan (and prevent the user from
+	 * accidentally pasting a 5KB email body into the box).
+	 */
+	@IsOptional()
+	@IsString()
+	@MaxLength(80)
+	search?: string;
 }

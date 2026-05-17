@@ -1,5 +1,5 @@
 import { billingStatusQueryOptions, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
-import type { BillingStatus } from '@quoteom/shared';
+import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -8,9 +8,9 @@ import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
+import type { BillingStatus } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import dayjs from 'dayjs';
 
 export const Route = createFileRoute('/(app)/billing/')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions),
@@ -122,8 +122,8 @@ function StatusPanel({
 						</Button>
 					}
 				>
-					Cancellation scheduled for {formatDate(endDate)}. Resume your subscription before then to keep
-					access.
+					Cancellation scheduled for {toReadableDate(endDate, 'D MMM YYYY')}. Resume your subscription before
+					then to keep access.
 				</Alert>
 			)}
 
@@ -226,9 +226,9 @@ function primaryLine(state: BillingStatus['state'], endDate: Date | null): strin
 		case 'none':
 			return "You haven't started your trial yet.";
 		case 'trialing':
-			return `Free trial — first charge on ${formatDate(endDate)}`;
+			return `Free trial — first charge on ${endDate ? toReadableDate(endDate, 'D MMM YYYY') : '-'}`;
 		case 'active':
-			return `Subscription active — renews ${formatDate(endDate)}`;
+			return `Subscription active — renews ${endDate ? toReadableDate(endDate, 'D MMM YYYY') : '-'}`;
 		case 'past_due':
 			return "We couldn't collect your last payment.";
 		case 'paused':
@@ -255,16 +255,6 @@ function secondaryLine(state: BillingStatus['state']): string | null {
 		default:
 			return null;
 	}
-}
-
-function formatDate(date: Date | null): string {
-	if (!date) {
-		return '—';
-	}
-
-	// Use dayjs's locale-independent token formatter — `toLocaleDateString` would produce
-	// different strings on the SSR server vs. the user's browser, causing hydration drift.
-	return dayjs(date).format('D MMM YYYY');
 }
 
 function formatPaymentMethod(brand: string): string {

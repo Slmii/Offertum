@@ -1,4 +1,7 @@
+import { SummaryCard } from '@/components/SummaryCard.component';
 import { aiUsageQueryOptions } from '@/lib/queries/ai-usage.queries';
+import { toReadableDateTime } from '@/lib/utils/date.utils';
+import { toReadableNumber, toReadableUsd, toReadableUsdPrecise } from '@/lib/utils/number.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -75,13 +78,10 @@ function AIUsagePage() {
 			</ButtonGroup>
 
 			<Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
-				<SummaryCard label='Total cost (USD)' value={`$${data.summary.totalCostUsd.toFixed(4)}`} />
-				<SummaryCard label='Total calls' value={data.summary.totalCalls.toLocaleString('en-US')} />
-				<SummaryCard label='Prompt tokens' value={data.summary.totalPromptTokens.toLocaleString('en-US')} />
-				<SummaryCard
-					label='Completion tokens'
-					value={data.summary.totalCompletionTokens.toLocaleString('en-US')}
-				/>
+				<SummaryCard label='Total cost (USD)' value={toReadableUsd(data.summary.totalCostUsd)} />
+				<SummaryCard label='Total calls' value={toReadableNumber(data.summary.totalCalls)} />
+				<SummaryCard label='Prompt tokens' value={toReadableNumber(data.summary.totalPromptTokens)} />
+				<SummaryCard label='Completion tokens' value={toReadableNumber(data.summary.totalCompletionTokens)} />
 			</Stack>
 
 			{data.summary.unpricedModels.length > 0 && (
@@ -140,11 +140,11 @@ function AIUsagePage() {
 											{row.organizationId?.slice(0, 8) ?? '—'}
 										</code>
 									</TableCell>
-									<TableCell align='right'>{row.callCount.toLocaleString('en-US')}</TableCell>
-									<TableCell align='right'>{row.promptTokens.toLocaleString('en-US')}</TableCell>
-									<TableCell align='right'>{row.completionTokens.toLocaleString('en-US')}</TableCell>
+									<TableCell align='right'>{toReadableNumber(row.callCount)}</TableCell>
+									<TableCell align='right'>{toReadableNumber(row.promptTokens)}</TableCell>
+									<TableCell align='right'>{toReadableNumber(row.completionTokens)}</TableCell>
 									<TableCell align='right'>
-										${row.costUsd.toFixed(6)}
+										{toReadableUsdPrecise(row.costUsd)}
 										{row.costIsEstimate && (
 											<Chip label='est' size='small' sx={{ ml: 0.5, fontSize: '0.65rem' }} />
 										)}
@@ -157,21 +157,8 @@ function AIUsagePage() {
 			</TableContainer>
 
 			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
-				Window: {new Date(data.rangeStart).toLocaleString()} — {new Date(data.rangeEnd).toLocaleString()}
+				Window: {toReadableDateTime(data.rangeStart)} — {toReadableDateTime(data.rangeEnd)}
 			</Typography>
 		</Container>
-	);
-}
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-	return (
-		<Paper variant='outlined' sx={{ p: 2, flex: 1 }}>
-			<Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-				{label}
-			</Typography>
-			<Typography variant='h2' sx={{ fontSize: 22, mt: 0.5 }}>
-				{value}
-			</Typography>
-		</Paper>
 	);
 }

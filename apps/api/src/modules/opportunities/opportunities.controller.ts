@@ -21,7 +21,9 @@ export class OpportunitiesController {
 	list(@Req() request: Request, @Query() query: ListOpportunitiesQueryDto): Promise<OpportunityListResponseDto> {
 		return this.opportunities.list(request.organizationId!, {
 			cursor: query.cursor ?? null,
-			limit: query.limit ?? null
+			limit: query.limit ?? null,
+			status: query.status ?? null,
+			search: query.search ?? null
 		});
 	}
 

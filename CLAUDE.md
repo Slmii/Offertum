@@ -205,9 +205,27 @@ Every controller method has an explicit return-type annotation pointing at a DTO
 
 Service inputs (`CreateInvitationInput`) and module-private types (`PaymentMethodLike`, `ErrorResponseBody`) can remain interfaces — they never cross a boundary.
 
-### SSR-safe formatting
+### SSR-safe formatting + helper conventions
 
-In SSR-rendered components: **never** `toLocaleDateString(undefined, …)` or `Intl.*Format()` with undefined locale. Node defaults to `en-US`, the browser uses the visitor's locale → hydration mismatch. Use `dayjs(date).format('D MMM YYYY')` for dates; inline cents-to-string helper for currency. dayjs is already a dependency via MUI's `AdapterDayjs`.
+In SSR-rendered components: **never** `toLocaleDateString(undefined, …)` or `Intl.*Format()` with undefined locale. Node defaults to `en-US`, the browser uses the visitor's locale → hydration mismatch.
+
+All user-facing formatting goes through helpers in `apps/web/src/lib/utils/`:
+
+- **Dates** — `apps/web/src/lib/utils/date.utils.ts`:
+    - `toReadableDate(date)` — date-only, e.g. `17 mei`. For deadlines + inspection dates.
+    - `toReadableDateTime(date)` — date + time, e.g. `17 mei 2026 14:32`. For activity logs + audit timestamps.
+    - `toReadableTimestamp(date)` — human-relative, e.g. `2u geleden`. For inbox arrival times.
+- **Numbers + currency** — `apps/web/src/lib/utils/number.utils.ts`:
+    - `toReadableNumber(value)` — `1.234.567` (NL thousand separators). For counts + token totals.
+    - `toReadableDecimal(value)` — `1.234,56` (NL decimal). For non-currency decimals.
+    - `toReadableEuro(value)` / `toReadableUsd(value)` — fixed 2-decimal currency.
+    - `toReadableUsdPrecise(value)` — 4-6 decimals for tiny per-call AI costs that round to zero at 2 decimals.
+
+**Never** inline `toLocaleString(...)`, `toFixed(...)`, `Intl.NumberFormat(...)`, or `dayjs(...).format(...)` in components. Helpers keep the locale pinned to `nl-NL` so SSR + client render the same string, and centralize the format choices.
+
+### Hook conventions
+
+Free-standing custom hooks live in `apps/web/src/lib/hooks/` — one file per hook (e.g. `use-debounced-value.ts`). Hooks that are tightly coupled to a domain's `queryOptions` (mutation hooks, etc.) stay in their `lib/queries/<domain>.queries.ts` file so they sit next to the read they invalidate.
 
 ### Self-signup is BLOCKED
 
