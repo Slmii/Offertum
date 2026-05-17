@@ -360,6 +360,12 @@ export class MicrosoftGraphApiService {
 			'$select',
 			'id,conversationId,internetMessageId,subject,from,toRecipients,receivedDateTime,bodyPreview,body'
 		);
+		// Graph defaults `/me/messages/delta` to 10 messages per page. With a 500+ message
+		// inbox that means 50+ round-trips just to walk a snapshot. `$top=999` (the per-
+		// request max) collapses that to ~1-5 pages. The value is sticky on the deltaLink,
+		// so subsequent delta-syncs via the cursor inherit the same page size — also a win
+		// (fewer push-fired walks).
+		params.set('$top', '999');
 		return `${MICROSOFT_GRAPH_BASE}/me/mailFolders/Inbox/messages/delta?${params.toString()}`;
 	}
 
