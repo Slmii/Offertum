@@ -17,6 +17,7 @@
 
 // `.js` extensions are required by the API's `nodenext` moduleResolution. The web uses
 // `Bundler` resolution which doesn't care either way, so suffixed paths work for both.
+export * from './ai-usage.js';
 export * from './auth.js';
 export * from './billing.js';
 export * from './common.js';

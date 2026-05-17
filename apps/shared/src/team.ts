@@ -10,6 +10,7 @@ export interface MembershipUser {
 	id: string;
 	email: string;
 	name: string | null;
+	isAdmin: boolean;
 }
 
 /** Minimal organization shape included in membership responses. */

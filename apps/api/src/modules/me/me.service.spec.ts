@@ -46,9 +46,12 @@ function makePrisma(target: TargetRow | null, fallback: { organizationId: string
 
 const billingStub = { syncSeatCount: jest.fn().mockReturnValue(Promise.resolve()) } as unknown as BillingService;
 const logStub = { logAction: jest.fn() } as unknown as LogService;
+const configStub = { get: jest.fn().mockReturnValue(undefined) } as unknown as ConstructorParameters<
+	typeof MeService
+>[3];
 
 function buildService(prisma: FakePrisma): MeService {
-	return new MeService(prisma as unknown as PrismaService, billingStub, logStub);
+	return new MeService(prisma as unknown as PrismaService, billingStub, logStub, configStub);
 }
 
 describe('MeService.removeMember', () => {

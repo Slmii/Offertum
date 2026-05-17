@@ -100,7 +100,11 @@ export const envSchema = z.object({
 	// for new projects); Azure Responses-API support was added in `2025-03-01-preview`.
 	// Bump only when a GA version with Responses-API parity ships; chasing preview tags
 	// has historically been more pain than benefit for stability.
-	AZURE_OPENAI_API_VERSION: z.string().default('2025-03-01-preview')
+	AZURE_OPENAI_API_VERSION: z.string().default('2025-03-01-preview'),
+	// Comma-separated list of email addresses allowed to access dev-admin endpoints
+	// (e.g. /api/admin/ai-usage). Checked case-insensitively against `session.user.email`.
+	// Leave empty in environments where no one should have access — the guard returns 403.
+	ADMIN_EMAILS: z.string().optional()
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

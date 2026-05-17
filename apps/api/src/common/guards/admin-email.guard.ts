@@ -1,0 +1,56 @@
+import { AuthGuard } from '@/common/guards/auth.guard';
+import type { EnvSchema } from '@/config/env.schema';
+import { NOT_AUTHENTICATED } from '@/lib/errors';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
+
+/**
+ * Gates admin/dev endpoints (e.g. /api/admin/ai-usage) behind an email allowlist set via
+ * the `ADMIN_EMAILS` env var (comma-separated, case-insensitive). The check runs AFTER
+ * `AuthGuard` resolves the session, so the user must be authenticated AND their email
+ * must appear in the allowlist.
+ *
+ * Composes `AuthGuard` directly so we don't have to require both `@UseGuards(AuthGuard,
+ * AdminEmailGuard)` at every endpoint — applying only `AdminEmailGuard` is enough.
+ *
+ * Empty/unset `ADMIN_EMAILS` → 403 for everyone (the safe default; admins are explicitly
+ * opted in, never implicit).
+ */
+@Injectable()
+export class AdminEmailGuard implements CanActivate {
+	constructor(
+		private readonly authGuard: AuthGuard,
+		private readonly config: ConfigService<EnvSchema, true>
+	) {}
+
+	async canActivate(context: ExecutionContext): Promise<boolean> {
+		await this.authGuard.canActivate(context);
+
+		const request = context.switchToHttp().getRequest<Request>();
+		const email = request.authSession?.user?.email?.toLowerCase();
+		if (!email) {
+			throw new UnauthorizedException(NOT_AUTHENTICATED);
+		}
+
+		const allowlist = this.parseAllowlist(this.config.get('ADMIN_EMAILS', { infer: true }));
+		if (!allowlist.has(email)) {
+			throw new ForbiddenException();
+		}
+
+		return true;
+	}
+
+	private parseAllowlist(raw: string | undefined): Set<string> {
+		if (!raw) {
+			return new Set();
+		}
+
+		return new Set(
+			raw
+				.split(',')
+				.map(s => s.trim().toLowerCase())
+				.filter(s => s.length > 0)
+		);
+	}
+}

@@ -1,3 +1,4 @@
+import type { EnvSchema } from '@/config/env.schema';
 import { MembershipRole } from '@/generated/prisma/client';
 import { CANNOT_REMOVE_OWNER, CANNOT_REMOVE_SELF, MEMBERSHIP_NOT_FOUND } from '@/lib/errors';
 import { BillingService } from '@/modules/billing/billing.service';
@@ -5,6 +6,7 @@ import { LogService } from '@/modules/logger/log.service';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * Reads + writes scoped to the current user. Controller stays thin — orchestrates
@@ -16,7 +18,8 @@ export class MeService {
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly billing: BillingService,
-		private readonly logService: LogService
+		private readonly logService: LogService,
+		private readonly config: ConfigService<EnvSchema, true>
 	) {}
 
 	private static readonly MEMBERSHIP_INCLUDE = {
@@ -24,15 +27,20 @@ export class MeService {
 		organization: { select: { id: true, name: true } }
 	} as const;
 
-	/** All members of the given org (teammates of the current user). */
-	listOrgMembers(organizationId: string): Promise<MembershipResponseDto[]> {
-		return this.prisma.membership.findMany({
+	/** All members of the given org (teammates of the current user). `isAdmin` is always
+	 * `false` here — admin status is per-user metadata that we deliberately don't expose
+	 * across the team listing. The current user's admin flag is on `findMyMembership`. */
+	async listOrgMembers(organizationId: string): Promise<MembershipResponseDto[]> {
+		const rows = await this.prisma.membership.findMany({
 			where: { organizationId },
 			include: MeService.MEMBERSHIP_INCLUDE
 		});
+		return rows.map(row => this.withIsAdmin(row, false));
 	}
 
-	/** The current user's single membership in the active org, or null if missing. */
+	/** The current user's single membership in the active org. `isAdmin` is computed from
+	 * the `ADMIN_EMAILS` env allowlist so the web can gate dev/admin routes without
+	 * shipping the allowlist to the browser. */
 	async findMyMembership(userId: string, organizationId: string): Promise<MembershipResponseDto> {
 		const membership = await this.prisma.membership.findFirst({
 			where: { userId, organizationId },
@@ -43,16 +51,40 @@ export class MeService {
 			throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
 		}
 
-		return membership;
+		return this.withIsAdmin(membership, this.isAdminEmail(membership.user.email));
 	}
 
-	/** All orgs the current user belongs to — drives the org switcher dropdown. */
-	listMyOrganizations(userId: string): Promise<MembershipResponseDto[]> {
-		return this.prisma.membership.findMany({
+	/** All orgs the current user belongs to — drives the org switcher dropdown. Every row
+	 * shares the same `user` (the requester themselves), so `isAdmin` is meaningful. */
+	async listMyOrganizations(userId: string): Promise<MembershipResponseDto[]> {
+		const rows = await this.prisma.membership.findMany({
 			where: { userId },
 			orderBy: { createdAt: 'asc' },
 			include: MeService.MEMBERSHIP_INCLUDE
 		});
+		return rows.map(row => this.withIsAdmin(row, this.isAdminEmail(row.user.email)));
+	}
+
+	private isAdminEmail(email: string | null | undefined): boolean {
+		if (!email) {
+			return false;
+		}
+		const raw = this.config.get('ADMIN_EMAILS', { infer: true });
+		if (!raw) {
+			return false;
+		}
+		const target = email.toLowerCase();
+		return raw
+			.split(',')
+			.map(s => s.trim().toLowerCase())
+			.some(allowed => allowed.length > 0 && allowed === target);
+	}
+
+	private withIsAdmin<T extends { user: { id: string; email: string; name: string | null } }>(
+		row: T,
+		isAdmin: boolean
+	): T & { user: T['user'] & { isAdmin: boolean } } {
+		return { ...row, user: { ...row.user, isAdmin } };
 	}
 
 	/**
