@@ -131,7 +131,19 @@ export class EmailAccountsService {
 			accessToken: encrypt(input.tokens.accessToken),
 			refreshToken: refreshTokenCipher,
 			accessTokenExpiresAt: input.tokens.expiresAt,
-			userId: input.userId
+			userId: input.userId,
+			// Reactivation: if a previously-disconnected row exists for this provider
+			// account, clear the soft-delete marker so it counts as "connected" again.
+			// Operational state (`deltaLink`, `historyId`, `subscriptionId`, etc.) is
+			// also cleared so backfill captures a fresh cursor + the Inngest pipeline
+			// re-registers the watch/subscription. Without this, a re-connect would
+			// inherit the stale cursor + over-fetch the entire inbox on the next push.
+			disconnectedAt: null,
+			deltaLink: null,
+			historyId: null,
+			subscriptionId: null,
+			subscriptionClientState: null,
+			watchExpiresAt: null
 		};
 
 		const row = await this.prisma.emailAccount.upsert({
@@ -149,8 +161,22 @@ export class EmailAccountsService {
 				...data
 			},
 			update: data,
-			select: { id: true }
+			select: { id: true, disconnectedAt: true }
 		});
+
+		if (existing?.disconnectedAt) {
+			this.logService.logAction({
+				action: 'email.reconnect',
+				message: `${input.provider} mailbox reconnected: ${input.email}`,
+				metadata: {
+					provider: input.provider,
+					emailAccountId: row.id,
+					email: input.email,
+					previousDisconnectedAt: existing.disconnectedAt.toISOString()
+				},
+				context: 'EmailAccountsService'
+			});
+		}
 
 		this.logService.logAction({
 			action: 'email.connect',
@@ -183,7 +209,8 @@ export class EmailAccountsService {
 			where: {
 				organizationId: scope.organizationId,
 				userId: scope.userId,
-				provider: scope.provider
+				provider: scope.provider,
+				disconnectedAt: null
 			}
 		});
 		if (!row) {
@@ -208,7 +235,8 @@ export class EmailAccountsService {
 			where: {
 				organizationId: scope.organizationId,
 				userId: scope.userId,
-				provider: scope.provider
+				provider: scope.provider,
+				disconnectedAt: null
 			},
 			select: {
 				id: true,
@@ -236,7 +264,8 @@ export class EmailAccountsService {
 			where: {
 				organizationId: scope.organizationId,
 				userId: scope.userId,
-				provider: scope.provider
+				provider: scope.provider,
+				disconnectedAt: null
 			}
 		});
 
@@ -257,12 +286,22 @@ export class EmailAccountsService {
 			refreshed = await this.oauthFor(scope.provider).refreshAccessToken(refreshToken);
 		} catch (error) {
 			if (error instanceof OAuthRefreshTokenInvalidException) {
-				// `deleteMany` (not `delete`) so concurrent self-heal attempts don't collide:
-				// status + messages queries fire in parallel from the same page load and both
-				// can independently detect the stale token, both refresh, both hit
-				// `invalid_grant`, and both race to delete the same row. `delete` throws P2025
-				// for the loser; `deleteMany` is silent on zero rows.
-				await this.prisma.emailAccount.deleteMany({ where: { id: row.id } });
+				// Soft-disconnect (not hard-delete): same rationale as user-initiated
+				// disconnect — keep the row + its `RawMessage`/`Opportunity` history.
+				// `updateMany` is silent on zero rows so parallel self-heal attempts
+				// from the same page load (status + messages queries firing together)
+				// don't collide.
+				await this.prisma.emailAccount.updateMany({
+					where: { id: row.id, disconnectedAt: null },
+					data: {
+						disconnectedAt: new Date(),
+						deltaLink: null,
+						historyId: null,
+						subscriptionId: null,
+						subscriptionClientState: null,
+						watchExpiresAt: null
+					}
+				});
 				this.logService.logAction({
 					action: 'email.disconnect.self_heal',
 					message: `${scope.provider} ${row.email} self-healed — refresh token rejected upstream`,
@@ -329,18 +368,22 @@ export class EmailAccountsService {
 	}
 
 	/**
-	 * Disconnect THIS user's mailbox. Best-effort revoke at the provider (Microsoft is a
-	 * no-op), then delete the local row. Cascade clears any `RawMessage` rows tied to
-	 * this connection.
+	 * Soft-disconnect THIS user's mailbox. Best-effort revoke at the provider (Microsoft
+	 * is a no-op), then set `disconnectedAt = now()` + clear operational state (delta
+	 * cursors, push-subscription ids). The row stays so `RawMessage` + `Opportunity`
+	 * history is preserved — losing months of pipeline work on a transient disconnect
+	 * would be a data-loss bug. Re-connecting the same provider account upserts on the
+	 * existing row + clears `disconnectedAt`; see `upsertEmailAccount`.
 	 *
-	 * Idempotent — returns silently if there's no connected account for this user.
+	 * Idempotent — returns silently if there's no active connection for this user.
 	 */
 	async disconnectEmailAccount(scope: MailboxScope): Promise<void> {
 		const row = await this.prisma.emailAccount.findFirst({
 			where: {
 				organizationId: scope.organizationId,
 				userId: scope.userId,
-				provider: scope.provider
+				provider: scope.provider,
+				disconnectedAt: null
 			}
 		});
 		if (!row) {
@@ -350,10 +393,20 @@ export class EmailAccountsService {
 		const refreshToken = decrypt(row.refreshToken);
 		await this.oauthFor(scope.provider).revoke(refreshToken);
 
-		// `deleteMany` for the same reason as the self-heal path above: parallel disconnect
-		// requests (or a self-heal racing a user-initiated disconnect) would each find the
-		// row and both try to delete — `delete` throws P2025 for the loser.
-		await this.prisma.emailAccount.deleteMany({ where: { id: row.id } });
+		// `updateMany` (not `update`) so parallel disconnect requests, or a self-heal
+		// racing a user-initiated disconnect, can't collide: `updateMany` is silent on
+		// zero rows, where `update` throws P2025 for the loser of the race.
+		await this.prisma.emailAccount.updateMany({
+			where: { id: row.id, disconnectedAt: null },
+			data: {
+				disconnectedAt: new Date(),
+				deltaLink: null,
+				historyId: null,
+				subscriptionId: null,
+				subscriptionClientState: null,
+				watchExpiresAt: null
+			}
+		});
 		this.logService.logAction({
 			action: 'email.disconnect',
 			message: `${scope.provider} mailbox disconnected: ${row.email}`,

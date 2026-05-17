@@ -349,6 +349,14 @@ model EmailAccount {
     // because leakage would let anyone post fake notifications and trigger delta-syncs.
     // Null for Gmail rows.
     subscriptionClientState String?       @db.Text
+    // W4.4 follow-up — soft-disconnect timestamp. When non-null, the user has clicked
+    // Disconnect: we stop the Pub/Sub watch / Graph subscription, revoke the OAuth
+    // refresh token at the provider, and set this column instead of hard-deleting the
+    // row. The row stays so `RawMessage` / `Opportunity` history is preserved (those
+    // FKs cascade-delete and would wipe months of pipeline work otherwise). Re-
+    // connecting the same provider account upserts on the existing row + clears this.
+    // All "is connected" lookups filter `disconnectedAt: null`.
+    disconnectedAt          DateTime?
     createdAt               DateTime      @default(now())
     updatedAt               DateTime      @updatedAt
 

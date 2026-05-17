@@ -282,6 +282,7 @@ export class MicrosoftSubscriptionService {
 		const candidates = await this.prisma.emailAccount.findMany({
 			where: {
 				provider: EmailProvider.MICROSOFT,
+				disconnectedAt: null,
 				OR: [
 					// Expiring within the renewal window AND has a subscription id to PATCH.
 					{ watchExpiresAt: { lt: cutoff }, subscriptionId: { not: null } },

@@ -187,6 +187,7 @@ export class GmailWatchService {
 		const candidates = await this.prisma.emailAccount.findMany({
 			where: {
 				provider: EmailProvider.GMAIL,
+				disconnectedAt: null,
 				OR: [
 					// Expiring within the renewal window.
 					{ watchExpiresAt: { lt: cutoff } },

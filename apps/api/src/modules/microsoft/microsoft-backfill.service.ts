@@ -51,8 +51,11 @@ export class MicrosoftBackfillService {
 	) {}
 
 	async run(emailAccountId: string): Promise<MicrosoftBackfillResult> {
-		const account = await this.prisma.emailAccount.findUnique({
-			where: { id: emailAccountId },
+		// `findFirst` with `disconnectedAt: null` (not `findUnique` on id alone) so a
+		// stale Inngest event for an account that's been soft-disconnected since it was
+		// enqueued is treated the same as a missing row — no work, no crash.
+		const account = await this.prisma.emailAccount.findFirst({
+			where: { id: emailAccountId, disconnectedAt: null },
 			select: { id: true, organizationId: true, userId: true, email: true, provider: true }
 		});
 		if (!account || account.provider !== EmailProvider.MICROSOFT) {

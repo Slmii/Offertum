@@ -119,7 +119,7 @@ export class MicrosoftWebhookController {
 		const enqueuedAccounts = new Map<string, { organizationId: string }>();
 		for (const [subscriptionId, notes] of bySubscription) {
 			const account = await this.prisma.emailAccount.findFirst({
-				where: { provider: EmailProvider.MICROSOFT, subscriptionId },
+				where: { provider: EmailProvider.MICROSOFT, subscriptionId, disconnectedAt: null },
 				select: { id: true, organizationId: true, email: true }
 			});
 

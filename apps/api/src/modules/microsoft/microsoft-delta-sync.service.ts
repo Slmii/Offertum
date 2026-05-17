@@ -56,8 +56,11 @@ export class MicrosoftDeltaSyncService {
 	) {}
 
 	async run(emailAccountId: string): Promise<MicrosoftDeltaSyncResult> {
-		const account = await this.prisma.emailAccount.findUnique({
-			where: { id: emailAccountId },
+		// `findFirst` + `disconnectedAt: null`: a push that arrives mid-disconnect (the
+		// Graph subscription hasn't been torn down yet) shouldn't drive work on a row
+		// the user just severed.
+		const account = await this.prisma.emailAccount.findFirst({
+			where: { id: emailAccountId, disconnectedAt: null },
 			select: {
 				id: true,
 				organizationId: true,

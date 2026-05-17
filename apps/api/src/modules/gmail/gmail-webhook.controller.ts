@@ -127,7 +127,7 @@ export class GmailWebhookController {
 		// so a push to a shared mailbox doesn't silently drop sync for every org except
 		// the first one returned.
 		const accounts = await this.prisma.emailAccount.findMany({
-			where: { provider: EmailProvider.GMAIL, email: payload.emailAddress },
+			where: { provider: EmailProvider.GMAIL, email: payload.emailAddress, disconnectedAt: null },
 			select: { id: true, organizationId: true, userId: true }
 		});
 

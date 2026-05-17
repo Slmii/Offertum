@@ -58,8 +58,11 @@ export class GmailDeltaSyncService {
 	) {}
 
 	async run(emailAccountId: string): Promise<DeltaSyncResult> {
-		const account = await this.prisma.emailAccount.findUnique({
-			where: { id: emailAccountId },
+		// `findFirst` + `disconnectedAt: null`: a Pub/Sub push that arrives mid-disconnect
+		// (the watch hasn't been stopped at Google yet) shouldn't drive work on a row
+		// the user just severed.
+		const account = await this.prisma.emailAccount.findFirst({
+			where: { id: emailAccountId, disconnectedAt: null },
 			select: {
 				id: true,
 				organizationId: true,

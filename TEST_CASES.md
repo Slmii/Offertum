@@ -1060,8 +1060,105 @@ Prereqs: `OPENAI_API_KEY` set in `apps/api/.env`; Inngest dev server (`pnpm inng
     }
     ```
 - [ ] **Expect** the run logs but does **not** crash.
-- [ ] DB check: `SELECT * FROM "Log" WHERE action = 'inngest.event.unknown_email_account' AND "createdAt" > NOW() - INTERVAL '5 minutes';` returns a `WARN`-level row with `metadata.emailAccountId` set to the fake UUID.
+- [ ] DB check: `SELECT * FROM "Log" WHERE metadata->>'action' = 'inngest.event.unknown_email_account' AND "createdAt" > NOW() - INTERVAL '5 minutes';` returns a `WARN`-level row with `metadata.emailAccountId` set to the fake UUID.
 - [ ] **Expect** no new `AICall` row (the provider sync step fails first; the AI pipeline never runs for this fake account).
+
+---
+
+## Bulk-mail pre-filter (W4.4 hardening)
+
+Verifies that obvious marketing emails short-circuit BEFORE the AI classifier runs. Saves OpenAI cost and prevents vendor-direction misclassifications (e.g., "Vraag offerte aan" links from affiliate sites mistakenly flagged as customer quote requests).
+
+### BULK-01: `List-Unsubscribe` header → bulk skip
+
+- [ ] Send the connected mailbox a marketing email from a real ESP (Mailchimp / Sendgrid / similar) — most include `List-Unsubscribe` in the headers.
+- [ ] Wait for the push + delta-sync. **Expect** a `Log` row with `metadata->>'action' = 'opportunity.pipeline.bulk_mail_skipped'` and `metadata.reason = 'list_unsubscribe_header'`.
+- [ ] DB check: no `AICall` row for that `RawMessage`. No `Opportunity` row. `RawMessage.isQuoteRequest = false` + `classifiedAt IS NOT NULL`.
+
+### BULK-02: Body unsubscribe phrase → bulk skip
+
+- [ ] Send yourself an email containing "click here to remove yourself from our emails list" or "afmelden voor deze e-mails".
+- [ ] **Expect** `metadata.reason = 'body_unsubscribe_phrase'` and the same "no AICall, no Opportunity" outcome as BULK-01.
+
+### BULK-03: Two or more tracking links → bulk skip
+
+- [ ] Send yourself an email with two distinct tracking-domain URLs (e.g., one `bit.ly/...` and one `mailchi.mp/...`).
+- [ ] **Expect** `metadata.reason = 'tracking_link_density'`. No AICall, no Opportunity.
+
+### BULK-04: A single tracking link does NOT trigger the filter (false-positive guard)
+
+- [ ] Send yourself a plain Dutch quote request that happens to contain ONE `bit.ly` link (e.g., a project reference URL the customer is sharing).
+- [ ] **Expect** the AI classifier runs (one `AICall` row with `purpose = 'classifier'`) and produces a normal verdict — the bulk filter does not short-circuit.
+
+---
+
+## Email connect error UX (W4.4 hardening)
+
+Verifies that OAuth callback failures redirect to `/settings/email?error=<code>` with a friendly message, not a 500 JSON page.
+
+### EMAIL-CONNECT-01: AADSTS70000 (Microsoft "code already redeemed") shows friendly message
+
+- [ ] During an Outlook connect flow, after Microsoft redirects back to the callback, refresh the callback URL in the browser to force the same authorization code to be submitted twice.
+- [ ] **Expect** the second hit lands on `/settings/email?error=oauth_code_invalid` and the page renders an Alert reading **"That authorization expired."** with copy "The one-time code from Google/Microsoft can only be used once...".
+- [ ] DB check: `SELECT message, metadata FROM "Log" WHERE metadata->>'action' = 'oauth.microsoft.token_exchange_failed' ORDER BY "createdAt" DESC LIMIT 1;` shows the underlying AADSTS70000 in `metadata.body` and `metadata.code = 'oauth_code_invalid'`.
+
+### EMAIL-CONNECT-02: State mismatch redirects with friendly message
+
+- [ ] Start a Gmail or Outlook connect flow. Before completing consent, clear the `q_gm_oauth_state` / `q_ms_oauth_state` cookie via DevTools → Application → Cookies.
+- [ ] Complete the consent flow.
+- [ ] **Expect** the page lands on `/settings/email?error=oauth_state_mismatch` with the Alert "Your connection got mixed up." and the "try connecting again" copy.
+
+---
+
+## Microsoft backfill deltaLink capture (W4.4 hardening)
+
+Verifies that backfill captures a delta cursor so the first push-triggered delta-sync only fetches new mail (not a full-inbox snapshot).
+
+### BACKFILL-MS-01: Backfill captures a deltaLink at end-of-run
+
+- [ ] Connect a fresh Outlook mailbox with ≥1 message.
+- [ ] In the Inngest dev UI, find the `microsoft-backfill` step's output. **Expect** `deltaLinkAcquired: true`.
+- [ ] DB check: `SELECT "deltaLink" IS NOT NULL AS has_cursor FROM "EmailAccount" WHERE id = '<the-new-account>';` returns `true`.
+
+### BACKFILL-MS-02: First push after backfill only inserts new mail
+
+- [ ] After BACKFILL-MS-01 completes, send yourself ONE new email.
+- [ ] **Expect** within ~5s the Inngest `microsoft-delta-sync` run shows `messagesInserted: 1, pagesFetched: 1` in its `microsoft-delta-sync-walk` step output (not hundreds — that was the pre-fix bug).
+- [ ] **Expect** the same step output shows a non-null `deltaLink` — the cursor has advanced.
+
+---
+
+## Soft-disconnect (W4.4 hardening)
+
+Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` history. The cascade-delete on `EmailAccount` would otherwise wipe months of pipeline data on a transient disconnect — data-loss bug.
+
+### SOFT-DISCONNECT-01: Disconnect sets `disconnectedAt` instead of deleting
+
+- [ ] Connect a Gmail or Microsoft mailbox, wait for backfill, confirm at least one `Opportunity` row exists for it (or send a quote-request test email).
+- [ ] Note the `EmailAccount.id` and `Opportunity.id`s.
+- [ ] Click Disconnect on `/settings/email`.
+- [ ] DB check: `SELECT id, "disconnectedAt", "deltaLink", "subscriptionId" FROM "EmailAccount" WHERE id = '<the-id>';`
+- [ ] **Expect** the row still exists with `disconnectedAt IS NOT NULL` and `deltaLink IS NULL` (operational state cleared).
+- [ ] DB check: `SELECT count(*) FROM "Opportunity" WHERE "emailAccountId" = '<the-id>';` — count unchanged from before disconnect.
+- [ ] DB check: `SELECT count(*) FROM "RawMessage" WHERE "emailAccountId" = '<the-id>';` — count unchanged.
+
+### SOFT-DISCONNECT-02: Status endpoint shows "not connected" after disconnect
+
+- [ ] After SOFT-DISCONNECT-01, hit `/settings/email` page — both provider sections render as "Not connected" with a Connect button.
+- [ ] DB check: `findEmailAccount` filters `disconnectedAt: null`, so the status query returns nothing for the disconnected account.
+
+### SOFT-DISCONNECT-03: Reconnect clears `disconnectedAt` + reactivates the row
+
+- [ ] After SOFT-DISCONNECT-01/02, click Connect for the same provider with the same mailbox.
+- [ ] DB check: same `EmailAccount.id` (no new row created), `disconnectedAt IS NULL`, new `deltaLink` captured (Microsoft) or `historyId` set (Gmail).
+- [ ] Log check: `metadata->>'action' = 'email.reconnect'` row in `Log` for the reactivation.
+- [ ] Existing opportunities + raw messages from before disconnect are still attached to this row.
+
+### SOFT-DISCONNECT-04: Push to a soft-disconnected account is a no-op
+
+- [ ] Soft-disconnect a mailbox (per SOFT-DISCONNECT-01).
+- [ ] Send a test email to that mailbox (the Pub/Sub watch / Graph subscription was stopped on disconnect, but the underlying inbox still exists).
+- [ ] **Expect** no `RawMessage`, `AICall`, or `Opportunity` rows get inserted. If a stale push somehow arrives, the webhook controller filters `disconnectedAt: null` and `microsoft.webhook.unknown_subscription` / `gmail.webhook.unknown_mailbox` log fires.
 
 ---
 
