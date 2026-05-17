@@ -26,9 +26,7 @@ describe('detectBulkMail', () => {
 		const result = detectBulkMail({
 			provider: EmailProvider.MICROSOFT,
 			raw: {
-				internetMessageHeaders: [
-					{ name: 'List-Unsubscribe', value: '<https://vendor.example/unsub?u=123>' }
-				],
+				internetMessageHeaders: [{ name: 'List-Unsubscribe', value: '<https://vendor.example/unsub?u=123>' }],
 				body: { contentType: 'text', content: 'irrelevant' }
 			}
 		});
@@ -41,7 +39,8 @@ describe('detectBulkMail', () => {
 			raw: {
 				body: {
 					contentType: 'html',
-					content: '<p>Some marketing copy</p><a href="https://x.example/u">click here to remove yourself from our emails list</a>'
+					content:
+						'<p>Some marketing copy</p><a href="https://x.example/u">click here to remove yourself from our emails list</a>'
 				}
 			}
 		});

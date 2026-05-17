@@ -1,8 +1,8 @@
 import { EmailProvider } from '@/generated/prisma/enums';
-import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
+import type { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
 import { MicrosoftBackfillService } from '@/modules/microsoft/microsoft-backfill.service';
-import { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
-import { PrismaService } from '@/modules/prisma/prisma.service';
+import type { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
+import type { PrismaService } from '@/modules/prisma/prisma.service';
 import { describe, expect, it, jest } from '@jest/globals';
 import { NotFoundException } from '@nestjs/common';
 
@@ -12,7 +12,7 @@ const logServiceStub = { logAction: () => undefined } as unknown as ConstructorP
 >[3];
 
 interface FakePrisma {
-	emailAccount: { findUnique: jest.Mock };
+	emailAccount: { findUnique: jest.Mock; update: jest.Mock };
 	rawMessage: {
 		findMany: jest.Mock;
 		createMany: jest.Mock;
@@ -22,7 +22,8 @@ interface FakePrisma {
 function makePrisma(emailAccountRow: object | null, existingRawIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			findUnique: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow))
+			findUnique: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
+			update: jest.fn().mockReturnValue(Promise.resolve({}))
 		},
 		rawMessage: {
 			findMany: jest.fn().mockReturnValue(Promise.resolve(existingRawIds.map(id => ({ providerMessageId: id })))),
@@ -51,7 +52,12 @@ interface MessageStub {
 	receivedIso?: string;
 }
 
-function makeApi(opts: { pages: ReadonlyArray<ReadonlyArray<MessageStub>> }): MicrosoftGraphApiService {
+function makeApi(opts: {
+	pages: ReadonlyArray<ReadonlyArray<MessageStub>>;
+	/** Fake `deltaLink` returned by `captureFreshDeltaLink` at end-of-backfill. Defaults
+	 * to a non-null value so the default-happy-path tests don't have to know about it. */
+	capturedDeltaLink?: string | null;
+}): MicrosoftGraphApiService {
 	const pageIterator = opts.pages.values();
 	const listPage = jest.fn().mockImplementation(() => {
 		const next = pageIterator.next();
@@ -72,7 +78,20 @@ function makeApi(opts: { pages: ReadonlyArray<ReadonlyArray<MessageStub>> }): Mi
 		});
 	});
 
-	return { listInboxMessagesPage: listPage } as unknown as MicrosoftGraphApiService;
+	// `getDelta` is invoked once at the END of backfill to capture the cursor. Tests
+	// that care about delta-link behavior assert on `prisma.emailAccount.update`.
+	const getDelta = jest.fn().mockReturnValue(
+		Promise.resolve({
+			messages: [],
+			nextLink: null,
+			deltaLink:
+				opts.capturedDeltaLink === undefined
+					? 'https://graph.microsoft.com/.../delta?token=fake'
+					: opts.capturedDeltaLink
+		})
+	);
+
+	return { listInboxMessagesPage: listPage, getDelta } as unknown as MicrosoftGraphApiService;
 }
 
 const SCOPE_ROW = {
@@ -258,5 +277,46 @@ describe('MicrosoftBackfillService.run', () => {
 		expect(result.pagesFetched).toBe(1);
 		expect(result.messagesInserted).toBe(0);
 		expect(prisma.rawMessage.createMany).not.toHaveBeenCalled();
+	});
+
+	it('captures a fresh deltaLink at end-of-backfill and persists it on the EmailAccount', async () => {
+		const prisma = makePrisma(SCOPE_ROW, []);
+		const api = makeApi({
+			pages: [[{ id: 'm-1', conversationId: 'c-1', subject: 'A' }]],
+			capturedDeltaLink: 'https://graph.microsoft.com/v1.0/me/messages/delta?token=abc'
+		});
+		const service = new MicrosoftBackfillService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			api,
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		expect(result.deltaLinkAcquired).toBe(true);
+		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
+			where: { id: 'ea-1' },
+			data: { deltaLink: 'https://graph.microsoft.com/v1.0/me/messages/delta?token=abc' }
+		});
+	});
+
+	it('logs a warn + skips the EmailAccount update when no deltaLink is captured', async () => {
+		const prisma = makePrisma(SCOPE_ROW, []);
+		const api = makeApi({
+			pages: [[{ id: 'm-1', conversationId: 'c-1', subject: 'A' }]],
+			capturedDeltaLink: null
+		});
+		const service = new MicrosoftBackfillService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			api,
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		expect(result.deltaLinkAcquired).toBe(false);
+		expect(prisma.emailAccount.update).not.toHaveBeenCalled();
 	});
 });

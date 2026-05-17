@@ -23,6 +23,9 @@ export interface MicrosoftBackfillResult {
 	pagesFetched: number;
 	messagesInserted: number;
 	messagesSkipped: number;
+	/** True when we successfully captured a `deltaLink` cursor at end-of-backfill, so the
+	 * next push-triggered delta-sync only fetches new mail instead of the whole inbox. */
+	deltaLinkAcquired: boolean;
 }
 
 /**
@@ -63,7 +66,13 @@ export class MicrosoftBackfillService {
 				level: 'warn',
 				context: 'MicrosoftBackfillService'
 			});
-			return { emailAccountId, pagesFetched: 0, messagesInserted: 0, messagesSkipped: 0 };
+			return {
+				emailAccountId,
+				pagesFetched: 0,
+				messagesInserted: 0,
+				messagesSkipped: 0,
+				deltaLinkAcquired: false
+			};
 		}
 
 		const scope = {
@@ -105,15 +114,39 @@ export class MicrosoftBackfillService {
 			}
 		});
 
+		// Capture a `deltaLink` cursor now that backfill has the 90-day window in. Without
+		// this, the first push-triggered delta-sync calls `/me/messages/delta` with no
+		// cursor — Graph then returns a snapshot of the ENTIRE inbox (not just changes),
+		// causing every older-than-90-days message to be processed by the AI on first
+		// push. We walk the delta endpoint to completion here purely to capture the
+		// cursor and discard the messages (they're either already persisted via the
+		// date-filtered backfill, or intentionally outside the 90-day window).
+		const deltaLink = await this.captureFreshDeltaLink(scope);
+		if (deltaLink) {
+			await this.prisma.emailAccount.update({
+				where: { id: emailAccountId },
+				data: { deltaLink }
+			});
+		} else {
+			this.logService.logAction({
+				action: 'email.backfill.delta_link_capture_failed',
+				message: `Backfill completed but failed to capture a deltaLink for ${account.email} — first push will over-fetch`,
+				metadata: { provider: account.provider, emailAccountId },
+				level: 'warn',
+				context: 'MicrosoftBackfillService'
+			});
+		}
+
 		this.logService.logAction({
 			action: 'email.backfill.completed',
-			message: `Backfill complete for ${account.email}: ${pagesFetched} pages, ${messagesInserted} new, ${messagesSkipped} already present`,
+			message: `Backfill complete for ${account.email}: ${pagesFetched} pages, ${messagesInserted} new, ${messagesSkipped} already present (deltaLink: ${deltaLink ? 'captured' : 'missed'})`,
 			metadata: {
 				provider: account.provider,
 				emailAccountId,
 				pagesFetched,
 				messagesInserted,
-				messagesSkipped
+				messagesSkipped,
+				deltaLinkAcquired: deltaLink !== null
 			},
 			context: 'MicrosoftBackfillService'
 		});
@@ -122,8 +155,41 @@ export class MicrosoftBackfillService {
 			emailAccountId,
 			pagesFetched,
 			messagesInserted,
-			messagesSkipped
+			messagesSkipped,
+			deltaLinkAcquired: deltaLink !== null
 		};
+	}
+
+	/**
+	 * Walk `/me/messages/delta` from a fresh start to its end purely to capture the
+	 * `@odata.deltaLink` cursor. Messages returned along the way are intentionally
+	 * discarded — they're either already in `RawMessage` from the date-filtered backfill
+	 * (and would be deduped on insert anyway) OR they're older than the 90-day window
+	 * and we don't want them processed.
+	 *
+	 * Capped at `MAX_PAGES` so a malformed Graph response (deltaLink never returned,
+	 * nextLink looping) can't hang forever.
+	 */
+	private async captureFreshDeltaLink(scope: {
+		provider: EmailProvider;
+		organizationId: string;
+		userId: string;
+	}): Promise<string | null> {
+		return this.accounts.withFreshAccessToken(scope, async accessToken => {
+			let cursor: string | null = null;
+			for (let i = 0; i < MAX_PAGES; i += 1) {
+				const page = await this.api.getDelta(accessToken, cursor);
+				if (page.deltaLink) {
+					return page.deltaLink;
+				}
+				if (page.nextLink) {
+					cursor = page.nextLink;
+					continue;
+				}
+				return null;
+			}
+			return null;
+		});
 	}
 
 	/**
