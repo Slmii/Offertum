@@ -1,8 +1,12 @@
 import { processOpportunitiesInBatches } from '@/modules/inngest/functions/process-opportunities-in-batches';
 import { inngest } from '@/modules/inngest/inngest.client';
 import type { InngestEventName } from '@/modules/inngest/inngest.constants';
+// Imported under an alias to avoid colliding with the config field `logContext` below
+// (which is a *string* identifier — the named context for logger output, not the ALS).
+import { logContext as requestContext } from '@/modules/logger/log-context';
 import type { LogService } from '@/modules/logger/log.service';
 import type { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
+import { randomUUID } from 'node:crypto';
 import type { InngestFunction } from 'inngest';
 
 /**
@@ -95,37 +99,59 @@ export function defineMailboxPipelineFunction<TSyncResult>(
 				return { skipped: true };
 			}
 
-			const syncResult = await step.run(config.syncStepName, () => config.runSync(emailAccountId));
-
-			await processOpportunitiesInBatches({
-				step,
-				opportunities: config.opportunities,
-				logService: config.logService,
-				emailAccountId,
-				stepNamePrefix: config.processOpportunitiesStepPrefix,
-				logContext: config.logContext
-			});
-
-			if (config.postSyncStep) {
-				await step.run(config.postSyncStep.stepName, async () => {
-					try {
-						await config.postSyncStep!.run(emailAccountId);
-					} catch (error) {
-						config.logService.logAction({
-							action: config.postSyncStep!.failureAction,
-							message: `${config.postSyncStep!.failureMessage(emailAccountId)}: ${error instanceof Error ? error.message : 'unknown'}`,
-							metadata: { emailAccountId },
-							level: 'error',
-							stack: error instanceof Error ? error.stack : undefined,
-							context: config.logContext
-						});
-					}
-
-					return { ok: true };
+			// Resolve `organizationId` so every AICall + Log row written from inside this
+			// worker run carries it. Without this wrap, `logContext.get()` returns undefined
+			// (the ALS is only populated by HTTP request middleware) and rows land with
+			// NULL organizationId — breaking per-org cost queries + debug filters.
+			const organizationId = await config.opportunities.resolveOrganizationIdForEmailAccount(emailAccountId);
+			if (!organizationId) {
+				config.logService.logAction({
+					action: 'inngest.event.unknown_email_account',
+					message: `${config.triggerEvent}: emailAccount ${emailAccountId} not found; AICall correlation will be NULL`,
+					metadata: { event: config.triggerEvent, emailAccountId },
+					level: 'warn',
+					context: config.logContext
 				});
 			}
 
-			return syncResult;
+			// Use Inngest's event id as the correlation request id — stable across retries
+			// and visible in the Inngest dev UI, so a `Log` row's requestId pivots back to
+			// the originating run. Fallback to a fresh UUID if a future trigger omits it.
+			const requestId = (event as { id?: string }).id ?? randomUUID();
+
+			return requestContext.run({ requestId, ...(organizationId ? { organizationId } : {}) }, async () => {
+				const syncResult = await step.run(config.syncStepName, () => config.runSync(emailAccountId));
+
+				await processOpportunitiesInBatches({
+					step,
+					opportunities: config.opportunities,
+					logService: config.logService,
+					emailAccountId,
+					stepNamePrefix: config.processOpportunitiesStepPrefix,
+					logContext: config.logContext
+				});
+
+				if (config.postSyncStep) {
+					await step.run(config.postSyncStep.stepName, async () => {
+						try {
+							await config.postSyncStep!.run(emailAccountId);
+						} catch (error) {
+							config.logService.logAction({
+								action: config.postSyncStep!.failureAction,
+								message: `${config.postSyncStep!.failureMessage(emailAccountId)}: ${error instanceof Error ? error.message : 'unknown'}`,
+								metadata: { emailAccountId },
+								level: 'error',
+								stack: error instanceof Error ? error.stack : undefined,
+								context: config.logContext
+							});
+						}
+
+						return { ok: true };
+					});
+				}
+
+				return syncResult;
+			});
 		}
 	);
 }

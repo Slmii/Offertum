@@ -99,6 +99,14 @@ export class OpportunitiesRepository {
 		}));
 	}
 
+	async findOrganizationIdForEmailAccount(emailAccountId: string): Promise<string | null> {
+		const row = await this.prisma.emailAccount.findUnique({
+			where: { id: emailAccountId },
+			select: { organizationId: true }
+		});
+		return row?.organizationId ?? null;
+	}
+
 	async markRawMessageNegative(rawMessageId: string): Promise<void> {
 		await this.prisma.rawMessage.update({
 			where: { id: rawMessageId },

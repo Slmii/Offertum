@@ -49,6 +49,16 @@ export class OpportunitiesService {
 		private readonly logService: LogService
 	) {}
 
+	/**
+	 * Resolve `Organization.id` from `EmailAccount.id`. Used by the Inngest pipeline
+	 * scaffolding to populate `logContext.organizationId` before any AI/log call inside
+	 * a worker run — otherwise `AICall`/`Log` rows from background jobs land with NULL
+	 * `organizationId` (the AsyncLocalStorage context is only set by HTTP middleware).
+	 */
+	resolveOrganizationIdForEmailAccount(emailAccountId: string): Promise<string | null> {
+		return this.repository.findOrganizationIdForEmailAccount(emailAccountId);
+	}
+
 	async list(
 		organizationId: string,
 		options: { cursor: string | null; limit: number | null } = { cursor: null, limit: null }

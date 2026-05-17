@@ -42,9 +42,22 @@ pnpm db:deploy                     # prisma migrate deploy (prod)
 pnpm db:generate                   # regen Prisma client into src/generated/prisma/
 pnpm db:studio
 pnpm db:seed                       # prisma db seed (runs prisma/seed.ts via tsx)
-pnpm dev                           # nest start --watch
+pnpm dev                           # rebuilds @quoteom/shared once + then runs `tsc --watch`
+                                   # on shared + `nest start --watch` on api, both in parallel
 pnpm invite --email a@b.com --org <uuid> [--role MEMBER|OWNER|EXTERNAL]
+pnpm inngest                       # local Inngest CLI dev server (requires inngest-cli build script
+                                   # — allowlisted in root `package.json#pnpm.onlyBuiltDependencies`)
 ```
+
+Shared package (in `apps/shared/`):
+
+```bash
+pnpm build                         # tsc emit → dist/index.js + .d.ts (consumed by api/web)
+pnpm dev                           # tsc --watch — re-emits dist/ on every source edit
+pnpm typecheck                     # tsc --noEmit
+```
+
+The shared package is a **compile target**, not a "source as artifact" package — `package.json#main` points at `./dist/index.js`. The api's `pnpm dev` script bootstraps `dist/` automatically; outside dev, run `pnpm --filter @quoteom/shared build` before anything that requires it (e.g., `pnpm typecheck` from root).
 
 Web-specific (in `apps/web/`):
 
