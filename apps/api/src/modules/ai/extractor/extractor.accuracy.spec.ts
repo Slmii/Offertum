@@ -53,7 +53,7 @@ describeIfKey('ExtractorService — live OpenAI accuracy', () => {
 				OpenAIClient,
 				{ provide: AI_CLIENT, useExisting: OpenAIClient },
 				ExtractorService,
-				{ provide: AICallLogger, useValue: { record: () => Promise.resolve() } },
+				{ provide: AICallLogger, useValue: { record: () => Promise.resolve(null) } },
 				{ provide: LogService, useValue: { logAction: () => undefined } }
 			]
 		}).compile();
@@ -69,26 +69,41 @@ describeIfKey('ExtractorService — live OpenAI accuracy', () => {
 			return { expected, fixture };
 		});
 
-		const results = await Promise.all(
-			pairs.map(async ({ expected, fixture }) => {
-				try {
-					const result = await extractor.extract(fixture.input, REFERENCE_DATE_ISO);
-					return {
-						expected,
-						subject: fixture.input.subject,
-						result,
-						error: null as string | null
-					};
-				} catch (error) {
-					return {
-						expected,
-						subject: fixture.input.subject,
-						result: null,
-						error: error instanceof Error ? error.message : String(error)
-					};
-				}
-			})
-		);
+		// Concurrency-limit the harness. gpt-4o's default TPM is 30k and one extraction
+		// burns ~1.5–2k tokens — firing all ~23 fixtures in parallel blows the bucket
+		// and one of them inevitably loses the SDK retry race. Batching to 5 keeps
+		// total in-flight tokens around ~10k and makes the harness reproducible.
+		const CONCURRENCY = 5;
+		const results: Array<{
+			expected: (typeof pairs)[number]['expected'];
+			subject: string | null;
+			result: Awaited<ReturnType<typeof extractor.extract>>['value'] | null;
+			error: string | null;
+		}> = [];
+		for (let i = 0; i < pairs.length; i += CONCURRENCY) {
+			const slice = pairs.slice(i, i + CONCURRENCY);
+			const chunk = await Promise.all(
+				slice.map(async ({ expected, fixture }) => {
+					try {
+						const { value: result } = await extractor.extract(fixture.input, REFERENCE_DATE_ISO);
+						return {
+							expected,
+							subject: fixture.input.subject,
+							result,
+							error: null as string | null
+						};
+					} catch (error) {
+						return {
+							expected,
+							subject: fixture.input.subject,
+							result: null,
+							error: error instanceof Error ? error.message : String(error)
+						};
+					}
+				})
+			);
+			results.push(...chunk);
+		}
 
 		let passed = 0;
 		const fixturePayloads: Array<{

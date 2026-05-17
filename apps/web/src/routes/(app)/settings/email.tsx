@@ -8,7 +8,6 @@ import {
 	useDisconnectGmail,
 	useDisconnectMicrosoft
 } from '@/lib/queries/email.queries';
-import type { BillingState, GmailMessage, MailboxStatus, MicrosoftMessage } from '@quoteom/shared';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { EmailSettingsSearchSchema } from '@/lib/schemas/email.schema';
 import Alert from '@mui/material/Alert';
@@ -24,6 +23,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import type { BillingState, GmailMessage, MailboxStatus, MicrosoftMessage } from '@quoteom/shared';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
@@ -295,19 +295,14 @@ function ProviderPanel({
 						</Typography>
 					)}
 
-					<Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-						<Button
-							variant='outlined'
-							color='error'
-							onClick={() => disconnect.mutate()}
-							disabled={disconnect.isPending || !billingEntitled}
-						>
-							{disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
-						</Button>
-						<Button variant='outlined' onClick={handleConnect} disabled={!billingEntitled}>
-							Reconnect
-						</Button>
-					</Box>
+					<Button
+						variant='outlined'
+						color='error'
+						onClick={() => disconnect.mutate()}
+						disabled={disconnect.isPending || !billingEntitled}
+					>
+						{disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
+					</Button>
 
 					{disconnectNote && (
 						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1.5 }}>

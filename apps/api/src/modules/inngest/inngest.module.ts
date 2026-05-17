@@ -7,6 +7,7 @@ import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { Module } from '@nestjs/common';
+import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
 
 /**
  * Inngest itself is wired as Express middleware in `main.ts` — same pattern as Auth.js.
@@ -20,7 +21,7 @@ import { Module } from '@nestjs/common';
  * the `serve()` array just gets both flavors concatenated.
  */
 @Module({
-	imports: [GmailModule, MicrosoftModule],
+	imports: [GmailModule, MicrosoftModule, OpportunitiesModule],
 	providers: [
 		GmailBackfillFunction,
 		GmailDeltaSyncFunction,

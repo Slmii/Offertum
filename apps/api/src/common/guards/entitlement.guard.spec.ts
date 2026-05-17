@@ -3,7 +3,7 @@ import { MISSING_ORG_CONTEXT, SUBSCRIPTION_REQUIRED } from '@/lib/errors';
 import { BILLING_REQUIRED_CODE } from '@/modules/billing/billing.constants';
 import type { PrismaService } from '@/modules/prisma/prisma.service';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import { type ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
 
 function makeContext(method: string, organizationId?: string): ExecutionContext {
 	const request = { method, organizationId };

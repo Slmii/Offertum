@@ -64,6 +64,7 @@ export default tseslint.config(
 			'apps/api/**/*.service.ts',
 			'apps/api/**/*.module.ts',
 			'apps/api/**/*.resolver.ts',
+			'apps/api/**/*.repository.ts',
 			'apps/api/**/*.guard.ts',
 			'apps/api/**/*.interceptor.ts',
 			'apps/api/**/*.pipe.ts',

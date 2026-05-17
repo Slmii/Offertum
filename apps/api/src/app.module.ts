@@ -11,6 +11,7 @@ import { InvitationsModule } from '@/modules/invitations/invitations.module';
 import { MicrosoftModule } from '@/modules/microsoft/microsoft.module';
 import { LogModule } from '@/modules/logger/log.module';
 import { MeModule } from '@/modules/me/me.module';
+import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
 import { PrismaModule } from '@/modules/prisma/prisma.module';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Module } from '@nestjs/common';
@@ -46,6 +47,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		EmailAccountsModule,
 		GmailModule,
 		MicrosoftModule,
+		OpportunitiesModule,
 		InngestModule,
 		AiModule
 	],

@@ -35,11 +35,11 @@ export class AICallLogger {
 		private readonly logService: LogService
 	) {}
 
-	async record(input: AICallRecord): Promise<void> {
+	async record(input: AICallRecord): Promise<string | null> {
 		const context = logContext.get();
 
 		try {
-			await this.prisma.aICall.create({
+			const row = await this.prisma.aICall.create({
 				data: {
 					provider: input.provider,
 					model: input.model,
@@ -55,8 +55,10 @@ export class AICallLogger {
 					requestId: context?.requestId,
 					userId: context?.userId,
 					organizationId: context?.organizationId
-				}
+				},
+				select: { id: true }
 			});
+			return row.id;
 		} catch (error) {
 			// Don't rethrow — the AI call's caller already has its result (or its error).
 			// Surface the persistence failure for ops visibility but don't break the flow.
@@ -73,6 +75,7 @@ export class AICallLogger {
 				stack: error instanceof Error ? error.stack : undefined,
 				context: 'AICallLogger'
 			});
+			return null;
 		}
 	}
 }

@@ -22,4 +22,5 @@ export * from './billing.js';
 export * from './common.js';
 export * from './email.js';
 export * from './invitations.js';
+export * from './opportunities.js';
 export * from './team.js';

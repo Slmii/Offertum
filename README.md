@@ -8,6 +8,7 @@ AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote req
 - **Backend**: NestJS 11 + Prisma 7 + Postgres 16
 - **AI**: OpenAI Responses API via the official `openai` SDK (direct OpenAI or Azure OpenAI EU). Provider-swap seam in place for the W5.1 spike against Mistral / Anthropic.
 - **Background jobs**: Inngest (delta-sync workers, push handlers, scheduled crons)
+- **Opportunity pipeline**: Gmail/Graph `RawMessage` rows are classified, extracted, and materialized into tenant-scoped `Opportunity` rows with server-enforced status transitions.
 - **Build**: Turborepo + pnpm workspaces
 - **Deploy**: DigitalOcean App Platform (EU)
 
@@ -41,7 +42,7 @@ cd ../.. && pnpm dev
 - API: http://localhost:3001 (Swagger at `/docs`)
 - Web: http://localhost:3000
 
-**Optional — enable AI features locally:** drop `OPENAI_API_KEY=sk-...` into `apps/api/.env`. The classifier / extractor accuracy harnesses (`pnpm test:ai` from `apps/api/`) skip silently without it; with it, you get the live-API harness + an HTML report under `apps/api/.ai-reports/index.html`.
+**Optional — enable AI features locally:** drop `OPENAI_API_KEY=sk-...` into `apps/api/.env`. The classifier / extractor accuracy harnesses (`pnpm test:ai` from `apps/api/`) skip silently without it; with it, you get the live-API harness + an HTML report under `apps/api/.ai-reports/index.html`. The opportunities pipeline also needs an AI provider configured; without one, raw messages remain unclassified until a later processing run.
 
 ## Scripts
 
@@ -77,24 +78,27 @@ configuration, cookies just work.
 Prerequisites: a DigitalOcean account and `doctl` CLI installed + authenticated.
 
 1. **Validate the spec locally:**
-   ```bash
-   doctl apps spec validate .do/app.yaml
-   ```
+
+    ```bash
+    doctl apps spec validate .do/app.yaml
+    ```
 
 2. **Create the app:**
-   ```bash
-   doctl apps create --spec .do/app.yaml
-   ```
-   Note the printed `App ID` — you'll need it for updates.
+
+    ```bash
+    doctl apps create --spec .do/app.yaml
+    ```
+
+    Note the printed `App ID` — you'll need it for updates.
 
 3. **Set secrets in the Dashboard** (Apps → quoteom → Settings → App-Level Environment Variables). These can't be in the spec because they're secret values:
-   - `AUTH_SECRET` — generate with `openssl rand -base64 32`
-   - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
-   - `RESEND_API_KEY`
-   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (leave blank to disable that provider)
-   - `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (leave blank to disable)
+    - `AUTH_SECRET` — generate with `openssl rand -base64 32`
+    - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
+    - `RESEND_API_KEY`
+    - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (leave blank to disable that provider)
+    - `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (leave blank to disable)
 
-   After the first deploy attempt these will be visible as empty SECRET fields; fill them in and trigger a new deploy.
+    After the first deploy attempt these will be visible as empty SECRET fields; fill them in and trigger a new deploy.
 
 4. **Point Stripe webhooks** at `https://<your-app>.ondigitalocean.app/api/billing/webhook`. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
 
@@ -115,9 +119,11 @@ Pushing to `main` auto-deploys via `deploy_on_push: true` regardless of spec cha
 App Platform keeps the last several builds. To roll back:
 
 **Via Dashboard** (fastest):
+
 1. Apps → quoteom → Activity tab → find the last good deployment → click → **Rollback to this deployment**.
 
 **Via CLI:**
+
 ```bash
 doctl apps list-deployments <APP_ID>            # find a good deployment id
 doctl apps create-deployment <APP_ID> \

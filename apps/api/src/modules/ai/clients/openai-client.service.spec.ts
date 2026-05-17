@@ -13,8 +13,8 @@ import { z } from 'zod';
 
 const logServiceStub = { logAction: jest.fn() } as unknown as LogService;
 
-function makeLogger(): { logger: AICallLogger; record: jest.Mock } {
-	const record = jest.fn().mockReturnValue(Promise.resolve());
+function makeLogger(rowId: string | null = 'call-test-id'): { logger: AICallLogger; record: jest.Mock } {
+	const record = jest.fn().mockReturnValue(Promise.resolve(rowId));
 	return {
 		logger: { record } as unknown as AICallLogger,
 		record
@@ -128,7 +128,12 @@ describe('OpenAIClient.generate (Responses API)', () => {
 			schema: classifierSchema
 		});
 
-		expect(result).toEqual({ isQuote: true, confidence: 0.9 });
+		expect(result).toEqual({
+			value: { isQuote: true, confidence: 0.9 },
+			provider: 'openai',
+			model: 'gpt-4o-mini',
+			callId: 'call-test-id'
+		});
 		expect(parse).toHaveBeenCalledTimes(1);
 		const callArgs = parse.mock.calls[0]?.[0] as {
 			model: string;

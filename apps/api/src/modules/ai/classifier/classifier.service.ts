@@ -1,4 +1,4 @@
-import { AI_CLIENT, type AIClient } from '@/modules/ai/clients/ai-client.interface';
+import { AI_CLIENT, type AIClient, type AIGenerateResult } from '@/modules/ai/clients/ai-client.interface';
 import {
 	ClassifierResultSchema,
 	type ClassifierInput,
@@ -25,7 +25,7 @@ import { Inject, Injectable } from '@nestjs/common';
 export class ClassifierService {
 	constructor(@Inject(AI_CLIENT) private readonly ai: AIClient) {}
 
-	async classify(input: ClassifierInput): Promise<ClassifierResult> {
+	async classify(input: ClassifierInput): Promise<AIGenerateResult<ClassifierResult>> {
 		const prompt = buildClassifierPromptNL(input);
 		return this.ai.generate({
 			purpose: 'classifier',

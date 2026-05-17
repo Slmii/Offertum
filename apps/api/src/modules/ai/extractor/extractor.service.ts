@@ -1,4 +1,4 @@
-import { AI_CLIENT, type AIClient } from '@/modules/ai/clients/ai-client.interface';
+import { AI_CLIENT, type AIClient, type AIGenerateResult } from '@/modules/ai/clients/ai-client.interface';
 import {
 	ExtractorResultSchema,
 	type ExtractorInput,
@@ -34,7 +34,7 @@ import { Inject, Injectable } from '@nestjs/common';
 export class ExtractorService {
 	constructor(@Inject(AI_CLIENT) private readonly ai: AIClient) {}
 
-	async extract(input: ExtractorInput, referenceDateIso: string): Promise<ExtractorResult> {
+	async extract(input: ExtractorInput, referenceDateIso: string): Promise<AIGenerateResult<ExtractorResult>> {
 		const prompt = buildExtractorPromptNL(input, referenceDateIso);
 		return this.ai.generate({
 			purpose: 'extractor',

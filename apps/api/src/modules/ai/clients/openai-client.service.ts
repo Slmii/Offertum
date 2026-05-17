@@ -4,7 +4,8 @@ import {
 	AIProviderError,
 	AISchemaInvalidError,
 	type AIClient,
-	type AIGenerateRequest
+	type AIGenerateRequest,
+	type AIGenerateResult
 } from '@/modules/ai/clients/ai-client.interface';
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
 import { LogService } from '@/modules/logger/log.service';
@@ -65,7 +66,7 @@ export class OpenAIClient implements AIClient {
 		private readonly logService: LogService
 	) {}
 
-	async generate<T>(request: AIGenerateRequest<T>): Promise<T> {
+	async generate<T>(request: AIGenerateRequest<T>): Promise<AIGenerateResult<T>> {
 		const client = this.resolveClient();
 		if (!client) {
 			throw new AINotConfiguredError();
@@ -148,7 +149,7 @@ export class OpenAIClient implements AIClient {
 				throw err;
 			}
 
-			await this.logger.record({
+			const callId = await this.logger.record({
 				provider,
 				model,
 				purpose: request.purpose,
@@ -162,7 +163,7 @@ export class OpenAIClient implements AIClient {
 				latencyMs
 			});
 
-			return response.output_parsed as T;
+			return { value: response.output_parsed as T, provider, model, callId };
 		} catch (error) {
 			// Re-throw our own typed errors without re-wrapping (the refusal/no-parsed branches
 			// above already recorded an AICall row before throwing).

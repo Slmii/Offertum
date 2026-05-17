@@ -74,12 +74,17 @@ export const InngestSteps = {
 	GmailBackfill: {
 		/** The whole 90-day fetch + persist loop. One step today; split later if it timeouts. */
 		Backfill: 'gmail-backfill',
+		/** Per-batch process step. Built dynamically as `${ProcessOpportunitiesBatch}-${i}`
+		 * so each Inngest step is bounded by `PROCESS_BATCH_SIZE` and individual batches
+		 * can be retried in isolation. */
+		ProcessOpportunitiesBatch: 'gmail-backfill-process-opportunities-batch',
 		/** Watch-start runs as a separate Inngest step after backfill completes so Inngest's
 		 * retry on a watch failure doesn't re-run the backfill. */
 		StartWatch: 'gmail-start-watch'
 	},
 	MicrosoftBackfill: {
 		Backfill: 'microsoft-backfill',
+		ProcessOpportunitiesBatch: 'microsoft-backfill-process-opportunities-batch',
 		/** Step 2 — register the Graph subscription so future arrivals fire push pings.
 		 * Separate step so an Inngest retry on a subscription failure doesn't re-run the
 		 * (expensive, idempotent-but-slow) backfill. */
@@ -87,7 +92,8 @@ export const InngestSteps = {
 	},
 	GmailDeltaSync: {
 		/** Single step: walk history, fetch payloads, persist. */
-		Sync: 'gmail-delta-sync-walk'
+		Sync: 'gmail-delta-sync-walk',
+		ProcessOpportunitiesBatch: 'gmail-delta-sync-process-opportunities-batch'
 	},
 	GmailWatchRenewal: {
 		/** Single step: scan, re-watch, persist new expiry. */
@@ -95,7 +101,8 @@ export const InngestSteps = {
 	},
 	MicrosoftDeltaSync: {
 		/** Single step: walk `/me/messages/delta` from cursor, persist new rows. */
-		Sync: 'microsoft-delta-sync-walk'
+		Sync: 'microsoft-delta-sync-walk',
+		ProcessOpportunitiesBatch: 'microsoft-delta-sync-process-opportunities-batch'
 	},
 	MicrosoftSubscriptionRenewal: {
 		/** Single step: scan rows, PATCH subscriptions, persist new expiry. */

@@ -67,6 +67,29 @@ enum AICallStatus {
     TIMEOUT
 }
 
+// W4.4 — Materialized quote opportunity created from a classified-positive RawMessage.
+// Uppercase per existing schema convention (see `MembershipRole`, `AICallStatus`,
+// `EmailProvider`). Wire-format conversion to lowercase happens in
+// `opportunity-status.mapper.ts`.
+enum OpportunityStatus {
+    NEW
+    REPLIED
+    WAITING
+    COLD
+    WON
+    LOST
+}
+
+// W4.4 — Customer-signaled urgency on a quote request. Mirrors the extractor's Zod enum
+// (see `extractor.types.ts`). Wire-format conversion to lowercase happens in
+// `opportunity-urgency.mapper.ts`.
+enum Urgency {
+    EMERGENCY
+    HIGH
+    NORMAL
+    LOW
+}
+
 model User {
     id                    String    @id @default(uuid()) @db.Uuid
     email                 String    @unique
@@ -97,6 +120,7 @@ model Organization {
     currentMembers User[]         @relation("CurrentOrganization")
     subscription   Subscription?
     emailAccounts  EmailAccount[]
+    opportunities  Opportunity[]
 }
 
 model Log {
@@ -153,6 +177,12 @@ model AICall {
     userId           String?      @db.Uuid
     organizationId   String?      @db.Uuid
     createdAt        DateTime     @default(now())
+
+    // W4.4 — Opportunities link to their originating classifier + extractor calls so we
+    // can drill from a row in the product UI back to the exact prompt/response that
+    // produced it. Two named relations because one Opportunity has two AICalls.
+    classifiedOpportunities Opportunity[] @relation("OpportunityClassifiedAICall")
+    extractedOpportunities  Opportunity[] @relation("OpportunityExtractedAICall")
 
     @@index([organizationId, createdAt(sort: Desc)])
     @@index([purpose, status, createdAt(sort: Desc)])
@@ -322,9 +352,10 @@ model EmailAccount {
     createdAt               DateTime      @default(now())
     updatedAt               DateTime      @updatedAt
 
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-    rawMessages  RawMessage[]
+    organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+    rawMessages   RawMessage[]
+    opportunities Opportunity[]
 
     // One row per (org, provider, mailbox). Reconnecting the same Gmail account should
     // upsert this row, not create a duplicate.
@@ -359,8 +390,55 @@ model RawMessage {
     classifiedAt      DateTime?
 
     emailAccount EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+    opportunity  Opportunity?
 
     // Idempotency on backfill + delta sync: re-fetching the same message ID is a no-op.
     @@unique([emailAccountId, providerMessageId])
     @@index([organizationId, internalDate(sort: Desc)])
+}
+
+// W4.4 — The user-facing quote request entity. RawMessage remains the immutable source
+// payload; Opportunity is the indexed, editable workflow record.
+model Opportunity {
+    id                   String            @id @default(uuid()) @db.Uuid
+    organizationId       String            @db.Uuid
+    emailAccountId       String            @db.Uuid
+    rawMessageId         String            @unique @db.Uuid
+    status               OpportunityStatus @default(NEW)
+    // `provider/model` of the call that produced this opportunity's structured fields
+    // (the extractor call). E.g. `openai/gpt-4o`, `azure-openai/gpt-4o-mini`. Kept as
+    // String because providers add SKUs faster than we'd want to migrate the schema.
+    aiProvider           String
+    // FK to the AICall row that ran the classifier for this RawMessage. Nullable because
+    // the AICall log persist is best-effort — a DB hiccup on the AICall write shouldn't
+    // block the Opportunity from being created. SetNull on delete so an AICall retention
+    // policy that purges old rows doesn't cascade-delete real product data.
+    classifiedAiCallId   String?           @db.Uuid
+    // FK to the AICall row that ran the extractor for this RawMessage. Same nullability +
+    // SetNull semantics as `classifiedAiCallId`.
+    extractedAiCallId    String?           @db.Uuid
+    classifierConfidence Float?
+    classifierReason     String?           @db.Text
+    customerName         String?
+    customerEmail        String?
+    address              String?           @db.Text
+    requestType          String
+    urgency              Urgency
+    customerDeadline     DateTime?
+    customerAppointment  DateTime?
+    deliverableHints     Json
+    createdAt            DateTime          @default(now())
+    updatedAt            DateTime          @updatedAt
+
+    organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    emailAccount     EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+    rawMessage       RawMessage   @relation(fields: [rawMessageId], references: [id], onDelete: Cascade)
+    classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
+    extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
+
+    @@index([organizationId, status, createdAt(sort: Desc)])
+    @@index([organizationId, customerDeadline])
+    @@index([emailAccountId])
+    @@index([classifiedAiCallId])
+    @@index([extractedAiCallId])
 }

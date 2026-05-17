@@ -52,7 +52,7 @@ describeIfKey('ClassifierService — live OpenAI accuracy', () => {
 				ClassifierService,
 				// Stub AICallLogger — no Prisma connection needed for the harness. Real prod
 				// path logs through `AICallLogger` normally.
-				{ provide: AICallLogger, useValue: { record: () => Promise.resolve() } },
+				{ provide: AICallLogger, useValue: { record: () => Promise.resolve(null) } },
 				// Stub LogService — no Postgres needed.
 				{ provide: LogService, useValue: { logAction: () => undefined } }
 			]
@@ -66,7 +66,7 @@ describeIfKey('ClassifierService — live OpenAI accuracy', () => {
 		const results = await Promise.all(
 			NL_CLASSIFIER_FIXTURES.map(async fixture => {
 				try {
-					const result = await classifier.classify(fixture.input);
+					const { value: result } = await classifier.classify(fixture.input);
 					return {
 						fixture,
 						result,

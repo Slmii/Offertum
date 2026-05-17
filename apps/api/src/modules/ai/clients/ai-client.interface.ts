@@ -12,7 +12,8 @@ import type { ZodType } from 'zod';
  */
 export interface AIClient {
 	/**
-	 * Send `prompt` to the model and return a value that matches `schema`.
+	 * Send `prompt` to the model and return a value that matches `schema`, alongside the
+	 * metadata callers need to link the result back to its AICall audit row.
 	 *
 	 * Implementation contract:
 	 *  - The provider must produce structured output matching `schema` (modern providers
@@ -24,9 +25,26 @@ export interface AIClient {
 	 *  - 429 / 5xx / network errors retry with exponential backoff (3 attempts total).
 	 *    400 / 401 / 403 / Zod validation failures do NOT retry — they're terminal.
 	 *  - Every call (success or failure) writes one `AICall` row via `AICallLogger`.
-	 *    Best-effort: a DB log failure doesn't break the AI call's return path.
+	 *    Best-effort: a DB log failure doesn't break the AI call's return path. When the
+	 *    log row didn't persist, `callId` is `null` — callers that want to store an FK
+	 *    must tolerate that.
 	 */
-	generate<T>(opts: AIGenerateRequest<T>): Promise<T>;
+	generate<T>(opts: AIGenerateRequest<T>): Promise<AIGenerateResult<T>>;
+}
+
+/**
+ * Provider-level metadata returned alongside the parsed value. `provider` + `model` are
+ * the exact strings written to the AICall row's `provider` / `model` columns, so callers
+ * can build a display string like `${provider}/${model}` without re-reading the row.
+ *
+ * `callId` is the AICall row's UUID, or `null` if the audit-log persist failed (still
+ * best-effort — we never drop a legitimate AI response over a Postgres hiccup).
+ */
+export interface AIGenerateResult<T> {
+	value: T;
+	provider: string;
+	model: string;
+	callId: string | null;
 }
 
 export interface AIGenerateRequest<T> {

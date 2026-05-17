@@ -18,7 +18,8 @@ export const NO_ACTIVE_ORGANIZATION =
 export const MEMBERSHIP_NOT_FOUND = 'Membership not found in the active organization';
 // User-facing — surfaced when an OWNER attempts to remove their own membership. Ownership
 // transfer (if we ever build it) is a separate flow; deleting the owner would orphan the org.
-export const CANNOT_REMOVE_SELF = 'You cannot remove yourself. Ask another owner, or contact support to transfer ownership.';
+export const CANNOT_REMOVE_SELF =
+	'You cannot remove yourself. Ask another owner, or contact support to transfer ownership.';
 // User-facing — surfaced when an OWNER attempts to remove another OWNER. Today there's only
 // one owner per org, so this is mostly defensive; if multi-owner ever lands, surface
 // "transfer ownership first" as a follow-up.
@@ -103,8 +104,14 @@ export const GMAIL_API_CALL_FAILED = (operation: string) => `Gmail API ${operati
 export const MICROSOFT_GRAPH_API_CALL_FAILED = (operation: string) => `Microsoft Graph API ${operation} failed`;
 // Dev-facing — both Gmail + Microsoft. Should never reach a user; signals a refresh-token
 // disappeared between issue + reuse, which we don't expect outside a Prisma bug.
-export const NO_REFRESH_TOKEN_AVAILABLE =
-	'No refresh token in token exchange response and no existing one on file';
+export const NO_REFRESH_TOKEN_AVAILABLE = 'No refresh token in token exchange response and no existing one on file';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Opportunities (User-facing)
+// ────────────────────────────────────────────────────────────────────────────
+export const OPPORTUNITY_NOT_FOUND = 'Opportunity not found';
+export const invalidOpportunityStatusTransition = (from: string, to: string) =>
+	`Cannot transition opportunity from ${from} to ${to}.`;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Microsoft Entra — admin-consent flow (User-facing — structured error code)

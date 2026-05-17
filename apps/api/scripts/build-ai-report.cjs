@@ -291,12 +291,17 @@ function runBlock(run) {
 	`;
 }
 
-function dateBlock(date, runs) {
+function dateBlock(date, runs, isLatest) {
+	// Latest date opens automatically; older dates collapse to keep the page scannable
+	// after weeks of iteration. Click any date header to expand/collapse.
+	const openAttr = isLatest ? 'open' : '';
 	return `
-		<section class="date">
-			<h2>${date} <span class="muted">(${runs.length} run${runs.length === 1 ? '' : 's'})</span></h2>
-			${runs.map(runBlock).join('')}
-		</section>
+		<details class="date" ${openAttr}>
+			<summary><h2>${date} <span class="muted">(${runs.length} run${runs.length === 1 ? '' : 's'})</span></h2></summary>
+			<div class="date-runs">
+				${runs.map(runBlock).join('')}
+			</div>
+		</details>
 	`;
 }
 
@@ -314,6 +319,14 @@ function renderHtml(byDate, totalRuns) {
 		h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
 		h2 { font-size: 1.15rem; border-bottom: 2px solid #ddd; padding-bottom: 0.3rem; margin-top: 2rem; }
 		h3 { font-size: 1rem; margin: 0.5rem 0; }
+		details.date { margin-top: 2rem; }
+		details.date > summary { list-style: none; cursor: pointer; }
+		details.date > summary::-webkit-details-marker { display: none; }
+		details.date > summary h2 { margin-top: 0; display: flex; align-items: center; }
+		details.date > summary h2::before { content: '▶'; display: inline-block; transform: rotate(0deg); transition: transform 0.1s; margin-right: 0.5rem; color: #888; font-size: 0.85rem; }
+		details.date[open] > summary h2::before { transform: rotate(90deg); }
+		details.date > summary:hover h2 { color: #000; }
+		.date-runs { margin-top: 0.25rem; }
 		.muted { color: #888; font-weight: normal; }
 		.pass { color: #1f8a3e; font-weight: bold; }
 		.fail { color: #c63a3a; font-weight: bold; }
@@ -361,7 +374,7 @@ function renderHtml(byDate, totalRuns) {
 <body>
 	<h1>Quoteom — AI Accuracy Reports</h1>
 	<p class="muted">${totalRuns} total run${totalRuns === 1 ? '' : 's'} across ${dates.length} day${dates.length === 1 ? '' : 's'}. Local-only; not pushed to GitHub.</p>
-	${dates.map(([date, runs]) => dateBlock(date, runs)).join('')}
+	${dates.map(([date, runs], index) => dateBlock(date, runs, index === 0)).join('')}
 	<footer>Generated ${escapeHtml(generatedAt)} · scripts/build-ai-report.cjs</footer>
 </body>
 </html>`;

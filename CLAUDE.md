@@ -100,6 +100,7 @@ modules/
     extractor/         # ExtractorService + Dutch prompt + 23-fixture corpus + accuracy harness
     logging/           # AICallLogger — persists every generate() call to AICall table
     __test-utils/      # JSONL writer used by both accuracy harnesses for the local HTML report
+  opportunities/       # W4.4 — RawMessage → Opportunity pipeline + workflow status API
   gmail/               # Gmail OAuth + backfill + delta-sync + watch + webhook
   microsoft/           # Microsoft Graph OAuth + backfill + delta-sync + subscription + webhook
   inngest/             # Inngest function registrations + client
@@ -132,18 +133,18 @@ Path alias: `@/*` → `apps/web/src/*`.
 
 For tenant-scoped routes, ask three independent questions:
 
-| Question | Guard |
-| --- | --- |
-| Who are you? | `AuthGuard` (built into the others) |
-| Which org? | `OrganizationGuard` (built into `OwnerGuard`) |
-| Is the org allowed to make changes? | `EntitlementGuard` |
-| (Optional) Are you the org's OWNER? | `OwnerGuard` |
+| Question                            | Guard                                         |
+| ----------------------------------- | --------------------------------------------- |
+| Who are you?                        | `AuthGuard` (built into the others)           |
+| Which org?                          | `OrganizationGuard` (built into `OwnerGuard`) |
+| Is the org allowed to make changes? | `EntitlementGuard`                            |
+| (Optional) Are you the org's OWNER? | `OwnerGuard`                                  |
 
 Apply via composite decorators:
 
 - `@UseGuards(OrganizationGuard)` — read; any member of the org.
 - `@TenantWrite()` — write; any member; needs entitlement (covers trial/active/past_due/local-grace).
-- `@UseGuards(OwnerGuard)` — owner-only, no entitlement check (e.g. billing Checkout — needed when the sub is *canceled* to re-subscribe).
+- `@UseGuards(OwnerGuard)` — owner-only, no entitlement check (e.g. billing Checkout — needed when the sub is _canceled_ to re-subscribe).
 - `@OwnerWrite()` — owner-only write that also requires entitlement.
 
 `EntitlementGuard` (formerly `TrialGateGuard` — renamed because it gates ALL non-entitled states, not just trials) returns `402 { code: 'billing_required', billingPath: '/billing' }`. The web `api()` client auto-redirects to `/billing` on that exact shape.
@@ -217,6 +218,7 @@ A user has `currentOrganizationId` for the active session. `OrganizationGuard` r
 `stripe listen --forward-to localhost:3001/api/billing/webhook` must be running in another terminal. The `whsec_…` it prints goes into `apps/api/.env` as `STRIPE_WEBHOOK_SECRET`. Restart the API after changing.
 
 Quick scenarios:
+
 - `stripe trigger payment_intent.succeeded` — proves the channel works.
 - `stripe subscriptions update sub_XXX --trial-end=now` — end an active trial (only works if status is `trialing`; if already `active`, cancel and re-subscribe via `/billing`).
 - `stripe subscriptions cancel sub_XXX` — kill an active sub to test resubscribe.
@@ -241,10 +243,12 @@ pnpm --filter @quoteom/api inngest                       # discovers /api/innges
 The CLI dev server handles auth at the localhost boundary, so `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` stay empty in dev. They're required in production (Inngest Cloud → Settings → Keys).
 
 Smoke checks:
+
 - **Manual event** → in the dev UI: New event → `{"name": "test/hello", "data": {"name": "Quoteom"}}` → run history shows the `hello` fn output `{ "greeting": "Hello, Quoteom!" }`.
 - **Scheduled cron** → `heartbeat` fires at `0 * * * *`. In the dev UI use "Invoke" to bypass the cron and trigger it manually.
 
 Adding a new function:
+
 1. Create `apps/api/src/modules/inngest/functions/<name>.function.ts` exporting an `InngestFunction.Any`-typed constant.
 2. Add the import + export to `functions/index.ts`.
 3. Reload the API — the dev UI picks it up on the next discovery poll.
@@ -274,38 +278,38 @@ One-time setup per dev machine:
 3. **Push subscription** on the topic — Delivery type: **Push**; Endpoint URL: `https://<your-domain>/api/email/gmail/webhook`; Enable authentication: **ON**; Audience: same as the endpoint URL; pick or create a service account with `roles/iam.serviceAccountTokenCreator`.
 4. **Authorized redirect URIs** on the Google OAuth client — add `https://<your-domain>/api/email/gmail/callback` and `https://<your-domain>/api/auth/callback/google` so OAuth callbacks land on the tunnel domain during smoke testing.
 5. **`apps/api/.env`**:
-   ```bash
-   GOOGLE_PUBSUB_TOPIC=projects/<gcp-project>/topics/quoteom-gmail-dev
-   GOOGLE_PUBSUB_AUDIENCE=https://<your-domain>/api/email/gmail/webhook
-   GOOGLE_PUBSUB_SERVICE_ACCOUNT=<service-account-email-from-step-3>
-   ```
-   Restart `pnpm dev`.
+    ```bash
+    GOOGLE_PUBSUB_TOPIC=projects/<gcp-project>/topics/quoteom-gmail-dev
+    GOOGLE_PUBSUB_AUDIENCE=https://<your-domain>/api/email/gmail/webhook
+    GOOGLE_PUBSUB_SERVICE_ACCOUNT=<service-account-email-from-step-3>
+    ```
+    Restart `pnpm dev`.
 
 Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @quoteom/api inngest`, `ngrok ...`, `db:studio`):
 
 1. Sign in via the **ngrok URL** (not `localhost:3000` — OAuth callbacks need to land on the tunnel domain).
-2. Connect Gmail at `/settings/email`. The `gmail-backfill` Inngest run shows two steps: `backfill` then `start-watch`. After completion: `EmailAccount.historyId` set AND `watchExpiresAt` ~7 days out.
+2. Connect Gmail at `/settings/email`. The `gmail-backfill` Inngest run shows `gmail-backfill`, `gmail-backfill-process-opportunities`, then `gmail-start-watch`. After completion: `EmailAccount.historyId` set AND `watchExpiresAt` ~7 days out.
 3. Send yourself a test email from another account.
 4. Within 5–10 seconds:
-   - **ngrok inspector** (http://localhost:4040): POST to `/api/email/gmail/webhook` with a `Bearer eyJ...` JWT, response 204.
-   - **Inngest UI**: `gmail-delta-sync` fires (2 s debounce — wait a beat), run reports `messagesInserted: 1`.
-   - **`RawMessage`** in `db:studio`: the new row.
+    - **ngrok inspector** (http://localhost:4040): POST to `/api/email/gmail/webhook` with a `Bearer eyJ...` JWT, response 204.
+    - **Inngest UI**: `gmail-delta-sync` fires (2 s debounce — wait a beat), run reports `messagesInserted: 1`.
+    - **`RawMessage`** in `db:studio`: the new row.
 
 Renewal cron is verifiable without waiting a week: in `db:studio` backdate `watchExpiresAt` to yesterday → in the Inngest UI click **Invoke** on `gmail-watch-renewal` → output reports `{ scanned: 1, renewed: 1, ... }` and `watchExpiresAt` jumps back to ~7 days out. Same path also verifies the orphan-row fix: NULL out `watchExpiresAt` (keep `historyId`) and Invoke again — orphan still gets picked up.
 
 Common Phase C gotchas (in order of frequency):
 
-| Symptom | Fix |
-|---|---|
-| `users.watch` returns 403 / `Insufficient Permission` | `gmail-api-push@system.gserviceaccount.com` missing Publisher on topic (Step 1). |
-| OAuth callback redirects to `localhost:3000` | `WEB_ORIGIN` in `apps/api/.env` still set to `http://localhost:3000`. Auth.js's `redirect` callback rewrites every post-signin URL to this value. **Set `WEB_ORIGIN=https://<your-ngrok>` for the smoke**, restart API, then put it back when done. |
+| Symptom                                                                                          | Fix                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users.watch` returns 403 / `Insufficient Permission`                                            | `gmail-api-push@system.gserviceaccount.com` missing Publisher on topic (Step 1).                                                                                                                                                                                                                                                                                                                           |
+| OAuth callback redirects to `localhost:3000`                                                     | `WEB_ORIGIN` in `apps/api/.env` still set to `http://localhost:3000`. Auth.js's `redirect` callback rewrites every post-signin URL to this value. **Set `WEB_ORIGIN=https://<your-ngrok>` for the smoke**, restart API, then put it back when done.                                                                                                                                                        |
 | Sign-in completes but home page bounces to `/sign-in` (and `Failed to load organizations (401)`) | `AUTH_URL=http://localhost:3000/api/auth` set in `apps/api/.env`. This env var **overrides** Auth.js's header-based URL detection — `@auth/express`'s `getSession` builds an HTTP URL → uses non-secure cookie name → can't find the `__Secure-`-prefixed cookie that ExpressAuth set. **Unset `AUTH_URL` for the smoke** (and for dev in general — `trustHost: true` handles URL detection from headers). |
-| Webhook 401 on every push | `GOOGLE_PUBSUB_AUDIENCE` doesn't match the subscription's audience exactly, OR `GOOGLE_PUBSUB_SERVICE_ACCOUNT` doesn't match the actual signer in the subscription's Auth section. The `gmail.webhook.jwt_invalid` action log includes the JWT's actual `email` claim — copy-paste that into env. |
-| Webhook 503 | One of `GOOGLE_PUBSUB_AUDIENCE` / `GOOGLE_PUBSUB_SERVICE_ACCOUNT` is empty — by design (refuse to accept pushes when verification isn't configured). |
-| Vite responds 403 "host not allowed" | ngrok subdomain not in `apps/web/vite.config.ts` `server.allowedHosts`. The `.ngrok-free.dev` wildcard already in main covers the free tier; add `.ngrok.app` etc. if you use a different TLD. |
-| Push arrives but `gmail.webhook.unknown_mailbox` 204 | `EmailAccount.email` doesn't match Gmail's primary alias. Check `db:studio`. |
-| OAuth callback hits `localhost:3000` instead of the tunnel | You signed in via localhost; restart from the ngrok URL. |
-| Push body has empty `message.data` | Gmail occasionally fires heartbeat-style pushes with no data. Webhook returns 400 → Pub/Sub retries → eventually drops. Not blocking but noisy. |
+| Webhook 401 on every push                                                                        | `GOOGLE_PUBSUB_AUDIENCE` doesn't match the subscription's audience exactly, OR `GOOGLE_PUBSUB_SERVICE_ACCOUNT` doesn't match the actual signer in the subscription's Auth section. The `gmail.webhook.jwt_invalid` action log includes the JWT's actual `email` claim — copy-paste that into env.                                                                                                          |
+| Webhook 503                                                                                      | One of `GOOGLE_PUBSUB_AUDIENCE` / `GOOGLE_PUBSUB_SERVICE_ACCOUNT` is empty — by design (refuse to accept pushes when verification isn't configured).                                                                                                                                                                                                                                                       |
+| Vite responds 403 "host not allowed"                                                             | ngrok subdomain not in `apps/web/vite.config.ts` `server.allowedHosts`. The `.ngrok-free.dev` wildcard already in main covers the free tier; add `.ngrok.app` etc. if you use a different TLD.                                                                                                                                                                                                             |
+| Push arrives but `gmail.webhook.unknown_mailbox` 204                                             | `EmailAccount.email` doesn't match Gmail's primary alias. Check `db:studio`.                                                                                                                                                                                                                                                                                                                               |
+| OAuth callback hits `localhost:3000` instead of the tunnel                                       | You signed in via localhost; restart from the ngrok URL.                                                                                                                                                                                                                                                                                                                                                   |
+| Push body has empty `message.data`                                                               | Gmail occasionally fires heartbeat-style pushes with no data. Webhook returns 400 → Pub/Sub retries → eventually drops. Not blocking but noisy.                                                                                                                                                                                                                                                            |
 
 **Env hygiene after smoke:** revert `WEB_ORIGIN` to `http://localhost:3000` if you want normal-localhost dev to keep working. `GOOGLE_PUBSUB_TOPIC` / `AUDIENCE` / `SERVICE_ACCOUNT` are inert during localhost dev (the watch service only fires when you connect through the configured topic, which requires the ngrok flow) — fine to leave set.
 
@@ -313,7 +317,7 @@ Common Phase C gotchas (in order of frequency):
 
 See `TEST_CASES.md` → EMAIL-PUSH-01..06 for the full test catalog.
 
-## AI extraction pipeline (W4.1 + W4.2 + W4.3)
+## AI extraction pipeline (W4.1 + W4.2 + W4.3 + W4.4)
 
 OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in (W5.1 spike → final pick) is a one-line DI binding change in `AiModule`, not a service rewrite.
 
@@ -343,11 +347,28 @@ apps/api/src/modules/ai/
     └── ai-report-writer.ts                 # Both accuracy specs append JSONL → consumed by build-ai-report
 ```
 
+W4.4 adds the user-facing materialization layer under `apps/api/src/modules/opportunities/`:
+
+```
+opportunities/
+├── opportunities.controller.ts              # GET list (cursor pagination) + PATCH status, tenant scoped
+├── opportunities.service.ts                 # processBatch (one Inngest step) + processRawMessagesForAccount + status transitions
+├── opportunities.repository.ts              # Prisma persistence, rawMessageId idempotency, AICall FKs
+├── raw-message-ai-input.ts                  # Gmail/Graph JSON payload → plain body text
+├── opportunity-status.mapper.ts             # Prisma enum ↔ lowercase wire status
+├── opportunity-urgency.mapper.ts            # Prisma Urgency enum ↔ lowercase wire urgency
+├── opportunity-list-cursor.ts               # Opaque base64url cursor over (createdAt, id)
+└── dto/                                     # Concrete DTO classes for OpenAPI/Orval
+```
+
+The Inngest backfill + delta-sync functions chain the pipeline via `processOpportunitiesInBatches` (in `apps/api/src/modules/inngest/functions/`), which calls `OpportunitiesService.processBatch` inside its own dynamic `step.run` per batch. Each batch is capped at `PROCESS_BATCH_SIZE = 25` so a single step finishes well within Inngest's 5-minute step timeout; the outer loop is bounded by `PROCESS_MAX_BATCHES_PER_RUN = 200` (≈5,000 messages/pass) with a `opportunity.pipeline.batch_cap_reached` warn log if hit.
+
 ### Three patterns to know
 
 **1. The `AI_CLIENT` seam.** Downstream services (`ClassifierService`, `ExtractorService`, future `ReplyDraftService`, etc.) inject `@Inject(AI_CLIENT) private readonly ai: AIClient` — they don't know whether OpenAI, Mistral, or Anthropic is behind it. Swapping providers in W5.1 is a one-line change to `useExisting: OpenAIClient` in `ai.module.ts`. Caller code never sees it.
 
 **2. `AICall` is the single source of truth for AI activity.** Every `generate()` call writes one row: provider, model, purpose, prompt, response, parsed JSON, status (`SUCCESS | FAILED | SCHEMA_INVALID | TIMEOUT`), tokens, latency, requestId/userId/orgId from AsyncLocalStorage. Used for:
+
 - **Replay** when prompts iterate: rerun new prompt over historical AICall rows
 - **Cost tracking** per org per month (`promptTokens` + `completionTokens` sums)
 - **Debugging** schema failures (filter `status = SCHEMA_INVALID`)
@@ -356,6 +377,12 @@ apps/api/src/modules/ai/
 `AICallLogger.record(...)` is best-effort: if persistence fails, the AI call's return value is still given to the caller (we don't drop a legitimate response over a Postgres hiccup).
 
 **3. `store: false` on every OpenAI call.** OpenAI's default is to retain prompt + response for 30 days for abuse monitoring. We opt out — Dutch SMB customer data shouldn't sit on US servers we don't control. Trade-off: can't use Responses-API chaining (`previous_response_id`), but we don't need it for one-shot classification + extraction. Documented in `openai-client.service.ts`.
+
+**4. `RawMessage` is the pipeline idempotency root.** W4.4 does not emit one event per inserted message because Gmail/Graph backfill + delta sync intentionally use `createMany` and return counts, not inserted IDs. Inngest runs account-level processing after each backfill/delta step: scan unclassified `RawMessage` rows, classify, extract positives, and create `Opportunity` rows. `Opportunity.rawMessageId` is unique, and repository writes use `createMany(..., skipDuplicates: true)` so retries and overlapping syncs cannot duplicate opportunities.
+
+**5. Positive extraction failures stay retryable.** A negative classifier result sets `RawMessage.isQuoteRequest = false` and `classifiedAt`. A positive classifier result only marks the raw message classified after the extractor succeeds and the opportunity write has been attempted. If extraction fails, the row stays unclassified so the next processing run can retry instead of losing the lead.
+
+**6. `AIClient.generate()` returns `{ value, provider, model, callId }`.** Not just the parsed value. `callId` is the `AICall` row's UUID (or `null` if the audit-log persist failed). `OpportunitiesService` captures the classifier + extractor call IDs and writes them to `Opportunity.classifiedAiCallId` / `Opportunity.extractedAiCallId` so a row in the product UI is one join away from the exact prompt/response that produced it. `aiProvider` on `Opportunity` is the composite `${provider}/${model}` from the extractor call (e.g. `openai/gpt-4o`) — keeps W5.1's accuracy-vs-cost slice precise by exact SKU, not just vendor.
 
 ### Accuracy harness workflow (`pnpm test:ai`)
 
@@ -370,6 +397,7 @@ pnpm test:ai:extractor        # extractor only
 ```
 
 The launcher script (`scripts/run-jest-with-env.cjs`):
+
 1. Loads `apps/api/.env` (picks up `OPENAI_API_KEY`)
 2. Sets `AI_REPORT_RUN_ID` env so both specs' results share one run ID
 3. Spawns Jest as a child process (so the post-step can run after Jest exits)
@@ -381,11 +409,11 @@ The launcher script (`scripts/run-jest-with-env.cjs`):
 
 ### Gotchas
 
-| Symptom | Fix |
-|---|---|
-| `pnpm test:ai` says "skipping live accuracy test" even though `.env` has `OPENAI_API_KEY` | `apps/api/.env` not loaded by Jest. Run via `pnpm test:ai` (not `pnpm exec jest accuracy`); the launcher script does the `dotenv` load. |
-| Azure OpenAI returns 400 on every call | `AZURE_OPENAI_API_VERSION` predates Responses API. Bump to ≥ `2025-03-01-preview`. |
-| Classifier reasoning is always 3 sentences | The schema field is `reason` (not `reasoning`) — the name primes the model toward a one-liner. If you renamed it back, output grows. |
-| Extractor returns the same `customerDeadline` value as `customerAppointment` | The prompt rule for `customerDeadline` says "inspection dates do NOT go here." Verify the model isn't conflating; the rule is enforced by prompt text, not the schema. |
+| Symptom                                                                                   | Fix                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm test:ai` says "skipping live accuracy test" even though `.env` has `OPENAI_API_KEY` | `apps/api/.env` not loaded by Jest. Run via `pnpm test:ai` (not `pnpm exec jest accuracy`); the launcher script does the `dotenv` load.                                |
+| Azure OpenAI returns 400 on every call                                                    | `AZURE_OPENAI_API_VERSION` predates Responses API. Bump to ≥ `2025-03-01-preview`.                                                                                     |
+| Classifier reasoning is always 3 sentences                                                | The schema field is `reason` (not `reasoning`) — the name primes the model toward a one-liner. If you renamed it back, output grows.                                   |
+| Extractor returns the same `customerDeadline` value as `customerAppointment`              | The prompt rule for `customerDeadline` says "inspection dates do NOT go here." Verify the model isn't conflating; the rule is enforced by prompt text, not the schema. |
 
-See `TEST_CASES.md` once W4.4 lands for the user-observable behavior catalog (currently W4 has no user surface — just internal services consumed by W4.4's Opportunity pipeline).
+See `TEST_CASES.md` → Opportunities (W4.4) for the user-observable behavior catalog.
