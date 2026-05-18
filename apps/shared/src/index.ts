@@ -20,6 +20,7 @@
 export * from './ai-usage.js';
 export * from './auth.js';
 export * from './billing.js';
+export * from './classifier-quality.js';
 export * from './common.js';
 export * from './email.js';
 export * from './invitations.js';

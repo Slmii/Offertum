@@ -145,6 +145,9 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 		customerDeadline: new Date('2026-06-01T00:00:00.000Z'),
 		customerAppointment: null,
 		deliverableHints: ['CV-ketel'],
+		dismissedAt: null,
+		dismissReason: null,
+		dismissedById: null,
 		createdAt: new Date('2026-05-17T10:01:00.000Z'),
 		updatedAt: new Date('2026-05-17T10:01:00.000Z'),
 		rawMessage: {
@@ -292,7 +295,8 @@ describe('OpportunitiesService.list pagination', () => {
 			take: 3,
 			cursor: null,
 			status: null,
-			search: null
+			search: null,
+			dismissed: 'active'
 		});
 	});
 

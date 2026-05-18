@@ -5,6 +5,7 @@ import { AiModule } from '@/modules/ai/ai.module';
 import { AIUsageModule } from '@/modules/ai-usage/ai-usage.module';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { BillingModule } from '@/modules/billing/billing.module';
+import { ClassifierQualityModule } from '@/modules/classifier-quality/classifier-quality.module';
 import { EmailAccountsModule } from '@/modules/email-accounts/email-accounts.module';
 import { GmailModule } from '@/modules/gmail/gmail.module';
 import { InngestModule } from '@/modules/inngest/inngest.module';
@@ -51,7 +52,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		OpportunitiesModule,
 		InngestModule,
 		AiModule,
-		AIUsageModule
+		AIUsageModule,
+		ClassifierQualityModule
 	],
 	controllers: [AppController],
 	providers: [AppService, PrismaService, { provide: APP_GUARD, useClass: ThrottlerGuard }]

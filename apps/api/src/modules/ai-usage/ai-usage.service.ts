@@ -1,3 +1,4 @@
+import { resolveAdminRangeWindow } from '@/lib/time/admin-range-window';
 import { calculateCostUsd, rateFor } from '@/modules/ai-usage/pricing';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
@@ -48,7 +49,7 @@ export class AIUsageService {
 	constructor(private readonly prisma: PrismaService) {}
 
 	async aggregate(range: AIUsageRange): Promise<AIUsageResponse> {
-		const { rangeStart, rangeEnd } = resolveWindow(range);
+		const { rangeStart, rangeEnd } = resolveAdminRangeWindow(range);
 
 		const calls = await this.prisma.aICall.findMany({
 			where: { createdAt: { gte: rangeStart, lt: rangeEnd } },
@@ -124,29 +125,4 @@ export class AIUsageService {
 			}
 		};
 	}
-}
-
-function resolveWindow(range: AIUsageRange): { rangeStart: Date; rangeEnd: Date } {
-	const now = new Date();
-	const rangeEnd = new Date(now);
-	const rangeStart = new Date(now);
-
-	switch (range) {
-		case 'today':
-			rangeStart.setUTCHours(0, 0, 0, 0);
-			break;
-		case '7d':
-			rangeStart.setUTCDate(rangeStart.getUTCDate() - 7);
-			break;
-		case '30d':
-			rangeStart.setUTCDate(rangeStart.getUTCDate() - 30);
-			break;
-		case 'all':
-			// Far-past epoch — selects every row without a per-DB UNIX-zero quirk.
-			rangeStart.setUTCFullYear(2000, 0, 1);
-			rangeStart.setUTCHours(0, 0, 0, 0);
-			break;
-	}
-
-	return { rangeStart, rangeEnd };
 }

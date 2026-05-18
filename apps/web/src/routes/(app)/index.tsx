@@ -102,6 +102,11 @@ function HomePage() {
 								AI usage (dev)
 							</Button>
 						)}
+						{me.user.isAdmin && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/admin/classifier-quality' })}>
+								Classifier quality (dev)
+							</Button>
+						)}
 						<Button variant='outlined' onClick={() => signOut.mutate()} disabled={signOut.isPending}>
 							{signOut.isPending ? 'Signing out...' : 'Sign out'}
 						</Button>

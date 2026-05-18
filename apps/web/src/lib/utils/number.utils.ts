@@ -36,6 +36,12 @@ const NL_USD_PRECISE_FORMATTER = new Intl.NumberFormat('nl-NL', {
 	maximumFractionDigits: 6
 });
 
+const NL_PERCENT_FORMATTER = new Intl.NumberFormat('nl-NL', {
+	style: 'percent',
+	minimumFractionDigits: 1,
+	maximumFractionDigits: 1
+});
+
 /** `1234567` → `"1.234.567"`. Use for any human-readable integer (counts, tokens, etc.). */
 export const toReadableNumber = (value: number): string => NL_NUMBER_FORMATTER.format(value);
 
@@ -54,3 +60,15 @@ export const toReadableUsd = (value: number): string => NL_USD_FORMATTER.format(
  * width stays bounded.
  */
 export const toReadableUsdPrecise = (value: number): string => NL_USD_PRECISE_FORMATTER.format(value);
+
+/**
+ * `0.977` → `"97,7%"`. Pass a unit ratio (0..1); the formatter applies the ×100 itself.
+ * One decimal so precision metrics on the admin dashboard read as "97,7%" not "98%" or
+ * "97,72%". Pass `null` or `NaN` and you get `"—"` so empty states render cleanly.
+ */
+export const toReadablePercent = (value: number | null | undefined): string => {
+	if (value === null || value === undefined || Number.isNaN(value)) {
+		return '—';
+	}
+	return NL_PERCENT_FORMATTER.format(value);
+};
