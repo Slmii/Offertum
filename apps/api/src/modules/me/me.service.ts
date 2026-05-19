@@ -27,8 +27,17 @@ export class MeService {
 		// `tonePlaybookText` is selected only so we can derive the `hasTonePlaybook`
 		// boolean — the actual prose never leaves this service, so the per-request
 		// payload doesn't carry the (potentially multi-kB) text on every page load.
-		// `updatedAt` is the proxy for `tonePlaybookUpdatedAt` (W5.4 — banner trigger).
-		user: { select: { id: true, email: true, name: true, tonePlaybookText: true, updatedAt: true } },
+		// `tonePlaybookUpdatedAt` is the dedicated timestamp that drives the W5.4
+		// "your writing style was updated since this draft was generated" banner.
+		user: {
+			select: {
+				id: true,
+				email: true,
+				name: true,
+				tonePlaybookText: true,
+				tonePlaybookUpdatedAt: true
+			}
+		},
 		organization: { select: { id: true, name: true } }
 	} as const;
 
@@ -104,13 +113,13 @@ export class MeService {
 				email: string;
 				name: string | null;
 				tonePlaybookText: string | null;
-				updatedAt: Date;
+				tonePlaybookUpdatedAt: Date | null;
 			};
 			organization: { id: string; name: string };
 		},
 		isAdmin: boolean
 	): MembershipResponseDto {
-		const { tonePlaybookText, updatedAt: userUpdatedAt, ...userRest } = row.user;
+		const { tonePlaybookText, tonePlaybookUpdatedAt, ...userRest } = row.user;
 		const hasTonePlaybook = tonePlaybookText !== null && tonePlaybookText.trim().length > 0;
 		return {
 			...row,
@@ -118,20 +127,21 @@ export class MeService {
 				...userRest,
 				isAdmin,
 				hasTonePlaybook,
-				tonePlaybookUpdatedAt: hasTonePlaybook ? userUpdatedAt.toISOString() : null
+				tonePlaybookUpdatedAt: tonePlaybookUpdatedAt?.toISOString() ?? null
 			}
 		};
 	}
 
 	/**
 	 * W5.2 — Read the current user's writing-style playbook. Returns the prose + the
-	 * user row's `updatedAt` as a proxy for "when did the playbook last change" (no
-	 * separate per-column timestamp; we don't need that resolution).
+	 * dedicated `tonePlaybookUpdatedAt` timestamp (when the playbook itself last
+	 * changed, distinct from `User.updatedAt` which moves on any User-row write).
+	 * When the user has never authored a playbook, `updatedAt` is `null`.
 	 */
 	async getTonePlaybook(userId: string): Promise<TonePlaybook> {
 		const user = await this.prisma.user.findUnique({
 			where: { id: userId },
-			select: { tonePlaybookText: true, updatedAt: true }
+			select: { tonePlaybookText: true, tonePlaybookUpdatedAt: true }
 		});
 
 		if (!user) {
@@ -140,15 +150,16 @@ export class MeService {
 
 		return {
 			text: user.tonePlaybookText,
-			updatedAt: user.updatedAt.toISOString()
+			updatedAt: user.tonePlaybookUpdatedAt?.toISOString() ?? null
 		};
 	}
 
 	/**
 	 * W5.2 — Update the current user's writing-style playbook. Empty / whitespace-only
-	 * `text` clears the playbook (back to generic baseline). The org doesn't need to be
-	 * entitled to write this — it's a personal preference, not a tenant-write — but
-	 * controller still goes through `AuthGuard` so it requires a valid session.
+	 * `text` clears the playbook AND nulls out `tonePlaybookUpdatedAt` (back to generic
+	 * baseline). The org doesn't need to be entitled to write this — it's a personal
+	 * preference, not a tenant-write — but controller still goes through `AuthGuard`
+	 * so it requires a valid session.
 	 */
 	async updateTonePlaybook(userId: string, text: string): Promise<TonePlaybook> {
 		const trimmed = text.trim();
@@ -156,8 +167,14 @@ export class MeService {
 
 		const updated = await this.prisma.user.update({
 			where: { id: userId },
-			data: { tonePlaybookText: next },
-			select: { tonePlaybookText: true, updatedAt: true }
+			data: {
+				tonePlaybookText: next,
+				// W5.4 — dedicated timestamp so the "regenerate?" banner only fires when
+				// the playbook itself changed, not on unrelated User-row writes. NULL on
+				// clear so the banner can't fire after the user wipes their playbook.
+				tonePlaybookUpdatedAt: next === null ? null : new Date()
+			},
+			select: { tonePlaybookText: true, tonePlaybookUpdatedAt: true }
 		});
 
 		this.logService.logAction({
@@ -172,7 +189,7 @@ export class MeService {
 
 		return {
 			text: updated.tonePlaybookText,
-			updatedAt: updated.updatedAt.toISOString()
+			updatedAt: updated.tonePlaybookUpdatedAt?.toISOString() ?? null
 		};
 	}
 

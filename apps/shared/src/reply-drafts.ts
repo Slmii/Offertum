@@ -23,6 +23,15 @@ export interface ReplyDraft {
 	sentAt: string | null;
 	createdAt: string;
 	updatedAt: string;
+	/**
+	 * W5.4 — ISO timestamp when the *body* was last AI-generated. Sourced from the
+	 * linked `AICall.createdAt` so it advances on every regenerate (unlike `createdAt`,
+	 * which is fixed at row insert and never changes). Used by the editor banner's
+	 * "your writing style is newer than this draft" comparison. `null` only when the
+	 * AICall persist failed at the moment of (re)generation — caller falls back to
+	 * `createdAt` in that case.
+	 */
+	aiBodyGeneratedAt: string | null;
 }
 
 /**

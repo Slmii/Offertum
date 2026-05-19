@@ -13,7 +13,6 @@ datasource db {
     provider = "postgresql"
 }
 
-// W1.4 — Initial tenancy schema.
 // Users are provisioned by Quoteom admin via invitation; self-signup is disabled.
 // An org can have many users. Roles exist but are informational until a feature enforces them
 // (e.g. billing notifications, "can't delete the org while you're the last OWNER").
@@ -23,7 +22,6 @@ enum MembershipRole {
     EXTERNAL
 }
 
-// W2.6 — Database-backed structured logger.
 // Pre-Sentry stand-in. `warn`/`error`/`fatal` events from NestJS's Logger are
 // persisted here in addition to the console.
 enum LogLevel {
@@ -131,6 +129,12 @@ model User {
     // not the org's). NULL = use the generic Dutch neutral-professional baseline. Settable
     // from `/settings/writing-style`.
     tonePlaybookText      String?   @db.Text
+    // When the playbook was last saved. Distinct from `User.updatedAt` so other
+    // User-row updates (name change, etc.) don't trigger the "your writing style was
+    // updated since this draft was generated" banner in the W5.4 editor. NULL when the
+    // user has never authored a playbook; set to NOW on every successful save; reset to
+    // NULL when the playbook is cleared (text → empty).
+    tonePlaybookUpdatedAt DateTime?
     createdAt             DateTime  @default(now())
     updatedAt             DateTime  @updatedAt
 
@@ -225,7 +229,6 @@ model AICall {
     @@index([requestId])
 }
 
-// W2.1 — Auth.js (v5) Prisma adapter models.
 // Schema dictated by @auth/prisma-adapter; field names use snake_case in places
 // where the adapter expects them. Do not rename.
 // `refresh_token` / `access_token` / `id_token` are encrypted at rest via the
@@ -309,7 +312,6 @@ model Invitation {
     @@index([organizationId])
 }
 
-// W2.4 — Stripe subscription state cache.
 // One row per Organization (1:1). Acts as the local "single source of truth" that we
 // sync from Stripe via webhooks + the post-checkout /sync endpoint. Avoids the split-
 // brain problem of trusting individual webhook payloads — every relevant event triggers

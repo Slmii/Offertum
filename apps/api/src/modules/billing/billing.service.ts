@@ -9,15 +9,15 @@ import {
 import {
 	LIVE_SUBSCRIPTION_STATUSES,
 	PER_SEAT_OVERAGE_CENTS,
-	SEATS_INCLUDED,
-	SEAT_SYNC_STATUSES
+	SEAT_SYNC_STATUSES,
+	SEATS_INCLUDED
 } from '@/modules/billing/billing.constants';
-import type { BillingState } from '@quoteom/shared';
 import type { BillingStatusResponseDto } from '@/modules/billing/dto/billing-status.response.dto';
 import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { BillingState } from '@quoteom/shared';
 import Stripe from 'stripe';
 
 /**
@@ -202,7 +202,7 @@ export class BillingService {
 			cancel_url: `${webOrigin}/billing/cancel`,
 			subscription_data: {
 				metadata: { organizationId },
-				// W2.5: every new subscription starts with 14 days free. Stripe charges
+				// Every new subscription starts with 14 days free. Stripe charges
 				// the saved payment method at the end of the trial automatically. The
 				// `Subscription.status` flips from "trialing" → "active" at that moment;
 				// our sync function picks that up via `customer.subscription.updated`.

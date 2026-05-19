@@ -16,6 +16,7 @@ export class ReplyDraftResponseDto implements ReplyDraft {
 	sentAt!: string | null;
 	createdAt!: string;
 	updatedAt!: string;
+	aiBodyGeneratedAt!: string | null;
 }
 
 export class OpportunityDetailResponseDto extends OpportunityResponseDto implements OpportunityDetail {

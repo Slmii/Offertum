@@ -20,11 +20,11 @@ export interface MembershipUser {
 	 */
 	hasTonePlaybook: boolean;
 	/**
-	 * W5.4 — ISO timestamp the playbook was last updated. `null` when the user has
-	 * never authored one. Used by the detail editor's "your writing style changed,
-	 * regenerate?" banner — compared against `replyDraft.createdAt`. Approximated as
-	 * `User.updatedAt` server-side (other User-row updates can shift it; acceptable
-	 * MVP noise — a name change firing this banner once is a tiny edge case).
+	 * W5.4 — ISO timestamp the playbook was last saved (the dedicated
+	 * `User.tonePlaybookUpdatedAt` column, not `User.updatedAt`). `null` when the user
+	 * has never authored a playbook. Used by the detail editor's "your writing style
+	 * changed, regenerate?" banner — compared against `replyDraft.createdAt`. Won't
+	 * shift on unrelated User-row writes (e.g. name change).
 	 */
 	tonePlaybookUpdatedAt: string | null;
 }

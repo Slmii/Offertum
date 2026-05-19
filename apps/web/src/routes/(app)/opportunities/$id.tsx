@@ -291,25 +291,40 @@ function MuiBackToList() {
 
 /**
  * W5.4 — Banner trigger for the "your writing style was updated since this draft was
- * generated" hint. Four conditions must all hold:
+ * generated" hint. Conditions:
  *   1. The user has authored a playbook (no playbook → no comparison to make).
- *   2. The playbook timestamp exists AND is after the draft's `createdAt`.
- *   3. The draft hasn't been touched (`wasEditedByUser === false`) — we don't want to
- *      offer a clobber of in-progress edits.
- *   4. The draft isn't `sent` (nothing to regenerate post-send).
+ *   2. The playbook timestamp exists AND is after the draft body's last AI generation
+ *      (`aiBodyGeneratedAt`, sourced from `AICall.createdAt`). Falls back to the row's
+ *      `createdAt` if the AICall join is null. Using the AI-generation timestamp
+ *      (not the row's `createdAt`) is critical so the banner correctly disappears
+ *      after a regenerate — the row's `createdAt` doesn't advance on `prisma.update`,
+ *      so the AICall pointer is the only honest anchor for "what does this body
+ *      reflect?".
+ *   3. The draft isn't `sent` (nothing to regenerate post-send).
+ *
+ * Deliberately NOT checking `wasEditedByUser` — the banner is an offer, not an
+ * auto-action, and clicking is the user's explicit choice. Suppressing the banner on
+ * edited drafts was over-cautious; users who've also updated their writing style
+ * legitimately want the option to regenerate even after touching the draft.
  */
 function shouldShowRegenerateHint({
 	me,
 	replyDraft
 }: {
 	me: { user: { hasTonePlaybook: boolean; tonePlaybookUpdatedAt: string | null } };
-	replyDraft: { createdAt: string; wasEditedByUser: boolean; status: string } | null;
+	replyDraft: { createdAt: string; aiBodyGeneratedAt: string | null; status: string } | null;
 }): boolean {
-	if (!replyDraft) {return false;}
-	if (replyDraft.status === 'sent') {return false;}
-	if (replyDraft.wasEditedByUser) {return false;}
-	if (!me.user.hasTonePlaybook || !me.user.tonePlaybookUpdatedAt) {return false;}
-	return new Date(me.user.tonePlaybookUpdatedAt).getTime() > new Date(replyDraft.createdAt).getTime();
+	if (!replyDraft) {
+		return false;
+	}
+	if (replyDraft.status === 'sent') {
+		return false;
+	}
+	if (!me.user.hasTonePlaybook || !me.user.tonePlaybookUpdatedAt) {
+		return false;
+	}
+	const bodyTimestamp = replyDraft.aiBodyGeneratedAt ?? replyDraft.createdAt;
+	return new Date(me.user.tonePlaybookUpdatedAt).getTime() > new Date(bodyTimestamp).getTime();
 }
 
 function DraftEditor({

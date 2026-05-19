@@ -62,7 +62,13 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 			emailAccount: { select: { provider: true } }
 		}
 	},
-	replyDraft: true
+	// W5.4 — include the linked AICall's `createdAt` so the FE banner can compare
+	// "when was the body last AI-generated" against `tonePlaybookUpdatedAt`. The row's
+	// own `createdAt` is stable across regenerations (Prisma `update` doesn't touch
+	// it), so the AICall pointer is the right anchor for "what time does this body
+	// reflect?". Falls back to `replyDraft.createdAt` on the FE when `aiCallId` is
+	// null (best-effort AICall persist failure).
+	replyDraft: { include: { aiCall: { select: { createdAt: true } } } }
 } as const satisfies Prisma.OpportunityInclude;
 
 export type OpportunityDetailRecord = Prisma.OpportunityGetPayload<{ include: typeof OPPORTUNITY_DETAIL_INCLUDE }>;

@@ -687,7 +687,11 @@ function toReplyDraftResponseDto(draft: NonNullable<OpportunityDetailRecord['rep
 		aiCallId: draft.aiCallId ?? null,
 		sentAt: draft.sentAt?.toISOString() ?? null,
 		createdAt: draft.createdAt.toISOString(),
-		updatedAt: draft.updatedAt.toISOString()
+		updatedAt: draft.updatedAt.toISOString(),
+		// W5.4 — sourced from the linked AICall's `createdAt`. Advances on regenerate.
+		// Falls back to `null` when `aiCallId` is unset OR the join didn't pull the row
+		// (best-effort persist failure); the FE then uses `createdAt` as a fallback.
+		aiBodyGeneratedAt: draft.aiCall?.createdAt.toISOString() ?? null
 	};
 }
 

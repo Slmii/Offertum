@@ -8,8 +8,13 @@
 
 export interface TonePlaybook {
 	text: string | null;
-	/** ISO timestamp of the org's `updatedAt` (proxy for "when did the playbook last change"). */
-	updatedAt: string;
+	/**
+	 * ISO timestamp when the playbook was last saved. `null` when the user has never
+	 * authored one — distinct from `User.updatedAt` so unrelated User-row writes don't
+	 * trigger the W5.4 "your writing style was updated since this draft was generated"
+	 * banner.
+	 */
+	updatedAt: string | null;
 }
 
 export interface UpdateTonePlaybookInput {

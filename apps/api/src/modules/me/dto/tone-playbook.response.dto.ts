@@ -7,5 +7,5 @@ import type { TonePlaybook } from '@quoteom/shared';
  */
 export class TonePlaybookResponseDto implements TonePlaybook {
 	text!: string | null;
-	updatedAt!: string;
+	updatedAt!: string | null;
 }

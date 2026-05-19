@@ -4,17 +4,17 @@ Decision: **OpenAI as the only runtime AI provider at MVP.** Locked 2026-05-19.
 
 ## Provider configuration
 
-| Concern              | Default                                                | Override                                              |
-| -------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
-| Provider             | OpenAI direct                                          | `AZURE_OPENAI_ENDPOINT` set → routes via Azure OpenAI |
-| EU data residency    | Azure OpenAI EU (Frankfurt / Sweden) in production     | OpenAI direct (US) for dev                            |
-| Classifier model     | `gpt-4o-mini` (high volume, conservative output)       | Configurable per call                                 |
-| Extractor model      | `gpt-4o` (lower volume, accuracy-sensitive)            | Configurable per call                                 |
-| Reply-draft model    | `gpt-4o` (W5.3 — tone-sensitive, want top-tier output) | Reassess after first 100 sends                        |
-| Kennisbank compile   | `gpt-4o-mini` (W11.3 — bounded structured output)      | Reassess on prompt-tuning iteration                   |
-| Retention            | `store: false` on every call per D24                   | Non-negotiable for GDPR posture                       |
-| Retries              | SDK built-in budget (429 / 5xx / network)              | No custom retry layer                                 |
-| Structured output    | `zodTextFormat` (Responses API per D23)                | Drop-in `zodResponseFormat` if Chat Completions ever wins |
+| Concern            | Default                                                | Override                                                  |
+| ------------------ | ------------------------------------------------------ | --------------------------------------------------------- |
+| Provider           | OpenAI direct                                          | `AZURE_OPENAI_ENDPOINT` set → routes via Azure OpenAI     |
+| EU data residency  | Azure OpenAI EU (Frankfurt / Sweden) in production     | OpenAI direct (US) for dev                                |
+| Classifier model   | `gpt-4o-mini` (high volume, conservative output)       | Configurable per call                                     |
+| Extractor model    | `gpt-4o` (lower volume, accuracy-sensitive)            | Configurable per call                                     |
+| Reply-draft model  | `gpt-4o` (W5.3 — tone-sensitive, want top-tier output) | Reassess after first 100 sends                            |
+| Kennisbank compile | `gpt-4o-mini` (W11.3 — bounded structured output)      | Reassess on prompt-tuning iteration                       |
+| Retention          | `store: false` on every call per D24                   | Non-negotiable for GDPR posture                           |
+| Retries            | SDK built-in budget (429 / 5xx / network)              | No custom retry layer                                     |
+| Structured output  | `zodTextFormat` (Responses API per D23)                | Drop-in `zodResponseFormat` if Chat Completions ever wins |
 
 ## Why we skipped the Mistral / Anthropic spike
 
