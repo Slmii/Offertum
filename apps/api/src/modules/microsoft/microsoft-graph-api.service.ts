@@ -374,11 +374,20 @@ export class MicrosoftGraphApiService {
 	async sendMail(accessToken: string, input: GraphSendMailInput): Promise<void> {
 		const url = `${MICROSOFT_GRAPH_BASE}/me/sendMail`;
 
-		const internetMessageHeaders: { name: string; value: string }[] = [];
+		// Graph rejects standard RFC headers (In-Reply-To / References / Message-ID) in
+		// `internetMessageHeaders` — that array is documented to accept user-defined `x-*`
+		// headers only. For RFC threading we set the MAPI extended properties Outlook
+		// uses when composing the outbound SMTP envelope:
+		//   - `String 0x1042` = PR_IN_REPLY_TO_ID
+		//   - `String 0x1039` = PR_INTERNET_REFERENCES
+		// Outlook writes the correct RFC 2822 headers on the wire from these tags, and
+		// recipients see a normally-threaded reply. Symmetric with the Gmail path's
+		// In-Reply-To / References (which go straight into the raw envelope).
+		const singleValueExtendedProperties: { id: string; value: string }[] = [];
 		if (input.inReplyTo) {
-			internetMessageHeaders.push({ name: 'In-Reply-To', value: input.inReplyTo });
+			singleValueExtendedProperties.push({ id: 'String 0x1042', value: input.inReplyTo });
 			const referencesChain = input.references ? `${input.references} ${input.inReplyTo}` : input.inReplyTo;
-			internetMessageHeaders.push({ name: 'References', value: referencesChain });
+			singleValueExtendedProperties.push({ id: 'String 0x1039', value: referencesChain });
 		}
 
 		// Graph's `fileAttachment` OData type takes a base64-encoded `contentBytes`. Total
@@ -403,7 +412,7 @@ export class MicrosoftGraphApiService {
 							: { address: input.toEmail }
 					}
 				],
-				...(internetMessageHeaders.length > 0 ? { internetMessageHeaders } : {}),
+				...(singleValueExtendedProperties.length > 0 ? { singleValueExtendedProperties } : {}),
 				...(attachmentsPayload.length > 0 ? { attachments: attachmentsPayload } : {})
 			},
 			saveToSentItems: true
