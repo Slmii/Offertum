@@ -38,7 +38,9 @@ function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Moc
 	return {
 		findPendingRawMessagesForAccount: jest.fn().mockReturnValue(Promise.resolve([])),
 		markRawMessageNegative: jest.fn().mockReturnValue(Promise.resolve()),
-		createOpportunityFromRawMessage: jest.fn().mockReturnValue(Promise.resolve(true)),
+		createOpportunityFromRawMessage: jest
+			.fn()
+			.mockReturnValue(Promise.resolve({ created: true, opportunityId: 'opp-created-1' })),
 		findByIdForOrganization: jest.fn().mockReturnValue(Promise.resolve(null)),
 		updateStatus: jest.fn(),
 		listByOrganization: jest.fn().mockReturnValue(Promise.resolve([])),
@@ -106,7 +108,10 @@ function makeService(
 			)
 		}) as unknown as ExtractorService,
 		config as unknown as ConfigService<never, true>,
-		{ logAction: jest.fn() } as unknown as ConstructorParameters<typeof OpportunitiesService>[4]
+		{ logAction: jest.fn() } as unknown as ConstructorParameters<typeof OpportunitiesService>[4],
+		{
+			regenerate: jest.fn().mockReturnValue(Promise.resolve({ overwrote: true, opportunityFound: true }))
+		} as unknown as ConstructorParameters<typeof OpportunitiesService>[5]
 	);
 }
 
@@ -285,7 +290,13 @@ describe('OpportunitiesService.list pagination', () => {
 		});
 		const service = makeService({ repository });
 
-		const list = await service.list('org-1', { cursor: null, limit: 2, status: null, search: null, dismissed: null });
+		const list = await service.list('org-1', {
+			cursor: null,
+			limit: 2,
+			status: null,
+			search: null,
+			dismissed: null
+		});
 
 		expect(list.opportunities).toHaveLength(2);
 		expect(list.opportunities[0]?.id).toBe('opp-1');
@@ -307,7 +318,13 @@ describe('OpportunitiesService.list pagination', () => {
 		});
 		const service = makeService({ repository });
 
-		const list = await service.list('org-1', { cursor: null, limit: 25, status: null, search: null, dismissed: null });
+		const list = await service.list('org-1', {
+			cursor: null,
+			limit: 25,
+			status: null,
+			search: null,
+			dismissed: null
+		});
 
 		expect(list.opportunities).toHaveLength(1);
 		expect(list.nextCursor).toBeNull();

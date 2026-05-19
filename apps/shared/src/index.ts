@@ -25,5 +25,6 @@ export * from './common.js';
 export * from './email.js';
 export * from './invitations.js';
 export * from './opportunities.js';
+export * from './reply-drafts.js';
 export * from './team.js';
 export * from './tone-playbook.js';

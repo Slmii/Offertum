@@ -3,9 +3,14 @@ import { TenantWrite } from '@/common/decorators/tenant-write.decorator';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { DismissOpportunityDto } from '@/modules/opportunities/dto/dismiss-opportunity.dto';
 import { ListOpportunitiesQueryDto } from '@/modules/opportunities/dto/list-opportunities-query.dto';
+import {
+	OpportunityDetailResponseDto,
+	ReplyDraftResponseDto
+} from '@/modules/opportunities/dto/opportunity-detail.response.dto';
 import { OpportunityListResponseDto } from '@/modules/opportunities/dto/opportunity-list.response.dto';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import { UpdateOpportunityStatusDto } from '@/modules/opportunities/dto/update-opportunity-status.dto';
+import { UpdateReplyDraftDto } from '@/modules/opportunities/dto/update-reply-draft.dto';
 import { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
 import {
 	Body,
@@ -15,6 +20,7 @@ import {
 	Param,
 	ParseUUIDPipe,
 	Patch,
+	Post,
 	Query,
 	Req,
 	UnauthorizedException,
@@ -40,6 +46,41 @@ export class OpportunitiesController {
 			search: query.search ?? null,
 			dismissed: query.dismissed ?? null
 		});
+	}
+
+	@ApiOperation({ summary: 'Detail view: opportunity + original email body + AI reply draft (W5.4)' })
+	@ApiOkResponse({ type: OpportunityDetailResponseDto })
+	@UseGuards(OrganizationGuard)
+	@Get(':id')
+	getDetail(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string
+	): Promise<OpportunityDetailResponseDto> {
+		return this.opportunities.getDetail(request.organizationId!, id);
+	}
+
+	@ApiOperation({ summary: 'Update the AI reply-draft body — autosave from the W5.4 editor' })
+	@ApiOkResponse({ type: ReplyDraftResponseDto })
+	@TenantWrite()
+	@Patch(':id/reply-draft')
+	updateReplyDraft(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string,
+		@Body() body: UpdateReplyDraftDto
+	): Promise<ReplyDraftResponseDto> {
+		return this.opportunities.updateReplyDraft(request.organizationId!, id, body.body);
+	}
+
+	@ApiOperation({ summary: 'Regenerate the reply draft using the requesting user’s writing style (W5.4)' })
+	@ApiOkResponse({ type: ReplyDraftResponseDto })
+	@TenantWrite()
+	@Post(':id/reply-draft/regenerate')
+	regenerateReplyDraft(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string
+	): Promise<ReplyDraftResponseDto> {
+		const actorUserId = requireUserId(request);
+		return this.opportunities.regenerateReplyDraft(request.organizationId!, id, actorUserId);
 	}
 
 	@ApiOperation({ summary: 'Update an opportunity status' })

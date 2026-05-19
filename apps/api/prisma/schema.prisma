@@ -104,6 +104,17 @@ enum DismissReason {
     OTHER
 }
 
+// W5.3 — Workflow state of a generated reply draft.
+//   - PENDING_APPROVAL : AI generated, user hasn't touched it yet.
+//   - EDITED           : user has modified the body (drives the W5.7 edit-driven
+//                        tone-playbook update prompt + the W14.10 "AI accuracy" metric).
+//   - SENT             : draft has been sent as a reply via Gmail / Graph (W5.5).
+enum ReplyDraftStatus {
+    PENDING_APPROVAL
+    EDITED
+    SENT
+}
+
 model User {
     id                    String    @id @default(uuid()) @db.Uuid
     email                 String    @unique
@@ -205,6 +216,9 @@ model AICall {
     // produced it. Two named relations because one Opportunity has two AICalls.
     classifiedOpportunities Opportunity[] @relation("OpportunityClassifiedAICall")
     extractedOpportunities  Opportunity[] @relation("OpportunityExtractedAICall")
+    // W5.3 — Reply-draft generation call. Named so it doesn't collide with the
+    // classifier / extractor relations above.
+    replyDrafts             ReplyDraft[]  @relation("ReplyDraftAICall")
 
     @@index([organizationId, createdAt(sort: Desc)])
     @@index([purpose, status, createdAt(sort: Desc)])
@@ -474,6 +488,7 @@ model Opportunity {
     classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
     extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
     dismissedBy      User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+    replyDraft       ReplyDraft?
 
     @@index([organizationId, status, createdAt(sort: Desc)])
     @@index([organizationId, customerDeadline])
@@ -486,4 +501,39 @@ model Opportunity {
     //   CREATE INDEX "Opportunity_org_createdAt_active_idx"
     //     ON "Opportunity" ("organizationId", "createdAt" DESC) WHERE "dismissedAt" IS NULL;
     @@index([organizationId, dismissedAt])
+}
+
+// W5.3 — AI-generated reply draft for an Opportunity. 1:1 with Opportunity (the
+// `opportunityId @unique` enforces idempotency — the Inngest function can retry a
+// generation event safely without producing duplicate drafts). `originalBody` keeps
+// the pristine AI output so W5.7 can compute the diff against `body` when the owner
+// sends, and surface the "Wil je dit aan je schrijfstijl toevoegen?" prompt.
+model ReplyDraft {
+    id              String           @id @default(uuid()) @db.Uuid
+    opportunityId   String           @unique @db.Uuid
+    // The original AI-generated body. Never mutated after creation — used as the
+    // baseline for the W5.7 edit-detection diff and as a "revert to AI version"
+    // affordance in the W5.4 editor if we want one later.
+    originalBody    String           @db.Text
+    // The current body. Starts == originalBody; mutates as the user edits.
+    body            String           @db.Text
+    status          ReplyDraftStatus @default(PENDING_APPROVAL)
+    // W14.10 + W5.7 — flips true on first user edit so the dashboard can compute
+    // "% of AI drafts sent without modification."
+    wasEditedByUser Boolean          @default(false)
+    // FK to the AICall that produced the draft. Same SetNull semantics as the
+    // classifier / extractor links so an AICall retention purge doesn't cascade
+    // into product data. Null when the AICall persist failed (best-effort).
+    aiCallId        String?          @db.Uuid
+    // Timestamp the draft was sent (W5.5). Null until then. Separate from `status`
+    // so we can query "drafts sent in window X" without parsing audit logs.
+    sentAt          DateTime?
+    createdAt       DateTime         @default(now())
+    updatedAt       DateTime         @updatedAt
+
+    opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+    aiCall      AICall?     @relation("ReplyDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
+
+    @@index([status, createdAt(sort: Desc)])
+    @@index([aiCallId])
 }

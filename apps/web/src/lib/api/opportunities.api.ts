@@ -1,5 +1,10 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { OpportunityDismissedFilter, OpportunityList, OpportunityStatus } from '@quoteom/shared';
+import type {
+	OpportunityDetail,
+	OpportunityDismissedFilter,
+	OpportunityList,
+	OpportunityStatus
+} from '@quoteom/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export interface ListOpportunitiesInput {
@@ -49,4 +54,19 @@ export const listOpportunitiesServer = createServerFn({ method: 'GET' })
 		}
 
 		return (await response.json()) as OpportunityList;
+	});
+
+/**
+ * GET /api/opportunities/:id — detail view loaded by the W5.4 editor route. Includes
+ * the extracted Opportunity fields, the original email body as plain text, and the
+ * AI-generated `ReplyDraft` (or `null` when W5.3 generation hasn't completed yet).
+ */
+export const getOpportunityDetailServer = createServerFn({ method: 'GET' })
+	.inputValidator((data: { id: string }) => data)
+	.handler(async ({ data }): Promise<OpportunityDetail> => {
+		const response = await serverFetch(`/api/opportunities/${encodeURIComponent(data.id)}`);
+		if (!response.ok) {
+			throw new Error(`Failed to load opportunity (${response.status})`);
+		}
+		return (await response.json()) as OpportunityDetail;
 	});

@@ -1,3 +1,5 @@
+import type { ReplyDraft } from './reply-drafts.js';
+
 export const OPPORTUNITY_STATUSES = ['new', 'replied', 'waiting', 'cold', 'won', 'lost'] as const;
 
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
@@ -91,6 +93,21 @@ export interface ListOpportunitiesQuery {
 
 export interface UpdateOpportunityStatusInput {
 	status: OpportunityStatus;
+}
+
+/**
+ * W5.4 — Detail-view shape for `GET /api/opportunities/:id`. Extends the list-row
+ * `Opportunity` with:
+ *  - `originalEmailBody` — plain-text rendering of the customer's email body (HTML
+ *    stripped + whitespace normalised via the same `buildRawMessageAIInput` helper the
+ *    AI pipeline uses). The detail panel renders it as preformatted text.
+ *  - `replyDraft` — the AI-generated reply draft, or `null` if the W5.3 generation
+ *    hasn't completed yet (the FE polls or surfaces a "draft is being prepared" state
+ *    when null).
+ */
+export interface OpportunityDetail extends Opportunity {
+	originalEmailBody: string;
+	replyDraft: ReplyDraft | null;
 }
 
 /**

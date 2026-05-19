@@ -54,7 +54,7 @@ import type {
 } from '@quoteom/shared';
 import { OPPORTUNITY_DISMISS_REASONS, OPPORTUNITY_STATUSES } from '@quoteom/shared';
 import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 
@@ -372,7 +372,13 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							variant='body2'
 							sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}
 						>
-							{customerLabel} · {opportunity.requestType}
+							<Link
+								to='/opportunities/$id'
+								params={{ id: opportunity.id }}
+								style={{ color: 'inherit', textDecoration: 'none' }}
+							>
+								{customerLabel} · {opportunity.requestType}
+							</Link>
 						</Typography>
 					</Stack>
 					{subtitle && (

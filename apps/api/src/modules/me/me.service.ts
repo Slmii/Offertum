@@ -27,7 +27,8 @@ export class MeService {
 		// `tonePlaybookText` is selected only so we can derive the `hasTonePlaybook`
 		// boolean — the actual prose never leaves this service, so the per-request
 		// payload doesn't carry the (potentially multi-kB) text on every page load.
-		user: { select: { id: true, email: true, name: true, tonePlaybookText: true } },
+		// `updatedAt` is the proxy for `tonePlaybookUpdatedAt` (W5.4 — banner trigger).
+		user: { select: { id: true, email: true, name: true, tonePlaybookText: true, updatedAt: true } },
 		organization: { select: { id: true, name: true } }
 	} as const;
 
@@ -98,16 +99,27 @@ export class MeService {
 			role: MembershipRole;
 			createdAt: Date;
 			updatedAt: Date;
-			user: { id: string; email: string; name: string | null; tonePlaybookText: string | null };
+			user: {
+				id: string;
+				email: string;
+				name: string | null;
+				tonePlaybookText: string | null;
+				updatedAt: Date;
+			};
 			organization: { id: string; name: string };
 		},
 		isAdmin: boolean
 	): MembershipResponseDto {
-		const { tonePlaybookText, ...userRest } = row.user;
+		const { tonePlaybookText, updatedAt: userUpdatedAt, ...userRest } = row.user;
 		const hasTonePlaybook = tonePlaybookText !== null && tonePlaybookText.trim().length > 0;
 		return {
 			...row,
-			user: { ...userRest, isAdmin, hasTonePlaybook }
+			user: {
+				...userRest,
+				isAdmin,
+				hasTonePlaybook,
+				tonePlaybookUpdatedAt: hasTonePlaybook ? userUpdatedAt.toISOString() : null
+			}
 		};
 	}
 

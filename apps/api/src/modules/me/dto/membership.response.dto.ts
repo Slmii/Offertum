@@ -7,6 +7,7 @@ export class MembershipUserDto implements MembershipUser {
 	name!: string | null;
 	isAdmin!: boolean;
 	hasTonePlaybook!: boolean;
+	tonePlaybookUpdatedAt!: string | null;
 }
 
 export class MembershipOrganizationDto implements MembershipOrganization {

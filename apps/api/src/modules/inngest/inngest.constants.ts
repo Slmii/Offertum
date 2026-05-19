@@ -30,7 +30,14 @@ export const InngestEvents = {
 	 * Fired by the Microsoft webhook controller (W3.6) when Graph pushes a `created`
 	 * notification. Payload: `{ emailAccountId }`. Triggers `MicrosoftDeltaSyncFunction`.
 	 */
-	MicrosoftDeltaChanged: 'microsoft/delta.changed'
+	MicrosoftDeltaChanged: 'microsoft/delta.changed',
+	/**
+	 * Fired by `OpportunitiesService.processOneRawMessage` after a new Opportunity row is
+	 * successfully created. Payload: `{ opportunityId, organizationId }`. Triggers
+	 * `ReplyDraftGenerateFunction` (W5.3) which composes the AI reply draft in the org
+	 * OWNER's voice.
+	 */
+	OpportunityCreated: 'opportunity/created'
 } as const;
 
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];
@@ -51,7 +58,11 @@ export const InngestFunctionIds = {
 	/** W3.6 delta-sync — walks `/me/messages/delta` from the stored cursor on Graph push. */
 	MicrosoftDeltaSync: 'microsoft-delta-sync',
 	/** W3.6 renewal cron — PATCHes Graph subscriptions nearing the 3-day expiry. */
-	MicrosoftSubscriptionRenewal: 'microsoft-subscription-renewal'
+	MicrosoftSubscriptionRenewal: 'microsoft-subscription-renewal',
+	/** W5.3 reply-draft generate — fires on `opportunity/created`, composes the AI draft
+	 *  in the org OWNER's voice and persists a `ReplyDraft` row. Idempotent via the
+	 *  `opportunityId @unique` constraint. */
+	ReplyDraftGenerate: 'reply-draft-generate'
 } as const;
 
 /**
@@ -107,5 +118,9 @@ export const InngestSteps = {
 	MicrosoftSubscriptionRenewal: {
 		/** Single step: scan rows, PATCH subscriptions, persist new expiry. */
 		Renew: 'microsoft-subscription-renew'
+	},
+	ReplyDraftGenerate: {
+		/** Single step: fetch opportunity + owner voice → call generator → persist row. */
+		Generate: 'reply-draft-generate-compose'
 	}
 } as const;

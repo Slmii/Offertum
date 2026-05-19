@@ -19,6 +19,14 @@ export interface MembershipUser {
 	 * Per-user (not per-org) per D31 — voice belongs to the person.
 	 */
 	hasTonePlaybook: boolean;
+	/**
+	 * W5.4 — ISO timestamp the playbook was last updated. `null` when the user has
+	 * never authored one. Used by the detail editor's "your writing style changed,
+	 * regenerate?" banner — compared against `replyDraft.createdAt`. Approximated as
+	 * `User.updatedAt` server-side (other User-row updates can shift it; acceptable
+	 * MVP noise — a name change firing this banner once is a tiny edge case).
+	 */
+	tonePlaybookUpdatedAt: string | null;
 }
 
 /** Minimal organization shape included in membership responses. */

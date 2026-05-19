@@ -10,8 +10,16 @@ function makePrisma(createCount: number): {
 } {
 	const opportunityCreateMany = jest.fn().mockReturnValue(Promise.resolve({ count: createCount }));
 	const rawMessageUpdate = jest.fn().mockReturnValue(Promise.resolve({}));
+	// W5.3 — repo now does an in-transaction `findUnique` after a successful insert to
+	// return the new row's id (needed for the `opportunity/created` event emit). Mock
+	// returns a deterministic id only when the createMany "inserted" something —
+	// matches the real Prisma behaviour where the lookup would only find a row that
+	// was inserted by this tx.
+	const opportunityFindUnique = jest
+		.fn()
+		.mockReturnValue(Promise.resolve(createCount > 0 ? { id: 'opp-created-1' } : null));
 	const tx = {
-		opportunity: { createMany: opportunityCreateMany },
+		opportunity: { createMany: opportunityCreateMany, findUnique: opportunityFindUnique },
 		rawMessage: { update: rawMessageUpdate }
 	};
 	const prisma = {
@@ -56,7 +64,7 @@ describe('OpportunitiesRepository.createOpportunityFromRawMessage', () => {
 
 		const created = await repository.createOpportunityFromRawMessage(CREATE_INPUT);
 
-		expect(created).toBe(true);
+		expect(created).toEqual({ created: true, opportunityId: expect.any(String) as unknown as string });
 		expect(opportunityCreateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				skipDuplicates: true,
@@ -79,6 +87,9 @@ describe('OpportunitiesRepository.createOpportunityFromRawMessage', () => {
 		const { prisma } = makePrisma(0);
 		const repository = new OpportunitiesRepository(prisma);
 
-		await expect(repository.createOpportunityFromRawMessage(CREATE_INPUT)).resolves.toBe(false);
+		await expect(repository.createOpportunityFromRawMessage(CREATE_INPUT)).resolves.toEqual({
+			created: false,
+			opportunityId: null
+		});
 	});
 });

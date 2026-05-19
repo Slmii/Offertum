@@ -1,0 +1,42 @@
+/**
+ * Wire-format types for the W5.3 reply-draft surface.
+ *
+ * Drafts are 1:1 with `Opportunity` (`opportunityId` is unique in the schema). The AI
+ * generates the draft after `Opportunity.status = NEW` is persisted (Inngest function
+ * `reply-draft-generate`), so by the time the owner opens the W5.4 detail view the body
+ * is ready. `originalBody` is the pristine AI output; `body` is the current state (the
+ * user may have edited it). On send (W5.5) the server diffs the two to drive the W5.7
+ * edit-driven tone-playbook update.
+ */
+
+export const REPLY_DRAFT_STATUSES = ['pending_approval', 'edited', 'sent'] as const;
+export type ReplyDraftStatus = (typeof REPLY_DRAFT_STATUSES)[number];
+
+export interface ReplyDraft {
+	id: string;
+	opportunityId: string;
+	originalBody: string;
+	body: string;
+	status: ReplyDraftStatus;
+	wasEditedByUser: boolean;
+	aiCallId: string | null;
+	sentAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/**
+ * Request body for `PATCH /api/opportunities/:id/reply-draft`. Autosaved from the W5.4
+ * editor on debounced typing. The server flips `wasEditedByUser = true` on first
+ * non-no-op write + bumps `status` to `EDITED`.
+ */
+export interface UpdateReplyDraftInput {
+	body: string;
+}
+
+/**
+ * Max length of the draft body. Generous on purpose — covers a fully-edited multi-
+ * paragraph quote PDF cover note without truncation. Capped server-side to stop a
+ * runaway client from blowing up Postgres TEXT.
+ */
+export const REPLY_DRAFT_BODY_MAX_LENGTH = 16_000;

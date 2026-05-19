@@ -6,8 +6,10 @@ import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-wat
 import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft-backfill.function';
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
+import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
 import { Module } from '@nestjs/common';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
+import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 
 /**
  * Inngest itself is wired as Express middleware in `main.ts` — same pattern as Auth.js.
@@ -21,14 +23,15 @@ import { OpportunitiesModule } from '@/modules/opportunities/opportunities.modul
  * the `serve()` array just gets both flavors concatenated.
  */
 @Module({
-	imports: [GmailModule, MicrosoftModule, OpportunitiesModule],
+	imports: [GmailModule, MicrosoftModule, OpportunitiesModule, ReplyDraftsModule],
 	providers: [
 		GmailBackfillFunction,
 		GmailDeltaSyncFunction,
 		GmailWatchRenewalFunction,
 		MicrosoftBackfillFunction,
 		MicrosoftDeltaSyncFunction,
-		MicrosoftSubscriptionRenewalFunction
+		MicrosoftSubscriptionRenewalFunction,
+		ReplyDraftGenerateFunction
 	],
 	exports: [
 		GmailBackfillFunction,
@@ -36,7 +39,8 @@ import { OpportunitiesModule } from '@/modules/opportunities/opportunities.modul
 		GmailWatchRenewalFunction,
 		MicrosoftBackfillFunction,
 		MicrosoftDeltaSyncFunction,
-		MicrosoftSubscriptionRenewalFunction
+		MicrosoftSubscriptionRenewalFunction,
+		ReplyDraftGenerateFunction
 	]
 })
 export class InngestModule {}

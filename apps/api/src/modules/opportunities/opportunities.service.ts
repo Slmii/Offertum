@@ -2,8 +2,18 @@ import type { EnvSchema } from '@/config/env.schema';
 import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
 import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
-import { OPPORTUNITY_NOT_DISMISSED, OPPORTUNITY_NOT_FOUND, invalidOpportunityStatusTransition } from '@/lib/errors';
+import {
+	OPPORTUNITY_NOT_DISMISSED,
+	OPPORTUNITY_NOT_FOUND,
+	REPLY_DRAFT_ALREADY_SENT,
+	REPLY_DRAFT_NOT_FOUND,
+	invalidOpportunityStatusTransition
+} from '@/lib/errors';
 import { LogService } from '@/modules/logger/log.service';
+import {
+	OpportunityDetailResponseDto,
+	ReplyDraftResponseDto
+} from '@/modules/opportunities/dto/opportunity-detail.response.dto';
 import { OpportunityListResponseDto } from '@/modules/opportunities/dto/opportunity-list.response.dto';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import {
@@ -15,6 +25,7 @@ import {
 	OPPORTUNITY_DISMISS_REASON_FROM_WIRE,
 	OPPORTUNITY_DISMISS_REASON_TO_WIRE
 } from '@/modules/opportunities/opportunity-dismiss-reason.mapper';
+import { REPLY_DRAFT_STATUS_TO_WIRE } from '@/modules/opportunities/reply-draft-status.mapper';
 import {
 	OPPORTUNITY_STATUS_FROM_WIRE,
 	OPPORTUNITY_STATUS_TO_WIRE,
@@ -23,6 +34,7 @@ import {
 import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
 import {
 	OpportunitiesRepository,
+	type OpportunityDetailRecord,
 	type OpportunityDismissedFilter,
 	type OpportunityRecord,
 	type RawMessageForOpportunityProcessing
@@ -33,6 +45,9 @@ import type {
 } from '@/modules/opportunities/opportunities.types';
 import { detectBulkMail } from '@/lib/email/bulk-mail-filter';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
+import { inngest } from '@/modules/inngest/inngest.client';
+import { InngestEvents } from '@/modules/inngest/inngest.constants';
+import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
@@ -66,7 +81,8 @@ export class OpportunitiesService {
 		private readonly classifier: ClassifierService,
 		private readonly extractor: ExtractorService,
 		private readonly config: ConfigService<EnvSchema, true>,
-		private readonly logService: LogService
+		private readonly logService: LogService,
+		private readonly replyDrafts: ReplyDraftsService
 	) {}
 
 	/**
@@ -246,6 +262,145 @@ export class OpportunitiesService {
 	}
 
 	/**
+	 * W5.4 — Detail-view read. Fetches the opportunity + raw provider payload + the
+	 * W5.3 reply draft (if generated). The `replyDraft` field is `null` when the
+	 * Inngest function hasn't completed yet (cold-start race on a freshly-created
+	 * opportunity); the FE polls in that case.
+	 *
+	 * **Self-healing for missing drafts:** if the opportunity has no `ReplyDraft` row
+	 * AND it isn't dismissed, this method re-fires the `opportunity/created` event
+	 * before returning. Covers three real failure modes:
+	 *  1. Opportunities created before W5.3 shipped (no emit ran for them).
+	 *  2. Emit succeeded but the Inngest function later failed terminally (transient
+	 *     OpenAI error, AICall persist hiccup, etc.).
+	 *  3. The emit itself failed at insert time (the error-handler in
+	 *     `processOneRawMessage` swallows + logs but doesn't retry).
+	 *
+	 * Re-firing is safe: `ReplyDraft.opportunityId` is unique, and the Inngest function
+	 * short-circuits if a row already exists. The fire-and-forget cost is one extra
+	 * event per missed-draft detail-view open — negligible.
+	 */
+	async getDetail(organizationId: string, opportunityId: string): Promise<OpportunityDetailResponseDto> {
+		const opportunity = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		const originalEmailBody = buildRawMessageAIInput({
+			provider: opportunity.rawMessage.emailAccount.provider,
+			subject: opportunity.rawMessage.subject,
+			fromName: opportunity.rawMessage.fromName,
+			fromEmail: opportunity.rawMessage.fromEmail,
+			raw: opportunity.rawMessage.raw
+		}).bodyText;
+
+		if (!opportunity.replyDraft && !opportunity.dismissedAt) {
+			void this.requestReplyDraftGeneration(opportunity.id, opportunity.organizationId);
+		}
+
+		return toOpportunityDetailResponseDto(opportunity, originalEmailBody);
+	}
+
+	/**
+	 * Fire-and-forget Inngest emit. Errors are swallowed + logged — failing to enqueue
+	 * a backfill event should never break a detail-view load. The Inngest function on
+	 * the other end is idempotent against the `ReplyDraft.opportunityId @unique`
+	 * constraint, so duplicate emits are safe.
+	 */
+	private async requestReplyDraftGeneration(opportunityId: string, organizationId: string): Promise<void> {
+		try {
+			await inngest.send({
+				name: InngestEvents.OpportunityCreated,
+				data: { opportunityId, organizationId }
+			});
+			this.logService.logAction({
+				action: 'reply_draft.lazy_regenerate_enqueued',
+				message: `Lazy-emitted opportunity/created for ${opportunityId} (no ReplyDraft on detail open)`,
+				metadata: { opportunityId, organizationId },
+				context: 'OpportunitiesService'
+			});
+		} catch (error) {
+			this.logService.logAction({
+				action: 'reply_draft.lazy_regenerate_enqueue_failed',
+				message: `Failed to lazy-emit opportunity/created for ${opportunityId}: ${error instanceof Error ? error.message : 'unknown'}`,
+				metadata: { opportunityId, organizationId },
+				level: 'error',
+				stack: error instanceof Error ? error.stack : undefined,
+				context: 'OpportunitiesService'
+			});
+		}
+	}
+
+	/**
+	 * W5.4 — Regenerate the reply draft for an opportunity using the *requesting user's*
+	 * `tonePlaybookText`. Powers the "Regenereer in mijn stijl" button. The service
+	 * verifies the opportunity belongs to the org (cross-tenant guard) then delegates
+	 * to `ReplyDraftsService.regenerate`. Returns the freshly-generated draft.
+	 *
+	 * Refuses to regenerate a SENT draft (409) — the email is already out.
+	 */
+	async regenerateReplyDraft(
+		organizationId: string,
+		opportunityId: string,
+		requestingUserId: string
+	): Promise<ReplyDraftResponseDto> {
+		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		const result = await this.replyDrafts.regenerate(opportunityId, requestingUserId);
+		if (!result.opportunityFound) {
+			// Should not happen — we just verified the opportunity exists in the right
+			// org. Defensive only.
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+		if (!result.overwrote) {
+			throw new ConflictException(REPLY_DRAFT_ALREADY_SENT);
+		}
+
+		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
+		if (!detail?.replyDraft) {
+			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
+		}
+
+		return toReplyDraftResponseDto(detail.replyDraft);
+	}
+
+	/**
+	 * W5.4 — Update the reply-draft body. Called by the autosave debounce in the editor.
+	 * Idempotent: re-saving the same body is a no-op for the `wasEditedByUser` flag
+	 * (only the first divergence from `originalBody` flips it). Throws 404 if the draft
+	 * doesn't exist yet — caller surfaces a "draft is being prepared, retry shortly"
+	 * banner in the UI.
+	 */
+	async updateReplyDraft(
+		organizationId: string,
+		opportunityId: string,
+		body: string
+	): Promise<ReplyDraftResponseDto> {
+		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		const updated = await this.repository.updateReplyDraftBody(opportunityId, body);
+		if (!updated) {
+			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
+		}
+
+		// Re-read the full draft row so the response shape matches the GET endpoint —
+		// caller's React Query cache replaces the in-memory draft from one fetch.
+		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
+		if (!detail?.replyDraft) {
+			// Should never happen — we just wrote the row. Defensive.
+			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
+		}
+
+		return toReplyDraftResponseDto(detail.replyDraft);
+	}
+
+	/**
 	 * Convenience wrapper that loops `processBatch` until the queue is exhausted. Used by
 	 * unit tests + any callsite that doesn't need to interleave with Inngest's step
 	 * checkpointing. **Inngest functions must use `processBatch` directly** so each batch
@@ -393,7 +548,7 @@ export class OpportunitiesService {
 			}
 
 			const extraction = await this.extractor.extract(input, rawMessage.internalDate.toISOString().slice(0, 10));
-			const created = await this.repository.createOpportunityFromRawMessage({
+			const { created, opportunityId } = await this.repository.createOpportunityFromRawMessage({
 				rawMessage,
 				classification: classification.value,
 				extraction: extraction.value,
@@ -408,6 +563,34 @@ export class OpportunitiesService {
 			result.classifiedPositive += 1;
 			if (created) {
 				result.opportunitiesCreated += 1;
+				// W5.3 — fan out to the reply-draft generator. Best-effort: a send failure
+				// shouldn't abort the per-RawMessage processing (the opportunity is already
+				// persisted; the only loss is the auto-draft). A future "find opportunities
+				// without a ReplyDraft and re-emit" backfill cron will close the gap if
+				// emits start failing systemically. Idempotency is upstream: the
+				// `ReplyDraft.opportunityId @unique` constraint blocks duplicates even if
+				// we somehow emit twice.
+				if (opportunityId) {
+					try {
+						await inngest.send({
+							name: InngestEvents.OpportunityCreated,
+							data: { opportunityId, organizationId: rawMessage.organizationId }
+						});
+					} catch (error) {
+						this.logService.logAction({
+							action: 'opportunity.created.enqueue_failed',
+							message: `Failed to enqueue reply-draft generation for opportunity ${opportunityId}: ${error instanceof Error ? error.message : 'unknown'}`,
+							metadata: {
+								opportunityId,
+								organizationId: rawMessage.organizationId,
+								rawMessageId: rawMessage.id
+							},
+							level: 'error',
+							stack: error instanceof Error ? error.stack : undefined,
+							context: 'OpportunitiesService'
+						});
+					}
+				}
 			} else {
 				result.opportunitiesSkipped += 1;
 			}
@@ -491,4 +674,57 @@ function toStringArray(value: unknown): string[] {
 	}
 
 	return value.filter((item): item is string => typeof item === 'string');
+}
+
+function toReplyDraftResponseDto(draft: NonNullable<OpportunityDetailRecord['replyDraft']>): ReplyDraftResponseDto {
+	return {
+		id: draft.id,
+		opportunityId: draft.opportunityId,
+		originalBody: draft.originalBody,
+		body: draft.body,
+		status: REPLY_DRAFT_STATUS_TO_WIRE[draft.status],
+		wasEditedByUser: draft.wasEditedByUser,
+		aiCallId: draft.aiCallId ?? null,
+		sentAt: draft.sentAt?.toISOString() ?? null,
+		createdAt: draft.createdAt.toISOString(),
+		updatedAt: draft.updatedAt.toISOString()
+	};
+}
+
+function toOpportunityDetailResponseDto(
+	opportunity: OpportunityDetailRecord,
+	originalEmailBody: string
+): OpportunityDetailResponseDto {
+	return {
+		// Re-uses the same field projection as the list response — keeps the shapes in
+		// lockstep so adding an Opportunity column shows up in both places automatically.
+		id: opportunity.id,
+		organizationId: opportunity.organizationId,
+		emailAccountId: opportunity.emailAccountId,
+		rawMessageId: opportunity.rawMessageId,
+		status: OPPORTUNITY_STATUS_TO_WIRE[opportunity.status],
+		aiProvider: opportunity.aiProvider,
+		requestType: opportunity.requestType,
+		urgency: OPPORTUNITY_URGENCY_TO_WIRE[opportunity.urgency],
+		deliverableHints: toStringArray(opportunity.deliverableHints),
+		createdAt: opportunity.createdAt.toISOString(),
+		updatedAt: opportunity.updatedAt.toISOString(),
+		internalDate: opportunity.rawMessage.internalDate.toISOString(),
+		subject: opportunity.rawMessage.subject,
+		fromEmail: opportunity.rawMessage.fromEmail,
+		fromName: opportunity.rawMessage.fromName,
+		threadId: opportunity.rawMessage.threadId,
+		classifierConfidence: opportunity.classifierConfidence,
+		classifierReason: opportunity.classifierReason,
+		customerName: opportunity.customerName,
+		customerEmail: opportunity.customerEmail,
+		address: opportunity.address,
+		customerDeadline: opportunity.customerDeadline?.toISOString() ?? null,
+		customerAppointment: opportunity.customerAppointment?.toISOString() ?? null,
+		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
+		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
+		dismissedByUserId: opportunity.dismissedById ?? null,
+		originalEmailBody,
+		replyDraft: opportunity.replyDraft ? toReplyDraftResponseDto(opportunity.replyDraft) : null
+	};
 }

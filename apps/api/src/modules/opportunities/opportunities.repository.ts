@@ -3,6 +3,7 @@ import {
 	DismissReason as PrismaDismissReason,
 	EmailProvider,
 	OpportunityStatus as PrismaOpportunityStatus,
+	ReplyDraftStatus as PrismaReplyDraftStatus,
 	Urgency as PrismaUrgency
 } from '@/generated/prisma/enums';
 import type { ClassifierResult } from '@/modules/ai/classifier/classifier.types';
@@ -41,6 +42,30 @@ const OPPORTUNITY_INCLUDE = {
 		}
 	}
 } as const satisfies Prisma.OpportunityInclude;
+
+/**
+ * W5.4 — detail-view include. Extends `OPPORTUNITY_INCLUDE` with the raw provider
+ * payload (so we can render the original email body) + the W5.3 `ReplyDraft` if
+ * generation has completed. Used by `findDetailByIdForOrganization` only — the list
+ * endpoint stays on the lighter `OPPORTUNITY_INCLUDE` to avoid hauling email bodies
+ * over the wire on every page.
+ */
+const OPPORTUNITY_DETAIL_INCLUDE = {
+	rawMessage: {
+		select: {
+			internalDate: true,
+			subject: true,
+			fromEmail: true,
+			fromName: true,
+			threadId: true,
+			raw: true,
+			emailAccount: { select: { provider: true } }
+		}
+	},
+	replyDraft: true
+} as const satisfies Prisma.OpportunityInclude;
+
+export type OpportunityDetailRecord = Prisma.OpportunityGetPayload<{ include: typeof OPPORTUNITY_DETAIL_INCLUDE }>;
 
 /**
  * Shape returned by every read on this repository. Derived from the Prisma generated
@@ -123,8 +148,10 @@ export class OpportunitiesRepository {
 		});
 	}
 
-	async createOpportunityFromRawMessage(input: CreateOpportunityFromRawMessageInput): Promise<boolean> {
-		const created = await this.prisma.$transaction(async tx => {
+	async createOpportunityFromRawMessage(
+		input: CreateOpportunityFromRawMessageInput
+	): Promise<{ created: boolean; opportunityId: string | null }> {
+		return this.prisma.$transaction(async tx => {
 			const result = await tx.opportunity.createMany({
 				data: [
 					{
@@ -155,10 +182,22 @@ export class OpportunitiesRepository {
 				data: { isQuoteRequest: true, classifiedAt: new Date() }
 			});
 
-			return result.count > 0;
-		});
+			const created = result.count > 0;
+			// W5.3 — caller needs the new row's ID to emit the `opportunity/created`
+			// event. We do the lookup inside the same transaction (cheap, single-row,
+			// `rawMessageId` is unique) so a downstream consumer can't see a half-state.
+			// When `created === false` we skip the lookup — caller has nothing to fire.
+			if (!created) {
+				return { created: false, opportunityId: null };
+			}
 
-		return created;
+			const inserted = await tx.opportunity.findUnique({
+				where: { rawMessageId: input.rawMessage.id },
+				select: { id: true }
+			});
+
+			return { created: true, opportunityId: inserted?.id ?? null };
+		});
 	}
 
 	async listByOrganization(
@@ -251,6 +290,19 @@ export class OpportunitiesRepository {
 		});
 	}
 
+	/**
+	 * W5.4 — fetch a single opportunity with everything the detail view + draft editor
+	 * needs: raw provider payload (for original-email rendering), email-account provider
+	 * (for plain-text extraction routing), and the reply draft row (if W5.3 generation
+	 * has completed).
+	 */
+	async findDetailByIdForOrganization(organizationId: string, id: string): Promise<OpportunityDetailRecord | null> {
+		return this.prisma.opportunity.findFirst({
+			where: { id, organizationId },
+			include: OPPORTUNITY_DETAIL_INCLUDE
+		});
+	}
+
 	async updateStatus(id: string, status: PrismaOpportunityStatus): Promise<OpportunityRecord> {
 		return this.prisma.opportunity.update({
 			where: { id },
@@ -290,6 +342,58 @@ export class OpportunitiesRepository {
 			},
 			include: OPPORTUNITY_INCLUDE
 		});
+	}
+
+	/**
+	 * W5.4 — Update the reply-draft body for an opportunity. Flips
+	 * `wasEditedByUser = true` permanently once the body diverges from `originalBody`
+	 * (W14.10 / W5.7 use this flag); status transitions `PENDING_APPROVAL` → `EDITED` on
+	 * the same first divergence. Idempotent: re-submitting the same body that's already
+	 * stored is a no-op write (Prisma still touches `updatedAt`, but the flag stays
+	 * stable).
+	 *
+	 * Returns `null` when no draft exists for the opportunity — caller surfaces 404.
+	 */
+	async updateReplyDraftBody(
+		opportunityId: string,
+		body: string
+	): Promise<{ draftId: string; body: string; status: PrismaReplyDraftStatus; wasEditedByUser: boolean } | null> {
+		const existing = await this.prisma.replyDraft.findUnique({
+			where: { opportunityId },
+			select: { id: true, originalBody: true, wasEditedByUser: true, status: true }
+		});
+
+		if (!existing) {
+			return null;
+		}
+
+		const diverges = body !== existing.originalBody;
+		const updated = await this.prisma.replyDraft.update({
+			where: { opportunityId },
+			data: {
+				body,
+				// Only flip the flag forward — once edited, it stays edited even if the
+				// user later reverts the text back to the AI baseline. That matches the
+				// metric's intent (W14.10): "did the owner touch this draft at all?"
+				wasEditedByUser: existing.wasEditedByUser || diverges,
+				// Same forward-only transition for status — once EDITED, don't fall back
+				// to PENDING_APPROVAL even on revert. SENT is terminal (set by W5.5).
+				status:
+					existing.status === PrismaReplyDraftStatus.SENT
+						? existing.status
+						: diverges || existing.status === PrismaReplyDraftStatus.EDITED
+							? PrismaReplyDraftStatus.EDITED
+							: PrismaReplyDraftStatus.PENDING_APPROVAL
+			},
+			select: { id: true, body: true, status: true, wasEditedByUser: true }
+		});
+
+		return {
+			draftId: updated.id,
+			body: updated.body,
+			status: updated.status,
+			wasEditedByUser: updated.wasEditedByUser
+		};
 	}
 }
 

@@ -16,6 +16,7 @@ import { MeModule } from '@/modules/me/me.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
 import { PrismaModule } from '@/modules/prisma/prisma.module';
 import { PrismaService } from '@/modules/prisma/prisma.service';
+import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -50,6 +51,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		GmailModule,
 		MicrosoftModule,
 		OpportunitiesModule,
+		ReplyDraftsModule,
 		InngestModule,
 		AiModule,
 		AIUsageModule,
