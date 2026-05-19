@@ -68,10 +68,30 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 	// it), so the AICall pointer is the right anchor for "what time does this body
 	// reflect?". Falls back to `replyDraft.createdAt` on the FE when `aiCallId` is
 	// null (best-effort AICall persist failure).
-	replyDraft: { include: { aiCall: { select: { createdAt: true } } } }
+	//
+	// W5.5 follow-up — include staged attachments. `orderBy createdAt asc` so the UI
+	// chip list stays stable across re-renders.
+	replyDraft: {
+		include: {
+			aiCall: { select: { createdAt: true } },
+			attachments: { orderBy: { createdAt: 'asc' } }
+		}
+	}
 } as const satisfies Prisma.OpportunityInclude;
 
 export type OpportunityDetailRecord = Prisma.OpportunityGetPayload<{ include: typeof OPPORTUNITY_DETAIL_INCLUDE }>;
+
+/**
+ * W5.4 — Result of `updateReplyDraftBody`. Surfaces just the post-update fields the
+ * controller needs to render the next auto-save tick; the full `ReplyDraft` shape comes
+ * back from a follow-up read in the service layer.
+ */
+export interface UpdatedReplyDraftRow {
+	draftId: string;
+	body: string;
+	status: PrismaReplyDraftStatus;
+	wasEditedByUser: boolean;
+}
 
 /**
  * Shape returned by every read on this repository. Derived from the Prisma generated
@@ -360,10 +380,7 @@ export class OpportunitiesRepository {
 	 *
 	 * Returns `null` when no draft exists for the opportunity — caller surfaces 404.
 	 */
-	async updateReplyDraftBody(
-		opportunityId: string,
-		body: string
-	): Promise<{ draftId: string; body: string; status: PrismaReplyDraftStatus; wasEditedByUser: boolean } | null> {
+	async updateReplyDraftBody(opportunityId: string, body: string): Promise<UpdatedReplyDraftRow | null> {
 		const existing = await this.prisma.replyDraft.findUnique({
 			where: { opportunityId },
 			select: { id: true, originalBody: true, wasEditedByUser: true, status: true }

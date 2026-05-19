@@ -14,7 +14,7 @@ const logServiceStub = { logAction: () => undefined } as unknown as ConstructorP
 
 interface FakePrisma {
 	emailAccount: {
-		findUnique: jest.Mock;
+		findFirst: jest.Mock;
 		update: jest.Mock;
 	};
 	rawMessage: {
@@ -26,7 +26,8 @@ interface FakePrisma {
 function makePrisma(emailAccountRow: object | null, existingRawIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			findUnique: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
+			// `findFirst` (not `findUnique`) per S17: production filters `disconnectedAt: null`.
+			findFirst: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
 			update: jest.fn().mockReturnValue(Promise.resolve({}))
 		},
 		rawMessage: {

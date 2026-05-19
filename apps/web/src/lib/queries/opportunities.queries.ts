@@ -1,5 +1,5 @@
+import { api, WrapperApiError } from '@/lib/api/client';
 import { getOpportunityDetailServer, listOpportunitiesServer } from '@/lib/api/opportunities.api';
-import { api } from '@/lib/api/client';
 import type {
 	DismissOpportunityInput,
 	Opportunity,
@@ -7,6 +7,7 @@ import type {
 	OpportunityDismissedFilter,
 	OpportunityStatus,
 	ReplyDraft,
+	ReplyDraftAttachment,
 	UpdateReplyDraftInput
 } from '@quoteom/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -151,6 +152,115 @@ export function useRegenerateReplyDraft(opportunityId: string) {
 			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current =>
 				current ? { ...current, replyDraft: nextDraft } : current
 			);
+		}
+	});
+}
+
+/**
+ * W5.5 — `POST /api/opportunities/:id/reply-draft/send`. Sends the draft body as a
+ * threaded reply via the connected inbox. On success, splices the SENT draft (with
+ * `sentAt`) into the detail cache so the editor immediately renders the read-only
+ * state. Also invalidates the list cache because `Opportunity.status` flips to
+ * `replied` and the row should move under the right tab.
+ */
+/**
+ * W5.5 follow-up — multipart upload for a reply-draft attachment. We don't go through
+ * the JSON `api()` wrapper because that always sets `Content-Type: application/json`;
+ * for multipart the browser must set the header itself with the boundary. The error
+ * shape mirrors `api()` so callers can treat both paths the same.
+ */
+export function useUploadReplyDraftAttachment(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({ file }: { file: File }) => {
+			const formData = new FormData();
+			formData.append('file', file);
+			const response = await fetch(`/api/opportunities/${opportunityId}/reply-draft/attachments`, {
+				method: 'POST',
+				credentials: 'include',
+				body: formData
+			});
+			if (!response.ok) {
+				const errorBody = (await response.json().catch(() => null)) as {
+					message?: string | string[];
+					code?: string;
+				} | null;
+				const messageRaw = errorBody?.message;
+				const message = Array.isArray(messageRaw)
+					? messageRaw.join('; ')
+					: typeof messageRaw === 'string'
+						? messageRaw
+						: response.statusText;
+				throw new WrapperApiError({ code: response.status, message, apiCode: errorBody?.code });
+			}
+			return (await response.json()) as ReplyDraftAttachment;
+		},
+		onSuccess: nextAttachment => {
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current => {
+				if (!current?.replyDraft) {
+					return current;
+				}
+				return {
+					...current,
+					replyDraft: {
+						...current.replyDraft,
+						attachments: [...current.replyDraft.attachments, nextAttachment]
+					}
+				};
+			});
+		}
+	});
+}
+
+/**
+ * W5.5 follow-up — remove an attachment. Optimistically removes the chip from the
+ * detail cache so the UI feels instant; failures rollback by invalidating the detail
+ * query so the server's authoritative list lands.
+ */
+export function useDeleteReplyDraftAttachment(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({ attachmentId }: { attachmentId: string }) => {
+			await api<void>(`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachmentId}`, {
+				method: 'DELETE'
+			});
+			return { attachmentId };
+		},
+		onSuccess: ({ attachmentId }) => {
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current => {
+				if (!current?.replyDraft) {
+					return current;
+				}
+				return {
+					...current,
+					replyDraft: {
+						...current.replyDraft,
+						attachments: current.replyDraft.attachments.filter(a => a.id !== attachmentId)
+					}
+				};
+			});
+		},
+		onError: () => {
+			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.detail(opportunityId) });
+		}
+	});
+}
+
+export function useSendReplyDraft(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: () =>
+			api<ReplyDraft>(`/api/opportunities/${opportunityId}/reply-draft/send`, {
+				method: 'POST'
+			}),
+		onSuccess: nextDraft => {
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current =>
+				current ? { ...current, replyDraft: nextDraft, status: 'replied' } : current
+			);
+			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
 		}
 	});
 }

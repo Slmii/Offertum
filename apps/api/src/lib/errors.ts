@@ -145,6 +145,34 @@ export const REPLY_DRAFT_NOT_FOUND = 'Reply draft has not been generated yet.';
 // User-facing — surfaced when a user tries to regenerate a draft that's already been
 // sent. The email is out the door; there's nothing to regenerate.
 export const REPLY_DRAFT_ALREADY_SENT = 'Reply draft has already been sent and cannot be regenerated.';
+// User-facing — surfaced when the inbox owner who connected the mailbox has been
+// removed from the org, or the original email had no `From:` address. Either way we
+// can't send a reply through that mailbox.
+export const REPLY_DRAFT_CANNOT_SEND = 'Cannot send reply: the inbox is no longer connectable.';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Reply-draft attachments (User-facing)
+// ────────────────────────────────────────────────────────────────────────────
+export const ATTACHMENT_FILE_MISSING = 'No file uploaded. Pick a file and try again.';
+export const ATTACHMENT_NOT_FOUND = 'Attachment not found';
+export const ATTACHMENT_DRAFT_LOCKED = 'Cannot change attachments after the reply has been sent.';
+export const attachmentMimeNotAllowed = (mime: string) =>
+	`File type '${mime}' is not allowed. Accepted: PDF, Office docs, images, plain text, CSV, ZIP.`;
+export const attachmentFileTooLarge = (sizeBytes: number, maxBytes: number) =>
+	`File is ${formatBytes(sizeBytes)} which exceeds the per-file limit of ${formatBytes(maxBytes)}.`;
+export const attachmentTotalTooLarge = (totalBytes: number, maxBytes: number) =>
+	`Combined attachments would be ${formatBytes(totalBytes)} which exceeds the total limit of ${formatBytes(maxBytes)}.`;
+export const attachmentCountExceeded = (max: number) => `You can attach at most ${max} files per draft.`;
+
+function formatBytes(bytes: number): string {
+	if (bytes >= 1024 * 1024) {
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+	if (bytes >= 1024) {
+		return `${(bytes / 1024).toFixed(0)} KB`;
+	}
+	return `${bytes} B`;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Microsoft Entra — admin-consent flow (User-facing — structured error code)

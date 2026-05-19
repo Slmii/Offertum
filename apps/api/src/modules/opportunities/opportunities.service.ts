@@ -6,6 +6,7 @@ import {
 	OPPORTUNITY_NOT_DISMISSED,
 	OPPORTUNITY_NOT_FOUND,
 	REPLY_DRAFT_ALREADY_SENT,
+	REPLY_DRAFT_CANNOT_SEND,
 	REPLY_DRAFT_NOT_FOUND,
 	invalidOpportunityStatusTransition
 } from '@/lib/errors';
@@ -368,6 +369,49 @@ export class OpportunitiesService {
 	}
 
 	/**
+	 * W5.5 — Send the reply draft as a threaded email via the connected mailbox.
+	 * Verifies tenant ownership of the opportunity, then delegates the heavy lifting
+	 * (provider routing, OAuth token refresh, threading headers) to
+	 * `ReplyDraftsService.send`. Returns the post-send draft for the editor to render
+	 * the read-only "Verzonden" state.
+	 *
+	 * Status mapping:
+	 *  - 404 → opportunity not in this org.
+	 *  - 409 → draft is already SENT.
+	 *  - 422 → inbox owner removed or original had no From-address.
+	 */
+	async sendReplyDraft(
+		organizationId: string,
+		opportunityId: string,
+		requestingUserId: string
+	): Promise<ReplyDraftResponseDto> {
+		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		const result = await this.replyDrafts.send(opportunityId, requestingUserId);
+
+		if (result.sent === false && result.alreadySent === true) {
+			throw new ConflictException(REPLY_DRAFT_ALREADY_SENT);
+		}
+		if (result.sent === false && result.alreadySent === false) {
+			if (result.reason === 'not_found') {
+				throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
+			}
+			throw new ConflictException(REPLY_DRAFT_CANNOT_SEND);
+		}
+
+		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
+		if (!detail?.replyDraft) {
+			// Shouldn't happen — the send just succeeded + the row exists. Defensive.
+			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
+		}
+
+		return toReplyDraftResponseDto(detail.replyDraft);
+	}
+
+	/**
 	 * W5.4 — Update the reply-draft body. Called by the autosave debounce in the editor.
 	 * Idempotent: re-saving the same body is a no-op for the `wasEditedByUser` flag
 	 * (only the first divergence from `originalBody` flips it). Throws 404 if the draft
@@ -691,7 +735,17 @@ function toReplyDraftResponseDto(draft: NonNullable<OpportunityDetailRecord['rep
 		// W5.4 — sourced from the linked AICall's `createdAt`. Advances on regenerate.
 		// Falls back to `null` when `aiCallId` is unset OR the join didn't pull the row
 		// (best-effort persist failure); the FE then uses `createdAt` as a fallback.
-		aiBodyGeneratedAt: draft.aiCall?.createdAt.toISOString() ?? null
+		aiBodyGeneratedAt: draft.aiCall?.createdAt.toISOString() ?? null,
+		// W5.5 follow-up — staged attachments. Always an array (never `null`) so the UI
+		// doesn't branch on presence.
+		attachments: draft.attachments.map(a => ({
+			id: a.id,
+			replyDraftId: a.replyDraftId,
+			filename: a.filename,
+			contentType: a.contentType,
+			sizeBytes: a.sizeBytes,
+			createdAt: a.createdAt.toISOString()
+		}))
 	};
 }
 

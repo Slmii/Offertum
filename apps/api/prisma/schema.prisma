@@ -533,9 +533,40 @@ model ReplyDraft {
     createdAt       DateTime         @default(now())
     updatedAt       DateTime         @updatedAt
 
-    opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-    aiCall      AICall?     @relation("ReplyDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
+    opportunity Opportunity            @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+    aiCall      AICall?                @relation("ReplyDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
+    attachments ReplyDraftAttachment[]
 
     @@index([status, createdAt(sort: Desc)])
     @@index([aiCallId])
+}
+
+// W5.5 follow-up — attachments staged on a reply draft. Persisted alongside the draft
+// so a regenerate doesn't lose them and a read-only SENT view can list what went out.
+// Binary lives in the configured storage backend (local FS in dev, DigitalOcean Spaces
+// in prod); this table only holds metadata. Cascade-delete on the draft cleans up the
+// row but NOT the stored blob — the service layer purges the backend file before it
+// hands off to Prisma (best-effort: orphaned blobs on the local driver are harmless
+// noise and the prod driver handles them via a separate sweeper).
+model ReplyDraftAttachment {
+    id            String   @id @default(uuid()) @db.Uuid
+    replyDraftId  String   @db.Uuid
+    // Display name, taken from the upload. Sanitized at write-time (path separators
+    // stripped) so it's safe to surface in the UI verbatim and to use in the Content-
+    // Disposition header on send.
+    filename      String
+    contentType   String
+    sizeBytes     Int
+    // Opaque storage-backend pointer. Local FS driver = relative path under the
+    // configured root (`<replyDraftId>/<uuid>-<filename>`). Spaces driver = the object
+    // key (`reply-drafts/<replyDraftId>/<uuid>-<filename>`). The driver column below
+    // captures which backend produced this key so a future migration can know what
+    // to migrate FROM.
+    storageKey    String   @db.Text
+    storageDriver String   @default("local")
+    createdAt     DateTime @default(now())
+
+    replyDraft ReplyDraft @relation(fields: [replyDraftId], references: [id], onDelete: Cascade)
+
+    @@index([replyDraftId])
 }

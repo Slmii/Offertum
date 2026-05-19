@@ -32,6 +32,27 @@ export interface ReplyDraft {
 	 * `createdAt` in that case.
 	 */
 	aiBodyGeneratedAt: string | null;
+	/**
+	 * W5.5 follow-up — attachments staged on this draft. Empty array (never `null`)
+	 * when none are attached so the UI doesn't branch on presence. Ordered by upload
+	 * time ascending so the order is stable across re-renders.
+	 */
+	attachments: ReplyDraftAttachment[];
+}
+
+/**
+ * W5.5 follow-up — metadata for a file attached to a reply draft. Binary is fetched
+ * separately via `GET /api/opportunities/:id/reply-draft/attachments/:attachmentId/download`
+ * — keeping it out of the JSON payload means a 5 MB PDF doesn't bloat every detail-view
+ * load.
+ */
+export interface ReplyDraftAttachment {
+	id: string;
+	replyDraftId: string;
+	filename: string;
+	contentType: string;
+	sizeBytes: number;
+	createdAt: string;
 }
 
 /**

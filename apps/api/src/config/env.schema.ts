@@ -104,7 +104,20 @@ export const envSchema = z.object({
 	// Comma-separated list of email addresses allowed to access dev-admin endpoints
 	// (e.g. /api/admin/ai-usage). Checked case-insensitively against `session.user.email`.
 	// Leave empty in environments where no one should have access — the guard returns 403.
-	ADMIN_EMAILS: z.string().optional()
+	ADMIN_EMAILS: z.string().optional(),
+
+	// W5.5 attachments — storage backend for ReplyDraft attachments.
+	//   - `local`  : writes to the directory at `ATTACHMENT_STORAGE_LOCAL_DIR` (default
+	//                `.attachments` under the API working dir). Intended for local dev
+	//                + tests only.
+	//   - `spaces` : DigitalOcean Spaces (S3-compatible). Wiring lands when the bucket
+	//                is provisioned; until then, picking `spaces` makes startup fail
+	//                fast so we never accidentally store customer files on a developer
+	//                laptop in production.
+	ATTACHMENT_STORAGE_DRIVER: z.enum(['local', 'spaces']).default('local'),
+	// Filesystem root for the `local` driver. Resolved relative to the API working dir
+	// (i.e. `apps/api`). Gitignored — see `.gitignore`'s `.attachments/` entry.
+	ATTACHMENT_STORAGE_LOCAL_DIR: z.string().default('.attachments')
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

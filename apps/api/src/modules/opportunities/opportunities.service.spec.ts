@@ -110,7 +110,10 @@ function makeService(
 		config as unknown as ConfigService<never, true>,
 		{ logAction: jest.fn() } as unknown as ConstructorParameters<typeof OpportunitiesService>[4],
 		{
-			regenerate: jest.fn().mockReturnValue(Promise.resolve({ overwrote: true, opportunityFound: true }))
+			regenerate: jest.fn().mockReturnValue(Promise.resolve({ overwrote: true, opportunityFound: true })),
+			send: jest
+				.fn()
+				.mockReturnValue(Promise.resolve({ sent: true, sentAt: new Date('2026-05-19T14:00:00.000Z') }))
 		} as unknown as ConstructorParameters<typeof OpportunitiesService>[5]
 	);
 }

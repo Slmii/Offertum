@@ -15,8 +15,9 @@ import { NotFoundException } from '@nestjs/common';
  * The fake Prisma:
  *  - `findFirst` always returns the same stale row (`accessTokenExpiresAt` 1h in the past),
  *    so every call enters the refresh branch.
- *  - `deleteMany` is silent on zero rows (mirrors real Prisma behavior — that's the whole
- *    reason we switched from `delete` to `deleteMany` in the service).
+ *  - `updateMany` is silent on zero rows (mirrors real Prisma behavior — that's why we use
+ *    `updateMany` with the `disconnectedAt: null` filter for self-heal: parallel callers
+ *    racing to soft-disconnect resolve idempotently without P2025).
  *
  * The fake OAuth service:
  *  - `refreshAccessToken` always throws `OAuthRefreshTokenInvalidException`. This is the
@@ -24,7 +25,7 @@ import { NotFoundException } from '@nestjs/common';
  */
 function makeService(provider: EmailProvider): {
 	service: EmailAccountsService;
-	deleteManyCalls: jest.Mock;
+	updateManyCalls: jest.Mock;
 	refreshCalls: jest.Mock;
 	logActionCalls: jest.Mock;
 } {
@@ -40,7 +41,7 @@ function makeService(provider: EmailProvider): {
 		scope: 'Mail.Read'
 	};
 
-	const deleteManyCalls = jest.fn().mockReturnValue(Promise.resolve({ count: 1 }));
+	const updateManyCalls = jest.fn().mockReturnValue(Promise.resolve({ count: 1 }));
 	const refreshCalls = jest.fn().mockImplementation(() => {
 		throw new OAuthRefreshTokenInvalidException();
 	});
@@ -48,7 +49,7 @@ function makeService(provider: EmailProvider): {
 	const prisma = {
 		emailAccount: {
 			findFirst: jest.fn().mockReturnValue(Promise.resolve(row)),
-			deleteMany: deleteManyCalls
+			updateMany: updateManyCalls
 		}
 	} as unknown as PrismaService;
 
@@ -70,7 +71,7 @@ function makeService(provider: EmailProvider): {
 
 	return {
 		service: new EmailAccountsService(prisma, google, microsoft, logService),
-		deleteManyCalls,
+		updateManyCalls,
 		refreshCalls,
 		logActionCalls
 	};
@@ -96,13 +97,13 @@ describe('EmailAccountsService — parallel self-heal race', () => {
 	 *   1. detect the stale token,
 	 *   2. attempt refresh,
 	 *   3. get `invalid_grant`,
-	 *   4. try to delete the same EmailAccount row.
+	 *   4. try to soft-disconnect the same EmailAccount row.
 	 *
-	 * The first delete wins; the second used to throw Prisma P2025 (`Record not found`),
-	 * which surfaced as a 500. The fix swapped `delete` for `deleteMany`, which is silent
-	 * on zero rows. This spec pins that behavior across both providers — the deletion path
-	 * is provider-agnostic, but running it under both proves nothing in the OAuth dispatch
-	 * accidentally branches the cleanup logic.
+	 * The first soft-disconnect sets `disconnectedAt`; the second `updateMany` matches zero
+	 * rows (filtered by `disconnectedAt: null`) and silently no-ops. Both callers then
+	 * throw `NotFoundException` to the caller. The earlier hard-delete bug (Prisma P2025
+	 * surfacing as a 500) was fixed by switching to `updateMany`; this spec pins the
+	 * idempotent behavior across both providers.
 	 */
 	describe.each([EmailProvider.GMAIL, EmailProvider.MICROSOFT])('provider=%s', provider => {
 		const scope: MailboxScope = { provider, organizationId: 'org-1', userId: 'user-1' };
@@ -122,20 +123,34 @@ describe('EmailAccountsService — parallel self-heal race', () => {
 			}
 		});
 
-		it('both parallel callers reach the deleteMany path — no silent short-circuit', async () => {
-			const { service, deleteManyCalls, refreshCalls } = makeService(provider);
+		it('both parallel callers reach the updateMany path — no silent short-circuit', async () => {
+			const { service, updateManyCalls, refreshCalls } = makeService(provider);
 
 			await Promise.allSettled([service.getAccessToken(scope), service.getAccessToken(scope)]);
 
-			// Each caller independently hit the refresh + delete branch. Belt-and-suspenders
-			// against a future "optimization" that tries to dedupe in-flight refreshes — the
-			// race only collides at the DB layer, which `deleteMany` resolves idempotently.
+			// Each caller independently hit the refresh + soft-disconnect branch.
+			// Belt-and-suspenders against a future "optimization" that tries to dedupe
+			// in-flight refreshes — the race only collides at the DB layer, which
+			// `updateMany` with the `disconnectedAt: null` filter resolves idempotently
+			// (the second call matches zero rows + no-ops).
 			expect(refreshCalls).toHaveBeenCalledTimes(2);
-			expect(deleteManyCalls).toHaveBeenCalledTimes(2);
-			expect(deleteManyCalls).toHaveBeenCalledWith({ where: { id: 'ea-1' } });
+			expect(updateManyCalls).toHaveBeenCalledTimes(2);
+			expect(updateManyCalls).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'ea-1', disconnectedAt: null },
+					data: expect.objectContaining({
+						disconnectedAt: expect.any(Date) as unknown as Date,
+						deltaLink: null,
+						historyId: null,
+						subscriptionId: null,
+						subscriptionClientState: null,
+						watchExpiresAt: null
+					})
+				})
+			);
 		});
 
-		it('emits email.disconnect.self_heal at warn level when the row is deleted', async () => {
+		it('emits email.disconnect.self_heal at warn level when the row is soft-disconnected', async () => {
 			const { service, logActionCalls } = makeService(provider);
 
 			await Promise.allSettled([service.getAccessToken(scope)]);

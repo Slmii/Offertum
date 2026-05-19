@@ -352,6 +352,48 @@ export class GmailApiService {
 		}
 	}
 
+	/**
+	 * W5.5 — Send a reply as a `users.messages.send` call. Caller is responsible for
+	 * building the RFC 2822 payload (`buildRfc2822Reply` in `lib/email/rfc2822-reply.ts`)
+	 * including the `In-Reply-To` + `References` headers that thread the reply into the
+	 * original conversation. `threadId` is also passed in the body — Gmail uses it as the
+	 * authoritative thread-grouping signal, with the headers as the cross-client fallback.
+	 *
+	 * Returns the new message's id (the just-created `Sent` folder row) so the caller
+	 * can log it for the audit trail.
+	 */
+	async sendMessage(
+		accessToken: string,
+		input: { rawBase64Url: string; threadId: string | null }
+	): Promise<{ id: string; threadId: string | null }> {
+		const url = `${GMAIL_API_BASE}/users/me/messages/send`;
+		const body: { raw: string; threadId?: string } = { raw: input.rawBase64Url };
+		if (input.threadId) {
+			body.threadId = input.threadId;
+		}
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify(body)
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('messages.send', response.status, text);
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('messages.send'));
+		}
+
+		const data = (await response.json()) as { id?: string; threadId?: string };
+		return { id: data.id ?? '', threadId: data.threadId ?? null };
+	}
+
 	private async fetchMessagesList(accessToken: string, url: string): Promise<GmailListPage> {
 		const response = await fetch(url, {
 			headers: { authorization: `Bearer ${accessToken}` }

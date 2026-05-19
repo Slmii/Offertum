@@ -15,14 +15,16 @@ const logServiceStub = { logAction: () => undefined } as unknown as ConstructorP
 >[3];
 
 interface FakePrisma {
-	emailAccount: { findUnique: jest.Mock; update: jest.Mock };
+	emailAccount: { findFirst: jest.Mock; update: jest.Mock };
 	rawMessage: { findMany: jest.Mock; createMany: jest.Mock };
 }
 
 function makePrisma(emailAccountRow: object | null, existingIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			findUnique: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
+			// `findFirst` (not `findUnique`) per S17: production filters `disconnectedAt: null`
+			// so a push that arrives for a soft-disconnected account is treated as missing.
+			findFirst: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
 			update: jest.fn().mockReturnValue(Promise.resolve({}))
 		},
 		rawMessage: {

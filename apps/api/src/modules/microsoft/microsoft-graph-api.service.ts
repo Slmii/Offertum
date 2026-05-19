@@ -115,6 +115,35 @@ export interface MicrosoftSubscription {
 	clientState?: string;
 }
 
+/** Options for `listInboxMessagesPage` — Graph paginates by nextLink, not page+token. */
+export interface ListInboxMessagesPageOptions {
+	filter?: string;
+	top?: number;
+	nextLink?: string;
+}
+
+/**
+ * W5.5 — Input for `sendMail`. Graph composes the SMTP envelope itself, so this carries
+ * the structured fields rather than a raw RFC 2822 string (Gmail's `sendMessage` path
+ * takes the encoded raw — different shape per provider).
+ */
+export interface GraphSendMailInput {
+	toEmail: string;
+	toName: string | null;
+	subject: string;
+	body: string;
+	inReplyTo: string | null;
+	references: string | null;
+	/** W5.5 follow-up — attachments to inline in the Graph message payload. */
+	attachments?: ReadonlyArray<GraphSendMailAttachment>;
+}
+
+export interface GraphSendMailAttachment {
+	filename: string;
+	contentType: string;
+	data: Buffer;
+}
+
 /**
  * Minimal Microsoft Graph client. Direct fetch wrappers — no Graph SDK dep.
  *
@@ -165,10 +194,7 @@ export class MicrosoftGraphApiService {
 	 * lets us request the body up front via `$select`, which avoids the 100 individual
 	 * GET calls per page that Gmail's API requires. Cheaper + faster.
 	 */
-	async listInboxMessagesPage(
-		accessToken: string,
-		opts: { filter?: string; top?: number; nextLink?: string }
-	): Promise<MicrosoftListPage> {
+	async listInboxMessagesPage(accessToken: string, opts: ListInboxMessagesPageOptions): Promise<MicrosoftListPage> {
 		if (opts.nextLink) {
 			// Graph's nextLink is fully-formed including query params. Use it as-is.
 			return this.fetchListUrl(accessToken, opts.nextLink);
@@ -333,6 +359,75 @@ export class MicrosoftGraphApiService {
 	 * Delete a subscription. Best-effort — caller decides whether to throw on 404 (the
 	 * subscription was already gone) or treat as "already disconnected, fine."
 	 */
+	/**
+	 * W5.5 — Send a reply via Graph's `/me/sendMail`. Graph composes the SMTP envelope
+	 * itself (no raw RFC 2822 to build); threading is signaled via
+	 * `internetMessageHeaders` (`In-Reply-To` + `References`) AND `conversationId`
+	 * passthrough when we have one. `saveToSentItems: true` so the user's Sent folder
+	 * mirrors what we sent — important for the customer trust story (owner sees their
+	 * outbound trail in Outlook).
+	 *
+	 * Graph returns 202 Accepted (no body) on success. The new message's id is NOT
+	 * returned — Graph emits it asynchronously into the Sent folder. We log "submitted"
+	 * here; matching the Sent-folder row back to this submission is a future polish.
+	 */
+	async sendMail(accessToken: string, input: GraphSendMailInput): Promise<void> {
+		const url = `${MICROSOFT_GRAPH_BASE}/me/sendMail`;
+
+		const internetMessageHeaders: { name: string; value: string }[] = [];
+		if (input.inReplyTo) {
+			internetMessageHeaders.push({ name: 'In-Reply-To', value: input.inReplyTo });
+			const referencesChain = input.references ? `${input.references} ${input.inReplyTo}` : input.inReplyTo;
+			internetMessageHeaders.push({ name: 'References', value: referencesChain });
+		}
+
+		// Graph's `fileAttachment` OData type takes a base64-encoded `contentBytes`. Total
+		// payload (after the JSON envelope) is what counts against Graph's ~35 MB cap;
+		// the upstream service caps the raw byte total at 25 MB so we're comfortably
+		// under the encoded ceiling.
+		const attachmentsPayload = (input.attachments ?? []).map(a => ({
+			'@odata.type': '#microsoft.graph.fileAttachment',
+			name: a.filename,
+			contentType: a.contentType,
+			contentBytes: a.data.toString('base64')
+		}));
+
+		const body = {
+			message: {
+				subject: input.subject,
+				body: { contentType: 'Text', content: input.body },
+				toRecipients: [
+					{
+						emailAddress: input.toName
+							? { name: input.toName, address: input.toEmail }
+							: { address: input.toEmail }
+					}
+				],
+				...(internetMessageHeaders.length > 0 ? { internetMessageHeaders } : {}),
+				...(attachmentsPayload.length > 0 ? { attachments: attachmentsPayload } : {})
+			},
+			saveToSentItems: true
+		};
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify(body)
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (!response.ok && response.status !== 202) {
+			const text = await response.text();
+			this.logApiError('sendMail', response.status, text);
+			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('sendMail'));
+		}
+	}
+
 	async deleteSubscription(accessToken: string, subscriptionId: string): Promise<void> {
 		const url = `${MICROSOFT_GRAPH_BASE}/subscriptions/${subscriptionId}`;
 		const response = await fetch(url, {

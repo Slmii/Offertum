@@ -1,6 +1,7 @@
 import { AppController } from '@/app.controller';
 import { AppService } from '@/app.service';
 import { validateEnv } from '@/config/env.schema';
+import { AttachmentStorageModule } from '@/lib/storage/attachment-storage.module';
 import { AiModule } from '@/modules/ai/ai.module';
 import { AIUsageModule } from '@/modules/ai-usage/ai-usage.module';
 import { AuthModule } from '@/modules/auth/auth.module';
@@ -43,6 +44,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 		PrismaModule,
 		LogModule,
+		AttachmentStorageModule,
 		AuthModule,
 		InvitationsModule,
 		MeModule,

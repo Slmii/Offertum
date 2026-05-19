@@ -2,9 +2,12 @@ import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import {
 	opportunityDetailQueryOptions,
+	useDeleteReplyDraftAttachment,
 	useRegenerateReplyDraft,
+	useSendReplyDraft,
 	useUpdateOpportunityStatus,
-	useUpdateReplyDraft
+	useUpdateReplyDraft,
+	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
@@ -20,6 +23,10 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
@@ -27,7 +34,12 @@ import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { OPPORTUNITY_STATUSES, REPLY_DRAFT_BODY_MAX_LENGTH, type OpportunityStatus } from '@quoteom/shared';
+import {
+	OPPORTUNITY_STATUSES,
+	REPLY_DRAFT_BODY_MAX_LENGTH,
+	type OpportunityStatus,
+	type ReplyDraftAttachment
+} from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
@@ -61,6 +73,10 @@ function OpportunityDetailPage() {
 	const updateStatus = useUpdateOpportunityStatus();
 	const updateDraft = useUpdateReplyDraft(id);
 	const regenerateDraft = useRegenerateReplyDraft(id);
+	const sendDraft = useSendReplyDraft(id);
+	const uploadAttachment = useUploadReplyDraftAttachment(id);
+	const deleteAttachment = useDeleteReplyDraftAttachment(id);
+	const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
 
 	const replyDraft = opportunity.replyDraft;
 	const [body, setBody] = useState(replyDraft?.body ?? '');
@@ -234,13 +250,65 @@ function OpportunityDetailPage() {
 						</Alert>
 					)}
 					{replyDraft ? (
-						<DraftEditor
-							body={body}
-							setBody={setBody}
-							isSaving={updateDraft.isPending}
-							lastUpdatedIso={replyDraft.updatedAt}
-							error={updateDraft.error}
-						/>
+						<>
+							<DraftEditor
+								body={body}
+								setBody={setBody}
+								isSaving={updateDraft.isPending}
+								lastUpdatedIso={replyDraft.updatedAt}
+								error={updateDraft.error}
+								readOnly={replyDraft.status === 'sent'}
+							/>
+							<AttachmentsPanel
+								opportunityId={id}
+								attachments={replyDraft.attachments}
+								readOnly={replyDraft.status === 'sent'}
+								isUploading={uploadAttachment.isPending}
+								uploadError={uploadAttachment.error}
+								onUpload={file => uploadAttachment.mutate({ file })}
+								deletingId={
+									deleteAttachment.isPending
+										? (deleteAttachment.variables?.attachmentId ?? null)
+										: null
+								}
+								deleteError={deleteAttachment.error}
+								onDelete={attachmentId => deleteAttachment.mutate({ attachmentId })}
+							/>
+							{replyDraft.status === 'sent' && replyDraft.sentAt ? (
+								<Alert severity='success' sx={{ mt: 2 }}>
+									Verzonden om {toReadableDateTime(replyDraft.sentAt)}.
+								</Alert>
+							) : (
+								<Stack
+									direction='row'
+									spacing={1}
+									sx={{ mt: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
+								>
+									{sendDraft.isError && (
+										<Alert severity='error' sx={{ flex: 1 }}>
+											Versturen mislukt:{' '}
+											{sendDraft.error instanceof Error
+												? sendDraft.error.message
+												: 'Onbekende fout'}
+										</Alert>
+									)}
+									<Button
+										variant='contained'
+										size='medium'
+										onClick={() => setSendConfirmOpen(true)}
+										disabled={
+											sendDraft.isPending ||
+											updateDraft.isPending ||
+											regenerateDraft.isPending ||
+											body.trim().length === 0
+										}
+										startIcon={sendDraft.isPending ? <CircularProgress size={14} /> : null}
+									>
+										{sendDraft.isPending ? 'Versturen…' : 'Verstuur'}
+									</Button>
+								</Stack>
+							)}
+						</>
 					) : (
 						<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 							<CircularProgress size={20} sx={{ mb: 1 }} />
@@ -277,6 +345,22 @@ function OpportunityDetailPage() {
 					/>
 				</Box>
 			</Stack>
+
+			<SendConfirmDialog
+				isOpen={sendConfirmOpen && replyDraft !== null}
+				recipientName={opportunity.fromName}
+				recipientEmail={opportunity.fromEmail}
+				subject={opportunity.subject}
+				bodyPreview={body}
+				attachments={replyDraft?.attachments ?? []}
+				isSending={sendDraft.isPending}
+				onClose={() => setSendConfirmOpen(false)}
+				onConfirm={() =>
+					sendDraft.mutate(undefined, {
+						onSettled: () => setSendConfirmOpen(false)
+					})
+				}
+			/>
 		</Container>
 	);
 }
@@ -332,25 +416,31 @@ function DraftEditor({
 	setBody,
 	isSaving,
 	lastUpdatedIso,
-	error
+	error,
+	readOnly
 }: {
 	body: string;
 	setBody: (next: string) => void;
 	isSaving: boolean;
 	lastUpdatedIso: string;
 	error: unknown;
+	readOnly: boolean;
 }) {
 	return (
 		<Paper variant='outlined' sx={{ p: 2 }}>
 			<TextField
 				value={body}
-				onChange={e => setBody(e.target.value)}
+				onChange={e => {
+					if (!readOnly) {
+						setBody(e.target.value);
+					}
+				}}
 				placeholder='Concept-antwoord verschijnt hier zodra het is opgesteld.'
 				multiline
 				minRows={12}
 				maxRows={30}
 				fullWidth
-				slotProps={{ htmlInput: { maxLength: REPLY_DRAFT_BODY_MAX_LENGTH } }}
+				slotProps={{ htmlInput: { maxLength: REPLY_DRAFT_BODY_MAX_LENGTH, readOnly } }}
 			/>
 			<Stack
 				direction='row'
@@ -365,7 +455,9 @@ function DraftEditor({
 					color='text.secondary'
 					sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
 				>
-					{isSaving ? (
+					{readOnly ? (
+						'Verzonden — alleen-lezen'
+					) : isSaving ? (
 						<>
 							<CircularProgress size={10} /> Opslaan…
 						</>
@@ -374,12 +466,107 @@ function DraftEditor({
 					)}
 				</Typography>
 			</Stack>
-			{error instanceof Error && (
+			{error instanceof Error && !readOnly && (
 				<Alert severity='error' sx={{ mt: 2 }}>
 					Opslaan mislukt: {error.message}
 				</Alert>
 			)}
 		</Paper>
+	);
+}
+
+function SendConfirmDialog({
+	isOpen,
+	recipientName,
+	recipientEmail,
+	subject,
+	bodyPreview,
+	attachments,
+	isSending,
+	onClose,
+	onConfirm
+}: {
+	isOpen: boolean;
+	recipientName: string | null;
+	recipientEmail: string | null;
+	subject: string | null;
+	bodyPreview: string;
+	attachments: ReplyDraftAttachment[];
+	isSending: boolean;
+	onClose: () => void;
+	onConfirm: () => void;
+}) {
+	const recipientLabel = recipientEmail
+		? recipientName
+			? `${recipientName} <${recipientEmail}>`
+			: recipientEmail
+		: '(onbekende ontvanger)';
+	const preview = bodyPreview.length > 280 ? `${bodyPreview.slice(0, 280)}…` : bodyPreview;
+
+	return (
+		<Dialog open={isOpen} onClose={isSending ? undefined : onClose} maxWidth='sm' fullWidth>
+			<DialogTitle>Concept versturen?</DialogTitle>
+			<DialogContent>
+				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+					Dit verstuurt direct als antwoord op de oorspronkelijke e-mail. Je kunt het niet terugnemen.
+				</Typography>
+				<Box sx={{ mb: 2 }}>
+					<Typography variant='caption' color='text.secondary'>
+						Naar
+					</Typography>
+					<Typography variant='body2'>{recipientLabel}</Typography>
+				</Box>
+				{subject && (
+					<Box sx={{ mb: 2 }}>
+						<Typography variant='caption' color='text.secondary'>
+							Onderwerp
+						</Typography>
+						<Typography variant='body2'>Re: {subject.replace(/^re:\s*/i, '')}</Typography>
+					</Box>
+				)}
+				<Box>
+					<Typography variant='caption' color='text.secondary'>
+						Begin van het bericht
+					</Typography>
+					<Typography
+						variant='body2'
+						component='pre'
+						sx={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', m: 0, mt: 0.5, color: 'text.primary' }}
+					>
+						{preview}
+					</Typography>
+				</Box>
+				{attachments.length > 0 && (
+					<Box sx={{ mt: 2 }}>
+						<Typography variant='caption' color='text.secondary'>
+							Bijlagen ({attachments.length})
+						</Typography>
+						<Stack direction='row' spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
+							{attachments.map(attachment => (
+								<Chip
+									key={attachment.id}
+									size='small'
+									label={`${attachment.filename} · ${formatBytes(attachment.sizeBytes)}`}
+								/>
+							))}
+						</Stack>
+					</Box>
+				)}
+			</DialogContent>
+			<DialogActions>
+				<Button onClick={onClose} disabled={isSending}>
+					Annuleren
+				</Button>
+				<Button
+					onClick={onConfirm}
+					variant='contained'
+					disabled={isSending}
+					startIcon={isSending ? <CircularProgress size={14} /> : null}
+				>
+					{isSending ? 'Versturen…' : 'Verstuur nu'}
+				</Button>
+			</DialogActions>
+		</Dialog>
 	);
 }
 
@@ -482,4 +669,118 @@ function ExtractedField({ label, value }: { label: string; value: string | null 
 			<Typography variant='body2'>{value ?? '—'}</Typography>
 		</Box>
 	);
+}
+
+/**
+ * W5.5 follow-up — staged-attachments panel under the draft editor. Renders one chip
+ * per attached file with a download (click) + delete (× icon) affordance. On SENT
+ * drafts the panel collapses into a read-only list (no upload, no delete) so the
+ * record of what was attached is preserved.
+ */
+function AttachmentsPanel({
+	opportunityId,
+	attachments,
+	readOnly,
+	isUploading,
+	uploadError,
+	onUpload,
+	deletingId,
+	deleteError,
+	onDelete
+}: {
+	opportunityId: string;
+	attachments: ReplyDraftAttachment[];
+	readOnly: boolean;
+	isUploading: boolean;
+	uploadError: unknown;
+	deletingId: string | null;
+	deleteError: unknown;
+	onUpload: (file: File) => void;
+	onDelete: (attachmentId: string) => void;
+}) {
+	const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+	if (readOnly && attachments.length === 0) {
+		// Nothing to show on a sent draft with no attachments. Keeping the section
+		// hidden avoids confusing "Bijlagen" + empty state copy after send.
+		return null;
+	}
+
+	return (
+		<Paper variant='outlined' sx={{ p: 2, mt: 2 }}>
+			<Stack direction='row' spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+				<Typography variant='subtitle2'>
+					Bijlagen{attachments.length > 0 ? ` (${attachments.length})` : ''}
+				</Typography>
+				{!readOnly && (
+					<>
+						<input
+							ref={fileInputRef}
+							type='file'
+							hidden
+							multiple
+							onChange={event => {
+								const file = event.target.files?.[0];
+								if (file) {
+									onUpload(file);
+								}
+								// Reset so picking the same file again still fires `onChange`.
+								event.target.value = '';
+							}}
+						/>
+						<Button
+							size='small'
+							variant='outlined'
+							disabled={isUploading}
+							startIcon={isUploading ? <CircularProgress size={14} /> : null}
+							onClick={() => fileInputRef.current?.click()}
+						>
+							{isUploading ? 'Uploaden…' : 'Bijlage toevoegen'}
+						</Button>
+					</>
+				)}
+			</Stack>
+			{attachments.length === 0 ? (
+				<Typography variant='body2' color='text.secondary'>
+					Geen bijlagen toegevoegd.
+				</Typography>
+			) : (
+				<Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+					{attachments.map(attachment => (
+						<Chip
+							key={attachment.id}
+							label={`${attachment.filename} · ${formatBytes(attachment.sizeBytes)}`}
+							component='a'
+							clickable
+							href={`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachment.id}/download`}
+							target='_blank'
+							rel='noopener'
+							onDelete={readOnly ? undefined : () => onDelete(attachment.id)}
+							disabled={deletingId === attachment.id}
+						/>
+					))}
+				</Stack>
+			)}
+			{uploadError instanceof Error && (
+				<Alert severity='error' sx={{ mt: 1 }}>
+					Uploaden mislukt: {uploadError.message}
+				</Alert>
+			)}
+			{deleteError instanceof Error && (
+				<Alert severity='error' sx={{ mt: 1 }}>
+					Verwijderen mislukt: {deleteError.message}
+				</Alert>
+			)}
+		</Paper>
+	);
+}
+
+function formatBytes(bytes: number): string {
+	if (bytes >= 1024 * 1024) {
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+	if (bytes >= 1024) {
+		return `${(bytes / 1024).toFixed(0)} KB`;
+	}
+	return `${bytes} B`;
 }
