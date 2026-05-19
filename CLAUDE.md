@@ -113,11 +113,14 @@ modules/
     extractor/         # ExtractorService + Dutch prompt + 23-fixture corpus + accuracy harness
     logging/           # AICallLogger — persists every generate() call to AICall table
     __test-utils/      # JSONL writer used by both accuracy harnesses for the local HTML report
-  opportunities/       # W4.4 — RawMessage → Opportunity pipeline + workflow status API
+  opportunities/       # W4.4/W4.6 — RawMessage → Opportunity pipeline, workflow status API,
+                       # dismiss-as-non-quote feedback loop
   gmail/               # Gmail OAuth + backfill + delta-sync + watch + webhook
   microsoft/           # Microsoft Graph OAuth + backfill + delta-sync + subscription + webhook
   inngest/             # Inngest function registrations + client
   email-accounts/      # provider-agnostic EmailAccountsService + OAuth services
+  ai-usage/            # W-S16 — admin AI-call cost dashboard (token + USD per provider/model)
+  classifier-quality/  # W4.6.5 — admin classifier-precision dashboard (dismiss-feedback aggregation)
 ```
 
 Path aliases: `@/*` → `apps/api/src/*`. No `.js` suffixes in imports (NestJS = CommonJS in this project; SWC was tried and reverted in favor of plain `tsc`).
@@ -348,9 +351,9 @@ Common Phase C gotchas (in order of frequency):
 
 See `TEST_CASES.md` → EMAIL-PUSH-01..06 for the full test catalog.
 
-## AI extraction pipeline (W4.1 + W4.2 + W4.3 + W4.4)
+## AI extraction pipeline (W4.1 + W4.2 + W4.3 + W4.4 + W4.5 + W4.6)
 
-OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in (W5.1 spike → final pick) is a one-line DI binding change in `AiModule`, not a service rewrite.
+OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in (W5.1 spike → final pick) is a one-line DI binding change in `AiModule`, not a service rewrite. The pipeline materializes `RawMessage` rows into `Opportunity` rows (W4.4), surfaces them through a URL-persisted list page (W4.5), and closes the feedback loop via owner dismissals + an admin precision dashboard (W4.6 / W4.6.5).
 
 ### Layout
 
@@ -378,23 +381,29 @@ apps/api/src/modules/ai/
     └── ai-report-writer.ts                 # Both accuracy specs append JSONL → consumed by build-ai-report
 ```
 
-W4.4 adds the user-facing materialization layer under `apps/api/src/modules/opportunities/`:
+W4.4–W4.6 add the user-facing materialization + feedback layers under `apps/api/src/modules/opportunities/`:
 
 ```
 opportunities/
-├── opportunities.controller.ts              # GET list (cursor pagination) + PATCH status, tenant scoped
-├── opportunities.service.ts                 # processBatch (one Inngest step) + processRawMessagesForAccount + status transitions
-├── opportunities.repository.ts              # Prisma persistence, rawMessageId idempotency, AICall FKs
+├── opportunities.controller.ts              # GET list (?dismissed=active|dismissed|all) + PATCH status
+│                                            # + PATCH/DELETE :id/dismiss (W4.6), tenant scoped
+├── opportunities.service.ts                 # processBatch (one Inngest step) + processRawMessagesForAccount,
+│                                            # list + status transitions + dismiss/undismiss with audit logs
+├── opportunities.repository.ts              # Prisma persistence, rawMessageId idempotency, AICall FKs,
+│                                            # listByOrganization(dismissed) + dismiss/undismiss writers
 ├── raw-message-ai-input.ts                  # Gmail/Graph JSON payload → plain body text
 ├── opportunity-status.mapper.ts             # Prisma enum ↔ lowercase wire status
 ├── opportunity-urgency.mapper.ts            # Prisma Urgency enum ↔ lowercase wire urgency
+├── opportunity-dismiss-reason.mapper.ts     # W4.6 — Prisma DismissReason ↔ lowercase wire reason
 ├── opportunity-list-cursor.ts               # Opaque base64url cursor over (createdAt, id)
-└── dto/                                     # Concrete DTO classes for OpenAPI/Orval
+└── dto/                                     # Concrete DTO classes for OpenAPI/Orval (incl. DismissOpportunityDto)
 ```
+
+W4.6.5 adds the admin classifier-quality dashboard under `apps/api/src/modules/classifier-quality/` — same `AdminEmailGuard` parent route as `/admin/ai-usage`. It computes precision (`1 − any-dismissal / total`) per `(org, classifierProvider, classifierModel)` with a per-reason breakdown, top-5 recent dismissals (any reason) with `classifiedAiCallId` for AI-Calls-inspector deep-link, and bulk-mail filter recall (filter-caught Log count vs. SPAM-dismissed count). Reads only from `Opportunity` + `Log` + the `AICall` FK chain — no new persistence.
 
 The Inngest backfill + delta-sync functions chain the pipeline via `processOpportunitiesInBatches` (in `apps/api/src/modules/inngest/functions/`), which calls `OpportunitiesService.processBatch` inside its own dynamic `step.run` per batch. Each batch is capped at `PROCESS_BATCH_SIZE = 25` so a single step finishes well within Inngest's 5-minute step timeout; the outer loop is bounded by `PROCESS_MAX_BATCHES_PER_RUN = 200` (≈5,000 messages/pass) with a `opportunity.pipeline.batch_cap_reached` warn log if hit.
 
-### Nine patterns to know
+### Twelve patterns to know
 
 **1. The `AI_CLIENT` seam.** Downstream services (`ClassifierService`, `ExtractorService`, future `ReplyDraftService`, etc.) inject `@Inject(AI_CLIENT) private readonly ai: AIClient` — they don't know whether OpenAI, Mistral, or Anthropic is behind it. Swapping providers in W5.1 is a one-line change to `useExisting: OpenAIClient` in `ai.module.ts`. Caller code never sees it.
 
@@ -420,6 +429,12 @@ The Inngest backfill + delta-sync functions chain the pipeline via `processOppor
 **8. AsyncLocalStorage context must be re-established inside each Inngest `step.run` callback.** The standard pattern of wrapping the whole function body in `logContext.run(...)` doesn't propagate across `step.run` boundaries — Inngest schedules step callbacks on a different async chain than the function body. `apps/api/src/modules/inngest/functions/define-mailbox-pipeline-function.ts` solves this by computing a `correlation = { requestId, organizationId }` object once at the top of the handler and re-entering `requestContext.run(correlation, …)` INSIDE every `step.run` callback (the sync step, each opportunities-batch step, the post-sync step). Without that, every `AICall` + `Log` row from background work lands with `requestId` = the request-context middleware's v4 UUID and `organizationId = NULL`.
 
 **9. OAuth callback failures redirect with a stable error code, never 500.** Both `gmail.controller.ts` and `microsoft.controller.ts` wrap the consent-onwards path in `try/catch` and throw `EmailConnectError(EmailConnectErrorCode.*)` from helper points (state mismatch, code reused, token exchange failed, userinfo failed). The controller catches them and redirects to `/settings/email?error=<code>`. The web layer maps the code → friendly copy in `apps/web/src/lib/utils/email-connect-error.ts`. Old URLs from before this landed still render (fallback to a generic message); adding a new code on the API without updating the mapping just produces the generic copy — never a blank screen.
+
+**10. Dismiss is a soft-disable, not a status (D28).** `Opportunity.dismissedAt + dismissReason + dismissedById` are _orthogonal_ to `OpportunityStatus`. Adding `not_a_quote` as a status value would have polluted the workflow funnel (`lost` already means "real quote we didn't win"). The DB enforces consistency via a raw-SQL CHECK constraint: `(dismissedAt IS NULL) = (dismissReason IS NULL)`. A partial index `Opportunity_org_createdAt_active_idx ON (organizationId, createdAt DESC) WHERE dismissedAt IS NULL` keeps the default list query fast even with thousands of dismissed rows. The `statusCounts` payload excludes dismissed rows so tab counts stay honest. **All four reasons (`NOT_A_QUOTE | DUPLICATE | SPAM | OTHER`) count toward precision** in `/admin/classifier-quality` — from the owner's perspective every dismiss is a system error; the reason diagnoses _which_ subsystem failed (classifier vs. bulk-mail filter vs. dedup), not whether it counts.
+
+**11. The classifier precision query is OR'd over `createdAt` AND `dismissedAt`.** `apps/api/src/modules/classifier-quality/classifier-quality.service.ts:fetchPrecisionRows` selects opportunities whose `createdAt` falls in window OR whose `dismissedAt` falls in window. Without the OR, a dismiss action on a backfilled opportunity (created weeks ago) wouldn't register on short ranges — a credibility wound on a feedback-loop UI where the user expects their click to show up immediately. Prisma de-dups rows matching both legs. The recent-dismissals query and the bulk-mail `missedCount` query stay filtered by `dismissedAt` alone since they're activity-based, not cohort-based.
+
+**12. URL-persisted filters via `validateSearch` Zod schemas.** Every TanStack Router route that exposes filterable lists puts every filter dimension into a route-level Zod schema: `apps/web/src/routes/(app)/opportunities/index.tsx` persists `status`, `search`, `sort`, and `showDismissed` to the URL via `validateSearch`. The `loader` uses `loaderDeps` to declare which search params should re-trigger prefetching. Search input uses the buffered-input pattern: local state for keystrokes, `useDebouncedValue` for the URL write, `navigate({ replace: true })` so history doesn't grow per keystroke. The two `useEffect`s (URL→input mirror, input→URL debounce) explicitly disable `react-hooks/set-state-in-effect` because they ARE the mirror pattern; this is the only legitimate use.
 
 ### Accuracy harness workflow (`pnpm test:ai`)
 
@@ -453,4 +468,4 @@ The launcher script (`scripts/run-jest-with-env.cjs`):
 | Classifier reasoning is always 3 sentences                                                | The schema field is `reason` (not `reasoning`) — the name primes the model toward a one-liner. If you renamed it back, output grows.                                   |
 | Extractor returns the same `customerDeadline` value as `customerAppointment`              | The prompt rule for `customerDeadline` says "inspection dates do NOT go here." Verify the model isn't conflating; the rule is enforced by prompt text, not the schema. |
 
-See `TEST_CASES.md` → Opportunities (W4.4) for the user-observable behavior catalog.
+See `TEST_CASES.md` → Opportunities (W4.4 + W4.5), Dismiss feedback (OPP-DISMISS-01..N), and Classifier quality dashboard (CQ-01..N) for the user-observable behavior catalog.

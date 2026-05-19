@@ -6,6 +6,7 @@ export class MembershipUserDto implements MembershipUser {
 	email!: string;
 	name!: string | null;
 	isAdmin!: boolean;
+	hasTonePlaybook!: boolean;
 }
 
 export class MembershipOrganizationDto implements MembershipOrganization {

@@ -1162,6 +1162,137 @@ Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` his
 
 ---
 
+## Opportunities list page (W4.5)
+
+### OPP-LIST-01: Status filter tabs render with live counts
+
+- [ ] Seed an org with opportunities in multiple statuses (e.g. 3 NEW, 2 REPLIED, 1 WAITING).
+- [ ] Open `/opportunities` — expect tabs `Alles · 6 · Nieuw · 3 · Beantwoord · 2 · Wachten · 1 · …`.
+- [ ] Counts exclude dismissed rows (see W4.6.3).
+
+### OPP-LIST-02: Search is debounced and URL-persisted
+
+- [ ] Type `loodgieter` in the search box — wait ~250ms.
+- [ ] **Expect** URL becomes `/opportunities?search=loodgieter`, list filters to matching rows on `customerName | address | requestType | fromName | subject` (case-insensitive `ILIKE`).
+- [ ] Hit browser refresh — list reloads pre-filtered with the same query string.
+- [ ] Search input is capped at 80 chars (DTO `@MaxLength(80)` + `slotProps.htmlInput.maxLength`).
+
+### OPP-LIST-03: Sort dropdown URL-persisted, applies client-side
+
+- [ ] Switch sort dropdown to `Deadline (vroegst)` — URL becomes `/opportunities?sort=deadline_soonest`.
+- [ ] Visible list reorders by `customerDeadline` ASC with `NULL`s last.
+- [ ] Refresh restores the sort.
+- [ ] Sorting is client-side over the already-loaded page — `Load more` is hidden when `sort !== 'newest_first'`.
+
+### OPP-LIST-04: Inline status change `Select` per row
+
+- [ ] Click the status chip on a `NEW` row → select `Beantwoord`.
+- [ ] **Expect** the chip updates within one tick (optimistic via cache invalidation), the row moves under the `Beantwoord` tab on the next render.
+- [ ] DB: `PATCH /api/opportunities/:id/status` was called; `status = REPLIED`.
+- [ ] Illegal transitions return 400 (server-enforced via `ALLOWED_TRANSITIONS` table).
+
+### OPP-LIST-05: Cursor-based "Load more"
+
+- [ ] Seed 30+ opportunities in one org. Default `limit=25` returns the first page + a `nextCursor`.
+- [ ] Click `Meer laden` — appends the next page to the visible list; `nextCursor` either advances or becomes `null`.
+- [ ] React Query cache mirrors the accumulated list so a route remount preserves the user's progress.
+- [ ] `Load more` is hidden when `nextCursor === null`, `debouncedSearch.length > 0`, or `sort !== 'newest_first'`.
+
+---
+
+## Dismiss-as-non-quote feedback (W4.6)
+
+### OPP-DISMISS-01: Schema invariants
+
+- [ ] DB: `\d "Opportunity"` shows `dismissedAt`, `dismissReason`, `dismissedById` columns + the `Opportunity_dismiss_consistency_chk` CHECK constraint enforcing `(dismissedAt IS NULL) = (dismissReason IS NULL)`.
+- [ ] DB: partial index `Opportunity_org_createdAt_active_idx` exists with `WHERE dismissedAt IS NULL`.
+- [ ] Attempting to write `dismissedAt = NOW(), dismissReason = NULL` directly fails the CHECK constraint.
+
+### OPP-DISMISS-02: Dismiss via kebab → reason modal
+
+- [ ] On `/opportunities`, click the kebab (⋮) on a row → `Markeer als geen offerteaanvraag…` → modal opens with 4 radio reasons (Geen offerteaanvraag / Dubbel / Spam / Anders) + optional notes textarea.
+- [ ] Select `Spam`, type `affiliate marketing` in notes, click `Afwijzen`.
+- [ ] **Expect** row disappears from default list within one tick.
+- [ ] DB: `dismissedAt IS NOT NULL`, `dismissReason = 'SPAM'`, `dismissedById = <your-user-uuid>`.
+- [ ] Log: row with `metadata->>'action' = 'opportunity.dismissed'`, `metadata->>'reason' = 'spam'`, `metadata->>'notes' = 'affiliate marketing'`.
+
+### OPP-DISMISS-03: "Toon afgewezen" toggle URL-persisted
+
+- [ ] After OPP-DISMISS-02, click the `Toon afgewezen` switch.
+- [ ] URL becomes `/opportunities?showDismissed=true`. Dismissed rows render greyed-out with a red `Afgewezen · Spam` chip.
+- [ ] `statusCounts` (tab numbers) do NOT change — they still exclude dismissed rows.
+- [ ] Refresh restores the dismissed-view.
+
+### OPP-DISMISS-04: Un-dismiss via kebab
+
+- [ ] In the `showDismissed` view, click the kebab on a dismissed row → `Niet afgewezen`.
+- [ ] **Expect** row returns to its previous status tab in the default view.
+- [ ] DB: `dismissedAt IS NULL`, `dismissReason IS NULL`, `dismissedById IS NULL`.
+- [ ] Log: row with `metadata->>'action' = 'opportunity.undismissed'`.
+
+### OPP-DISMISS-05: Re-dismiss is idempotent + audit-logged
+
+- [ ] Dismiss the same row twice with the same reason. Second click via API (`PATCH /api/opportunities/:id/dismiss`) returns 200, bumps `dismissedAt` to NOW, leaves `dismissReason` unchanged.
+- [ ] Two `opportunity.dismissed` audit rows exist — one per attempt — so timeline of changes is preserved.
+
+### OPP-DISMISS-06: `?dismissed` query param respected
+
+- [ ] `GET /api/opportunities` (no param) excludes dismissed rows. Default = `active`.
+- [ ] `GET /api/opportunities?dismissed=dismissed` returns only dismissed rows.
+- [ ] `GET /api/opportunities?dismissed=all` returns both.
+- [ ] Cross-tenant: a `dismissed=all` request from org A never returns org B's dismissed rows.
+
+---
+
+## Classifier-quality dashboard (W4.6.5)
+
+### CQ-01: Admin route gated by AdminEmailGuard
+
+- [ ] As a non-admin user, navigate to `/admin/classifier-quality` → redirected to `/` by the parent `(app)/admin/route.tsx`'s `beforeLoad`.
+- [ ] Direct `GET /api/admin/classifier-quality` as the same user → 403.
+- [ ] As a user whose email is in `ADMIN_EMAILS` → page renders, API returns 200.
+
+### CQ-02: Summary cards reflect dismissals
+
+- [ ] Seed org with 10 opportunities. Dismiss 1 as NOT_A_QUOTE, 1 as SPAM, 1 as DUPLICATE.
+- [ ] Open `/admin/classifier-quality?range=all`.
+- [ ] **Expect** cards: Overall precision = `70,0%` (1 − 3/10), Opportunities = `10`, Dismissed (total) = `3`, Bulk-mail recall renders (likely `0,0%` if no bulk-mail-filter hits).
+- [ ] Reason breakdown chips below cards: `Geen offerteaanvraag: 1 · Dubbel: 1 · Spam: 1 · Anders: 0`.
+
+### CQ-03: Recent dismissal of an old opportunity shows up on "Today"
+
+- [ ] Backfill mailbox so an opportunity has `createdAt > 7 days ago`. Dismiss it as NOT_A_QUOTE today.
+- [ ] Switch range chip to `Today` — `Dismissed (total)` should read `1`, even though the row's `createdAt` is outside the window.
+- [ ] DB query confirmation: `fetchPrecisionRows` OR's `createdAt IN range OR dismissedAt IN range`.
+
+### CQ-04: Precision table per (org, model) with reason breakdown column
+
+- [ ] After CQ-02, scroll to "Precision by org · classifier model".
+- [ ] **Expect** one row per `(organizationId, classifierProvider, classifierModel)` tuple. Rows with precision <90% are tinted warm (`#FAF3E8` background).
+- [ ] "Reason breakdown" column shows compact chips for each reason with count > 0 in the bucket.
+
+### CQ-05: Recent dismissals table shows all reasons with colored chips
+
+- [ ] Same seed as CQ-02. Scroll to "Recent dismissals (last 5)".
+- [ ] **Expect** 3 rows with `Reason` column showing colored chips (NOT_A_QUOTE red, SPAM orange, DUPLICATE blue).
+- [ ] `AI Call ID` column shows the first 8 chars of `classifiedAiCallId` (or `—` if null).
+
+### CQ-06: Bulk-mail recall card severity ramps to `warning` below 90%
+
+- [ ] Seed Log rows with `metadata.action = 'opportunity.pipeline.bulk_mail_skipped'` (e.g. 9 caught) + 1 SPAM-dismissed Opportunity.
+- [ ] **Expect** recall = 90%, card severity = `info`.
+- [ ] Add 2 more SPAM dismissals → recall = ~82%, card severity = `warning`, copy mentions "low recall = signals need tightening".
+
+### CQ-07: Zero-data state renders cleanly
+
+- [ ] Open the dashboard against an org with no opportunities + no bulk-mail logs.
+- [ ] **Expect** Overall precision = `—`, Opportunities = `0`, Dismissed (total) = `0`, Bulk-mail recall = `—`.
+- [ ] "By reason" row shows the empty-state copy `"No dismissals in this window yet."`.
+- [ ] Bulk-mail filter Alert shows the empty-state copy `"No bulk-mail activity in this window…"`.
+- [ ] Tables render their respective empty-state messages instead of throwing.
+
+---
+
 ## How to maintain this doc
 
 - **Adding a feature** → add a new `## Section` with `### XXX-01:` test cases. Use a short uppercase prefix per area (`AUTH`, `INV`, `TEN`, `LOG`, `MAIL`, `DB`, `WEB`, `BILLING`, then `OPP` for opportunities, `QUO` for quotes, etc.).

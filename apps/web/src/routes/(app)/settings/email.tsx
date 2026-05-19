@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
 	EmailKeys,
@@ -123,9 +124,7 @@ function EmailSettingsPage() {
 					<Typography variant='h1' sx={{ fontSize: 28 }}>
 						Your mailbox
 					</Typography>
-					<Button size='small' variant='text' onClick={() => navigate({ to: '/' })}>
-						← Home
-					</Button>
+					<BackToHomeButton />
 				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
 					Connect your own inbox so Quoteom can read incoming quote requests and send replies on your behalf.

@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { WrapperApiError } from '@/lib/api/client';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
@@ -93,9 +94,12 @@ function TeamPage() {
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
-				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-					Team
-				</Typography>
+				<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
+					<Typography variant='h1' sx={{ fontSize: 28 }}>
+						Team
+					</Typography>
+					<BackToHomeButton />
+				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
 					{seatsTaken} of {status.seats.included} {isTrial ? 'seats during trial' : 'included seats'}
 					{!isTrial && seatsTaken > status.seats.included

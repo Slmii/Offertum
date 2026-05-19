@@ -11,6 +11,14 @@ export interface MembershipUser {
 	email: string;
 	name: string | null;
 	isAdmin: boolean;
+	/**
+	 * W5.2 — Whether this user has authored a writing-style playbook
+	 * (`User.tonePlaybookText`). Boolean flag instead of the text itself: avoids leaking
+	 * the playbook into every authenticated page load while still letting the FE render
+	 * the just-in-time "Vertel ons hoe je schrijft" banner in the W5.4 draft editor.
+	 * Per-user (not per-org) per D31 — voice belongs to the person.
+	 */
+	hasTonePlaybook: boolean;
 }
 
 /** Minimal organization shape included in membership responses. */

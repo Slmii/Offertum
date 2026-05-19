@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { useSyncBilling } from '@/lib/queries/billing.queries';
 import { BillingSearchSchema } from '@/lib/schemas/billing.schema';
 import Box from '@mui/material/Box';
@@ -28,6 +29,9 @@ function BillingSuccessPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
+			<Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+				<BackToHomeButton />
+			</Box>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				{sync.isPending && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

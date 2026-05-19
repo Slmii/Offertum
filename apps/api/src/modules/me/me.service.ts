@@ -7,6 +7,7 @@ import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto'
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { TonePlaybook } from '@quoteom/shared';
 
 /**
  * Reads + writes scoped to the current user. Controller stays thin — orchestrates
@@ -23,7 +24,10 @@ export class MeService {
 	) {}
 
 	private static readonly MEMBERSHIP_INCLUDE = {
-		user: { select: { id: true, email: true, name: true } },
+		// `tonePlaybookText` is selected only so we can derive the `hasTonePlaybook`
+		// boolean — the actual prose never leaves this service, so the per-request
+		// payload doesn't carry the (potentially multi-kB) text on every page load.
+		user: { select: { id: true, email: true, name: true, tonePlaybookText: true } },
 		organization: { select: { id: true, name: true } }
 	} as const;
 
@@ -35,7 +39,7 @@ export class MeService {
 			where: { organizationId },
 			include: MeService.MEMBERSHIP_INCLUDE
 		});
-		return rows.map(row => this.withIsAdmin(row, false));
+		return rows.map(row => this.toMembershipResponse(row, false));
 	}
 
 	/** The current user's single membership in the active org. `isAdmin` is computed from
@@ -51,7 +55,7 @@ export class MeService {
 			throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
 		}
 
-		return this.withIsAdmin(membership, this.isAdminEmail(membership.user.email));
+		return this.toMembershipResponse(membership, this.isAdminEmail(membership.user.email));
 	}
 
 	/** All orgs the current user belongs to — drives the org switcher dropdown. Every row
@@ -62,7 +66,7 @@ export class MeService {
 			orderBy: { createdAt: 'asc' },
 			include: MeService.MEMBERSHIP_INCLUDE
 		});
-		return rows.map(row => this.withIsAdmin(row, this.isAdminEmail(row.user.email)));
+		return rows.map(row => this.toMembershipResponse(row, this.isAdminEmail(row.user.email)));
 	}
 
 	private isAdminEmail(email: string | null | undefined): boolean {
@@ -80,11 +84,84 @@ export class MeService {
 			.some(allowed => allowed.length > 0 && allowed === target);
 	}
 
-	private withIsAdmin<T extends { user: { id: string; email: string; name: string | null } }>(
-		row: T,
+	/**
+	 * Project Prisma's raw membership row into the wire DTO shape. Strips
+	 * `tonePlaybookText` (selected only so we can derive `hasTonePlaybook`) so the
+	 * playbook prose never leaves this service; the FE only needs the boolean to
+	 * render the just-in-time banner in the W5.4 draft editor.
+	 */
+	private toMembershipResponse(
+		row: {
+			id: string;
+			userId: string;
+			organizationId: string;
+			role: MembershipRole;
+			createdAt: Date;
+			updatedAt: Date;
+			user: { id: string; email: string; name: string | null; tonePlaybookText: string | null };
+			organization: { id: string; name: string };
+		},
 		isAdmin: boolean
-	): T & { user: T['user'] & { isAdmin: boolean } } {
-		return { ...row, user: { ...row.user, isAdmin } };
+	): MembershipResponseDto {
+		const { tonePlaybookText, ...userRest } = row.user;
+		const hasTonePlaybook = tonePlaybookText !== null && tonePlaybookText.trim().length > 0;
+		return {
+			...row,
+			user: { ...userRest, isAdmin, hasTonePlaybook }
+		};
+	}
+
+	/**
+	 * W5.2 — Read the current user's writing-style playbook. Returns the prose + the
+	 * user row's `updatedAt` as a proxy for "when did the playbook last change" (no
+	 * separate per-column timestamp; we don't need that resolution).
+	 */
+	async getTonePlaybook(userId: string): Promise<TonePlaybook> {
+		const user = await this.prisma.user.findUnique({
+			where: { id: userId },
+			select: { tonePlaybookText: true, updatedAt: true }
+		});
+
+		if (!user) {
+			throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
+		}
+
+		return {
+			text: user.tonePlaybookText,
+			updatedAt: user.updatedAt.toISOString()
+		};
+	}
+
+	/**
+	 * W5.2 — Update the current user's writing-style playbook. Empty / whitespace-only
+	 * `text` clears the playbook (back to generic baseline). The org doesn't need to be
+	 * entitled to write this — it's a personal preference, not a tenant-write — but
+	 * controller still goes through `AuthGuard` so it requires a valid session.
+	 */
+	async updateTonePlaybook(userId: string, text: string): Promise<TonePlaybook> {
+		const trimmed = text.trim();
+		const next = trimmed.length === 0 ? null : trimmed;
+
+		const updated = await this.prisma.user.update({
+			where: { id: userId },
+			data: { tonePlaybookText: next },
+			select: { tonePlaybookText: true, updatedAt: true }
+		});
+
+		this.logService.logAction({
+			action: next === null ? 'tone_playbook.cleared' : 'tone_playbook.updated',
+			message: `User ${userId} ${next === null ? 'cleared' : 'updated'} their writing-style playbook`,
+			metadata: {
+				userId,
+				length: next?.length ?? 0
+			},
+			context: 'MeService'
+		});
+
+		return {
+			text: updated.tonePlaybookText,
+			updatedAt: updated.updatedAt.toISOString()
+		};
 	}
 
 	/**

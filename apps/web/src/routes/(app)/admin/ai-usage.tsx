@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
 import { aiUsageQueryOptions } from '@/lib/queries/ai-usage.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
@@ -58,6 +59,8 @@ function AIUsagePage() {
 					AI usage
 				</Typography>
 				<Chip label='dev only' size='small' color='warning' />
+				<Box sx={{ flex: 1 }} />
+				<BackToHomeButton />
 			</Box>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
 				Aggregated <code>AICall</code> rows. Cost is in USD, computed from each row's prompt + completion tokens

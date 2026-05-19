@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
@@ -14,6 +15,9 @@ function BillingCancelPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
+			<Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+				<BackToHomeButton />
+			</Box>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
 					Checkout canceled

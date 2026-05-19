@@ -97,6 +97,11 @@ function HomePage() {
 								Email
 							</Button>
 						)}
+						{me.role !== 'EXTERNAL' && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/settings/writing-style' })}>
+								Schrijfstijl
+							</Button>
+						)}
 						{me.user.isAdmin && (
 							<Button variant='outlined' onClick={() => navigate({ to: '/admin/ai-usage' })}>
 								AI usage (dev)

@@ -113,6 +113,13 @@ model User {
     // Active organization for this user — session pins to this. Users with multiple
     // memberships switch via a future "switch org" mutation.
     currentOrganizationId String?   @db.Uuid
+    // W5.2 — Per-user writing-style playbook (D31). Free-form prose the user writes
+    // in plain Dutch (greeting, sign-off, register, recurring phrases). Injected verbatim
+    // into the reply-draft prompt in W5.3 when generating drafts on opportunities the user
+    // is composing a reply for. Persists across orgs (D5 multi-org: voice is the person's,
+    // not the org's). NULL = use the generic Dutch neutral-professional baseline. Settable
+    // from `/settings/writing-style`.
+    tonePlaybookText      String?   @db.Text
     createdAt             DateTime  @default(now())
     updatedAt             DateTime  @updatedAt
 

@@ -8,7 +8,10 @@ AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote req
 - **Backend**: NestJS 11 + Prisma 7 + Postgres 16
 - **AI**: OpenAI Responses API via the official `openai` SDK (direct OpenAI or Azure OpenAI EU). Provider-swap seam in place for the W5.1 spike against Mistral / Anthropic.
 - **Background jobs**: Inngest (delta-sync workers, push handlers, scheduled crons)
-- **Opportunity pipeline**: Gmail/Graph `RawMessage` rows are classified, extracted, and materialized into tenant-scoped `Opportunity` rows with server-enforced status transitions.
+- **Opportunity pipeline**: Gmail/Graph `RawMessage` rows are classified, extracted, and materialized into tenant-scoped `Opportunity` rows with server-enforced status transitions. Owners can dismiss false positives (`not_a_quote | duplicate | spam | other`); the admin classifier-quality dashboard turns those dismissals into precision metrics.
+- **Admin dashboards** (gated by `ADMIN_EMAILS` env allowlist):
+    - `/admin/ai-usage` — per-call token + USD cost grouped by provider / model / org / status.
+    - `/admin/classifier-quality` — classifier precision per (org, model) with per-reason breakdown, recent dismissals with `classifiedAiCallId` deep-link, and bulk-mail filter recall.
 - **Build**: Turborepo + pnpm workspaces
 - **Deploy**: DigitalOcean App Platform (EU)
 

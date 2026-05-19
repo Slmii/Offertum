@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
 import { classifierQualityQueryOptions } from '@/lib/queries/classifier-quality.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
@@ -66,6 +67,8 @@ function ClassifierQualityPage() {
 					Classifier quality
 				</Typography>
 				<Chip label='dev only' size='small' color='warning' />
+				<Box sx={{ flex: 1 }} />
+				<BackToHomeButton />
 			</Box>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
 				Precision = <code>1 − (any dismissal / total opportunities)</code>. Every dismiss reason counts — from

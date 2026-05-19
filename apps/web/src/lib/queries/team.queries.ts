@@ -10,7 +10,8 @@ import type { CreateInvitationInput, Invitation, Membership } from '@quoteom/sha
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 
-const TeamKeys = {
+export const TeamKeys = {
+	all: ['team'] as const,
 	memberships: ['team', 'memberships'] as const,
 	myMembership: ['team', 'my-membership'] as const,
 	myOrganizations: ['team', 'my-organizations'] as const,

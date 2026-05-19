@@ -4,6 +4,8 @@ import { OwnerGuard } from '@/common/guards/owner.guard';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { SwitchOrganizationDto } from '@/modules/me/dto/switch-organization.dto';
+import { TonePlaybookResponseDto } from '@/modules/me/dto/tone-playbook.response.dto';
+import { UpdateTonePlaybookDto } from '@/modules/me/dto/update-tone-playbook.dto';
 import { MeService } from '@/modules/me/me.service';
 import {
 	Body,
@@ -15,6 +17,7 @@ import {
 	Param,
 	ParseUUIDPipe,
 	Post,
+	Put,
 	Req,
 	UnauthorizedException,
 	UseGuards
@@ -70,6 +73,22 @@ export class MeController {
 	@Post('switch-organization')
 	switchOrganization(@Req() request: Request, @Body() body: SwitchOrganizationDto): Promise<MembershipResponseDto> {
 		return this.me.switchActiveOrganization(this.userId(request), body.organizationId);
+	}
+
+	@ApiOperation({ summary: 'Read the current user’s writing-style playbook (W5.2)' })
+	@ApiOkResponse({ type: TonePlaybookResponseDto })
+	@UseGuards(AuthGuard)
+	@Get('tone-playbook')
+	getTonePlaybook(@Req() request: Request): Promise<TonePlaybookResponseDto> {
+		return this.me.getTonePlaybook(this.userId(request));
+	}
+
+	@ApiOperation({ summary: 'Update the current user’s writing-style playbook (W5.2)' })
+	@ApiOkResponse({ type: TonePlaybookResponseDto })
+	@UseGuards(AuthGuard)
+	@Put('tone-playbook')
+	updateTonePlaybook(@Req() request: Request, @Body() body: UpdateTonePlaybookDto): Promise<TonePlaybookResponseDto> {
+		return this.me.updateTonePlaybook(this.userId(request), body.text);
 	}
 
 	/**

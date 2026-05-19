@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { billingStatusQueryOptions, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
 import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
@@ -25,9 +26,12 @@ function BillingPage() {
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
-				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-					Billing
-				</Typography>
+				<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
+					<Typography variant='h1' sx={{ fontSize: 28 }}>
+						Billing
+					</Typography>
+					<BackToHomeButton />
+				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
 					Manage your Quoteom subscription. €149/month after a 14-day free trial.
 				</Typography>

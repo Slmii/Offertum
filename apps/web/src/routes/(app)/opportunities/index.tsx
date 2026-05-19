@@ -1,3 +1,4 @@
+import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import {
@@ -141,9 +142,7 @@ function OpportunitiesIndexPage() {
 				<Typography variant='h1' sx={{ fontSize: 28 }}>
 					Offerteaanvragen
 				</Typography>
-				<Button size='small' variant='text' onClick={() => navigate({ to: '/' })}>
-					← Home
-				</Button>
+				<BackToHomeButton />
 			</Box>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
 				Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar
