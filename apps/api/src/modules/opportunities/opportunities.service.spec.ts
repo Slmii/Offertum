@@ -17,6 +17,7 @@ import type { ConfigService } from '@nestjs/config';
 type FakeRepository = Pick<
 	OpportunitiesRepository,
 	| 'findPendingRawMessagesForAccount'
+	| 'findOrganizationEmailAddresses'
 	| 'markRawMessageNegative'
 	| 'createOpportunityFromRawMessage'
 	| 'findByIdForOrganization'
@@ -37,6 +38,10 @@ const EMPTY_STATUS_COUNTS = {
 function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Mock>> = {}): FakeRepository {
 	return {
 		findPendingRawMessagesForAccount: jest.fn().mockReturnValue(Promise.resolve([])),
+		// W5.6-followup — self-email filter source. Default empty so the existing tests
+		// (which use external `fromEmail` addresses) fall through to the classifier
+		// path as before. Tests that exercise the filter override this mock explicitly.
+		findOrganizationEmailAddresses: jest.fn().mockReturnValue(Promise.resolve(new Set<string>())),
 		markRawMessageNegative: jest.fn().mockReturnValue(Promise.resolve()),
 		createOpportunityFromRawMessage: jest
 			.fn()

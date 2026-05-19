@@ -191,6 +191,24 @@ export class OpportunitiesRepository {
 	}
 
 	/**
+	 * W5.6-followup — Self-email filter source data. Returns every email address ever
+	 * connected to the organization (Gmail + Microsoft, both currently-connected AND
+	 * soft-disconnected per S17). Used by the pipeline to short-circuit any inbound
+	 * RawMessage whose `From` matches the org's own connected mailboxes — those are
+	 * our own outbound emails landing in another connected inbox, not real leads.
+	 *
+	 * Lower-cased so callers can do case-insensitive `has()` lookups without further
+	 * normalization. Returns a `Set` so membership checks are O(1) per RawMessage.
+	 */
+	async findOrganizationEmailAddresses(organizationId: string): Promise<Set<string>> {
+		const rows = await this.prisma.emailAccount.findMany({
+			where: { organizationId },
+			select: { email: true }
+		});
+		return new Set(rows.map(r => r.email.toLowerCase()));
+	}
+
+	/**
 	 * W5.6 — Thread reconstitution. Look up an existing Opportunity in the same org
 	 * whose originating RawMessage has the given threadId. Only matches non-dismissed
 	 * rows so a customer reply on a thread the owner already dismissed (NOT_A_QUOTE,

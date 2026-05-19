@@ -1,7 +1,7 @@
 import type { EnvSchema } from '@/config/env.schema';
-import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
-import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
-import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
+import { OpportunityStatus as PrismaOpportunityStatus } from '@/generated/prisma/enums';
+import { detectBulkMail } from '@/lib/email/bulk-mail-filter';
+import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import {
 	OPPORTUNITY_NOT_DISMISSED,
 	OPPORTUNITY_NOT_FOUND,
@@ -10,7 +10,11 @@ import {
 	REPLY_DRAFT_LOCKED,
 	REPLY_DRAFT_NOT_FOUND
 } from '@/lib/errors';
-import { isReplyDraftEditable } from '@/modules/opportunities/reply-draft-editability';
+import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
+import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
+import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
+import { inngest } from '@/modules/inngest/inngest.client';
+import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
 import {
 	OpportunityDetailResponseDto,
@@ -18,21 +22,6 @@ import {
 } from '@/modules/opportunities/dto/opportunity-detail.response.dto';
 import { OpportunityListResponseDto } from '@/modules/opportunities/dto/opportunity-list.response.dto';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
-import {
-	decodeOpportunityListCursor,
-	encodeOpportunityListCursor
-} from '@/modules/opportunities/opportunity-list-cursor';
-import { OpportunityStatus as PrismaOpportunityStatus } from '@/generated/prisma/enums';
-import {
-	OPPORTUNITY_DISMISS_REASON_FROM_WIRE,
-	OPPORTUNITY_DISMISS_REASON_TO_WIRE
-} from '@/modules/opportunities/opportunity-dismiss-reason.mapper';
-import { REPLY_DRAFT_STATUS_TO_WIRE } from '@/modules/opportunities/reply-draft-status.mapper';
-import {
-	OPPORTUNITY_STATUS_FROM_WIRE,
-	OPPORTUNITY_STATUS_TO_WIRE
-} from '@/modules/opportunities/opportunity-status.mapper';
-import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
 import {
 	OpportunitiesRepository,
 	type OpportunityDetailRecord,
@@ -44,10 +33,21 @@ import type {
 	OpportunityProcessingBatchResult,
 	OpportunityProcessingResult
 } from '@/modules/opportunities/opportunities.types';
-import { detectBulkMail } from '@/lib/email/bulk-mail-filter';
-import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
-import { inngest } from '@/modules/inngest/inngest.client';
-import { InngestEvents } from '@/modules/inngest/inngest.constants';
+import {
+	OPPORTUNITY_DISMISS_REASON_FROM_WIRE,
+	OPPORTUNITY_DISMISS_REASON_TO_WIRE
+} from '@/modules/opportunities/opportunity-dismiss-reason.mapper';
+import {
+	decodeOpportunityListCursor,
+	encodeOpportunityListCursor
+} from '@/modules/opportunities/opportunity-list-cursor';
+import {
+	OPPORTUNITY_STATUS_FROM_WIRE,
+	OPPORTUNITY_STATUS_TO_WIRE
+} from '@/modules/opportunities/opportunity-status.mapper';
+import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
+import { isReplyDraftEditable } from '@/modules/opportunities/reply-draft-editability';
+import { REPLY_DRAFT_STATUS_TO_WIRE } from '@/modules/opportunities/reply-draft-status.mapper';
 import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -609,6 +609,14 @@ export class OpportunitiesService {
 			return { result, failedRawMessageIds: [], exhausted: true };
 		}
 
+		// W5.6-followup — Fetch the org's own connected email addresses once per batch
+		// so the self-email filter inside `processOneRawMessage` is an O(1) Set lookup.
+		// All rows in a batch share an emailAccountId (and therefore an organizationId),
+		// so a single fetch covers the slice.
+		const orgEmailAddresses = await this.repository.findOrganizationEmailAddresses(
+			rawMessages[0]?.organizationId ?? ''
+		);
+
 		// Chunked parallel: each chunk runs `PROCESS_BATCH_CONCURRENCY` messages in
 		// parallel through `processOneRawMessage`, which mutates `result` + the failed-id
 		// set in-place (single-threaded JS makes the `+= 1` and `Set.add` effectively
@@ -619,7 +627,9 @@ export class OpportunitiesService {
 		for (let i = 0; i < rawMessages.length; i += PROCESS_BATCH_CONCURRENCY) {
 			const slice = rawMessages.slice(i, i + PROCESS_BATCH_CONCURRENCY);
 			const outcomes = await Promise.all(
-				slice.map(rawMessage => this.processOneRawMessage(rawMessage, result, failedRawMessageIds))
+				slice.map(rawMessage =>
+					this.processOneRawMessage(rawMessage, orgEmailAddresses, result, failedRawMessageIds)
+				)
 			);
 			if (outcomes.some(shouldContinue => !shouldContinue)) {
 				aiNotConfigured = true;
@@ -638,12 +648,42 @@ export class OpportunitiesService {
 
 	private async processOneRawMessage(
 		rawMessage: RawMessageForOpportunityProcessing,
+		orgEmailAddresses: Set<string>,
 		result: OpportunityProcessingResult,
 		failedRawMessageIds: Set<string>
 	): Promise<boolean> {
 		result.scanned += 1;
 
 		try {
+			// W5.6-followup — Self-email filter. If the `From` address matches another
+			// connected (or formerly-connected) mailbox in the same org, this is our own
+			// outbound email landing in a sibling inbox (e.g., user has both Gmail and
+			// Hotmail connected, sent a reply via Hotmail, Gmail picked up the copy on
+			// arrival). Skip entirely — neither classify nor thread-attach. Without
+			// this filter the classifier would happily flag the AI-generated Dutch text
+			// as a positive (it reads like quote-prep language) and create a phantom
+			// opportunity for what is essentially a sent-mail receipt.
+			//
+			// Sits BEFORE the thread-reconstitution check on purpose: cross-provider
+			// thread match can't find these (Gmail threadId ≠ Graph conversationId), so
+			// without this filter they'd fall all the way through to the classifier.
+			if (rawMessage.fromEmail && orgEmailAddresses.has(rawMessage.fromEmail.toLowerCase())) {
+				await this.repository.markRawMessageNegative(rawMessage.id);
+				result.classifiedNegative += 1;
+				this.logService.logAction({
+					action: 'opportunity.pipeline.self_email_skipped',
+					message: `RawMessage ${rawMessage.id} short-circuited as own-org outbound (${rawMessage.fromEmail})`,
+					metadata: {
+						rawMessageId: rawMessage.id,
+						emailAccountId: rawMessage.emailAccountId,
+						organizationId: rawMessage.organizationId,
+						fromEmail: rawMessage.fromEmail
+					},
+					context: 'OpportunitiesService'
+				});
+				return true;
+			}
+
 			// W5.6 — Thread reconstitution. Check FIRST (before bulk-mail filter + classifier)
 			// because a threaded reply is overwhelmingly a real customer message — a stronger
 			// positive signal than the AI classifier can give us. If the threadId matches an
