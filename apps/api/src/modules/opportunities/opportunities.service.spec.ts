@@ -11,7 +11,7 @@ import type {
 } from '@/modules/opportunities/opportunities.repository';
 import { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
 import { describe, expect, it, jest } from '@jest/globals';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 
 type FakeRepository = Pick<
@@ -164,7 +164,11 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 			fromEmail: 'alice@example.com',
 			fromName: 'Alice',
 			threadId: 'thread-1'
-		}
+		},
+		// W5.5 follow-up — `OPPORTUNITY_INCLUDE` now joins the reply draft (status + sentAt)
+		// so the editability guard + `replyDraftSentAt` wire field have data to work with.
+		// Default to "no draft yet" so the unchanged transition tests still pass.
+		replyDraft: null
 	};
 }
 
@@ -351,16 +355,40 @@ describe('OpportunitiesService.updateStatus', () => {
 		expect(result.customerDeadline).toBe('2026-06-01T00:00:00.000Z');
 	});
 
-	it('rejects illegal transitions from terminal states', async () => {
+	// W5.5 follow-up — the per-status transition policy was removed; any pair of statuses
+	// is a legal transition. Previous "you can't pretend you didn't act" rules (WON/LOST
+	// as dead ends; no return to NEW from a post-reply state) were aesthetic — solo SMB
+	// owners need misclick recovery more than policy enforcement. The audit log remains
+	// the source of truth for forensics. These two specs lock in the two previously-
+	// blocked cases so a future reintroduction of the gate doesn't silently break them.
+	it('permits any transition (previously restricted): WON → NEW', async () => {
+		const current = makeOpportunityRecord(PrismaOpportunityStatus.WON);
+		const updated = makeOpportunityRecord(PrismaOpportunityStatus.NEW);
 		const repository = makeRepository({
-			findByIdForOrganization: jest
-				.fn()
-				.mockReturnValue(Promise.resolve(makeOpportunityRecord(PrismaOpportunityStatus.WON)))
+			findByIdForOrganization: jest.fn().mockReturnValue(Promise.resolve(current)),
+			updateStatus: jest.fn().mockReturnValue(Promise.resolve(updated))
 		});
 		const service = makeService({ repository });
 
-		await expect(service.updateStatus('org-1', 'opp-1', 'new')).rejects.toBeInstanceOf(BadRequestException);
-		expect(repository.updateStatus).not.toHaveBeenCalled();
+		const result = await service.updateStatus('org-1', 'opp-1', 'new');
+
+		expect(repository.updateStatus).toHaveBeenCalledWith('opp-1', PrismaOpportunityStatus.NEW);
+		expect(result.status).toBe('new');
+	});
+
+	it('permits any transition (previously restricted): REPLIED → NEW', async () => {
+		const current = makeOpportunityRecord(PrismaOpportunityStatus.REPLIED);
+		const updated = makeOpportunityRecord(PrismaOpportunityStatus.NEW);
+		const repository = makeRepository({
+			findByIdForOrganization: jest.fn().mockReturnValue(Promise.resolve(current)),
+			updateStatus: jest.fn().mockReturnValue(Promise.resolve(updated))
+		});
+		const service = makeService({ repository });
+
+		const result = await service.updateStatus('org-1', 'opp-1', 'new');
+
+		expect(repository.updateStatus).toHaveBeenCalledWith('opp-1', PrismaOpportunityStatus.NEW);
+		expect(result.status).toBe('new');
 	});
 
 	it('returns 404 when the opportunity is not in the active organization', async () => {

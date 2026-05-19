@@ -436,12 +436,26 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 				</Menu>
 			</Paper>
 
-			{dismissOpen && <DismissDialog opportunityId={opportunity.id} onClose={() => setDismissOpen(false)} />}
+			{dismissOpen && (
+				<DismissDialog
+					opportunityId={opportunity.id}
+					replyDraftSentAt={opportunity.replyDraftSentAt}
+					onClose={() => setDismissOpen(false)}
+				/>
+			)}
 		</>
 	);
 }
 
-function DismissDialog({ opportunityId, onClose }: { opportunityId: string; onClose: () => void }) {
+function DismissDialog({
+	opportunityId,
+	replyDraftSentAt,
+	onClose
+}: {
+	opportunityId: string;
+	replyDraftSentAt: string | null;
+	onClose: () => void;
+}) {
 	const dismiss = useDismissOpportunity();
 	const [reason, setReason] = useState<OpportunityDismissReason>('not_a_quote');
 	const [notes, setNotes] = useState('');
@@ -457,10 +471,18 @@ function DismissDialog({ opportunityId, onClose }: { opportunityId: string; onCl
 		);
 	};
 
+	const hasSentReply = replyDraftSentAt !== null;
+
 	return (
 		<Dialog open onClose={dismiss.isPending ? undefined : onClose} maxWidth='xs' fullWidth>
 			<DialogTitle>Waarom afwijzen?</DialogTitle>
 			<DialogContent>
+				{hasSentReply && (
+					<Alert severity='warning' sx={{ mb: 2 }}>
+						Je hebt al een antwoord verstuurd — afwijzen markeert deze offerteaanvraag alleen intern als
+						geen offerte. Het verzonden e-mailbericht blijft staan.
+					</Alert>
+				)}
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
 					Je feedback helpt onze AI om in de toekomst beter te herkennen wat wél en geen offerteaanvraag is.
 				</Typography>

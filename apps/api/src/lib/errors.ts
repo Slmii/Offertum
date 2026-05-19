@@ -132,8 +132,6 @@ export const NO_REFRESH_TOKEN_AVAILABLE = 'No refresh token in token exchange re
 // Opportunities (User-facing)
 // ────────────────────────────────────────────────────────────────────────────
 export const OPPORTUNITY_NOT_FOUND = 'Opportunity not found';
-export const invalidOpportunityStatusTransition = (from: string, to: string) =>
-	`Cannot transition opportunity from ${from} to ${to}.`;
 // User-facing — surfaced when an owner un-dismisses a row that wasn't dismissed in the
 // first place. Returned as 409 so the FE can swallow + refresh state without surfacing
 // a scary error toast for what's effectively a duplicate click.
@@ -145,6 +143,13 @@ export const REPLY_DRAFT_NOT_FOUND = 'Reply draft has not been generated yet.';
 // User-facing — surfaced when a user tries to regenerate a draft that's already been
 // sent. The email is out the door; there's nothing to regenerate.
 export const REPLY_DRAFT_ALREADY_SENT = 'Reply draft has already been sent and cannot be regenerated.';
+// User-facing — surfaced when the user tries to mutate the draft body, regenerate it,
+// or change attachments while the draft is closed for editing. "Closed" = the email
+// was sent OR the opportunity moved to a terminal-for-draft status (replied / won /
+// lost). Unified message because the FE already gates the buttons; this only fires on
+// stale-state races + direct API hits.
+export const REPLY_DRAFT_LOCKED =
+	'This reply draft is closed for editing (the email was sent, or the opportunity is replied / won / lost).';
 // User-facing — surfaced when the inbox owner who connected the mailbox has been
 // removed from the org, or the original email had no `From:` address. Either way we
 // can't send a reply through that mailbox.
@@ -155,7 +160,6 @@ export const REPLY_DRAFT_CANNOT_SEND = 'Cannot send reply: the inbox is no longe
 // ────────────────────────────────────────────────────────────────────────────
 export const ATTACHMENT_FILE_MISSING = 'No file uploaded. Pick a file and try again.';
 export const ATTACHMENT_NOT_FOUND = 'Attachment not found';
-export const ATTACHMENT_DRAFT_LOCKED = 'Cannot change attachments after the reply has been sent.';
 export const attachmentMimeNotAllowed = (mime: string) =>
 	`File type '${mime}' is not allowed. Accepted: PDF, Office docs, images, plain text, CSV, ZIP.`;
 export const attachmentFileTooLarge = (sizeBytes: number, maxBytes: number) =>

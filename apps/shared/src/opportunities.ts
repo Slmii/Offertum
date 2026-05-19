@@ -41,6 +41,16 @@ export interface Opportunity {
 	dismissedAt: string | null;
 	dismissReason: OpportunityDismissReason | null;
 	dismissedByUserId: string | null;
+	/**
+	 * W5.5 follow-up — ISO timestamp the reply draft was sent at via Quoteom, or `null`
+	 * when no reply has been sent (no draft yet, or draft is still pending / edited).
+	 * Surfaces on the LIST shape so the dismiss dialog can warn "you already replied;
+	 * dismissing won't unsend the email" without an extra detail-view fetch. Distinct
+	 * from `Opportunity.status === 'replied'` because the user can manually move an opp
+	 * to `replied` without sending via Quoteom, and the dismiss-warning copy specifically
+	 * mentions the SENT email — keep the two signals decoupled.
+	 */
+	replyDraftSentAt: string | null;
 }
 
 /**

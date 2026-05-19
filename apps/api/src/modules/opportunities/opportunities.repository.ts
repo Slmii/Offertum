@@ -40,7 +40,14 @@ const OPPORTUNITY_INCLUDE = {
 			fromName: true,
 			threadId: true
 		}
-	}
+	},
+	// W5.5 follow-up — light-weight reply-draft fields used by:
+	//  1. `replyDraftSentAt` wire field on every row (drives the dismiss-dialog "you
+	//     already sent" warning + the `dismissedAfterSend` audit-log flag).
+	//  2. `isReplyDraftEditable()` server-side gate on the autosave / regenerate /
+	//     attachments endpoints — needs `status` to check for SENT.
+	// One LEFT JOIN per row, two scalar columns; negligible vs. the existing rawMessage join.
+	replyDraft: { select: { sentAt: true, status: true } }
 } as const satisfies Prisma.OpportunityInclude;
 
 /**

@@ -7,9 +7,10 @@ import {
 	OPPORTUNITY_NOT_FOUND,
 	REPLY_DRAFT_ALREADY_SENT,
 	REPLY_DRAFT_CANNOT_SEND,
-	REPLY_DRAFT_NOT_FOUND,
-	invalidOpportunityStatusTransition
+	REPLY_DRAFT_LOCKED,
+	REPLY_DRAFT_NOT_FOUND
 } from '@/lib/errors';
+import { isReplyDraftEditable } from '@/modules/opportunities/reply-draft-editability';
 import { LogService } from '@/modules/logger/log.service';
 import {
 	OpportunityDetailResponseDto,
@@ -29,8 +30,7 @@ import {
 import { REPLY_DRAFT_STATUS_TO_WIRE } from '@/modules/opportunities/reply-draft-status.mapper';
 import {
 	OPPORTUNITY_STATUS_FROM_WIRE,
-	OPPORTUNITY_STATUS_TO_WIRE,
-	isOpportunityStatusTransitionAllowed
+	OPPORTUNITY_STATUS_TO_WIRE
 } from '@/modules/opportunities/opportunity-status.mapper';
 import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
 import {
@@ -49,7 +49,7 @@ import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
 	OpportunityDismissReason as WireDismissReason,
@@ -156,15 +156,9 @@ export class OpportunitiesService {
 		}
 
 		const nextStatus = OPPORTUNITY_STATUS_FROM_WIRE[status];
-		if (!isOpportunityStatusTransitionAllowed(opportunity.status, nextStatus)) {
-			throw new BadRequestException(
-				invalidOpportunityStatusTransition(
-					OPPORTUNITY_STATUS_TO_WIRE[opportunity.status],
-					OPPORTUNITY_STATUS_TO_WIRE[nextStatus]
-				)
-			);
-		}
-
+		// Same-status no-op short-circuits the DB write. Any other transition is allowed
+		// (the previous restricted policy was removed — see commit history). Reintroduce
+		// a gate here if a future "soft-blocked transitions for analytics" rule lands.
 		if (opportunity.status === nextStatus) {
 			return toOpportunityResponseDto(opportunity);
 		}
@@ -215,7 +209,14 @@ export class OpportunitiesService {
 				previousStatus: OPPORTUNITY_STATUS_TO_WIRE[opportunity.status],
 				notes: notes ?? null,
 				actorUserId,
-				classifiedAiCallId: opportunity.classifiedAiCallId ?? null
+				classifiedAiCallId: opportunity.classifiedAiCallId ?? null,
+				// W5.5 follow-up — separates "caught quickly" from "caught after work was
+				// done." A `dismissedAfterSend: true` row is a more costly false-positive:
+				// the customer received an irrelevant reply before the classifier mistake
+				// was caught. `/admin/classifier-quality` can split precision metrics by
+				// this axis to surface the costlier mistakes.
+				dismissedAfterSend:
+					opportunity.replyDraft?.sentAt !== null && opportunity.replyDraft?.sentAt !== undefined
 			},
 			context: 'OpportunitiesService'
 		});
@@ -350,6 +351,19 @@ export class OpportunitiesService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
+		if (
+			!isReplyDraftEditable({
+				opportunityStatus: opportunity.status,
+				draftStatus: opportunity.replyDraft?.status ?? null
+			})
+		) {
+			// SENT case still surfaces as REPLY_DRAFT_ALREADY_SENT from the service-layer
+			// `regenerate()` call (`overwrote: false`) — that one is friendlier copy. This
+			// branch only fires when the lock comes from the OPPORTUNITY-status leg (replied
+			// without sending via Quoteom, won, or lost).
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
+		}
+
 		const result = await this.replyDrafts.regenerate(opportunityId, requestingUserId);
 		if (!result.opportunityFound) {
 			// Should not happen — we just verified the opportunity exists in the right
@@ -390,6 +404,18 @@ export class OpportunitiesService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
+		// W5.5 follow-up — sending a draft on a `won` / `lost` / already-`replied`-without-
+		// Quoteom opp doesn't make sense. The SENT case still surfaces via the
+		// `alreadySent: true` branch below with a more specific message.
+		if (
+			!isReplyDraftEditable({
+				opportunityStatus: opportunity.status,
+				draftStatus: opportunity.replyDraft?.status ?? null
+			})
+		) {
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
+		}
+
 		const result = await this.replyDrafts.send(opportunityId, requestingUserId);
 
 		if (result.sent === false && result.alreadySent === true) {
@@ -426,6 +452,15 @@ export class OpportunitiesService {
 		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
 		if (!opportunity) {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		if (
+			!isReplyDraftEditable({
+				opportunityStatus: opportunity.status,
+				draftStatus: opportunity.replyDraft?.status ?? null
+			})
+		) {
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
 		const updated = await this.repository.updateReplyDraftBody(opportunityId, body);
@@ -708,7 +743,8 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		customerAppointment: opportunity.customerAppointment?.toISOString() ?? null,
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
-		dismissedByUserId: opportunity.dismissedById ?? null
+		dismissedByUserId: opportunity.dismissedById ?? null,
+		replyDraftSentAt: opportunity.replyDraft?.sentAt?.toISOString() ?? null
 	};
 }
 
@@ -782,6 +818,7 @@ function toOpportunityDetailResponseDto(
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
+		replyDraftSentAt: opportunity.replyDraft?.sentAt?.toISOString() ?? null,
 		originalEmailBody,
 		replyDraft: opportunity.replyDraft ? toReplyDraftResponseDto(opportunity.replyDraft) : null
 	};

@@ -18,38 +18,3 @@ export const OPPORTUNITY_STATUS_FROM_WIRE: Record<WireOpportunityStatus, PrismaO
 	won: PrismaOpportunityStatus.WON,
 	lost: PrismaOpportunityStatus.LOST
 };
-
-const ALLOWED_TRANSITIONS: Record<PrismaOpportunityStatus, readonly PrismaOpportunityStatus[]> = {
-	[PrismaOpportunityStatus.NEW]: [
-		PrismaOpportunityStatus.REPLIED,
-		PrismaOpportunityStatus.COLD,
-		PrismaOpportunityStatus.WON,
-		PrismaOpportunityStatus.LOST
-	],
-	[PrismaOpportunityStatus.REPLIED]: [
-		PrismaOpportunityStatus.WAITING,
-		PrismaOpportunityStatus.COLD,
-		PrismaOpportunityStatus.WON,
-		PrismaOpportunityStatus.LOST
-	],
-	[PrismaOpportunityStatus.WAITING]: [
-		PrismaOpportunityStatus.REPLIED,
-		PrismaOpportunityStatus.COLD,
-		PrismaOpportunityStatus.WON,
-		PrismaOpportunityStatus.LOST
-	],
-	[PrismaOpportunityStatus.COLD]: [
-		PrismaOpportunityStatus.WAITING,
-		PrismaOpportunityStatus.WON,
-		PrismaOpportunityStatus.LOST
-	],
-	[PrismaOpportunityStatus.WON]: [],
-	[PrismaOpportunityStatus.LOST]: []
-};
-
-export function isOpportunityStatusTransitionAllowed(
-	current: PrismaOpportunityStatus,
-	next: PrismaOpportunityStatus
-): boolean {
-	return current === next || ALLOWED_TRANSITIONS[current].includes(next);
-}

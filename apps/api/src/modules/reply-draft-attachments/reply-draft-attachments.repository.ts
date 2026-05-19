@@ -1,3 +1,7 @@
+import type {
+	OpportunityStatus as PrismaOpportunityStatus,
+	ReplyDraftStatus as PrismaReplyDraftStatus
+} from '@/generated/prisma/enums';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
@@ -42,7 +46,22 @@ export interface AttachmentForAuthorization {
 	replyDraftId: string;
 	opportunityId: string;
 	organizationId: string;
-	draftStatus: 'PENDING_APPROVAL' | 'EDITED' | 'SENT';
+	draftStatus: PrismaReplyDraftStatus;
+	opportunityStatus: PrismaOpportunityStatus;
+}
+
+/**
+ * Shape returned by `findDraftForUpload`. Extended in W5.5 follow-up with
+ * `opportunityStatus` so the editability gate can fire on opps in terminal-for-draft
+ * states (replied / won / lost) without an additional round-trip.
+ */
+export interface DraftForUpload {
+	draftId: string;
+	opportunityId: string;
+	opportunityStatus: PrismaOpportunityStatus;
+	status: PrismaReplyDraftStatus;
+	attachmentCount: number;
+	attachmentTotalBytes: number;
 }
 
 @Injectable()
@@ -54,22 +73,14 @@ export class ReplyDraftAttachmentsRepository {
 	 * draft doesn't exist OR the opportunity belongs to a different organization (no row
 	 * leakage across tenants).
 	 */
-	async findDraftForUpload(
-		organizationId: string,
-		opportunityId: string
-	): Promise<{
-		draftId: string;
-		opportunityId: string;
-		status: 'PENDING_APPROVAL' | 'EDITED' | 'SENT';
-		attachmentCount: number;
-		attachmentTotalBytes: number;
-	} | null> {
+	async findDraftForUpload(organizationId: string, opportunityId: string): Promise<DraftForUpload | null> {
 		const draft = await this.prisma.replyDraft.findFirst({
 			where: { opportunityId, opportunity: { organizationId } },
 			select: {
 				id: true,
 				opportunityId: true,
 				status: true,
+				opportunity: { select: { status: true } },
 				attachments: { select: { sizeBytes: true } }
 			}
 		});
@@ -80,6 +91,7 @@ export class ReplyDraftAttachmentsRepository {
 		return {
 			draftId: draft.id,
 			opportunityId: draft.opportunityId,
+			opportunityStatus: draft.opportunity.status,
 			status: draft.status,
 			attachmentCount: draft.attachments.length,
 			attachmentTotalBytes: total
@@ -136,7 +148,7 @@ export class ReplyDraftAttachmentsRepository {
 					select: {
 						opportunityId: true,
 						status: true,
-						opportunity: { select: { organizationId: true } }
+						opportunity: { select: { organizationId: true, status: true } }
 					}
 				}
 			}
@@ -153,7 +165,8 @@ export class ReplyDraftAttachmentsRepository {
 			replyDraftId: row.replyDraftId,
 			opportunityId: row.replyDraft.opportunityId,
 			organizationId: row.replyDraft.opportunity.organizationId,
-			draftStatus: row.replyDraft.status
+			draftStatus: row.replyDraft.status,
+			opportunityStatus: row.replyDraft.opportunity.status
 		};
 	}
 

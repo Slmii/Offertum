@@ -6,10 +6,10 @@ import {
 } from '@/lib/storage/attachment-constraints';
 import { ATTACHMENT_STORAGE, type AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
 import {
-	ATTACHMENT_DRAFT_LOCKED,
 	ATTACHMENT_FILE_MISSING,
 	ATTACHMENT_NOT_FOUND,
 	OPPORTUNITY_NOT_FOUND,
+	REPLY_DRAFT_LOCKED,
 	attachmentCountExceeded,
 	attachmentFileTooLarge,
 	attachmentMimeNotAllowed,
@@ -20,6 +20,7 @@ import {
 	ReplyDraftAttachmentsRepository,
 	type ReplyDraftAttachmentRow
 } from '@/modules/reply-draft-attachments/reply-draft-attachments.repository';
+import { isReplyDraftEditable } from '@/modules/opportunities/reply-draft-editability';
 import {
 	BadRequestException,
 	ConflictException,
@@ -95,8 +96,8 @@ export class ReplyDraftAttachmentsService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
-		if (draft.status === 'SENT') {
-			throw new ConflictException(ATTACHMENT_DRAFT_LOCKED);
+		if (!isReplyDraftEditable({ opportunityStatus: draft.opportunityStatus, draftStatus: draft.status })) {
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
 		// Validation order is intentional: cheap checks first (count + size + MIME) so a
@@ -153,8 +154,8 @@ export class ReplyDraftAttachmentsService {
 		if (!row) {
 			throw new NotFoundException(ATTACHMENT_NOT_FOUND);
 		}
-		if (row.draftStatus === 'SENT') {
-			throw new ConflictException(ATTACHMENT_DRAFT_LOCKED);
+		if (!isReplyDraftEditable({ opportunityStatus: row.opportunityStatus, draftStatus: row.draftStatus })) {
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
 		// DB row first, then blob — if blob delete fails we'd rather have an orphaned

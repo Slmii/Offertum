@@ -17,6 +17,7 @@ import {
 	OPPORTUNITY_URGENCY_COLORS,
 	opportunityCustomerLabel
 } from '@/lib/utils/opportunity.utils';
+import { isReplyDraftEditable } from '@/lib/utils/reply-draft-editability';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -79,6 +80,17 @@ function OpportunityDetailPage() {
 	const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
 
 	const replyDraft = opportunity.replyDraft;
+	const status = opportunity.status;
+	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[status];
+	// W5.5 follow-up — single editability gate. `null` draftStatus means "no draft
+	// generated yet" → helper treats as still editable (caller-decides). The detail
+	// page only renders the editor when `replyDraft !== null`, so this branch only
+	// matters once the AI run lands. Declared up here so the autosave effect below
+	// (which gates on `isDraftEditable`) sees a defined value.
+	const isDraftEditable = isReplyDraftEditable({
+		opportunityStatus: status,
+		draftStatus: replyDraft?.status ?? null
+	});
 	const [body, setBody] = useState(replyDraft?.body ?? '');
 	const debouncedBody = useDebouncedValue(body, AUTOSAVE_DEBOUNCE_MS);
 	// Track the last body we PUT to the server so we don't refire the mutation on
@@ -108,13 +120,18 @@ function OpportunityDetailPage() {
 		if (debouncedBody === lastSavedRef.current) {
 			return;
 		}
+		if (!isDraftEditable) {
+			// Skip autosave on locked drafts — the backend would 409 with REPLY_DRAFT_LOCKED
+			// and the UI would render a confusing error toast. The body state can still
+			// diverge from the server's copy if the user typed before the lock applied;
+			// that's fine — when the lock lifts (status revert to `waiting`), the next
+			// debounce tick flushes the buffered edits.
+			return;
+		}
 		lastSavedRef.current = debouncedBody;
 		updateDraft.mutate({ body: debouncedBody });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [debouncedBody]);
-
-	const status = opportunity.status;
-	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[status];
+	}, [debouncedBody, isDraftEditable]);
 
 	return (
 		<Container maxWidth='lg' sx={{ py: 6 }}>
@@ -186,7 +203,7 @@ function OpportunityDetailPage() {
 				</Alert>
 			)}
 
-			{shouldShowRegenerateHint({ me, replyDraft }) && (
+			{isDraftEditable && shouldShowRegenerateHint({ me, replyDraft }) && (
 				<Alert
 					severity='info'
 					sx={{ mb: 3 }}
@@ -224,7 +241,7 @@ function OpportunityDetailPage() {
 						<Typography variant='h2' sx={{ fontSize: 18 }}>
 							Concept-antwoord
 						</Typography>
-						{replyDraft && replyDraft.status !== 'sent' && me.user.hasTonePlaybook && (
+						{replyDraft && isDraftEditable && me.user.hasTonePlaybook && (
 							<Button
 								size='small'
 								variant='text'
@@ -257,12 +274,12 @@ function OpportunityDetailPage() {
 								isSaving={updateDraft.isPending}
 								lastUpdatedIso={replyDraft.updatedAt}
 								error={updateDraft.error}
-								readOnly={replyDraft.status === 'sent'}
+								readOnly={!isDraftEditable}
 							/>
 							<AttachmentsPanel
 								opportunityId={id}
 								attachments={replyDraft.attachments}
-								readOnly={replyDraft.status === 'sent'}
+								readOnly={!isDraftEditable}
 								isUploading={uploadAttachment.isPending}
 								uploadError={uploadAttachment.error}
 								onUpload={file => uploadAttachment.mutate({ file })}
@@ -277,6 +294,12 @@ function OpportunityDetailPage() {
 							{replyDraft.status === 'sent' && replyDraft.sentAt ? (
 								<Alert severity='success' sx={{ mt: 2 }}>
 									Verzonden om {toReadableDateTime(replyDraft.sentAt)}.
+								</Alert>
+							) : !isDraftEditable ? (
+								<Alert severity='info' sx={{ mt: 2 }}>
+									Concept gesloten — deze offerteaanvraag is gemarkeerd als{' '}
+									{OPPORTUNITY_STATUS_LABELS_NL[status].toLowerCase()}. Zet de status terug naar{' '}
+									<em>Nieuw</em>, <em>Wachten</em> of <em>Stil</em> om verder te bewerken.
 								</Alert>
 							) : (
 								<Stack
