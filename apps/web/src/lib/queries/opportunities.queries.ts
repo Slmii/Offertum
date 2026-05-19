@@ -257,9 +257,50 @@ export function useSendReplyDraft(opportunityId: string) {
 				method: 'POST'
 			}),
 		onSuccess: nextDraft => {
+			// W5.6-followup — opp.status is NO LONGER unconditionally flipped to 'replied'
+			// on send (WON/LOST stay put). Drop the optimistic status update; the
+			// invalidate below re-fetches the authoritative status from the server.
 			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current =>
-				current ? { ...current, replyDraft: nextDraft, status: 'replied' } : current
+				current ? { ...current, replyDraft: nextDraft } : current
 			);
+			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
+		}
+	});
+}
+
+/**
+ * W5.6 — `POST /api/opportunities/:id/reply-draft/followup`. Powers the "Concept-vervolg
+ * opstellen" button on a SENT draft. Server creates a NEW `ReplyDraft` row (the prior
+ * SENT one stays put as an immutable record of what the customer received) and flips
+ * opp.status back to `new` so the editability rule unlocks the editor for the freshly-
+ * generated draft. We splice the new draft into the detail cache + invalidate the list
+ * cache so the row jumps under the `Nieuw` tab.
+ *
+ * Cache update: when the new draft becomes "current," the previously-current draft
+ * (almost always a SENT one) is prepended to the history array. Keeps the UI in sync
+ * with the server's authoritative ordering without a re-fetch.
+ */
+export function useComposeFollowupReplyDraft(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: () =>
+			api<ReplyDraft>(`/api/opportunities/${opportunityId}/reply-draft/followup`, {
+				method: 'POST'
+			}),
+		onSuccess: nextDraft => {
+			// W5.6-followup — compose-followup no longer flips opp.status; the deal stays
+			// where the owner left it. Splice the new draft in and prepend the prior one
+			// to history; rely on the invalidate below for any other state changes.
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current => {
+				if (!current) {
+					return current;
+				}
+				const nextHistory = current.replyDraft
+					? [current.replyDraft, ...current.replyDraftHistory]
+					: current.replyDraftHistory;
+				return { ...current, replyDraft: nextDraft, replyDraftHistory: nextHistory };
+			});
 			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
 		}
 	});

@@ -27,6 +27,11 @@ export interface RawMessageForOpportunityProcessing {
 	subject: string | null;
 	fromEmail: string | null;
 	fromName: string | null;
+	/** W5.6 — Provider thread identifier (Gmail `threadId`, Graph `conversationId`).
+	 *  Used for thread reconstitution before the classifier runs. NULL on the rare
+	 *  provider edge case where threading info is missing; the pipeline then falls
+	 *  through to the regular classifier path. */
+	threadId: string | null;
 	raw: unknown;
 	provider: EmailProvider;
 }
@@ -41,13 +46,17 @@ const OPPORTUNITY_INCLUDE = {
 			threadId: true
 		}
 	},
-	// W5.5 follow-up — light-weight reply-draft fields used by:
+	// W5.5 follow-up + W5.6 — light-weight reply-draft fields used by:
 	//  1. `replyDraftSentAt` wire field on every row (drives the dismiss-dialog "you
-	//     already sent" warning + the `dismissedAfterSend` audit-log flag).
+	//     already sent" warning + the `dismissedAfterSend` audit-log flag). Picks the
+	//     latest SENT draft (any historical send "sticks" the warning on, even after
+	//     a follow-up draft is composed on top).
 	//  2. `isReplyDraftEditable()` server-side gate on the autosave / regenerate /
-	//     attachments endpoints — needs `status` to check for SENT.
-	// One LEFT JOIN per row, two scalar columns; negligible vs. the existing rawMessage join.
-	replyDraft: { select: { sentAt: true, status: true } }
+	//     attachments endpoints — needs the LATEST draft's `status`.
+	// W5.6 — 1:N relation now (was 1:1). Fetch all drafts ordered by `createdAt DESC`
+	// so the mapper can pluck `[0]` for "latest" and `.find(d => d.sentAt)` for "any
+	// sent." Typical row has 1-3 drafts; payload cost is negligible.
+	replyDrafts: { orderBy: { createdAt: 'desc' }, select: { sentAt: true, status: true } }
 } as const satisfies Prisma.OpportunityInclude;
 
 /**
@@ -78,7 +87,12 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 	//
 	// W5.5 follow-up — include staged attachments. `orderBy createdAt asc` so the UI
 	// chip list stays stable across re-renders.
-	replyDraft: {
+	//
+	// W5.6 — 1:N. Fetch all drafts ordered by `createdAt DESC` so the mapper picks
+	// `[0]` as the current draft for the editor and `.find(d => d.sentAt)` to compute
+	// `replyDraftSentAt`.
+	replyDrafts: {
+		orderBy: { createdAt: 'desc' },
 		include: {
 			aiCall: { select: { createdAt: true } },
 			attachments: { orderBy: { createdAt: 'asc' } }
@@ -148,6 +162,7 @@ export class OpportunitiesRepository {
 				subject: true,
 				fromEmail: true,
 				fromName: true,
+				threadId: true,
 				raw: true,
 				emailAccount: { select: { provider: true } }
 			}
@@ -161,6 +176,7 @@ export class OpportunitiesRepository {
 			subject: rawMessage.subject,
 			fromEmail: rawMessage.fromEmail,
 			fromName: rawMessage.fromName,
+			threadId: rawMessage.threadId,
 			raw: rawMessage.raw,
 			provider: rawMessage.emailAccount.provider
 		}));
@@ -172,6 +188,58 @@ export class OpportunitiesRepository {
 			select: { organizationId: true }
 		});
 		return row?.organizationId ?? null;
+	}
+
+	/**
+	 * W5.6 — Thread reconstitution. Look up an existing Opportunity in the same org
+	 * whose originating RawMessage has the given threadId. Only matches non-dismissed
+	 * rows so a customer reply on a thread the owner already dismissed (NOT_A_QUOTE,
+	 * SPAM, etc.) falls through to the classifier path — the owner's correction sticks.
+	 *
+	 * Returns just the columns the pipeline needs to fire the follow-up event; the
+	 * caller can fetch a fuller record afterward if needed.
+	 */
+	async findOpportunityForThread(
+		organizationId: string,
+		threadId: string
+	): Promise<{ id: string; status: PrismaOpportunityStatus } | null> {
+		return this.prisma.opportunity.findFirst({
+			where: {
+				organizationId,
+				dismissedAt: null,
+				rawMessage: { threadId }
+			},
+			select: { id: true, status: true }
+		});
+	}
+
+	/**
+	 * W5.6 — Attach an inbound follow-up RawMessage to an existing Opportunity. Three
+	 * mutations in one transaction so the customer-visible state can't disagree with
+	 * ours mid-flight:
+	 *  1. RawMessage.opportunityId → existing opp (links the conversation),
+	 *  2. RawMessage.isQuoteRequest = true + classifiedAt = now (skip the classifier —
+	 *     the thread match is a stronger positive signal than a fresh classifier run),
+	 *  3. Opportunity.status → NEW (re-promotes the row to the top of the funnel so
+	 *     the owner sees the new draft waiting). The user explicitly asked for the
+	 *     auto-NEW move; revertible via the fully-open transition policy if undesired.
+	 */
+	async attachFollowupMessage(input: { rawMessageId: string; opportunityId: string }): Promise<void> {
+		const now = new Date();
+		await this.prisma.$transaction([
+			this.prisma.rawMessage.update({
+				where: { id: input.rawMessageId },
+				data: {
+					opportunityId: input.opportunityId,
+					isQuoteRequest: true,
+					classifiedAt: now
+				}
+			}),
+			this.prisma.opportunity.update({
+				where: { id: input.opportunityId },
+				data: { status: PrismaOpportunityStatus.NEW }
+			})
+		]);
 	}
 
 	async markRawMessageNegative(rawMessageId: string): Promise<void> {
@@ -388,8 +456,13 @@ export class OpportunitiesRepository {
 	 * Returns `null` when no draft exists for the opportunity — caller surfaces 404.
 	 */
 	async updateReplyDraftBody(opportunityId: string, body: string): Promise<UpdatedReplyDraftRow | null> {
-		const existing = await this.prisma.replyDraft.findUnique({
+		// W5.6 — Operate on the LATEST draft (was: unique-by-opportunityId). Picks by
+		// `createdAt DESC` so autosave targets the most recent draft when a follow-up
+		// exists. The service-layer editability gate already blocks autosave on SENT
+		// drafts, so we don't need to filter by status here.
+		const existing = await this.prisma.replyDraft.findFirst({
 			where: { opportunityId },
+			orderBy: { createdAt: 'desc' },
 			select: { id: true, originalBody: true, wasEditedByUser: true, status: true }
 		});
 
@@ -399,7 +472,7 @@ export class OpportunitiesRepository {
 
 		const diverges = body !== existing.originalBody;
 		const updated = await this.prisma.replyDraft.update({
-			where: { opportunityId },
+			where: { id: existing.id },
 			data: {
 				body,
 				// Only flip the flag forward — once edited, it stays edited even if the

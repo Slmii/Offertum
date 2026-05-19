@@ -434,13 +434,26 @@ model RawMessage {
     // W4 fields — written by the classifier/extractor. Nullable until then.
     isQuoteRequest    Boolean?
     classifiedAt      DateTime?
+    // W5.6 — Thread reconstitution. Set when this RawMessage is attached to an existing
+    // Opportunity (e.g., a customer reply on a thread we've already classified). NULL
+    // for messages that haven't been linked, including all bulk-mail-filtered and
+    // classifier-negative rows. The 1:N inverse on Opportunity is `threadMessages`.
+    //
+    // Note: the ORIGINATING message of an Opportunity is reachable via
+    // `Opportunity.rawMessageId` (1:1, unique). This nullable FK is the *follow-up*
+    // link — historical rows have it NULL until a future reply lands on the same
+    // threadId and we attach it. No backfill on existing rows; only new follow-ups
+    // populate this column. SetNull on delete so AICall retention purges don't cascade.
+    opportunityId     String?   @db.Uuid
 
-    emailAccount EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-    opportunity  Opportunity?
+    emailAccount    EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+    opportunity     Opportunity? @relation("OpportunityOriginatingRawMessage")
+    threadOpportunity Opportunity? @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
 
     // Idempotency on backfill + delta sync: re-fetching the same message ID is a no-op.
     @@unique([emailAccountId, providerMessageId])
     @@index([organizationId, internalDate(sort: Desc)])
+    @@index([opportunityId])
 }
 
 // W4.4 — The user-facing quote request entity. RawMessage remains the immutable source
@@ -486,11 +499,16 @@ model Opportunity {
 
     organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
     emailAccount     EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-    rawMessage       RawMessage   @relation(fields: [rawMessageId], references: [id], onDelete: Cascade)
+    rawMessage       RawMessage   @relation("OpportunityOriginatingRawMessage", fields: [rawMessageId], references: [id], onDelete: Cascade)
+    threadMessages   RawMessage[] @relation("OpportunityThreadMessages")
     classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
     extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
     dismissedBy      User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
-    replyDraft       ReplyDraft?
+    // W5.6 — 1:N drafts (formerly 1:1 via `@unique` on `ReplyDraft.opportunityId`). One opp
+    // can have multiple drafts: the original + one or more follow-ups composed after a
+    // customer reply or via the "Concept-vervolg opstellen" button. Read sites use
+    // `orderBy: createdAt desc, take: 1` to surface the *current* draft.
+    replyDrafts      ReplyDraft[]
 
     @@index([organizationId, status, createdAt(sort: Desc)])
     @@index([organizationId, customerDeadline])
@@ -512,7 +530,12 @@ model Opportunity {
 // sends, and surface the "Wil je dit aan je schrijfstijl toevoegen?" prompt.
 model ReplyDraft {
     id              String           @id @default(uuid()) @db.Uuid
-    opportunityId   String           @unique @db.Uuid
+    // W5.6 — dropped `@unique`. An opp now has 1:N drafts: the original plus one or
+    // more follow-ups created when a customer reply lands on the same thread, or when
+    // the owner clicks "Concept-vervolg opstellen" on a SENT draft. Read sites pick the
+    // current draft via `orderBy: createdAt desc, take: 1`; the editability gate keeps
+    // mutations on the latest non-SENT row.
+    opportunityId   String           @db.Uuid
     // The original AI-generated body. Never mutated after creation — used as the
     // baseline for the W5.7 edit-detection diff and as a "revert to AI version"
     // affordance in the W5.4 editor if we want one later.
@@ -537,6 +560,10 @@ model ReplyDraft {
     aiCall      AICall?                @relation("ReplyDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
     attachments ReplyDraftAttachment[]
 
+    // W5.6 — fast "latest draft for this opp" lookup. Replaces the implicit index that
+    // the dropped `@unique([opportunityId])` provided. Critical for the editor reads
+    // and the editability gate which run on every detail-view load.
+    @@index([opportunityId, createdAt(sort: Desc)])
     @@index([status, createdAt(sort: Desc)])
     @@index([aiCallId])
 }

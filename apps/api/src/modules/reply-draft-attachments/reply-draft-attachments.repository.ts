@@ -1,7 +1,4 @@
-import type {
-	OpportunityStatus as PrismaOpportunityStatus,
-	ReplyDraftStatus as PrismaReplyDraftStatus
-} from '@/generated/prisma/enums';
+import type { ReplyDraftStatus as PrismaReplyDraftStatus } from '@/generated/prisma/enums';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
@@ -47,18 +44,15 @@ export interface AttachmentForAuthorization {
 	opportunityId: string;
 	organizationId: string;
 	draftStatus: PrismaReplyDraftStatus;
-	opportunityStatus: PrismaOpportunityStatus;
 }
 
 /**
- * Shape returned by `findDraftForUpload`. Extended in W5.5 follow-up with
- * `opportunityStatus` so the editability gate can fire on opps in terminal-for-draft
- * states (replied / won / lost) without an additional round-trip.
+ * Shape returned by `findDraftForUpload`. The editability gate keys off `status` alone
+ * (W5.6-followup dropped the opp-status leg).
  */
 export interface DraftForUpload {
 	draftId: string;
 	opportunityId: string;
-	opportunityStatus: PrismaOpportunityStatus;
 	status: PrismaReplyDraftStatus;
 	attachmentCount: number;
 	attachmentTotalBytes: number;
@@ -74,13 +68,17 @@ export class ReplyDraftAttachmentsRepository {
 	 * leakage across tenants).
 	 */
 	async findDraftForUpload(organizationId: string, opportunityId: string): Promise<DraftForUpload | null> {
+		// W5.6 — Pick the LATEST draft for the opp (was: unique-by-opportunityId).
+		// The editability gate in the service layer refuses uploads when the latest is
+		// SENT, so we don't filter by status here — keeps the error message coherent
+		// ("draft is closed" rather than "no draft found").
 		const draft = await this.prisma.replyDraft.findFirst({
 			where: { opportunityId, opportunity: { organizationId } },
+			orderBy: { createdAt: 'desc' },
 			select: {
 				id: true,
 				opportunityId: true,
 				status: true,
-				opportunity: { select: { status: true } },
 				attachments: { select: { sizeBytes: true } }
 			}
 		});
@@ -91,7 +89,6 @@ export class ReplyDraftAttachmentsRepository {
 		return {
 			draftId: draft.id,
 			opportunityId: draft.opportunityId,
-			opportunityStatus: draft.opportunity.status,
 			status: draft.status,
 			attachmentCount: draft.attachments.length,
 			attachmentTotalBytes: total
@@ -148,7 +145,7 @@ export class ReplyDraftAttachmentsRepository {
 					select: {
 						opportunityId: true,
 						status: true,
-						opportunity: { select: { organizationId: true, status: true } }
+						opportunity: { select: { organizationId: true } }
 					}
 				}
 			}
@@ -165,8 +162,7 @@ export class ReplyDraftAttachmentsRepository {
 			replyDraftId: row.replyDraftId,
 			opportunityId: row.replyDraft.opportunityId,
 			organizationId: row.replyDraft.opportunity.organizationId,
-			draftStatus: row.replyDraft.status,
-			opportunityStatus: row.replyDraft.opportunity.status
+			draftStatus: row.replyDraft.status
 		};
 	}
 

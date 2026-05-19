@@ -118,6 +118,14 @@ export interface UpdateOpportunityStatusInput {
 export interface OpportunityDetail extends Opportunity {
 	originalEmailBody: string;
 	replyDraft: ReplyDraft | null;
+	/**
+	 * W5.6 — Prior drafts for this opportunity, newest-first, EXCLUDING the one in
+	 * `replyDraft` above. Each entry is an immutable record of what the customer
+	 * received (or what was prepared and superseded — `status` distinguishes). Empty
+	 * array when only one draft has ever existed. Rendered in the detail view as a
+	 * collapsed read-only history list under the active editor.
+	 */
+	replyDraftHistory: ReplyDraft[];
 }
 
 /**

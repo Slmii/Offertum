@@ -37,7 +37,18 @@ export const InngestEvents = {
 	 * `ReplyDraftGenerateFunction` (W5.3) which composes the AI reply draft in the org
 	 * OWNER's voice.
 	 */
-	OpportunityCreated: 'opportunity/created'
+	OpportunityCreated: 'opportunity/created',
+	/**
+	 * W5.6 — Fired when:
+	 *   1. A customer reply lands on an existing thread (`RawMessage.threadId` matches an
+	 *      Opportunity's originating message); OR
+	 *   2. The owner clicks "Concept-vervolg opstellen" on a SENT draft.
+	 * Payload: `{ opportunityId, organizationId, triggeredBy: 'customer_reply' | 'owner_compose' }`.
+	 * Triggers the same `ReplyDraftGenerateFunction` as `OpportunityCreated`, but the
+	 * handler routes follow-up events to `generateFollowupDraft` (no idempotency short-
+	 * circuit — always creates a new draft row).
+	 */
+	OpportunityFollowupReceived: 'opportunity/followup.received'
 } as const;
 
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];

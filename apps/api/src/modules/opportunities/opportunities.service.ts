@@ -215,8 +215,9 @@ export class OpportunitiesService {
 				// the customer received an irrelevant reply before the classifier mistake
 				// was caught. `/admin/classifier-quality` can split precision metrics by
 				// this axis to surface the costlier mistakes.
-				dismissedAfterSend:
-					opportunity.replyDraft?.sentAt !== null && opportunity.replyDraft?.sentAt !== undefined
+				// W5.6 — `replyDrafts` is 1:N. Any historical SENT draft sticks the flag on,
+				// even after a follow-up draft has been composed on top.
+				dismissedAfterSend: opportunity.replyDrafts.some(d => d.sentAt !== null)
 			},
 			context: 'OpportunitiesService'
 		});
@@ -296,7 +297,11 @@ export class OpportunitiesService {
 			raw: opportunity.rawMessage.raw
 		}).bodyText;
 
-		if (!opportunity.replyDraft && !opportunity.dismissedAt) {
+		// W5.6 — `replyDrafts` is 1:N. Lazy-emit only when there are NO drafts at all
+		// (cold-start window or pre-W5.3 opportunity). When there's at least one draft,
+		// the customer-reply path will fire its own follow-up event; this lazy path is
+		// only for the initial-generation gap.
+		if (opportunity.replyDrafts.length === 0 && !opportunity.dismissedAt) {
 			void this.requestReplyDraftGeneration(opportunity.id, opportunity.organizationId);
 		}
 
@@ -351,12 +356,7 @@ export class OpportunitiesService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
-		if (
-			!isReplyDraftEditable({
-				opportunityStatus: opportunity.status,
-				draftStatus: opportunity.replyDraft?.status ?? null
-			})
-		) {
+		if (!isReplyDraftEditable({ draftStatus: opportunity.replyDrafts[0]?.status ?? null })) {
 			// SENT case still surfaces as REPLY_DRAFT_ALREADY_SENT from the service-layer
 			// `regenerate()` call (`overwrote: false`) — that one is friendlier copy. This
 			// branch only fires when the lock comes from the OPPORTUNITY-status leg (replied
@@ -375,11 +375,12 @@ export class OpportunitiesService {
 		}
 
 		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
-		if (!detail?.replyDraft) {
+		const latestDraft = detail?.replyDrafts[0];
+		if (!latestDraft) {
 			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
 		}
 
-		return toReplyDraftResponseDto(detail.replyDraft);
+		return toReplyDraftResponseDto(latestDraft);
 	}
 
 	/**
@@ -394,6 +395,68 @@ export class OpportunitiesService {
 	 *  - 409 → draft is already SENT.
 	 *  - 422 → inbox owner removed or original had no From-address.
 	 */
+	/**
+	 * W5.6 — "Concept-vervolg opstellen" (compose follow-up). User-driven entry point
+	 * for creating a new draft on a SENT opportunity. Generates synchronously here
+	 * (rather than enqueuing the Inngest follow-up event) so the FE can read the new
+	 * draft on the response — same pattern as `regenerateReplyDraft`. The endpoint:
+	 *
+	 *  - 404 → opportunity not in this org.
+	 *  - 409 → the latest draft is NOT yet SENT (there's already an editable draft —
+	 *    use that one instead of creating another).
+	 *  - 200 → freshly-generated draft in the user's voice.
+	 *
+	 * **W5.6-followup:** No longer touches `opp.status`. The editability rule keys off
+	 * draft-state only (a brand-new PENDING_APPROVAL draft is editable regardless of
+	 * opp.status), so the prior `updateStatus(NEW)` here is dead. Owners can compose a
+	 * courtesy follow-up on a WON deal and the deal stays WON through send.
+	 */
+	async composeFollowupReplyDraft(
+		organizationId: string,
+		opportunityId: string,
+		requestingUserId: string
+	): Promise<ReplyDraftResponseDto> {
+		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		const latestIsSent = await this.replyDrafts.isLatestDraftSent(opportunityId);
+		if (!latestIsSent) {
+			// Either no draft exists yet (cold-start race — caller should retry) or a
+			// non-sent draft is already in progress. Either way, no follow-up needed.
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
+		}
+
+		const { created } = await this.replyDrafts.generateFollowupDraft(
+			opportunityId,
+			requestingUserId,
+			'owner_compose'
+		);
+		if (!created) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		this.logService.logAction({
+			action: 'reply_draft.followup.owner_composed',
+			message: `Owner ${requestingUserId} composed a follow-up draft on opportunity ${opportunityId}`,
+			metadata: {
+				organizationId,
+				opportunityId,
+				requestingUserId,
+				opportunityStatus: OPPORTUNITY_STATUS_TO_WIRE[opportunity.status]
+			},
+			context: 'OpportunitiesService'
+		});
+
+		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
+		const latestDraft = detail?.replyDrafts[0];
+		if (!latestDraft) {
+			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
+		}
+		return toReplyDraftResponseDto(latestDraft);
+	}
+
 	async sendReplyDraft(
 		organizationId: string,
 		opportunityId: string,
@@ -407,12 +470,7 @@ export class OpportunitiesService {
 		// W5.5 follow-up — sending a draft on a `won` / `lost` / already-`replied`-without-
 		// Quoteom opp doesn't make sense. The SENT case still surfaces via the
 		// `alreadySent: true` branch below with a more specific message.
-		if (
-			!isReplyDraftEditable({
-				opportunityStatus: opportunity.status,
-				draftStatus: opportunity.replyDraft?.status ?? null
-			})
-		) {
+		if (!isReplyDraftEditable({ draftStatus: opportunity.replyDrafts[0]?.status ?? null })) {
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
@@ -429,12 +487,13 @@ export class OpportunitiesService {
 		}
 
 		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
-		if (!detail?.replyDraft) {
+		const latestDraft = detail?.replyDrafts[0];
+		if (!latestDraft) {
 			// Shouldn't happen — the send just succeeded + the row exists. Defensive.
 			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
 		}
 
-		return toReplyDraftResponseDto(detail.replyDraft);
+		return toReplyDraftResponseDto(latestDraft);
 	}
 
 	/**
@@ -454,12 +513,7 @@ export class OpportunitiesService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
-		if (
-			!isReplyDraftEditable({
-				opportunityStatus: opportunity.status,
-				draftStatus: opportunity.replyDraft?.status ?? null
-			})
-		) {
+		if (!isReplyDraftEditable({ draftStatus: opportunity.replyDrafts[0]?.status ?? null })) {
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
@@ -471,12 +525,13 @@ export class OpportunitiesService {
 		// Re-read the full draft row so the response shape matches the GET endpoint —
 		// caller's React Query cache replaces the in-memory draft from one fetch.
 		const detail = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
-		if (!detail?.replyDraft) {
+		const latestDraft = detail?.replyDrafts[0];
+		if (!latestDraft) {
 			// Should never happen — we just wrote the row. Defensive.
 			throw new NotFoundException(REPLY_DRAFT_NOT_FOUND);
 		}
 
-		return toReplyDraftResponseDto(detail.replyDraft);
+		return toReplyDraftResponseDto(latestDraft);
 	}
 
 	/**
@@ -589,6 +644,69 @@ export class OpportunitiesService {
 		result.scanned += 1;
 
 		try {
+			// W5.6 — Thread reconstitution. Check FIRST (before bulk-mail filter + classifier)
+			// because a threaded reply is overwhelmingly a real customer message — a stronger
+			// positive signal than the AI classifier can give us. If the threadId matches an
+			// existing non-dismissed Opportunity in the same org, attach this RawMessage to
+			// it instead of creating a new Opportunity, flip the opp back to NEW, and fire a
+			// follow-up event so the Inngest function regenerates a fresh draft.
+			//
+			// Dismissed opportunities are excluded from the match (see `findOpportunityForThread`)
+			// so a customer reply on a thread the owner already rejected (NOT_A_QUOTE / SPAM)
+			// falls through to the classifier — the owner's correction is respected.
+			if (rawMessage.threadId) {
+				const existingOpp = await this.repository.findOpportunityForThread(
+					rawMessage.organizationId,
+					rawMessage.threadId
+				);
+				if (existingOpp) {
+					await this.repository.attachFollowupMessage({
+						rawMessageId: rawMessage.id,
+						opportunityId: existingOpp.id
+					});
+					result.classifiedPositive += 1;
+
+					try {
+						await inngest.send({
+							name: InngestEvents.OpportunityFollowupReceived,
+							data: {
+								opportunityId: existingOpp.id,
+								organizationId: rawMessage.organizationId,
+								triggeredBy: 'customer_reply'
+							}
+						});
+					} catch (error) {
+						this.logService.logAction({
+							action: 'opportunity.followup.enqueue_failed',
+							message: `Failed to enqueue follow-up draft for ${existingOpp.id}: ${error instanceof Error ? error.message : 'unknown'}`,
+							metadata: {
+								opportunityId: existingOpp.id,
+								organizationId: rawMessage.organizationId,
+								rawMessageId: rawMessage.id
+							},
+							level: 'error',
+							stack: error instanceof Error ? error.stack : undefined,
+							context: 'OpportunitiesService'
+						});
+					}
+
+					this.logService.logAction({
+						action: 'opportunity.followup.attached',
+						message: `RawMessage ${rawMessage.id} attached to existing opportunity ${existingOpp.id} via thread match`,
+						metadata: {
+							rawMessageId: rawMessage.id,
+							opportunityId: existingOpp.id,
+							organizationId: rawMessage.organizationId,
+							threadId: rawMessage.threadId,
+							previousStatus: existingOpp.status
+						},
+						context: 'OpportunitiesService'
+					});
+
+					return true;
+				}
+			}
+
 			// Pre-filter: short-circuit obvious bulk/marketing mail BEFORE the AI call.
 			// Same negative-result effect as a classifier "no" but avoids the OpenAI cost
 			// and prevents the well-known vendor-direction misclassification (emails with
@@ -744,7 +862,10 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
-		replyDraftSentAt: opportunity.replyDraft?.sentAt?.toISOString() ?? null
+		// W5.6 — `replyDrafts` is 1:N, ordered `createdAt DESC` by the include. Picking
+		// the *first* draft with a `sentAt` gives us the most-recent send, which is what
+		// the dismiss-dialog warning + the `dismissedAfterSend` audit flag care about.
+		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null
 	};
 }
 
@@ -756,7 +877,7 @@ function toStringArray(value: unknown): string[] {
 	return value.filter((item): item is string => typeof item === 'string');
 }
 
-function toReplyDraftResponseDto(draft: NonNullable<OpportunityDetailRecord['replyDraft']>): ReplyDraftResponseDto {
+function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][number]): ReplyDraftResponseDto {
 	return {
 		id: draft.id,
 		opportunityId: draft.opportunityId,
@@ -818,8 +939,16 @@ function toOpportunityDetailResponseDto(
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
-		replyDraftSentAt: opportunity.replyDraft?.sentAt?.toISOString() ?? null,
+		// W5.6 — `replyDrafts` is 1:N. See the list mapper for the same `find()` logic.
+		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
 		originalEmailBody,
-		replyDraft: opportunity.replyDraft ? toReplyDraftResponseDto(opportunity.replyDraft) : null
+		// Latest draft (`createdAt DESC` already applied in the include) — null when no
+		// draft exists yet (cold-start window between Opportunity insert and the
+		// `reply-draft-generate` Inngest function finishing).
+		replyDraft: opportunity.replyDrafts[0] ? toReplyDraftResponseDto(opportunity.replyDrafts[0]) : null,
+		// W5.6 — Prior drafts, newest-first, excluding the current one above. Drives the
+		// read-only history panel under the editor. Each entry is the immutable record
+		// of what the customer received at that point in the conversation.
+		replyDraftHistory: opportunity.replyDrafts.slice(1).map(toReplyDraftResponseDto)
 	};
 }

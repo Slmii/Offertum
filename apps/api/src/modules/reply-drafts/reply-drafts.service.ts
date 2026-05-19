@@ -78,6 +78,15 @@ export class ReplyDraftsService {
 		@Inject(ATTACHMENT_STORAGE) private readonly attachmentStorage: AttachmentStorage
 	) {}
 
+	/**
+	 * W5.6 — Convenience passthrough used by the "compose follow-up" controller path.
+	 * Kept on the service (vs. dipping into the repo from `OpportunitiesService`) so
+	 * the public surface this module exposes stays cohesive.
+	 */
+	isLatestDraftSent(opportunityId: string): Promise<boolean> {
+		return this.repository.isLatestDraftSent(opportunityId);
+	}
+
 	async upsertFromOpportunity(opportunityId: string): Promise<UpsertReplyDraftResult> {
 		// Short-circuit: if the row already exists, the Inngest function is retrying or
 		// the user has multiple opportunities reaching this code path. Cheaper than re-
@@ -152,6 +161,96 @@ export class ReplyDraftsService {
 		});
 
 		return { created, alreadyExisted: false };
+	}
+
+	/**
+	 * W5.6 — Generate a follow-up draft for an existing opportunity. Always creates a
+	 * NEW `ReplyDraft` row (does not overwrite the prior SENT one — that row stays as
+	 * an immutable record of what the customer received). Two callers:
+	 *  1. The Inngest `OpportunityFollowupReceived` handler when a customer reply lands
+	 *     on the thread (`triggeredBy: 'customer_reply'`).
+	 *  2. The "Concept-vervolg opstellen" endpoint when the owner manually requests a
+	 *     follow-up draft on a SENT opp (`triggeredBy: 'owner_compose'`).
+	 *
+	 * Uses the requesting user's voice when supplied (matches the W5.4 regenerate
+	 * semantics); falls back to the org OWNER's voice otherwise (matches the W5.3
+	 * generate-on-arrival semantics) so a customer-reply on an opp where the OWNER is
+	 * the inbox connector still produces a draft in their voice.
+	 *
+	 * Returns the newly-inserted draft's id so the caller can echo or audit-log it.
+	 */
+	async generateFollowupDraft(
+		opportunityId: string,
+		requestingUserId: string | null,
+		triggeredBy: 'customer_reply' | 'owner_compose'
+	): Promise<{ created: boolean; draftId: string | null }> {
+		const opportunity = await this.repository.findOpportunityForGeneration(opportunityId);
+		if (!opportunity) {
+			this.logService.logAction({
+				action: 'reply_draft.followup.opportunity_not_found',
+				message: `Opportunity ${opportunityId} not found at follow-up draft-generation time`,
+				metadata: { opportunityId, triggeredBy },
+				level: 'warn',
+				context: 'ReplyDraftsService'
+			});
+			return { created: false, draftId: null };
+		}
+
+		const voice = requestingUserId
+			? await this.repository.findUserForVoice(requestingUserId)
+			: await this.repository.findOwnerForOrganization(opportunity.organizationId);
+		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
+
+		const bodyText = buildRawMessageAIInput({
+			provider: opportunity.rawMessage.provider,
+			subject: opportunity.rawMessage.subject,
+			fromName: opportunity.rawMessage.fromName,
+			fromEmail: opportunity.rawMessage.fromEmail,
+			raw: opportunity.rawMessage.raw
+		}).bodyText;
+
+		const input: ReplyDraftInput = {
+			subject: opportunity.rawMessage.subject,
+			fromName: opportunity.rawMessage.fromName,
+			fromEmail: opportunity.rawMessage.fromEmail,
+			bodyText,
+			customerName: opportunity.customerName,
+			address: opportunity.address,
+			requestType: opportunity.requestType,
+			urgency: this.toWireUrgency(opportunity.urgency),
+			customerDeadline: opportunity.customerDeadline?.toISOString().slice(0, 10) ?? null,
+			customerAppointment: opportunity.customerAppointment?.toISOString().slice(0, 10) ?? null,
+			deliverableHints: this.toStringArray(opportunity.deliverableHints),
+			tonePlaybookText: voice?.tonePlaybookText ?? null,
+			senderName: voice?.name ?? null,
+			organizationName
+		};
+
+		const result = await this.generator.generate(input);
+
+		const { draftId } = await this.repository.createFollowup({
+			opportunityId,
+			body: result.value.body,
+			aiCallId: result.callId
+		});
+
+		this.logService.logAction({
+			action: 'reply_draft.followup.created',
+			message: `Follow-up reply draft generated for opportunity ${opportunityId} (${triggeredBy})`,
+			metadata: {
+				opportunityId,
+				organizationId: opportunity.organizationId,
+				aiProvider: `${result.provider}/${result.model}`,
+				usedTonePlaybook: input.tonePlaybookText !== null,
+				voiceUserId: voice?.userId ?? null,
+				bodyLength: result.value.body.length,
+				draftId,
+				triggeredBy
+			},
+			context: 'ReplyDraftsService'
+		});
+
+		return { created: true, draftId };
 	}
 
 	/**
@@ -344,7 +443,7 @@ export class ReplyDraftsService {
 			}
 		);
 
-		const { draftSentAt } = await this.repository.markSent({ opportunityId });
+		const { draftSentAt } = await this.repository.markSent({ draftId: context.draftId, opportunityId });
 
 		this.logService.logAction({
 			action: 'reply_draft.sent',

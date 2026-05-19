@@ -10,12 +10,20 @@ import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 /**
- * W5.3 — listens for `opportunity/created` events emitted by the opportunities pipeline
- * after a new `Opportunity` row is persisted, and generates the AI reply draft.
- *
- * Idempotency: the `ReplyDraft.opportunityId @unique` constraint + `createMany` /
- * `skipDuplicates: true` in `ReplyDraftsRepository.createIfAbsent` make this function
- * retry-safe. Inngest's per-function retry budget covers transient OpenAI hiccups.
+ * W5.3 + W5.6 — listens for two events emitted by the opportunities pipeline and
+ * generates the appropriate AI reply draft:
+ *  - `opportunity/created` → first-time draft on a brand-new opportunity. Idempotent
+ *    via an explicit "any draft already exists?" check in `createIfAbsent` (the
+ *    `@unique` constraint that previously guaranteed this was dropped in W5.6 to allow
+ *    follow-up drafts).
+ *  - `opportunity/followup.received` → fresh draft on an existing opportunity after a
+ *    customer reply OR after the owner clicks "Concept-vervolg opstellen." ALWAYS
+ *    creates a new draft row (no idempotency short-circuit). The Inngest function's
+ *    retry budget covers transient OpenAI hiccups; a retry of an already-completed
+ *    follow-up event will create a duplicate draft — an exceedingly rare race that
+ *    the owner can resolve manually by deleting one. Tightening would require a
+ *    consumed-events table or a per-event idempotency key, neither of which is worth
+ *    it at MVP scale.
  *
  * AsyncLocalStorage: re-established INSIDE the `step.run` callback per W4 pattern #8.
  * Inngest schedules step callbacks on a different async chain than the handler body, so
@@ -32,19 +40,25 @@ export class ReplyDraftGenerateFunction {
 			{
 				id: InngestFunctionIds.ReplyDraftGenerate,
 				name: 'Reply draft generate',
-				triggers: [{ event: InngestEvents.OpportunityCreated }],
+				triggers: [
+					{ event: InngestEvents.OpportunityCreated },
+					{ event: InngestEvents.OpportunityFollowupReceived }
+				],
 				retries: 3
 			},
 			async ({ event, runId }) => {
-				const data = event.data as { opportunityId?: unknown; organizationId?: unknown } | undefined;
+				const data = event.data as
+					| { opportunityId?: unknown; organizationId?: unknown; triggeredBy?: unknown }
+					| undefined;
 				const opportunityId = typeof data?.opportunityId === 'string' ? data.opportunityId : null;
 				const organizationId = typeof data?.organizationId === 'string' ? data.organizationId : null;
+				const triggeredBy = data?.triggeredBy === 'owner_compose' ? 'owner_compose' : 'customer_reply';
 
 				if (!opportunityId) {
 					logService.logAction({
 						action: 'inngest.event.invalid_payload',
-						message: `${InngestEvents.OpportunityCreated} event missing opportunityId`,
-						metadata: { event: InngestEvents.OpportunityCreated, payload: event.data },
+						message: `${event.name} event missing opportunityId`,
+						metadata: { event: event.name, payload: event.data },
 						level: 'warn',
 						context: 'InngestFn:reply-draft-generate'
 					});
@@ -56,15 +70,18 @@ export class ReplyDraftGenerateFunction {
 					...(organizationId ? { organizationId } : {})
 				};
 
-				// Wrapping the service call in `requestContext.run` propagates the
-				// correlation into every `AICall` / `Log` row the generator produces. There's
-				// only one step in this function (no chained `step.run` calls), but the wrap
-				// stays here to preserve the pattern for any future expansion.
+				const isFollowup = event.name === InngestEvents.OpportunityFollowupReceived;
 				const result = await requestContext.run(correlation, () =>
-					replyDrafts.upsertFromOpportunity(opportunityId)
+					isFollowup
+						? // Follow-up path: always creates a new draft. The caller (customer-reply
+							// pipeline or owner-compose endpoint) is the trigger; no user-id is
+							// carried on the customer-reply event, so the org OWNER's voice is used
+							// (matches the W5.3 initial-generation default).
+							replyDrafts.generateFollowupDraft(opportunityId, null, triggeredBy)
+						: replyDrafts.upsertFromOpportunity(opportunityId)
 				);
 
-				return { opportunityId, ...result };
+				return { opportunityId, event: event.name, ...result };
 			}
 		);
 

@@ -126,6 +126,9 @@ const RAW_MESSAGE: RawMessageForOpportunityProcessing = {
 	subject: 'Offerte',
 	fromEmail: 'alice@example.com',
 	fromName: 'Alice',
+	// W5.6 — null so the thread-reconstitution branch falls through to the classifier
+	// path. Tests that exercise thread reconstitution explicitly set this themselves.
+	threadId: null,
 	raw: {
 		bodyPreview: 'Graag ontvang ik een offerte',
 		body: { contentType: 'text', content: 'Graag ontvang ik een offerte' }
@@ -165,10 +168,10 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 			fromName: 'Alice',
 			threadId: 'thread-1'
 		},
-		// W5.5 follow-up — `OPPORTUNITY_INCLUDE` now joins the reply draft (status + sentAt)
-		// so the editability guard + `replyDraftSentAt` wire field have data to work with.
-		// Default to "no draft yet" so the unchanged transition tests still pass.
-		replyDraft: null
+		// W5.5 follow-up — `OPPORTUNITY_INCLUDE` now joins reply-draft scalars used by the
+		// editability guard + `replyDraftSentAt` wire field. W5.6 flipped this to 1:N —
+		// default to an empty array so the unchanged transition tests still pass.
+		replyDrafts: []
 	};
 }
 

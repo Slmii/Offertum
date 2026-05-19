@@ -2,6 +2,7 @@ import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import {
 	opportunityDetailQueryOptions,
+	useComposeFollowupReplyDraft,
 	useDeleteReplyDraftAttachment,
 	useRegenerateReplyDraft,
 	useSendReplyDraft,
@@ -18,6 +19,9 @@ import {
 	opportunityCustomerLabel
 } from '@/lib/utils/opportunity.utils';
 import { isReplyDraftEditable } from '@/lib/utils/reply-draft-editability';
+import Accordion from '@mui/material/Accordion';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import AccordionSummary from '@mui/material/AccordionSummary';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -39,6 +43,7 @@ import {
 	OPPORTUNITY_STATUSES,
 	REPLY_DRAFT_BODY_MAX_LENGTH,
 	type OpportunityStatus,
+	type ReplyDraft,
 	type ReplyDraftAttachment
 } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -75,6 +80,7 @@ function OpportunityDetailPage() {
 	const updateDraft = useUpdateReplyDraft(id);
 	const regenerateDraft = useRegenerateReplyDraft(id);
 	const sendDraft = useSendReplyDraft(id);
+	const composeFollowup = useComposeFollowupReplyDraft(id);
 	const uploadAttachment = useUploadReplyDraftAttachment(id);
 	const deleteAttachment = useDeleteReplyDraftAttachment(id);
 	const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
@@ -82,15 +88,11 @@ function OpportunityDetailPage() {
 	const replyDraft = opportunity.replyDraft;
 	const status = opportunity.status;
 	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[status];
-	// W5.5 follow-up — single editability gate. `null` draftStatus means "no draft
-	// generated yet" → helper treats as still editable (caller-decides). The detail
-	// page only renders the editor when `replyDraft !== null`, so this branch only
-	// matters once the AI run lands. Declared up here so the autosave effect below
-	// (which gates on `isDraftEditable`) sees a defined value.
-	const isDraftEditable = isReplyDraftEditable({
-		opportunityStatus: status,
-		draftStatus: replyDraft?.status ?? null
-	});
+	// W5.6-followup — editability collapses to draft-state only. Opp.status no longer
+	// gates the editor; courtesy follow-ups on a WON/LOST deal stay editable until
+	// they're sent. `null` draftStatus means "no draft generated yet" → editable
+	// (caller decides); the detail page only renders the editor once a draft exists.
+	const isDraftEditable = isReplyDraftEditable({ draftStatus: replyDraft?.status ?? null });
 	const [body, setBody] = useState(replyDraft?.body ?? '');
 	const debouncedBody = useDebouncedValue(body, AUTOSAVE_DEBOUNCE_MS);
 	// Track the last body we PUT to the server so we don't refire the mutation on
@@ -292,15 +294,29 @@ function OpportunityDetailPage() {
 								onDelete={attachmentId => deleteAttachment.mutate({ attachmentId })}
 							/>
 							{replyDraft.status === 'sent' && replyDraft.sentAt ? (
-								<Alert severity='success' sx={{ mt: 2 }}>
-									Verzonden om {toReadableDateTime(replyDraft.sentAt)}.
-								</Alert>
-							) : !isDraftEditable ? (
-								<Alert severity='info' sx={{ mt: 2 }}>
-									Concept gesloten — deze offerteaanvraag is gemarkeerd als{' '}
-									{OPPORTUNITY_STATUS_LABELS_NL[status].toLowerCase()}. Zet de status terug naar{' '}
-									<em>Nieuw</em>, <em>Wachten</em> of <em>Stil</em> om verder te bewerken.
-								</Alert>
+								<Stack
+									direction='row'
+									spacing={1}
+									sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+								>
+									<Alert severity='success' sx={{ flex: 1 }}>
+										Verzonden om {toReadableDateTime(replyDraft.sentAt)}.
+									</Alert>
+									{/* W5.6 — "Concept-vervolg opstellen". Manual follow-up entry
+									 * point for cases where the customer responded out-of-band
+									 * (phone, in-person) but the owner still wants to send a
+									 * written confirmation. The customer-driven path is handled
+									 * automatically by the inbox-side thread reconstitution. */}
+									<Button
+										variant='outlined'
+										size='medium'
+										onClick={() => composeFollowup.mutate()}
+										disabled={composeFollowup.isPending}
+										startIcon={composeFollowup.isPending ? <CircularProgress size={14} /> : null}
+									>
+										{composeFollowup.isPending ? 'Bezig…' : 'Concept-vervolg opstellen'}
+									</Button>
+								</Stack>
 							) : (
 								<Stack
 									direction='row'
@@ -340,6 +356,9 @@ function OpportunityDetailPage() {
 								als het langer duurt dan een minuut.
 							</Typography>
 						</Paper>
+					)}
+					{opportunity.replyDraftHistory.length > 0 && (
+						<ReplyDraftHistoryPanel opportunityId={id} history={opportunity.replyDraftHistory} />
 					)}
 				</Box>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
@@ -806,4 +825,122 @@ function formatBytes(bytes: number): string {
 		return `${(bytes / 1024).toFixed(0)} KB`;
 	}
 	return `${bytes} B`;
+}
+
+/**
+ * W5.6 — Read-only history of prior reply drafts on this opportunity. Renders below the
+ * editor when there is more than one draft (i.e., a follow-up has been composed). Each
+ * historical draft expands into a panel showing the body the customer received + any
+ * attachments that were sent. Status badge distinguishes SENT (the customer received
+ * it) from EDITED/PENDING_APPROVAL (an earlier draft that was superseded before send —
+ * uncommon, but possible if a customer reply lands while the owner is mid-draft).
+ *
+ * No edit affordances at all — history is immutable from the UI's perspective. The
+ * server side enforces this too (mutations target the latest draft only, per the
+ * `findFirst({ orderBy: createdAt desc })` lookups in the repository layer).
+ */
+function ReplyDraftHistoryPanel({ opportunityId, history }: { opportunityId: string; history: ReplyDraft[] }) {
+	return (
+		<Box sx={{ mt: 4 }}>
+			<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
+				Vorige conceptenversies ({history.length})
+			</Typography>
+			<Stack spacing={1}>
+				{history.map((draft, index) => (
+					<ReplyDraftHistoryEntry
+						key={draft.id}
+						opportunityId={opportunityId}
+						draft={draft}
+						// Number the entries from newest (1) to oldest. `history` is already
+						// newest-first per the API; this matches what the user sees top-down.
+						ordinal={history.length - index}
+					/>
+				))}
+			</Stack>
+		</Box>
+	);
+}
+
+function ReplyDraftHistoryEntry({
+	opportunityId,
+	draft,
+	ordinal
+}: {
+	opportunityId: string;
+	draft: ReplyDraft;
+	ordinal: number;
+}) {
+	const isSent = draft.status === 'sent';
+	const timestamp = draft.sentAt ?? draft.updatedAt;
+	const headerText = isSent
+		? `Verzonden ${toReadableDateTime(timestamp)}`
+		: `Vervangen ${toReadableDateTime(timestamp)}`;
+
+	return (
+		<Accordion variant='outlined' disableGutters>
+			<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
+				<Stack
+					direction='row'
+					spacing={1}
+					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
+				>
+					<Typography variant='caption' sx={{ fontWeight: 600 }}>
+						v{ordinal}
+					</Typography>
+					<Chip
+						size='small'
+						label={isSent ? 'Verzonden' : 'Vervangen'}
+						color={isSent ? 'success' : 'default'}
+						variant={isSent ? 'filled' : 'outlined'}
+					/>
+					<Typography variant='caption' color='text.secondary'>
+						{headerText}
+					</Typography>
+					{draft.attachments.length > 0 && (
+						<Typography variant='caption' color='text.secondary'>
+							· {draft.attachments.length} bijlage{draft.attachments.length === 1 ? '' : 'n'}
+						</Typography>
+					)}
+				</Stack>
+			</AccordionSummary>
+			<AccordionDetails sx={{ pt: 0 }}>
+				<Typography
+					variant='body2'
+					component='pre'
+					sx={{
+						whiteSpace: 'pre-wrap',
+						fontFamily: 'inherit',
+						m: 0,
+						color: 'text.primary',
+						borderLeft: '3px solid',
+						borderColor: 'divider',
+						pl: 2
+					}}
+				>
+					{draft.body}
+				</Typography>
+				{draft.attachments.length > 0 && (
+					<Box sx={{ mt: 2 }}>
+						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
+							Bijlagen
+						</Typography>
+						<Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+							{draft.attachments.map(attachment => (
+								<Chip
+									key={attachment.id}
+									size='small'
+									label={`${attachment.filename} · ${formatBytes(attachment.sizeBytes)}`}
+									component='a'
+									clickable
+									href={`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachment.id}/download`}
+									target='_blank'
+									rel='noopener'
+								/>
+							))}
+						</Stack>
+					</Box>
+				)}
+			</AccordionDetails>
+		</Accordion>
+	);
 }

@@ -1,27 +1,6 @@
-import {
-	OpportunityStatus as PrismaOpportunityStatus,
-	ReplyDraftStatus as PrismaReplyDraftStatus
-} from '@/generated/prisma/enums';
-
-/**
- * Opportunity statuses that lock the reply draft. Picked deliberately:
- *  - REPLIED: a reply went out (either via Quoteom — which also flips draft.status to
- *    SENT — or the user marked it manually after a phone callback).
- *  - WON / LOST: workflow-terminal. The deal is settled; no more draft work belongs
- *    here. The status-transition policy doesn't permit moving OUT of WON/LOST, so this
- *    is a permanent lock at the workflow layer.
- *
- * NEW / WAITING / COLD stay editable — these are in-progress states where the owner
- * might still want to refine the draft or stage a follow-up.
- */
-export const TERMINAL_OPPORTUNITY_STATUSES_FOR_DRAFT: ReadonlySet<PrismaOpportunityStatus> = new Set([
-	PrismaOpportunityStatus.REPLIED,
-	PrismaOpportunityStatus.WON,
-	PrismaOpportunityStatus.LOST
-]);
+import { ReplyDraftStatus as PrismaReplyDraftStatus } from '@/generated/prisma/enums';
 
 export interface ReplyDraftEditabilityInput {
-	opportunityStatus: PrismaOpportunityStatus;
 	/** `null` when no draft has been generated yet — never locks (caller decides). */
 	draftStatus: PrismaReplyDraftStatus | null;
 }
@@ -30,23 +9,22 @@ export interface ReplyDraftEditabilityInput {
  * Single source of truth for "is the draft editable right now?" — drives the autosave
  * endpoint, the regenerate endpoint, and the attachments endpoints.
  *
- * Two independent legs combined with OR:
- *  1. **Draft has been sent** — permanent. Even if the user reverts the opportunity
- *     to WAITING / COLD, a sent email can't be un-sent and the draft stays read-only.
- *  2. **Opportunity is in a terminal-for-draft state** — reversible. Move from WON
- *     back to WAITING (transition policy doesn't permit this today, but the leg is
- *     order-independent for future-proofing) and the draft re-opens, provided it
- *     was never actually sent.
+ * **One lock, one rule:** the latest draft's status. `SENT` is permanent ("can't
+ * unsend an email"); anything else is editable.
  *
- * The reverse implication ("draft is editable") needs BOTH legs to clear; the OR on
- * the locked side is the same as AND on the editable side.
+ * W5.6-followup — Previously this rule also locked when the opportunity was in a
+ * terminal workflow state (REPLIED/WON/LOST). That second leg was a workaround for
+ * the 1:1 era when each opp had exactly one draft, and we needed an extra signal to
+ * say "this opp is done." With 1:N drafts (W5.6), the latest draft's `status` is
+ * fully expressive on its own: a PENDING_APPROVAL / EDITED draft means "we're
+ * working on a reply right now," regardless of the opp's workflow status. Keeping
+ * the opp-status leg caused real bugs (a follow-up on a WON deal would force the
+ * workflow status to REPLIED), so it was dropped.
+ *
+ * Opp.status is now strictly informational from this gate's perspective — owners
+ * can mark a deal won / lost / cold for their pipeline tracking without that
+ * affecting their ability to compose a courtesy follow-up.
  */
 export function isReplyDraftEditable(input: ReplyDraftEditabilityInput): boolean {
-	if (input.draftStatus === PrismaReplyDraftStatus.SENT) {
-		return false;
-	}
-	if (TERMINAL_OPPORTUNITY_STATUSES_FOR_DRAFT.has(input.opportunityStatus)) {
-		return false;
-	}
-	return true;
+	return input.draftStatus !== PrismaReplyDraftStatus.SENT;
 }

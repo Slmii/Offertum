@@ -24,4 +24,5 @@ export class ReplyDraftResponseDto implements ReplyDraft {
 export class OpportunityDetailResponseDto extends OpportunityResponseDto implements OpportunityDetail {
 	originalEmailBody!: string;
 	replyDraft!: ReplyDraftResponseDto | null;
+	replyDraftHistory!: ReplyDraftResponseDto[];
 }

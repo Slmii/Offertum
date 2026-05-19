@@ -38,6 +38,10 @@ const CREATE_INPUT = {
 		subject: 'Offerte',
 		fromEmail: 'alice@example.com',
 		fromName: 'Alice',
+		// W5.6 — `threadId` on RawMessageForOpportunityProcessing; null here because the
+		// thread-reconstitution check runs upstream of `createOpportunityFromRawMessage`,
+		// which only exercises the new-opportunity insert path.
+		threadId: null,
 		raw: {},
 		provider: 'GMAIL' as const
 	},

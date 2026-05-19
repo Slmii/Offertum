@@ -96,7 +96,7 @@ export class ReplyDraftAttachmentsService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
-		if (!isReplyDraftEditable({ opportunityStatus: draft.opportunityStatus, draftStatus: draft.status })) {
+		if (!isReplyDraftEditable({ draftStatus: draft.status })) {
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
@@ -154,7 +154,7 @@ export class ReplyDraftAttachmentsService {
 		if (!row) {
 			throw new NotFoundException(ATTACHMENT_NOT_FOUND);
 		}
-		if (!isReplyDraftEditable({ opportunityStatus: row.opportunityStatus, draftStatus: row.draftStatus })) {
+		if (!isReplyDraftEditable({ draftStatus: row.draftStatus })) {
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 

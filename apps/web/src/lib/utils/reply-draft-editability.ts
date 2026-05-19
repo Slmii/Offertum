@@ -1,27 +1,19 @@
-import type { OpportunityStatus, ReplyDraftStatus } from '@quoteom/shared';
+import type { ReplyDraftStatus } from '@quoteom/shared';
 
 /**
  * Web mirror of the API helper in
  * `apps/api/src/modules/opportunities/reply-draft-editability.ts`. Two helpers in two
- * apps because the wire-format and Prisma enums differ casing-wise, and DRY at this
- * boundary means importing Prisma enums into the web bundle (which we don't want).
+ * apps because the wire-format and Prisma enums differ casing-wise. Keep them in
+ * lockstep.
  *
- * Keep the two in lockstep: any future change to the lock rule needs the same change
- * here. The set of terminal opportunity statuses is the canonical contract.
+ * Lock collapses to a single rule: the latest draft's status. `sent` is the only
+ * lock (permanent). Opp.status is informational and does not affect editability —
+ * see the API helper's docblock for the W5.6-followup reasoning.
  */
-const TERMINAL_OPPORTUNITY_STATUSES_FOR_DRAFT: ReadonlySet<OpportunityStatus> = new Set(['replied', 'won', 'lost']);
-
 export interface ReplyDraftEditabilityInput {
-	opportunityStatus: OpportunityStatus;
 	draftStatus: ReplyDraftStatus | null;
 }
 
 export function isReplyDraftEditable(input: ReplyDraftEditabilityInput): boolean {
-	if (input.draftStatus === 'sent') {
-		return false;
-	}
-	if (TERMINAL_OPPORTUNITY_STATUSES_FOR_DRAFT.has(input.opportunityStatus)) {
-		return false;
-	}
-	return true;
+	return input.draftStatus !== 'sent';
 }

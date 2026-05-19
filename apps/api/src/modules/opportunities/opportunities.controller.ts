@@ -111,6 +111,18 @@ export class OpportunitiesController {
 		return this.opportunities.sendReplyDraft(request.organizationId!, id, actorUserId);
 	}
 
+	@ApiOperation({ summary: 'Compose a follow-up reply draft on a SENT opportunity (W5.6)' })
+	@ApiOkResponse({ type: ReplyDraftResponseDto })
+	@TenantWrite()
+	@Post(':id/reply-draft/followup')
+	composeFollowupReplyDraft(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string
+	): Promise<ReplyDraftResponseDto> {
+		const actorUserId = requireUserId(request);
+		return this.opportunities.composeFollowupReplyDraft(request.organizationId!, id, actorUserId);
+	}
+
 	@ApiOperation({ summary: 'List staged attachments on the reply draft (W5.5)' })
 	@ApiOkResponse({ type: [ReplyDraftAttachmentResponseDto] })
 	@UseGuards(OrganizationGuard)
