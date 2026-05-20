@@ -25,6 +25,13 @@ export const OPPORTUNITY_URGENCY_COLORS: Record<OpportunityUrgency, string> = {
 	low: '#9CA3AF'
 };
 
+export const OPPORTUNITY_URGENCY_LABELS_NL: Record<OpportunityUrgency, string> = {
+	emergency: 'Spoed',
+	high: 'Hoog',
+	normal: 'Normaal',
+	low: 'Laag'
+};
+
 /**
  * Sort weight for urgency. Lower = more urgent (sorts first). Used by client-side sort
  * over a loaded page.

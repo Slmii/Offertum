@@ -56,7 +56,6 @@ function Providers({ children }: { children: React.ReactNode }) {
 			<ThemeProvider theme={theme}>
 				<LocalizationProvider dateAdapter={AdapterDayjs}>
 					<CssBaseline />
-
 					{children}
 				</LocalizationProvider>
 			</ThemeProvider>

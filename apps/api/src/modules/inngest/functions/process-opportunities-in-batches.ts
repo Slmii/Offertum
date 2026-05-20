@@ -1,6 +1,6 @@
 import { logContext as requestContext } from '@/modules/logger/log-context';
 import type { LogService } from '@/modules/logger/log.service';
-import type { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
+import type { OpportunitiesService, PipelineMode } from '@/modules/opportunities/opportunities.service';
 import {
 	PROCESS_MAX_BATCHES_PER_RUN,
 	type OpportunityProcessingBatchResult,
@@ -36,6 +36,13 @@ export interface ProcessOpportunitiesInBatchesArgs {
 	 * outer ALS frame doesn't propagate across the `step.run` boundary on its own.
 	 */
 	correlation: { requestId: string; organizationId?: string };
+	/**
+	 * W5.6-followup — pipeline mode. `'backfill'` activates thread-as-unit classification
+	 * and suppresses `OpportunityFollowupReceived` events; `'live'` is the per-message
+	 * flow with follow-up events firing on thread attaches. See `PipelineMode` for the
+	 * full rationale.
+	 */
+	mode: PipelineMode;
 }
 
 export async function processOpportunitiesInBatches(
@@ -61,7 +68,7 @@ export async function processOpportunitiesInBatches(
 						requestId: args.correlation.requestId,
 						...(args.correlation.organizationId ? { organizationId: args.correlation.organizationId } : {})
 					},
-					() => args.opportunities.processBatch(args.emailAccountId, [...excluded])
+					() => args.opportunities.processBatch(args.emailAccountId, [...excluded], { mode: args.mode })
 				)
 		);
 

@@ -1293,6 +1293,189 @@ Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` his
 
 ---
 
+## Tone playbook (W5.2)
+
+### TONE-01: Settings page round-trips
+
+- [ ] Sign in. Navigate `/settings/writing-style`.
+- [ ] Save text `"Gebruik Hoi {voornaam}. Sluit af met Groet, Selami."`. Reload — text persists.
+- [ ] `db:studio` → `User.tonePlaybookText` matches; `tonePlaybookUpdatedAt` is set.
+- [ ] Clear the field + save. `tonePlaybookText` = null; `tonePlaybookUpdatedAt` = null.
+
+### TONE-02: Just-in-time banner shows on detail when playbook null
+
+- [ ] User with no playbook. Open any opportunity. **Expect** info-severity Alert above the editor with "Schrijfstijl instellen" button → links to `/settings/writing-style`.
+- [ ] Author a playbook. Reload detail. Banner gone.
+
+## Reply drafts (W5.3 + W5.4)
+
+### DRAFT-01: First draft generated after `opportunity/created`
+
+- [ ] Send a Dutch quote-request email to a connected inbox. Inngest dev UI shows `gmail-backfill` or delta-sync → `OpportunityCreated` event → `reply-draft-generate` function run completes.
+- [ ] `db:studio` → exactly one `ReplyDraft` row exists for the new `Opportunity`. `status = PENDING_APPROVAL`. `aiCallId` is set. `originalBody === body`.
+
+### DRAFT-02: Detail view + autosave
+
+- [ ] Open `/opportunities/:id` for a draft-generated opp. Editor pre-loads with the draft body.
+- [ ] Type into the editor. Within ~1s "Opslaan…" indicator flashes; `db:studio` shows `ReplyDraft.body` updated + `wasEditedByUser = true` + `status = EDITED`.
+- [ ] Type the same text back to match `originalBody`. **Expect** `wasEditedByUser` stays `true` (forward-only).
+
+### DRAFT-03: Regenerate in my style
+
+- [ ] User has a playbook. Open opp detail. Click "Regenereer in mijn stijl".
+- [ ] **Expect** editor body updates to a fresh AI-generated draft. `db:studio` → `ReplyDraft.originalBody` AND `body` updated; `wasEditedByUser = false`; `aiCallId` advances; `aiBodyGeneratedAt` (via the AICall.createdAt join) is newer than `tonePlaybookUpdatedAt`.
+
+### DRAFT-04: "Your writing style was updated" banner
+
+- [ ] Open a draft generated before you updated your playbook. Update playbook (Settings → save).
+- [ ] Return to the opp detail. **Expect** info Alert "Je schrijfstijl is bijgewerkt sinds dit concept werd opgesteld." with a "Regenereer in mijn stijl" button.
+- [ ] Click regenerate → banner disappears (new draft's `aiBodyGeneratedAt` now > `tonePlaybookUpdatedAt`).
+
+## Send reply (W5.5)
+
+### SEND-01: Gmail threaded send
+
+- [ ] Open a Gmail-sourced opp detail. Click "Verstuur" → confirm dialog shows recipient + subject + body preview → confirm.
+- [ ] **Expect** spinner, then green "Verzonden om <timestamp>" Alert. Editor becomes read-only.
+- [ ] In the customer's mailbox, the reply lands **in the original thread** (same conversation). `In-Reply-To` and `References` headers reference the original Message-Id (inspect raw source).
+- [ ] `db:studio` → `ReplyDraft.status = SENT`, `sentAt` set, `Opportunity.status = REPLIED` (when previous was NEW/WAITING/COLD). `Log` action `reply_draft.sent`.
+
+### SEND-02: Microsoft Graph threaded send
+
+- [ ] Same flow against an Outlook-sourced opp.
+- [ ] In the customer's mailbox, the reply threads correctly. Inspect raw source: `In-Reply-To` + `References` headers are present (Graph composes them from the MAPI extended properties `String 0x1042` + `String 0x1039` we set in `singleValueExtendedProperties`).
+- [ ] **Regression guard:** the request body to `/me/sendMail` MUST NOT contain `internetMessageHeaders` for `In-Reply-To` / `References` — Graph rejects standard RFC headers there with `InvalidInternetMessageHeader`.
+
+### SEND-03: Re-clicking Verstuur on a SENT draft
+
+- [ ] After SEND-01, attempt to send again via direct `POST /api/opportunities/:id/reply-draft/send`.
+- [ ] **Expect** `409 Conflict` with `REPLY_DRAFT_ALREADY_SENT` message. The customer does NOT receive a second email.
+
+### SEND-04: Send on WON / LOST opp leaves status alone
+
+- [ ] Manually mark an opp `won`, then compose a follow-up (OPP-FOLLOWUP-02) and send it.
+- [ ] **Expect** opp.status remains `won` after send (not flipped to `replied`). `db:studio` → `Opportunity.status = WON`.
+
+## Attachments (W5.5 follow-up)
+
+### ATTACH-01: Upload, list, download, delete
+
+- [ ] On opp detail with a non-sent draft, click "Bijlage toevoegen" → pick a 1 MB PDF.
+- [ ] **Expect** chip appears with `<filename> · 1.0 MB`. `db:studio` → one `ReplyDraftAttachment` row. File present at `apps/api/.attachments/<draftId>/<uuid>-<filename>` + `.contenttype` sidecar.
+- [ ] Click the chip → browser downloads the file. Content-Disposition is `attachment; filename="..."; filename*=UTF-8''...`.
+- [ ] Click the × on the chip → row gone from DB + file removed from disk.
+
+### ATTACH-02: Size + count + MIME limits
+
+- [ ] Upload a 21 MB file → 413 Payload Too Large with copy mentioning the 20 MB cap.
+- [ ] Upload 10 small files. Try the 11th → 400 with "you can attach at most 10 files".
+- [ ] Upload an `.exe` (or anything outside the allowlist) → 415 Unsupported Media Type with the MIME name in the message.
+- [ ] Upload until total exceeds 25 MB → 413 with the total-cap copy.
+
+### ATTACH-03: Attachments sent in the email
+
+- [ ] Send a draft that has 2 attachments (one PDF, one PNG) via Gmail.
+- [ ] In the customer's inbox, the reply has both attachments. Open the raw source — `multipart/mixed` envelope with two attachment parts; non-ASCII filenames carry `filename*=UTF-8''<percent-encoded>`.
+- [ ] Repeat via Outlook (Graph). The customer receives the same two attachments via Graph's `attachments` JSON array.
+
+### ATTACH-04: SENT-draft history shows attachments read-only
+
+- [ ] After SEND-01 with an attachment, open the same opp.
+- [ ] **Expect** the "Bijlagen" section still lists the attachment chip, but no × icon (read-only). Click the chip → still downloads.
+- [ ] After OPP-FOLLOWUP-02 (compose follow-up) → attachments panel resets to empty for the new draft; the SENT draft's attachments are visible in the "Vorige conceptenversies" history accordion expansion.
+
+## Dismiss after sending (W5.5 follow-up)
+
+### DISMISS-AFTER-SEND-01: Warning copy in the dismiss dialog
+
+- [ ] On a SENT opp, open the kebab menu → "Markeer als geen offerteaanvraag…".
+- [ ] **Expect** an additional warning-severity Alert at the top of the modal: *"Je hebt al een antwoord verstuurd — afwijzen markeert deze offerteaanvraag alleen intern als geen offerte. Het verzonden e-mailbericht blijft staan."*
+- [ ] Confirm the dismiss. `Log` action `opportunity.dismissed` includes `dismissedAfterSend: true` in metadata.
+- [ ] Compare against a NEW opp dismiss — same modal but no warning Alert; `dismissedAfterSend: false`.
+
+## Thread reconstitution + follow-up (W5.6)
+
+### OPP-FOLLOWUP-01: Customer reply auto-attaches to existing opp
+
+- [ ] From your test sender (a NOT-connected mailbox), reply to a Quoteom-sent thread.
+- [ ] Within ≤5s of the provider push: `db:studio` → no new `Opportunity` row; the original opp's status flipped back to `NEW`; new `RawMessage` row with `opportunityId = <original opp>` + `isQuoteRequest = true`.
+- [ ] Inngest UI shows a `reply-draft-generate` run triggered by `opportunity/followup.received` → new `ReplyDraft` row created for the same opp.
+- [ ] Open the opp detail → editor now shows the freshly-generated follow-up draft. Prior SENT draft is in "Vorige conceptenversies (1)" history.
+
+### OPP-FOLLOWUP-02: User-driven "Concept-vervolg opstellen" button
+
+- [ ] On a SENT opp (no customer reply yet), click "Concept-vervolg opstellen".
+- [ ] **Expect** new `ReplyDraft` row inserted; editor opens it; prior SENT draft moves into history.
+- [ ] Opp.status: **does NOT change** (W5.6-followup — compose-followup no longer touches opp.status). Workflow stays where the owner left it.
+
+### OPP-HISTORY-01: History panel renders past drafts
+
+- [ ] After OPP-FOLLOWUP-02 (or sending multiple drafts), scroll below the editor.
+- [ ] **Expect** "Vorige conceptenversies (N)" header with accordion entries. Each entry shows `v<N>` + status chip (`Verzonden` green for SENT, `Vervangen` outlined for superseded non-SENT) + timestamp + optional attachment count.
+- [ ] Expand an entry → body shown as read-only preformatted text; attachment chips clickable to download.
+
+### OPP-FOLLOWUP-03: Compose-followup is rejected when an editable draft exists
+
+- [ ] On an opp where the latest draft is `PENDING_APPROVAL` or `EDITED` (i.e., not SENT yet), directly POST `/api/opportunities/:id/reply-draft/followup`.
+- [ ] **Expect** `409 Conflict` with `REPLY_DRAFT_LOCKED` message.
+
+## Pipeline behavior changes (W5.6-followup)
+
+### PIPELINE-SELFMAIL-01: Self-email filter blocks org-own outbound
+
+- [ ] Connect both Gmail and Outlook in the same org. Manually send (or use the Quoteom send path) from one to the other.
+- [ ] **Expect** the inbound copy on the receiving side does NOT create an opportunity. `Log` action `opportunity.pipeline.self_email_skipped` is present with the `fromEmail` matching your own connected address.
+- [ ] `db:studio` → `RawMessage.classifiedAt` is set; `isQuoteRequest = false`.
+
+### PIPELINE-THREAD-01: Backfill anchors a multi-message thread to one opp
+
+- [ ] Have an existing Gmail thread with 5+ messages between you and a real customer (quote-related). Connect (or reconnect) the inbox.
+- [ ] After backfill completes: `db:studio` → **exactly one** `Opportunity` for that thread. `RawMessage` rows for the same threadId all have `opportunityId` set (the originating one via `Opportunity.rawMessageId`; the rest via `RawMessage.opportunityId`).
+- [ ] `Log` action `opportunity.pipeline.thread_anchored` fired once with `messageCount = <thread length>` and `originatingRawMessageId`.
+
+### PIPELINE-THREAD-02: Thread with no positive classifier hit → zero opps
+
+- [ ] Pre-seed an inbox with a thread of pure chitchat (no quote signal in any message). Trigger backfill.
+- [ ] **Expect** zero opportunities created from that thread. All messages have `RawMessage.classifiedAt` set + `isQuoteRequest = false`. `Log` action `opportunity.pipeline.thread_no_positive` fired once.
+
+### PIPELINE-MODE-01: Backfill suppresses follow-up draft events
+
+- [ ] After PIPELINE-THREAD-01 (5-message thread → 1 opp), `db:studio` → exactly ONE `ReplyDraft` row for that opp (the initial draft for the originating message). **Not five**.
+- [ ] Inngest UI history for the backfill run: zero `opportunity/followup.received` events. The one and only draft-related event is the `OpportunityCreated` for the anchor message.
+
+### PIPELINE-MODE-02: Live mode still fires follow-up events
+
+- [ ] After a customer-reply scenario (OPP-FOLLOWUP-01), inspect the Inngest run history.
+- [ ] **Expect** the `opportunity/followup.received` event was emitted (matches the `opportunity.followup.attached` Log row) and the `reply-draft-generate` function picked it up with `triggeredBy: 'customer_reply'`.
+
+## Editability rule (W5.6-followup)
+
+### EDIT-LOCK-01: SENT draft is read-only
+
+- [ ] Open a SENT opp. Editor textarea is `readOnly`; attachments panel hides upload/× affordances; regenerate button hidden.
+- [ ] Try direct `PATCH /api/opportunities/:id/reply-draft` → `409 REPLY_DRAFT_LOCKED`.
+
+### EDIT-LOCK-02: Non-SENT draft is always editable regardless of opp.status
+
+- [ ] Manually mark an opp `won` via the inline status select. Latest draft is still `PENDING_APPROVAL` or `EDITED`.
+- [ ] **Expect** the editor stays editable, attachments panel still allows upload/delete, regenerate button still visible.
+- [ ] (Compare against the pre-W5.6-followup behavior, which would have locked the editor on `won` — that lock was the 1:1-era workaround we deliberately dropped.)
+
+## Status transitions (W5.5-followup)
+
+### STATUS-OPEN-01: Any-to-any status transition
+
+- [ ] Open a `won` opp. The inline status `Select` lets you pick any other status (no transitions disabled in the dropdown).
+- [ ] Pick `new`. **Expect** opp moves to `new` immediately. `db:studio` confirms the transition.
+- [ ] Repeat `lost → won` and `replied → new`. All allowed.
+
+### STATUS-OPEN-02: Same-status no-op
+
+- [ ] Open a `new` opp. Select `new` again from the dropdown.
+- [ ] **Expect** no DB write (the service short-circuits the same-status path). UI reflects the unchanged state.
+
+---
+
 ## How to maintain this doc
 
 - **Adding a feature** → add a new `## Section` with `### XXX-01:` test cases. Use a short uppercase prefix per area (`AUTH`, `INV`, `TEN`, `LOG`, `MAIL`, `DB`, `WEB`, `BILLING`, then `OPP` for opportunities, `QUO` for quotes, etc.).

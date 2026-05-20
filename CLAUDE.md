@@ -99,6 +99,9 @@ config/                # @nestjs/config Zod env schema
 lib/
   errors.ts            # ALL thrown messages live here (single source of truth)
   mails/               # Resend templates (Inter + Playfair, dedent-rendered)
+  email/               # bulk-mail filter + rfc2822-reply builder + raw-message helpers
+  storage/             # W5.5 — AttachmentStorage interface + local FS driver +
+                       # constraints (size/MIME limits); @Global module
 generated/prisma/      # Prisma client (committed; generator output)
 modules/
   auth/                # auth.config (Auth.js v5 ExpressAuth) + auth.module
@@ -107,19 +110,24 @@ modules/
   billing/             # Stripe — controller / service / module / DTOs / constants
   invitations/
   me/
-  ai/                  # W4 — classifier + extractor + AIClient provider abstraction
+  ai/                  # W4–W5 — classifier + extractor + reply-draft + AIClient seam
     clients/           # AIClient interface + OpenAIClient (covers OpenAI + AzureOpenAI)
     classifier/        # ClassifierService + Dutch prompt + 43-fixture corpus + accuracy harness
     extractor/         # ExtractorService + Dutch prompt + 23-fixture corpus + accuracy harness
+    reply-draft/       # W5.3 — ReplyDraftGenerator + Dutch prompt (tone-playbook aware)
     logging/           # AICallLogger — persists every generate() call to AICall table
     __test-utils/      # JSONL writer used by both accuracy harnesses for the local HTML report
-  opportunities/       # W4.4/W4.6 — RawMessage → Opportunity pipeline, workflow status API,
-                       # dismiss-as-non-quote feedback loop
-  gmail/               # Gmail OAuth + backfill + delta-sync + watch + webhook
-  microsoft/           # Microsoft Graph OAuth + backfill + delta-sync + subscription + webhook
-  inngest/             # Inngest function registrations + client
-  email-accounts/      # provider-agnostic EmailAccountsService + OAuth services
-  ai-usage/            # W-S16 — admin AI-call cost dashboard (token + USD per provider/model)
+  opportunities/       # W4.4–W5.6 — RawMessage → Opportunity pipeline, thread reconstitution,
+                       # workflow + dismiss + draft endpoints
+  reply-drafts/        # W5.3–W5.6 — Draft generate/regenerate/send + thread-reply headers;
+                       # 1:N drafts per opp with createdAt-DESC "current" semantics
+  reply-draft-attachments/  # W5.5 — Upload/list/delete/download endpoints + service;
+                            # provider-agnostic via lib/storage's ATTACHMENT_STORAGE token
+  gmail/               # Gmail OAuth + backfill + delta-sync + watch + webhook + sendMessage
+  microsoft/           # Microsoft Graph OAuth + backfill + delta-sync + subscription + webhook + sendMail
+  inngest/             # Inngest function registrations + client + processOpportunitiesInBatches helper
+  email-accounts/      # provider-agnostic EmailAccountsService + OAuth services + soft-disconnect
+  ai-usage/            # S16 — admin AI-call cost dashboard (token + USD per provider/model)
   classifier-quality/  # W4.6.5 — admin classifier-precision dashboard (dismiss-feedback aggregation)
 ```
 
@@ -351,9 +359,9 @@ Common Phase C gotchas (in order of frequency):
 
 See `TEST_CASES.md` → EMAIL-PUSH-01..06 for the full test catalog.
 
-## AI extraction pipeline (W4.1 + W4.2 + W4.3 + W4.4 + W4.5 + W4.6)
+## AI pipeline + draft + send (W4.1 → W5.6)
 
-OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in (W5.1 spike → final pick) is a one-line DI binding change in `AiModule`, not a service rewrite. The pipeline materializes `RawMessage` rows into `Opportunity` rows (W4.4), surfaces them through a URL-persisted list page (W4.5), and closes the feedback loop via owner dismissals + an admin precision dashboard (W4.6 / W4.6.5).
+OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in is a one-line DI binding change in `AiModule`, not a service rewrite (W5.1 locked OpenAI for MVP per `PROVIDER_NOTES.md` — no Mistral/Anthropic spike). The pipeline materializes `RawMessage` rows into `Opportunity` rows (W4.4), surfaces them through a URL-persisted list page (W4.5), closes the classifier feedback loop via owner dismissals (W4.6 / W4.6.5), generates AI replies (W5.3) editable in a detail view (W5.4), sends them threaded via Gmail/Graph with optional attachments (W5.5), and handles inbound customer replies + manual follow-up composition (W5.6).
 
 ### Layout
 
@@ -381,29 +389,67 @@ apps/api/src/modules/ai/
     └── ai-report-writer.ts                 # Both accuracy specs append JSONL → consumed by build-ai-report
 ```
 
-W4.4–W4.6 add the user-facing materialization + feedback layers under `apps/api/src/modules/opportunities/`:
+W4.4–W5.6 add the user-facing materialization + feedback + draft + send layers under `apps/api/src/modules/opportunities/`:
 
 ```
 opportunities/
-├── opportunities.controller.ts              # GET list (?dismissed=active|dismissed|all) + PATCH status
-│                                            # + PATCH/DELETE :id/dismiss (W4.6), tenant scoped
-├── opportunities.service.ts                 # processBatch (one Inngest step) + processRawMessagesForAccount,
-│                                            # list + status transitions + dismiss/undismiss with audit logs
+├── opportunities.controller.ts              # GET list + GET :id detail + PATCH status + PATCH/DELETE
+│                                            # :id/dismiss + PATCH :id/reply-draft (autosave) + POST
+│                                            # :id/reply-draft/{regenerate,send,followup} + attachment
+│                                            # endpoints (POST upload, GET list, GET :aid/download, DELETE)
+├── opportunities.service.ts                 # Mode-aware processBatch (backfill | live) + processThreadGroup
+│                                            # (W5.6-followup) + composeFollowupReplyDraft + dismiss/undismiss
 ├── opportunities.repository.ts              # Prisma persistence, rawMessageId idempotency, AICall FKs,
-│                                            # listByOrganization(dismissed) + dismiss/undismiss writers
-├── raw-message-ai-input.ts                  # Gmail/Graph JSON payload → plain body text
-├── opportunity-status.mapper.ts             # Prisma enum ↔ lowercase wire status
+│                                            # findOpportunityForThread + attachFollowupMessage +
+│                                            # attachThreadMessage + findOrganizationEmailAddresses
+├── reply-draft-editability.ts               # W5.6-followup — single helper: latest draft SENT = locked
+├── opportunity-status.mapper.ts             # Prisma enum ↔ lowercase wire status (transitions fully open)
 ├── opportunity-urgency.mapper.ts            # Prisma Urgency enum ↔ lowercase wire urgency
 ├── opportunity-dismiss-reason.mapper.ts     # W4.6 — Prisma DismissReason ↔ lowercase wire reason
+├── reply-draft-status.mapper.ts             # W5.3 — Prisma ReplyDraftStatus ↔ lowercase wire status
 ├── opportunity-list-cursor.ts               # Opaque base64url cursor over (createdAt, id)
-└── dto/                                     # Concrete DTO classes for OpenAPI/Orval (incl. DismissOpportunityDto)
+└── dto/                                     # Concrete DTO classes for OpenAPI/Orval
+                                             # (DismissOpportunityDto, OpportunityDetailResponseDto,
+                                             # ReplyDraftResponseDto, UpdateReplyDraftDto, ...)
+```
+
+W5.3–W5.6 add the AI-reply-generation + send mechanics under `apps/api/src/modules/reply-drafts/`:
+
+```
+reply-drafts/
+├── reply-drafts.service.ts                  # upsertFromOpportunity (W5.3 initial draft) +
+│                                            # regenerate (W5.4 in-my-style) + send (W5.5 Gmail/Graph) +
+│                                            # generateFollowupDraft (W5.6 customer-reply OR owner-compose)
+├── reply-drafts.repository.ts               # findByOpportunityId (latest by createdAt DESC) +
+│                                            # createIfAbsent (first draft) + createFollowup (always new) +
+│                                            # overwriteAfterRegenerate + markSent (conditional opp.status) +
+│                                            # findSendContext (+ thread-reply headers)
+└── reply-drafts.module.ts                   # Imports AiModule, EmailAccountsModule, GmailModule,
+                                             # MicrosoftModule; @Inject(ATTACHMENT_STORAGE) on the service
+```
+
+W5.5 attachment endpoints + storage abstraction under `apps/api/src/modules/reply-draft-attachments/` + `apps/api/src/lib/storage/`:
+
+```
+reply-draft-attachments/
+├── reply-draft-attachments.service.ts       # Upload (validates count/size/MIME + writes to storage),
+│                                            # list, delete (DB row first, then blob), download
+└── reply-draft-attachments.repository.ts    # Prisma CRUD + findDraftForUpload (latest editable) +
+                                             # findForAuthorization (cross-tenant guard in one query)
+
+apps/api/src/lib/storage/
+├── attachment-storage.interface.ts          # AttachmentStorage interface + ATTACHMENT_STORAGE DI token
+├── attachment-storage.module.ts             # @Global module; useFactory picks driver from env
+├── attachment-constraints.ts                # 20 MB/file, 25 MB total, 10 files/draft, MIME allowlist
+└── local-attachment-storage.service.ts      # FS impl: writes under .attachments/<draftId>/<uuid>-<file>
+                                             # + .contenttype sidecar; path-safety check
 ```
 
 W4.6.5 adds the admin classifier-quality dashboard under `apps/api/src/modules/classifier-quality/` — same `AdminEmailGuard` parent route as `/admin/ai-usage`. It computes precision (`1 − any-dismissal / total`) per `(org, classifierProvider, classifierModel)` with a per-reason breakdown, top-5 recent dismissals (any reason) with `classifiedAiCallId` for AI-Calls-inspector deep-link, and bulk-mail filter recall (filter-caught Log count vs. SPAM-dismissed count). Reads only from `Opportunity` + `Log` + the `AICall` FK chain — no new persistence.
 
 The Inngest backfill + delta-sync functions chain the pipeline via `processOpportunitiesInBatches` (in `apps/api/src/modules/inngest/functions/`), which calls `OpportunitiesService.processBatch` inside its own dynamic `step.run` per batch. Each batch is capped at `PROCESS_BATCH_SIZE = 25` so a single step finishes well within Inngest's 5-minute step timeout; the outer loop is bounded by `PROCESS_MAX_BATCHES_PER_RUN = 200` (≈5,000 messages/pass) with a `opportunity.pipeline.batch_cap_reached` warn log if hit.
 
-### Twelve patterns to know
+### Patterns to know
 
 **1. The `AI_CLIENT` seam.** Downstream services (`ClassifierService`, `ExtractorService`, future `ReplyDraftService`, etc.) inject `@Inject(AI_CLIENT) private readonly ai: AIClient` — they don't know whether OpenAI, Mistral, or Anthropic is behind it. Swapping providers in W5.1 is a one-line change to `useExisting: OpenAIClient` in `ai.module.ts`. Caller code never sees it.
 
@@ -435,6 +481,22 @@ The Inngest backfill + delta-sync functions chain the pipeline via `processOppor
 **11. The classifier precision query is OR'd over `createdAt` AND `dismissedAt`.** `apps/api/src/modules/classifier-quality/classifier-quality.service.ts:fetchPrecisionRows` selects opportunities whose `createdAt` falls in window OR whose `dismissedAt` falls in window. Without the OR, a dismiss action on a backfilled opportunity (created weeks ago) wouldn't register on short ranges — a credibility wound on a feedback-loop UI where the user expects their click to show up immediately. Prisma de-dups rows matching both legs. The recent-dismissals query and the bulk-mail `missedCount` query stay filtered by `dismissedAt` alone since they're activity-based, not cohort-based.
 
 **12. URL-persisted filters via `validateSearch` Zod schemas.** Every TanStack Router route that exposes filterable lists puts every filter dimension into a route-level Zod schema: `apps/web/src/routes/(app)/opportunities/index.tsx` persists `status`, `search`, `sort`, and `showDismissed` to the URL via `validateSearch`. The `loader` uses `loaderDeps` to declare which search params should re-trigger prefetching. Search input uses the buffered-input pattern: local state for keystrokes, `useDebouncedValue` for the URL write, `navigate({ replace: true })` so history doesn't grow per keystroke. The two `useEffect`s (URL→input mirror, input→URL debounce) explicitly disable `react-hooks/set-state-in-effect` because they ARE the mirror pattern; this is the only legitimate use.
+
+**13. Provider-asymmetric thread reply headers.** Gmail sends accept raw RFC 2822 (`In-Reply-To` + `References` headers go straight into the envelope via `buildRfc2822Reply` at `apps/api/src/lib/email/rfc2822-reply.ts`). Microsoft Graph **rejects** those same headers in `internetMessageHeaders` — that array only accepts user-defined `x-*` headers. For Graph we set MAPI extended properties instead:`String 0x1042` (`PR_IN_REPLY_TO_ID`) + `String 0x1039` (`PR_INTERNET_REFERENCES`) via `singleValueExtendedProperties` on the message payload (`microsoft-graph-api.service.ts:sendMail`). Outlook writes the correct RFC headers on the wire from those tags, recipients see a normally-threaded reply. Service-layer caller is provider-blind — `ReplyDraftsService.send` just passes `inReplyTo` + `references` strings through.
+
+**14. 1:N reply drafts per opportunity with `createdAt DESC` "current" semantics.** W5.6 dropped `@unique` on `ReplyDraft.opportunityId` so the same opp can carry an immutable SENT history plus one editable draft on top (composed via thread reconstitution when the customer replies, or via the "Concept-vervolg opstellen" button). Every read site that wants "the current draft" uses `findFirst({ where: { opportunityId }, orderBy: { createdAt: 'desc' } })`; OPPORTUNITY_INCLUDE / OPPORTUNITY_DETAIL_INCLUDE fetch all drafts ordered DESC so the mapper plucks `[0]` for current + `slice(1)` for the history panel. `Opportunity.replyDrafts: ReplyDraft[]` on Prisma type; wire-format DTO surfaces both `replyDraft: ReplyDraft | null` (current/latest) and `replyDraftHistory: ReplyDraft[]` (everything older, newest-first).
+
+**15. Mode-aware opportunity pipeline (`'backfill' | 'live'`).** `OpportunitiesService.processBatch(emailAccountId, excluded, { mode })` is the entry point; mode is plumbed through `processOpportunitiesInBatches` → `MailboxPipelineFunctionConfig`. Backfill functions pass `'backfill'`; delta-sync functions pass `'live'`. Backfill **suppresses `OpportunityFollowupReceived` events** (a snapshot of historical thread messages shouldn't generate N phantom drafts) AND activates **thread-as-unit classification** for multi-message thread groups in the batch (classify newest-first, anchor opp to first positive, attach the rest as silent history; chitchat threads produce zero opps via `opportunity.pipeline.thread_no_positive`). Live mode keeps the per-message flow with thread-reconstitution → `OpportunityFollowupReceived` → fresh draft against the latest customer reply.
+
+**16. Self-email filter.** Every batch first calls `repository.findOrganizationEmailAddresses(orgId) → Set<string>` (lower-cased). Inside `processOneRawMessage` + `processThreadGroup`, any inbound RawMessage whose `fromEmail` matches the set is short-circuited before classification (mark negative + log `opportunity.pipeline.self_email_skipped`). This catches the cross-mailbox echo case: user has both Gmail and Outlook connected, Quoteom sends a reply via Outlook → it lands as inbound on Gmail → classifier would otherwise flag the Dutch quote-prep prose as positive and create a phantom opp.
+
+**17. Pluggable attachment storage seam.** `apps/api/src/lib/storage/attachment-storage.interface.ts` defines `AttachmentStorage` (put/get/delete) bound by the `ATTACHMENT_STORAGE` symbol DI token in a `@Global` module. `LocalAttachmentStorage` is the default (writes under `.attachments/<draftId>/<uuid>-<filename>` with a `.contenttype` sidecar; path-safety check defends against future user-supplied keys). `useFactory` in `AttachmentStorageModule` picks the driver from `ATTACHMENT_STORAGE_DRIVER` env (`local` | `spaces`); selecting `spaces` today throws at boot — explicit "not wired yet" rather than a silent fall-through to local. Swapping to DigitalOcean Spaces is one new file + one factory branch.
+
+**18. Draft editability collapses to draft-state-only (W5.6-followup).** `isReplyDraftEditable({ draftStatus })` in both apps (`apps/api/src/modules/opportunities/reply-draft-editability.ts` + `apps/web/src/lib/utils/reply-draft-editability.ts`) returns `draftStatus !== 'sent'`. The prior opp-status leg (`replied / won / lost` → locked) was a 1:1-era workaround that caused a real bug: composing a courtesy follow-up on a WON deal would silently flip workflow status to REPLIED. With 1:N drafts, the latest draft's own status is fully expressive. Send-time also conditionalises the opp.status transition: `markSent` only flips `NEW/WAITING/COLD → REPLIED`; `WON/LOST/REPLIED` stay put.
+
+**19. RFC 2822 multipart for Gmail attachments, JSON array for Graph.** `buildRfc2822Reply` switches to `multipart/mixed` with a random 128-bit boundary when `attachments` is non-empty; each part has `Content-Type` + `Content-Disposition: attachment` + RFC 2231 `filename*=UTF-8''<encoded>` for non-ASCII names; base64 body wrapped at 76 cols per RFC 2045. Graph's `sendMail` takes a structured `attachments: [{ '@odata.type': '#microsoft.graph.fileAttachment', name, contentType, contentBytes: base64 }]` array. Service-layer `ReplyDraftsService.send` loads each blob from `AttachmentStorage.get(storageKey)` in parallel before opening the OAuth-scoped send block, runs a final defense-in-depth total-bytes guard (25 MB cap), then hands provider-specific shapes to Gmail/Graph.
+
+**20. Fully-open opportunity status transitions.** `isOpportunityStatusTransitionAllowed` was deleted (it always returned true after W5.5-followup; the per-status policy table was aesthetic). Any status → any other. Misclicks on WON/LOST recoverable. The same-status no-op short-circuit stays in `updateStatus` to avoid a wasted DB write. Audit-log (`Log` table) remains the authoritative trail of every transition for forensics.
 
 ### Accuracy harness workflow (`pnpm test:ai`)
 

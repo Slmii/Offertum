@@ -1,7 +1,7 @@
 import { Prisma } from '@/generated/prisma/client';
 import {
-	DismissReason as PrismaDismissReason,
 	EmailProvider,
+	DismissReason as PrismaDismissReason,
 	OpportunityStatus as PrismaOpportunityStatus,
 	ReplyDraftStatus as PrismaReplyDraftStatus,
 	Urgency as PrismaUrgency
@@ -232,6 +232,31 @@ export class OpportunitiesRepository {
 	}
 
 	/**
+	 * W5.6-followup — Attach a historical thread message to an Opportunity. Used by the
+	 * thread-as-unit backfill flow: when a thread is processed for the first time, the
+	 * "originating message" (newest positive) creates the opp, and all the OTHER messages
+	 * in the thread attach via this method as immutable history. No opp.status reset
+	 * here — the opp was just freshly created in NEW; we don't want to wastefully bump
+	 * its updatedAt N times nor flip it back to NEW for already-NEW opps.
+	 *
+	 * Single mutation (vs. the transaction in `attachFollowupMessage`): only the
+	 * RawMessage row is touched. Idempotency is at the call-site level (only call this
+	 * for messages whose `classifiedAt IS NULL` and which belong to the same thread as
+	 * the originating message).
+	 */
+	async attachThreadMessage(input: { rawMessageId: string; opportunityId: string }): Promise<void> {
+		const now = new Date();
+		await this.prisma.rawMessage.update({
+			where: { id: input.rawMessageId },
+			data: {
+				opportunityId: input.opportunityId,
+				isQuoteRequest: true,
+				classifiedAt: now
+			}
+		});
+	}
+
+	/**
 	 * W5.6 — Attach an inbound follow-up RawMessage to an existing Opportunity. Three
 	 * mutations in one transaction so the customer-visible state can't disagree with
 	 * ours mid-flight:
@@ -426,6 +451,34 @@ export class OpportunitiesRepository {
 		return this.prisma.opportunity.update({
 			where: { id },
 			data: { status },
+			include: OPPORTUNITY_INCLUDE
+		});
+	}
+
+	/**
+	 * Patch the owner-editable extracted fields. Caller validated the partial payload
+	 * already; this writes through the union of provided keys + returns the refreshed
+	 * row for the wire-format mapper. Undefined values are stripped before reaching
+	 * Prisma so untouched columns stay put; explicit `null` is preserved as a clear.
+	 */
+	async updateEditableFields(
+		id: string,
+		patch: {
+			urgency?: PrismaUrgency;
+			address?: string | null;
+			customerDeadline?: Date | null;
+			customerAppointment?: Date | null;
+		}
+	): Promise<OpportunityRecord> {
+		const data: Prisma.OpportunityUpdateInput = {};
+		if (patch.urgency !== undefined) {data.urgency = patch.urgency;}
+		if (patch.address !== undefined) {data.address = patch.address;}
+		if (patch.customerDeadline !== undefined) {data.customerDeadline = patch.customerDeadline;}
+		if (patch.customerAppointment !== undefined) {data.customerAppointment = patch.customerAppointment;}
+
+		return this.prisma.opportunity.update({
+			where: { id },
+			data,
 			include: OPPORTUNITY_INCLUDE
 		});
 	}

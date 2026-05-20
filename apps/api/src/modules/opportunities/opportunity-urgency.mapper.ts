@@ -7,3 +7,10 @@ export const OPPORTUNITY_URGENCY_TO_WIRE: Record<PrismaUrgency, OpportunityUrgen
 	[PrismaUrgency.NORMAL]: 'normal',
 	[PrismaUrgency.LOW]: 'low'
 };
+
+export const OPPORTUNITY_URGENCY_FROM_WIRE: Record<OpportunityUrgency, PrismaUrgency> = {
+	emergency: PrismaUrgency.EMERGENCY,
+	high: PrismaUrgency.HIGH,
+	normal: PrismaUrgency.NORMAL,
+	low: PrismaUrgency.LOW
+};

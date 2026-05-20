@@ -4,7 +4,8 @@ export const OPPORTUNITY_STATUSES = ['new', 'replied', 'waiting', 'cold', 'won',
 
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
 
-export type OpportunityUrgency = 'emergency' | 'high' | 'normal' | 'low';
+export const OPPORTUNITY_URGENCIES = ['emergency', 'high', 'normal', 'low'] as const;
+export type OpportunityUrgency = (typeof OPPORTUNITY_URGENCIES)[number];
 
 /**
  * W4.6 — Reason an opportunity was dismissed by the owner. Distinct axis from
@@ -103,6 +104,24 @@ export interface ListOpportunitiesQuery {
 
 export interface UpdateOpportunityStatusInput {
 	status: OpportunityStatus;
+}
+
+/**
+ * Partial-update payload for `PATCH /api/opportunities/:id`. Every field is optional;
+ * omitting a key leaves it untouched (no "clear by absence" semantics — null is the
+ * explicit "clear" value for the nullable fields). Server validates each field
+ * independently + audit-logs each changed value for the year-2 extractor-improvement
+ * loop ("which fields are owners correcting most often?").
+ */
+export interface UpdateOpportunityFieldsInput {
+	urgency?: OpportunityUrgency;
+	/** Free text. `null` clears the field. Trimmed server-side; max 500 chars. */
+	address?: string | null;
+	/** ISO date (YYYY-MM-DD) or null to clear. Stored as DateTime at midnight UTC. */
+	customerDeadline?: string | null;
+	/** Same shape as `customerDeadline`. Conceptually distinct (D25): deadline = when
+	 * the customer wants the work done; appointment = when they want to meet. */
+	customerAppointment?: string | null;
 }
 
 /**

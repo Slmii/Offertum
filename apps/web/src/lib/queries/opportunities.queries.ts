@@ -8,6 +8,7 @@ import type {
 	OpportunityStatus,
 	ReplyDraft,
 	ReplyDraftAttachment,
+	UpdateOpportunityFieldsInput,
 	UpdateReplyDraftInput
 } from '@quoteom/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -57,6 +58,30 @@ export const opportunitiesListQueryOptions = (
  * success we invalidate every opportunities cache (filtered + unfiltered) so the row
  * disappears/appears under the right tab without manual refresh.
  */
+/**
+ * PATCH /api/opportunities/:id — partial-update the owner-editable extracted fields
+ * (urgency / address / customerDeadline / customerAppointment). Splices the response
+ * into the detail cache + invalidates the list cache so the list-row's deadline /
+ * urgency badge picks up the change without a refetch round-trip.
+ */
+export function useUpdateOpportunityFields(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (input: UpdateOpportunityFieldsInput) =>
+			api<Opportunity>(`/api/opportunities/${opportunityId}`, {
+				method: 'PATCH',
+				body: input
+			}),
+		onSuccess: updated => {
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current =>
+				current ? { ...current, ...updated } : current
+			);
+			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
+		}
+	});
+}
+
 export function useUpdateOpportunityStatus() {
 	const queryClient = useQueryClient();
 

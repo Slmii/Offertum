@@ -5,7 +5,7 @@ import type { InngestEventName } from '@/modules/inngest/inngest.constants';
 // (which is a *string* identifier — the named context for logger output, not the ALS).
 import { logContext as requestContext } from '@/modules/logger/log-context';
 import type { LogService } from '@/modules/logger/log.service';
-import type { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
+import type { OpportunitiesService, PipelineMode } from '@/modules/opportunities/opportunities.service';
 import type { InngestFunction } from 'inngest';
 
 /**
@@ -51,6 +51,13 @@ export interface MailboxPipelineFunctionConfig<TSyncResult> {
 	logService: LogService;
 	/** Used for log `context` field on completion / warn logs. */
 	logContext: string;
+	/**
+	 * W5.6-followup — pipeline mode. Backfill functions pass `'backfill'` to activate
+	 * thread-as-unit classification + suppress follow-up draft events. Delta-sync
+	 * functions pass `'live'` (default downstream) for per-message processing with
+	 * normal follow-up event firing.
+	 */
+	mode: PipelineMode;
 	/**
 	 * Optional post-processing step. Used by backfill to start the Pub/Sub watch
 	 * (Gmail) or Graph subscription (Microsoft) once the initial fetch + classification
@@ -138,7 +145,8 @@ export function defineMailboxPipelineFunction<TSyncResult>(
 				emailAccountId,
 				stepNamePrefix: config.processOpportunitiesStepPrefix,
 				logContext: config.logContext,
-				correlation
+				correlation,
+				mode: config.mode
 			});
 
 			if (config.postSyncStep) {

@@ -29,7 +29,8 @@ export class MicrosoftDeltaSyncFunction {
 			processOpportunitiesStepPrefix: InngestSteps.MicrosoftDeltaSync.ProcessOpportunitiesBatch,
 			opportunities,
 			logService,
-			logContext: 'InngestFn:microsoft-delta-sync'
+			logContext: 'InngestFn:microsoft-delta-sync',
+			mode: 'live'
 		});
 	}
 }

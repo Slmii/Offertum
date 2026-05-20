@@ -45,7 +45,11 @@ import {
 	OPPORTUNITY_STATUS_FROM_WIRE,
 	OPPORTUNITY_STATUS_TO_WIRE
 } from '@/modules/opportunities/opportunity-status.mapper';
-import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
+import {
+	OPPORTUNITY_URGENCY_FROM_WIRE,
+	OPPORTUNITY_URGENCY_TO_WIRE
+} from '@/modules/opportunities/opportunity-urgency.mapper';
+import type { UpdateOpportunityFieldsDto } from '@/modules/opportunities/dto/update-opportunity-fields.dto';
 import { isReplyDraftEditable } from '@/modules/opportunities/reply-draft-editability';
 import { REPLY_DRAFT_STATUS_TO_WIRE } from '@/modules/opportunities/reply-draft-status.mapper';
 import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service';
@@ -74,6 +78,25 @@ const PROCESS_BATCH_CONCURRENCY = 5;
 
 const LIST_DEFAULT_PAGE_SIZE = 25;
 const LIST_MAX_PAGE_SIZE = 100;
+
+/**
+ * W5.6-followup — Caller-supplied context for the opportunities pipeline. Drives two
+ * runtime choices:
+ *  - `'backfill'`: first-time ingest of a mailbox. Multi-message threads use the
+ *    *thread-as-unit* flow (classify newest-first, anchor opp to first positive,
+ *    attach the rest as history). `OpportunityFollowupReceived` events are SUPPRESSED
+ *    so a 5-message thread doesn't produce 5 stacked drafts.
+ *  - `'live'`: an incoming delta-sync push from the provider. Single-message-per-batch
+ *    is the norm. Thread reconstitution fires `OpportunityFollowupReceived` so a fresh
+ *    draft is generated against the latest customer reply.
+ */
+export type PipelineMode = 'backfill' | 'live';
+
+interface ProcessBatchOptions {
+	mode: PipelineMode;
+}
+
+const DEFAULT_PROCESS_OPTIONS: ProcessBatchOptions = { mode: 'live' };
 
 @Injectable()
 export class OpportunitiesService {
@@ -143,6 +166,108 @@ export class OpportunitiesService {
 				lost: statusCounts[PrismaOpportunityStatus.LOST]
 			}
 		};
+	}
+
+	/**
+	 * Patch the owner-editable extracted fields (urgency, address, customerDeadline,
+	 * customerAppointment). Workflow-status, dismiss, and reply-draft mutations have
+	 * their own dedicated endpoints. No editability lock here — these are workflow-
+	 * tracking fields the owner may need to correct at any time, including on closed
+	 * (WON/LOST) opportunities. The audit log records each changed key + before/after
+	 * for the year-2 extractor-improvement story ("which fields do owners correct?").
+	 */
+	async updateFields(
+		organizationId: string,
+		opportunityId: string,
+		patch: UpdateOpportunityFieldsDto,
+		actorUserId: string
+	): Promise<OpportunityResponseDto> {
+		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		// Normalize the wire payload into the Prisma write shape. We trim + null-empty
+		// strings here so the DB doesn't end up with " " or "" — owners clearing a field
+		// expect NULL semantics, not whitespace.
+		const writePatch: Parameters<typeof this.repository.updateEditableFields>[1] = {};
+		const changedKeys: string[] = [];
+		const beforeAfter: Record<string, { before: unknown; after: unknown }> = {};
+
+		if (patch.urgency !== undefined) {
+			const next = OPPORTUNITY_URGENCY_FROM_WIRE[patch.urgency];
+			if (next !== opportunity.urgency) {
+				writePatch.urgency = next;
+				changedKeys.push('urgency');
+				beforeAfter.urgency = {
+					before: OPPORTUNITY_URGENCY_TO_WIRE[opportunity.urgency],
+					after: patch.urgency
+				};
+			}
+		}
+		if (patch.address !== undefined) {
+			const next = patch.address === null ? null : patch.address.trim() || null;
+			if (next !== opportunity.address) {
+				writePatch.address = next;
+				changedKeys.push('address');
+				beforeAfter.address = { before: opportunity.address, after: next };
+			}
+		}
+		if (patch.customerDeadline !== undefined) {
+			const next = patch.customerDeadline === null ? null : new Date(patch.customerDeadline);
+			const same =
+				(next === null && opportunity.customerDeadline === null) ||
+				(next !== null &&
+					opportunity.customerDeadline !== null &&
+					next.getTime() === opportunity.customerDeadline.getTime());
+			if (!same) {
+				writePatch.customerDeadline = next;
+				changedKeys.push('customerDeadline');
+				beforeAfter.customerDeadline = {
+					before: opportunity.customerDeadline?.toISOString() ?? null,
+					after: next?.toISOString() ?? null
+				};
+			}
+		}
+		if (patch.customerAppointment !== undefined) {
+			const next = patch.customerAppointment === null ? null : new Date(patch.customerAppointment);
+			const same =
+				(next === null && opportunity.customerAppointment === null) ||
+				(next !== null &&
+					opportunity.customerAppointment !== null &&
+					next.getTime() === opportunity.customerAppointment.getTime());
+			if (!same) {
+				writePatch.customerAppointment = next;
+				changedKeys.push('customerAppointment');
+				beforeAfter.customerAppointment = {
+					before: opportunity.customerAppointment?.toISOString() ?? null,
+					after: next?.toISOString() ?? null
+				};
+			}
+		}
+
+		if (changedKeys.length === 0) {
+			// No-op: caller sent the same values the row already has.
+			return toOpportunityResponseDto(opportunity);
+		}
+
+		const updated = await this.repository.updateEditableFields(opportunityId, writePatch);
+
+		this.logService.logAction({
+			action: 'opportunity.fields_updated',
+			message: `Opportunity ${opportunityId} fields updated (${changedKeys.join(', ')}) by user ${actorUserId}`,
+			metadata: {
+				organizationId,
+				opportunityId,
+				actorUserId,
+				changedKeys,
+				diff: beforeAfter,
+				extractedAiCallId: opportunity.extractedAiCallId ?? null
+			},
+			context: 'OpportunitiesService'
+		});
+
+		return toOpportunityResponseDto(updated);
 	}
 
 	async updateStatus(
@@ -541,7 +666,10 @@ export class OpportunitiesService {
 	 * gets its own `step.run` and the 5-minute step timeout doesn't fail a multi-hundred-
 	 * message pass.
 	 */
-	async processRawMessagesForAccount(emailAccountId: string): Promise<OpportunityProcessingResult> {
+	async processRawMessagesForAccount(
+		emailAccountId: string,
+		options: ProcessBatchOptions = DEFAULT_PROCESS_OPTIONS
+	): Promise<OpportunityProcessingResult> {
 		const aggregate: OpportunityProcessingResult = {
 			emailAccountId,
 			scanned: 0,
@@ -554,7 +682,7 @@ export class OpportunitiesService {
 		const excluded = new Set<string>();
 
 		while (true) {
-			const batch = await this.processBatch(emailAccountId, [...excluded]);
+			const batch = await this.processBatch(emailAccountId, [...excluded], options);
 			mergeProcessingResults(aggregate, batch.result);
 			for (const id of batch.failedRawMessageIds) {
 				excluded.add(id);
@@ -586,7 +714,8 @@ export class OpportunitiesService {
 	 */
 	async processBatch(
 		emailAccountId: string,
-		excludedRawMessageIds: readonly string[]
+		excludedRawMessageIds: readonly string[],
+		options: ProcessBatchOptions = DEFAULT_PROCESS_OPTIONS
 	): Promise<OpportunityProcessingBatchResult> {
 		const result: OpportunityProcessingResult = {
 			emailAccountId,
@@ -610,30 +739,85 @@ export class OpportunitiesService {
 		}
 
 		// W5.6-followup — Fetch the org's own connected email addresses once per batch
-		// so the self-email filter inside `processOneRawMessage` is an O(1) Set lookup.
-		// All rows in a batch share an emailAccountId (and therefore an organizationId),
-		// so a single fetch covers the slice.
+		// so the self-email filter inside per-message + per-thread-group flows is an
+		// O(1) Set lookup. All rows in a batch share an emailAccountId (and therefore
+		// an organizationId), so a single fetch covers the slice.
 		const orgEmailAddresses = await this.repository.findOrganizationEmailAddresses(
 			rawMessages[0]?.organizationId ?? ''
 		);
 
-		// Chunked parallel: each chunk runs `PROCESS_BATCH_CONCURRENCY` messages in
-		// parallel through `processOneRawMessage`, which mutates `result` + the failed-id
-		// set in-place (single-threaded JS makes the `+= 1` and `Set.add` effectively
-		// atomic, so no race on the shared state). Short-circuit on AINotConfigured
-		// happens at chunk boundaries — a few in-flight calls may complete after the
-		// terminal error, but their results are already accounted for in `result`.
+		// W5.6-followup — Group by threadId. Null-threadId messages are treated as
+		// individual (no group). Multi-message groups within ONE batch are the canonical
+		// shape of a backfill pass over a historical thread; they need to run serially
+		// AND newest-first so the thread-as-unit classifier can anchor the opp to the
+		// most-recent quote signal. Single-message groups (the typical live delta-sync
+		// case) fall through to the existing per-message flow which already handles
+		// self-email + thread-reconstitution + classifier.
+		const threadGroups = new Map<string, RawMessageForOpportunityProcessing[]>();
+		const standaloneMessages: RawMessageForOpportunityProcessing[] = [];
+		for (const m of rawMessages) {
+			if (!m.threadId) {
+				standaloneMessages.push(m);
+				continue;
+			}
+			const group = threadGroups.get(m.threadId);
+			if (group) {
+				group.push(m);
+			} else {
+				threadGroups.set(m.threadId, [m]);
+			}
+		}
+		// Split out single-message thread groups — they don't need the thread-as-unit
+		// flow (no peers to anchor against). Falling through to `processOneRawMessage`
+		// keeps the per-message thread-reconstitution check + classifier path.
+		const multiMessageGroups: RawMessageForOpportunityProcessing[][] = [];
+		for (const [threadId, group] of threadGroups) {
+			if (group.length === 1) {
+				standaloneMessages.push(group[0]!);
+			} else {
+				multiMessageGroups.push(group);
+			}
+			// Silence "unused" warning for the destructured key — kept for future logging.
+			void threadId;
+		}
+
 		let aiNotConfigured = false;
-		for (let i = 0; i < rawMessages.length; i += PROCESS_BATCH_CONCURRENCY) {
-			const slice = rawMessages.slice(i, i + PROCESS_BATCH_CONCURRENCY);
+
+		// Phase 1 — standalone (no thread / single-message thread group). Chunked parallel.
+		// Single-message thread groups fall here because they still need the per-message
+		// thread-reconstitution check (the existing opp may have been created in a prior
+		// run, e.g. live delta-sync of a brand-new customer reply on a tracked thread).
+		for (let i = 0; i < standaloneMessages.length; i += PROCESS_BATCH_CONCURRENCY) {
+			if (aiNotConfigured) {
+				break;
+			}
+			const slice = standaloneMessages.slice(i, i + PROCESS_BATCH_CONCURRENCY);
 			const outcomes = await Promise.all(
 				slice.map(rawMessage =>
-					this.processOneRawMessage(rawMessage, orgEmailAddresses, result, failedRawMessageIds)
+					this.processOneRawMessage(rawMessage, orgEmailAddresses, result, failedRawMessageIds, options)
 				)
 			);
-			if (outcomes.some(shouldContinue => !shouldContinue)) {
+			if (outcomes.some(c => !c)) {
 				aiNotConfigured = true;
+			}
+		}
+
+		// Phase 2 — multi-message thread groups. Parallel BETWEEN groups (so a backfill
+		// touching many threads doesn't serialize sequentially), serial WITHIN each
+		// group (so thread reconstitution + thread-as-unit logic can rely on a stable
+		// per-thread DB state).
+		for (let i = 0; i < multiMessageGroups.length; i += PROCESS_BATCH_CONCURRENCY) {
+			if (aiNotConfigured) {
 				break;
+			}
+			const slice = multiMessageGroups.slice(i, i + PROCESS_BATCH_CONCURRENCY);
+			const outcomes = await Promise.all(
+				slice.map(group =>
+					this.processThreadGroup(group, orgEmailAddresses, result, failedRawMessageIds, options)
+				)
+			);
+			if (outcomes.some(c => !c)) {
+				aiNotConfigured = true;
 			}
 		}
 
@@ -646,11 +830,312 @@ export class OpportunitiesService {
 		};
 	}
 
+	/**
+	 * W5.6-followup — Thread-as-unit processing for a multi-message thread group within
+	 * a single batch. Three branches:
+	 *
+	 *  1. An Opportunity already exists for this thread → process each message via the
+	 *     existing per-message flow. Each one hits the thread-reconstitution check and
+	 *     attaches. This branch fires `OpportunityFollowupReceived` for each attach in
+	 *     live mode (default behavior); backfill mode suppresses those events.
+	 *
+	 *  2. No existing opp AND the mode is `'backfill'` → classify newest-first, anchor
+	 *     the opp to the first positive message, attach all others as immutable history,
+	 *     mark everything classified. No follow-up events fire (this is a snapshot, not
+	 *     a live customer reply). If no positive is found, mark all messages negative
+	 *     and skip the thread entirely (chitchat thread, not a lead).
+	 *
+	 *  3. No existing opp AND the mode is `'live'` → fall through to per-message
+	 *     processing. The "live" path implies messages arrive one at a time; a batch
+	 *     containing multiple messages of a brand-new thread is unusual but handled by
+	 *     letting each message classify individually + relying on the per-message
+	 *     thread-reconstitution check to attach later ones to the first one. (Same
+	 *     race-prone shape as before W5.6-followup, but vanishingly rare in live mode.)
+	 */
+	private async processThreadGroup(
+		group: RawMessageForOpportunityProcessing[],
+		orgEmailAddresses: Set<string>,
+		result: OpportunityProcessingResult,
+		failedRawMessageIds: Set<string>,
+		options: ProcessBatchOptions
+	): Promise<boolean> {
+		const first = group[0]!;
+		const threadId = first.threadId!;
+
+		// Branch 1 — existing opp on this thread. Fall through to per-message flow.
+		const existingOpp = await this.repository.findOpportunityForThread(first.organizationId, threadId);
+		if (existingOpp) {
+			for (const m of group) {
+				const cont = await this.processOneRawMessage(
+					m,
+					orgEmailAddresses,
+					result,
+					failedRawMessageIds,
+					options
+				);
+				if (!cont) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// Branch 3 — live mode without an existing opp. Per-message processing keeps
+		// the existing semantics (the rare "multiple new-thread messages arrived in one
+		// delta-sync" case still produces ONE opp via per-message thread reconstitution
+		// once the first message inserts its opp).
+		if (options.mode === 'live') {
+			for (const m of group) {
+				const cont = await this.processOneRawMessage(
+					m,
+					orgEmailAddresses,
+					result,
+					failedRawMessageIds,
+					options
+				);
+				if (!cont) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// Branch 2 — backfill, no existing opp. Thread-as-unit classification.
+		// Walk newest-first; first positive becomes the originating message. Earlier
+		// thread messages (chitchat, our own outbound, marketing) get filtered or
+		// classifier-negative individually. If we find a positive: anchor opp + attach
+		// the rest. If we don't: mark everything negative and skip the thread.
+		const sortedNewestFirst = [...group].sort((a, b) => b.internalDate.getTime() - a.internalDate.getTime());
+
+		let originatingMessage: RawMessageForOpportunityProcessing | null = null;
+		let originatingOpportunityId: string | null = null;
+		const skippedMessages: RawMessageForOpportunityProcessing[] = [];
+
+		for (const candidate of sortedNewestFirst) {
+			result.scanned += 1;
+
+			try {
+				// Self-email: skip the candidate; it's our own outbound, not a quote.
+				if (candidate.fromEmail && orgEmailAddresses.has(candidate.fromEmail.toLowerCase())) {
+					await this.repository.markRawMessageNegative(candidate.id);
+					result.classifiedNegative += 1;
+					this.logService.logAction({
+						action: 'opportunity.pipeline.self_email_skipped',
+						message: `RawMessage ${candidate.id} short-circuited as own-org outbound (${candidate.fromEmail}) within thread ${threadId}`,
+						metadata: {
+							rawMessageId: candidate.id,
+							emailAccountId: candidate.emailAccountId,
+							organizationId: candidate.organizationId,
+							fromEmail: candidate.fromEmail,
+							threadId
+						},
+						context: 'OpportunitiesService'
+					});
+					skippedMessages.push(candidate);
+					continue;
+				}
+
+				// Bulk-mail filter: skip — marketing or auto-reply.
+				const bulkMail = detectBulkMail({ provider: candidate.provider, raw: candidate.raw });
+				if (bulkMail.isBulk) {
+					await this.repository.markRawMessageNegative(candidate.id);
+					result.classifiedNegative += 1;
+					this.logService.logAction({
+						action: 'opportunity.pipeline.bulk_mail_skipped',
+						message: `RawMessage ${candidate.id} short-circuited as bulk mail (${bulkMail.reason}) within thread ${threadId}`,
+						metadata: {
+							rawMessageId: candidate.id,
+							emailAccountId: candidate.emailAccountId,
+							organizationId: candidate.organizationId,
+							reason: bulkMail.reason,
+							threadId
+						},
+						context: 'OpportunitiesService'
+					});
+					skippedMessages.push(candidate);
+					continue;
+				}
+
+				const input = buildRawMessageAIInput({
+					provider: candidate.provider,
+					subject: candidate.subject,
+					fromName: candidate.fromName,
+					fromEmail: candidate.fromEmail,
+					raw: candidate.raw
+				});
+				const classification = await this.classifier.classify(input);
+
+				if (!classification.value.isQuote) {
+					await this.repository.markRawMessageNegative(candidate.id);
+					result.classifiedNegative += 1;
+					continue;
+				}
+
+				// POSITIVE. Extract and create the opp anchored on THIS message.
+				const extraction = await this.extractor.extract(
+					input,
+					candidate.internalDate.toISOString().slice(0, 10)
+				);
+				const { created, opportunityId } = await this.repository.createOpportunityFromRawMessage({
+					rawMessage: candidate,
+					classification: classification.value,
+					extraction: extraction.value,
+					aiProvider: `${extraction.provider}/${extraction.model}`,
+					classifiedAiCallId: classification.callId,
+					extractedAiCallId: extraction.callId
+				});
+
+				result.classifiedPositive += 1;
+				if (created) {
+					result.opportunitiesCreated += 1;
+				} else {
+					result.opportunitiesSkipped += 1;
+				}
+
+				originatingMessage = candidate;
+				originatingOpportunityId = opportunityId;
+
+				if (created && opportunityId) {
+					try {
+						await inngest.send({
+							name: InngestEvents.OpportunityCreated,
+							data: { opportunityId, organizationId: candidate.organizationId }
+						});
+					} catch (error) {
+						this.logService.logAction({
+							action: 'opportunity.created.enqueue_failed',
+							message: `Failed to enqueue reply-draft generation for opportunity ${opportunityId}: ${error instanceof Error ? error.message : 'unknown'}`,
+							metadata: {
+								opportunityId,
+								organizationId: candidate.organizationId,
+								rawMessageId: candidate.id,
+								threadId
+							},
+							level: 'error',
+							stack: error instanceof Error ? error.stack : undefined,
+							context: 'OpportunitiesService'
+						});
+					}
+				}
+
+				break; // Found the anchor; stop scanning candidates.
+			} catch (error) {
+				result.failed += 1;
+				failedRawMessageIds.add(candidate.id);
+				this.logService.logAction({
+					action: 'opportunity.pipeline.raw_message_failed',
+					message: `Failed to process RawMessage ${candidate.id} within thread ${threadId}: ${error instanceof Error ? error.message : 'unknown'}`,
+					metadata: {
+						rawMessageId: candidate.id,
+						emailAccountId: candidate.emailAccountId,
+						organizationId: candidate.organizationId,
+						threadId
+					},
+					level: 'error',
+					stack: error instanceof Error ? error.stack : undefined,
+					context: 'OpportunitiesService'
+				});
+
+				if (error instanceof AINotConfiguredError) {
+					return false;
+				}
+				// Move on to the next candidate — this thread might still have a positive
+				// at an older message.
+			}
+		}
+
+		if (!originatingMessage || !originatingOpportunityId) {
+			// No positive in the thread (or every candidate errored). Mark remaining
+			// unclassified messages negative so the next batch doesn't re-scan them; the
+			// loop already marked skipped/classified-negative ones individually.
+			for (const m of group) {
+				if (skippedMessages.includes(m) || failedRawMessageIds.has(m.id)) {
+					continue;
+				}
+				if (
+					originatingMessage &&
+					(m as RawMessageForOpportunityProcessing).id ===
+						(originatingMessage as RawMessageForOpportunityProcessing).id
+				) {
+					continue;
+				}
+				await this.repository.markRawMessageNegative(m.id);
+				result.classifiedNegative += 1;
+			}
+			this.logService.logAction({
+				action: 'opportunity.pipeline.thread_no_positive',
+				message: `Thread ${threadId} produced no positive classification in ${group.length} messages — no opportunity created`,
+				metadata: {
+					threadId,
+					emailAccountId: first.emailAccountId,
+					organizationId: first.organizationId,
+					messageCount: group.length
+				},
+				context: 'OpportunitiesService'
+			});
+			return true;
+		}
+
+		// We have an anchor. Attach all other messages (newer or older) as immutable
+		// thread history. No follow-up event firings — backfill is a snapshot, not a
+		// live customer reply chain.
+		for (const m of group) {
+			if (m.id === originatingMessage.id) {
+				continue;
+			}
+			if (skippedMessages.includes(m)) {
+				continue;
+			}
+			// Classifier may have already marked some negative within the loop above;
+			// re-attach them anyway so the thread history is complete from the UI's
+			// perspective. `attachThreadMessage` flips them positive + sets classifiedAt.
+			try {
+				await this.repository.attachThreadMessage({
+					rawMessageId: m.id,
+					opportunityId: originatingOpportunityId
+				});
+				result.classifiedPositive += 1;
+			} catch (error) {
+				result.failed += 1;
+				failedRawMessageIds.add(m.id);
+				this.logService.logAction({
+					action: 'opportunity.pipeline.thread_attach_failed',
+					message: `Failed to attach RawMessage ${m.id} to opportunity ${originatingOpportunityId}: ${error instanceof Error ? error.message : 'unknown'}`,
+					metadata: {
+						rawMessageId: m.id,
+						opportunityId: originatingOpportunityId,
+						threadId
+					},
+					level: 'error',
+					stack: error instanceof Error ? error.stack : undefined,
+					context: 'OpportunitiesService'
+				});
+			}
+		}
+
+		this.logService.logAction({
+			action: 'opportunity.pipeline.thread_anchored',
+			message: `Thread ${threadId} anchored to opportunity ${originatingOpportunityId} (${group.length} messages, originating ${originatingMessage.id})`,
+			metadata: {
+				threadId,
+				opportunityId: originatingOpportunityId,
+				originatingRawMessageId: originatingMessage.id,
+				messageCount: group.length,
+				emailAccountId: first.emailAccountId,
+				organizationId: first.organizationId
+			},
+			context: 'OpportunitiesService'
+		});
+
+		return true;
+	}
+
 	private async processOneRawMessage(
 		rawMessage: RawMessageForOpportunityProcessing,
 		orgEmailAddresses: Set<string>,
 		result: OpportunityProcessingResult,
-		failedRawMessageIds: Set<string>
+		failedRawMessageIds: Set<string>,
+		options: ProcessBatchOptions = DEFAULT_PROCESS_OPTIONS
 	): Promise<boolean> {
 		result.scanned += 1;
 
@@ -706,28 +1191,34 @@ export class OpportunitiesService {
 					});
 					result.classifiedPositive += 1;
 
-					try {
-						await inngest.send({
-							name: InngestEvents.OpportunityFollowupReceived,
-							data: {
-								opportunityId: existingOpp.id,
-								organizationId: rawMessage.organizationId,
-								triggeredBy: 'customer_reply'
-							}
-						});
-					} catch (error) {
-						this.logService.logAction({
-							action: 'opportunity.followup.enqueue_failed',
-							message: `Failed to enqueue follow-up draft for ${existingOpp.id}: ${error instanceof Error ? error.message : 'unknown'}`,
-							metadata: {
-								opportunityId: existingOpp.id,
-								organizationId: rawMessage.organizationId,
-								rawMessageId: rawMessage.id
-							},
-							level: 'error',
-							stack: error instanceof Error ? error.stack : undefined,
-							context: 'OpportunitiesService'
-						});
+					// W5.6-followup — suppress the follow-up draft event during backfill.
+					// Backfill processes a snapshot of historical messages, not a live
+					// customer reply; firing the event would generate phantom drafts for
+					// every historical message in the thread.
+					if (options.mode === 'live') {
+						try {
+							await inngest.send({
+								name: InngestEvents.OpportunityFollowupReceived,
+								data: {
+									opportunityId: existingOpp.id,
+									organizationId: rawMessage.organizationId,
+									triggeredBy: 'customer_reply'
+								}
+							});
+						} catch (error) {
+							this.logService.logAction({
+								action: 'opportunity.followup.enqueue_failed',
+								message: `Failed to enqueue follow-up draft for ${existingOpp.id}: ${error instanceof Error ? error.message : 'unknown'}`,
+								metadata: {
+									opportunityId: existingOpp.id,
+									organizationId: rawMessage.organizationId,
+									rawMessageId: rawMessage.id
+								},
+								level: 'error',
+								stack: error instanceof Error ? error.stack : undefined,
+								context: 'OpportunitiesService'
+							});
+						}
 					}
 
 					this.logService.logAction({

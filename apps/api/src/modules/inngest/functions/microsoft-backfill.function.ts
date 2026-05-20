@@ -34,6 +34,7 @@ export class MicrosoftBackfillFunction {
 			opportunities,
 			logService,
 			logContext: 'InngestFn:microsoft-backfill',
+			mode: 'backfill',
 			postSyncStep: {
 				stepName: InngestSteps.MicrosoftBackfill.StartSubscription,
 				run: emailAccountId => subscriptions.startSubscriptionForAccount(emailAccountId),

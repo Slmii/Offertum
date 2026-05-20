@@ -10,6 +10,7 @@ import {
 } from '@/modules/opportunities/dto/opportunity-detail.response.dto';
 import { OpportunityListResponseDto } from '@/modules/opportunities/dto/opportunity-list.response.dto';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
+import { UpdateOpportunityFieldsDto } from '@/modules/opportunities/dto/update-opportunity-fields.dto';
 import { UpdateOpportunityStatusDto } from '@/modules/opportunities/dto/update-opportunity-status.dto';
 import { UpdateReplyDraftDto } from '@/modules/opportunities/dto/update-reply-draft.dto';
 import { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
@@ -209,6 +210,19 @@ export class OpportunitiesController {
 		@Body() body: UpdateOpportunityStatusDto
 	): Promise<OpportunityResponseDto> {
 		return this.opportunities.updateStatus(request.organizationId!, id, body.status);
+	}
+
+	@ApiOperation({ summary: 'Patch owner-editable extracted fields (urgency / address / dates)' })
+	@ApiOkResponse({ type: OpportunityResponseDto })
+	@TenantWrite()
+	@Patch(':id')
+	updateFields(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string,
+		@Body() body: UpdateOpportunityFieldsDto
+	): Promise<OpportunityResponseDto> {
+		const actorUserId = requireUserId(request);
+		return this.opportunities.updateFields(request.organizationId!, id, body, actorUserId);
 	}
 
 	@ApiOperation({ summary: 'Dismiss an opportunity (classifier feedback)' })

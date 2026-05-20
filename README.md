@@ -6,7 +6,7 @@ AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote req
 
 - **Frontend**: TanStack Start (React 19) + MUI v9 + TanStack Query
 - **Backend**: NestJS 11 + Prisma 7 + Postgres 16
-- **AI**: OpenAI Responses API via the official `openai` SDK (direct OpenAI or Azure OpenAI EU). Provider-swap seam in place for the W5.1 spike against Mistral / Anthropic.
+- **AI**: OpenAI Responses API via the official `openai` SDK (direct OpenAI or Azure OpenAI EU). Locked to OpenAI for MVP; provider-swap seam in place for a future change.
 - **Background jobs**: Inngest (delta-sync workers, push handlers, scheduled crons)
 - **Opportunity pipeline**: Gmail/Graph `RawMessage` rows are classified, extracted, and materialized into tenant-scoped `Opportunity` rows with server-enforced status transitions. Owners can dismiss false positives (`not_a_quote | duplicate | spam | other`); the admin classifier-quality dashboard turns those dismissals into precision metrics.
 - **Admin dashboards** (gated by `ADMIN_EMAILS` env allowlist):

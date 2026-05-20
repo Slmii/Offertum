@@ -33,7 +33,8 @@ export class GmailDeltaSyncFunction {
 			processOpportunitiesStepPrefix: InngestSteps.GmailDeltaSync.ProcessOpportunitiesBatch,
 			opportunities,
 			logService,
-			logContext: 'InngestFn:gmail-delta-sync'
+			logContext: 'InngestFn:gmail-delta-sync',
+			mode: 'live'
 		});
 	}
 }

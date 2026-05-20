@@ -75,7 +75,8 @@ describe('processOpportunitiesInBatches', () => {
 			emailAccountId: 'acct-1',
 			stepNamePrefix: 'test-batch',
 			logContext: 'TestFn',
-			correlation: { requestId: 'test-run' }
+			correlation: { requestId: 'test-run' },
+			mode: 'live'
 		});
 
 		expect(processBatch).toHaveBeenCalledTimes(3);
@@ -105,11 +106,12 @@ describe('processOpportunitiesInBatches', () => {
 			emailAccountId: 'acct-1',
 			stepNamePrefix: 'test-batch',
 			logContext: 'TestFn',
-			correlation: { requestId: 'test-run' }
+			correlation: { requestId: 'test-run' },
+			mode: 'live'
 		});
 
-		expect(processBatch).toHaveBeenNthCalledWith(1, 'acct-1', []);
-		expect(processBatch).toHaveBeenNthCalledWith(2, 'acct-1', ['raw-1']);
+		expect(processBatch).toHaveBeenNthCalledWith(1, 'acct-1', [], { mode: 'live' });
+		expect(processBatch).toHaveBeenNthCalledWith(2, 'acct-1', ['raw-1'], { mode: 'live' });
 	});
 
 	it('bails after PROCESS_MAX_BATCHES_PER_RUN and warns rather than looping forever', async () => {
@@ -127,7 +129,8 @@ describe('processOpportunitiesInBatches', () => {
 			emailAccountId: 'acct-1',
 			stepNamePrefix: 'test-batch',
 			logContext: 'TestFn',
-			correlation: { requestId: 'test-run' }
+			correlation: { requestId: 'test-run' },
+			mode: 'live'
 		});
 
 		expect(processBatch).toHaveBeenCalledTimes(PROCESS_MAX_BATCHES_PER_RUN);

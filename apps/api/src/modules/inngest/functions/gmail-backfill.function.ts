@@ -34,6 +34,7 @@ export class GmailBackfillFunction {
 			opportunities,
 			logService,
 			logContext: 'InngestFn:gmail-backfill',
+			mode: 'backfill',
 			postSyncStep: {
 				stepName: InngestSteps.GmailBackfill.StartWatch,
 				run: emailAccountId => watch.startWatchForAccount(emailAccountId),

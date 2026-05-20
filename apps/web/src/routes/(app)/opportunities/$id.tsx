@@ -6,16 +6,18 @@ import {
 	useDeleteReplyDraftAttachment,
 	useRegenerateReplyDraft,
 	useSendReplyDraft,
+	useUpdateOpportunityFields,
 	useUpdateOpportunityStatus,
 	useUpdateReplyDraft,
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
-import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
+import { toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
 	OPPORTUNITY_STATUS_CHIP_COLORS,
 	OPPORTUNITY_STATUS_LABELS_NL,
 	OPPORTUNITY_URGENCY_COLORS,
+	OPPORTUNITY_URGENCY_LABELS_NL,
 	opportunityCustomerLabel
 } from '@/lib/utils/opportunity.utils';
 import { isReplyDraftEditable } from '@/lib/utils/reply-draft-editability';
@@ -39,15 +41,19 @@ import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import {
 	OPPORTUNITY_STATUSES,
+	OPPORTUNITY_URGENCIES,
 	REPLY_DRAFT_BODY_MAX_LENGTH,
 	type OpportunityStatus,
+	type OpportunityUrgency,
 	type ReplyDraft,
 	type ReplyDraftAttachment
 } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
@@ -375,16 +381,7 @@ function OpportunityDetailPage() {
 					<Typography variant='h2' sx={{ fontSize: 18, mt: 4, mb: 1 }}>
 						Geëxtraheerde gegevens
 					</Typography>
-					<ExtractedFieldsPanel
-						customerName={opportunity.customerName}
-						customerEmail={opportunity.customerEmail}
-						address={opportunity.address}
-						requestType={opportunity.requestType}
-						urgency={opportunity.urgency}
-						customerDeadline={opportunity.customerDeadline}
-						customerAppointment={opportunity.customerAppointment}
-						deliverableHints={opportunity.deliverableHints}
-					/>
+					<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} />
 				</Box>
 			</Stack>
 
@@ -651,47 +648,147 @@ function OriginalEmailPanel({
 	);
 }
 
+/**
+ * Right-side panel showing the AI-extracted opportunity fields. Customer name / email /
+ * request type / deliverable hints stay read-only (less owner-mutable signals); urgency /
+ * address / deadline / appointment are inline-editable because the extractor isn't
+ * always right and there's no other correction path. Edits commit on blur (text /
+ * dates) or on change (select). No editability lock — even on WON/LOST opps the owner
+ * may need to correct a typo'd address or fix a deadline post-hoc.
+ */
 function ExtractedFieldsPanel({
-	customerName,
-	customerEmail,
-	address,
-	requestType,
-	urgency,
-	customerDeadline,
-	customerAppointment,
-	deliverableHints
+	opportunityId,
+	opportunity
 }: {
-	customerName: string | null;
-	customerEmail: string | null;
-	address: string | null;
-	requestType: string;
-	urgency: 'emergency' | 'high' | 'normal' | 'low';
-	customerDeadline: string | null;
-	customerAppointment: string | null;
-	deliverableHints: string[];
+	opportunityId: string;
+	opportunity: {
+		customerName: string | null;
+		customerEmail: string | null;
+		address: string | null;
+		requestType: string;
+		urgency: OpportunityUrgency;
+		customerDeadline: string | null;
+		customerAppointment: string | null;
+		deliverableHints: string[];
+	};
 }) {
+	const updateFields = useUpdateOpportunityFields(opportunityId);
+
+	// Local mirrors for the editable fields. Re-sync from server on prop change so
+	// regenerate / mutation success picks up the canonical value. Text + dates commit
+	// on blur (or change for dates); urgency commits on change.
+	const [address, setAddress] = useState<string>(opportunity.address ?? '');
+	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setAddress(opportunity.address ?? '');
+	}, [opportunity.address]);
+
+	const commitAddress = () => {
+		const next = address.trim() || null;
+		if (next === (opportunity.address ?? null)) {
+			return;
+		}
+		updateFields.mutate({ address: next });
+	};
+
+	const commitDate = (key: 'customerDeadline' | 'customerAppointment', next: Dayjs | null) => {
+		const iso = next && next.isValid() ? next.format('YYYY-MM-DD') : null;
+		const currentIso = opportunity[key] ? opportunity[key]!.slice(0, 10) : null;
+		if (iso === currentIso) {
+			return;
+		}
+		updateFields.mutate({ [key]: iso });
+	};
+
+	const commitUrgency = (next: OpportunityUrgency) => {
+		if (next === opportunity.urgency) {
+			return;
+		}
+		updateFields.mutate({ urgency: next });
+	};
+
 	return (
 		<Paper variant='outlined' sx={{ p: 2 }}>
 			<Stack spacing={1.5}>
-				<ExtractedField label='Klant' value={customerName} />
-				<ExtractedField label='E-mail' value={customerEmail} />
-				<ExtractedField label='Adres' value={address} />
-				<ExtractedField label='Aanvraag' value={requestType} />
-				<ExtractedField label='Urgentie' value={urgency} />
-				<ExtractedField label='Deadline' value={customerDeadline ? toReadableDate(customerDeadline) : null} />
-				<ExtractedField
-					label='Afspraak'
-					value={customerAppointment ? toReadableDate(customerAppointment) : null}
-				/>
+				<ExtractedField label='Klant' value={opportunity.customerName} />
+				<ExtractedField label='E-mail' value={opportunity.customerEmail} />
+				<Box>
+					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
+						Adres
+					</Typography>
+					<TextField
+						value={address}
+						onChange={e => setAddress(e.target.value)}
+						onBlur={commitAddress}
+						placeholder='—'
+						size='small'
+						fullWidth
+						multiline
+						maxRows={3}
+						slotProps={{ htmlInput: { maxLength: 500 } }}
+					/>
+				</Box>
+				<ExtractedField label='Aanvraag' value={opportunity.requestType} />
+				<Box>
+					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
+						Urgentie
+					</Typography>
+					<Select
+						value={opportunity.urgency}
+						size='small'
+						fullWidth
+						onChange={e => commitUrgency(e.target.value as OpportunityUrgency)}
+					>
+						{OPPORTUNITY_URGENCIES.map(u => (
+							<MenuItem key={u} value={u}>
+								{OPPORTUNITY_URGENCY_LABELS_NL[u]}
+							</MenuItem>
+						))}
+					</Select>
+				</Box>
+				<Box>
+					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
+						Deadline
+					</Typography>
+					<DatePicker
+						value={opportunity.customerDeadline ? dayjs(opportunity.customerDeadline) : null}
+						onChange={next => commitDate('customerDeadline', next)}
+						format='DD MMM YYYY'
+						slotProps={{
+							textField: { size: 'small', fullWidth: true },
+							field: { clearable: true }
+						}}
+					/>
+				</Box>
+				<Box>
+					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
+						Afspraak
+					</Typography>
+					<DatePicker
+						value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
+						onChange={next => commitDate('customerAppointment', next)}
+						format='DD MMM YYYY'
+						slotProps={{
+							textField: { size: 'small', fullWidth: true },
+							field: { clearable: true }
+						}}
+					/>
+				</Box>
+				{updateFields.isError && (
+					<Alert severity='error'>
+						Bijwerken mislukt:{' '}
+						{updateFields.error instanceof Error ? updateFields.error.message : 'Onbekende fout'}
+					</Alert>
+				)}
 				<Box>
 					<Typography variant='caption' color='text.secondary'>
 						Onderdelen
 					</Typography>
-					{deliverableHints.length === 0 ? (
+					{opportunity.deliverableHints.length === 0 ? (
 						<Typography variant='body2'>—</Typography>
 					) : (
 						<Stack direction='row' spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>
-							{deliverableHints.map(hint => (
+							{opportunity.deliverableHints.map(hint => (
 								<Chip key={hint} size='small' label={hint} />
 							))}
 						</Stack>
