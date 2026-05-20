@@ -1,6 +1,10 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { tonePlaybookQueryOptions, useUpdateTonePlaybook } from '@/lib/queries/tone-playbook.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
+import Accordion from '@mui/material/Accordion';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import AccordionSummary from '@mui/material/AccordionSummary';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -8,11 +12,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import Accordion from '@mui/material/Accordion';
-import AccordionDetails from '@mui/material/AccordionDetails';
-import AccordionSummary from '@mui/material/AccordionSummary';
 import { TONE_PLAYBOOK_MAX_LENGTH } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -91,7 +91,8 @@ function WritingStylePage() {
 			</Typography>
 
 			<Paper variant='outlined' sx={{ p: 3, mb: 3 }}>
-				<TextField
+				<StandaloneField
+					name='writingStyle'
 					value={text}
 					onChange={e => setText(e.target.value)}
 					placeholder='Bijvoorbeeld: ik open met "Beste {voornaam},", houd het kort en concreet, sluit af met "Met vriendelijke groet, Marco" en mijn directe nummer. Geen overdreven beleefdheidsfrasen.'
@@ -99,7 +100,7 @@ function WritingStylePage() {
 					minRows={6}
 					maxRows={20}
 					fullWidth
-					slotProps={{ htmlInput: { maxLength: TONE_PLAYBOOK_MAX_LENGTH } }}
+					maxLength={TONE_PLAYBOOK_MAX_LENGTH}
 					disabled={update.isPending}
 				/>
 				<Stack

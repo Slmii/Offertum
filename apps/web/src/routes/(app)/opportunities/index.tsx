@@ -1,6 +1,9 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { StandaloneField } from '@/components/Form/Field/Field.component';
+import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
-import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import {
 	opportunitiesListQueryOptions,
 	OpportunityKeys,
@@ -33,7 +36,6 @@ import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import FormLabel from '@mui/material/FormLabel';
 import IconButton from '@mui/material/IconButton';
-import InputAdornment from '@mui/material/InputAdornment';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
@@ -41,7 +43,6 @@ import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
-import Switch from '@mui/material/Switch';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
@@ -162,25 +163,16 @@ function OpportunitiesIndexPage() {
 			/>
 
 			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 2, mb: 2, alignItems: 'center' }}>
-				<TextField
-					size='small'
+				<StandaloneField
+					name='search'
 					placeholder='Zoek op klant, adres of type…'
+					fullWidth
 					value={searchInput}
 					onChange={e => setSearchInput(e.target.value)}
-					slotProps={{
-						htmlInput: { maxLength: 80 },
-						input: {
-							endAdornment: searching ? (
-								<InputAdornment position='end'>
-									<CircularProgress size={14} />
-								</InputAdornment>
-							) : null
-						}
-					}}
-					sx={{ flex: 1 }}
+					endElement={searching ? <CircularProgress size={14} /> : undefined}
 				/>
-				<Select
-					size='small'
+				<StandaloneSelect
+					name='sort'
 					value={sort}
 					onChange={e =>
 						navigate({
@@ -195,30 +187,22 @@ function OpportunitiesIndexPage() {
 							replace: true
 						})
 					}
-					sx={{ minWidth: 200 }}
-				>
-					{OPPORTUNITY_SORT_OPTIONS.map(option => (
-						<MenuItem key={option} value={option}>
-							{OPPORTUNITY_SORT_LABELS_NL[option]}
-						</MenuItem>
-					))}
-				</Select>
-				<FormControlLabel
-					control={
-						<Switch
-							size='small'
-							checked={showDismissed}
-							onChange={e =>
-								navigate({
-									to: '/opportunities',
-									search: { ...urlSearch, showDismissed: e.target.checked || undefined },
-									replace: true
-								})
-							}
-						/>
-					}
+					options={OPPORTUNITY_SORT_OPTIONS.map(sort => ({
+						id: sort,
+						label: OPPORTUNITY_SORT_LABELS_NL[sort]
+					}))}
+					sx={{ minWidth: { xs: '100%', sm: 200 } }}
+				/>
+				<StandaloneSwitch
+					name='showDismissed'
 					label='Toon afgewezen'
-					sx={{ whiteSpace: 'nowrap', mr: 0 }}
+					onChange={isChecked =>
+						navigate({
+							to: '/opportunities',
+							search: { ...urlSearch, showDismissed: isChecked || undefined },
+							replace: true
+						})
+					}
 				/>
 			</Stack>
 

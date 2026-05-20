@@ -1,3 +1,4 @@
+import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { createPageMeta } from '@/lib/createPageMeta';
 import { useSignOut } from '@/lib/queries/auth.queries';
 import {
@@ -8,10 +9,8 @@ import {
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -64,21 +63,18 @@ function HomePage() {
 						Signed in as <strong>{user.email}</strong>
 					</Typography>
 
-					<TextField
-						select
-						size='small'
-						label='Active organization'
+					<StandaloneSelect
+						name='org'
+						label='Actieve Organisatie'
 						value={me.organizationId}
 						onChange={e => switchOrganization.mutate(e.target.value)}
 						disabled={switchOrganization.isPending}
-						sx={{ mb: 4, minWidth: 240 }}
-					>
-						{organizations.map(m => (
-							<MenuItem key={m.organizationId} value={m.organizationId}>
-								{m.organization.name} · {m.role.toLowerCase()}
-							</MenuItem>
-						))}
-					</TextField>
+						fullWidth
+						options={organizations.map(org => ({
+							id: org.organizationId,
+							label: `${org.organization.name} · ${org.role.toLowerCase()}`
+						}))}
+					/>
 
 					<Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
 						<Button variant='contained' onClick={() => navigate({ to: '/opportunities' })}>

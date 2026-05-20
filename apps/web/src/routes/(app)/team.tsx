@@ -1,4 +1,6 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { StandaloneField } from '@/components/Form/Field/Field.component';
+import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { WrapperApiError } from '@/lib/api/client';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
@@ -20,10 +22,8 @@ import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { BillingState, MembershipRole } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -255,9 +255,9 @@ function TeamPage() {
 
 						<Box component='form' onSubmit={handleSubmit}>
 							<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-								<TextField
+								<StandaloneField
 									type='email'
-									size='small'
+									name='email'
 									fullWidth
 									required
 									placeholder='teammate@example.com'
@@ -265,20 +265,18 @@ function TeamPage() {
 									onChange={e => setEmail(e.target.value)}
 									disabled={createInvitation.isPending || trialCapReached}
 								/>
-								<TextField
-									select
-									size='small'
+								<StandaloneSelect
+									name='role'
+									fullWidth
 									value={role}
 									onChange={e => setRole(e.target.value as MembershipRole)}
 									disabled={createInvitation.isPending || trialCapReached}
-									sx={{ minWidth: 140 }}
-								>
-									{ROLE_OPTIONS.map(option => (
-										<MenuItem key={option.value} value={option.value}>
-											{option.label}
-										</MenuItem>
-									))}
-								</TextField>
+									options={ROLE_OPTIONS.map(role => ({
+										id: role.value,
+										label: role.label
+									}))}
+								/>
+
 								<Button
 									type='submit'
 									variant='contained'

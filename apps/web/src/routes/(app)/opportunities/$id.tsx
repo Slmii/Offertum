@@ -1,5 +1,8 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
-import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
+import { StandaloneField } from '@/components/Form/Field/Field.component';
+import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import {
 	opportunityDetailQueryOptions,
 	useComposeFollowupReplyDraft,
@@ -39,9 +42,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import {
 	OPPORTUNITY_STATUSES,
 	OPPORTUNITY_URGENCIES,
@@ -467,19 +468,21 @@ function DraftEditor({
 }) {
 	return (
 		<Paper variant='outlined' sx={{ p: 2 }}>
-			<TextField
+			<StandaloneField
+				name='draft'
+				placeholder='Concept-antwoord verschijnt hier zodra het is opgesteld.'
+				multiline
+				minRows={12}
+				maxRows={300}
+				maxLength={REPLY_DRAFT_BODY_MAX_LENGTH}
+				readOnly={readOnly}
+				fullWidth
 				value={body}
 				onChange={e => {
 					if (!readOnly) {
 						setBody(e.target.value);
 					}
 				}}
-				placeholder='Concept-antwoord verschijnt hier zodra het is opgesteld.'
-				multiline
-				minRows={12}
-				maxRows={30}
-				fullWidth
-				slotProps={{ htmlInput: { maxLength: REPLY_DRAFT_BODY_MAX_LENGTH, readOnly } }}
 			/>
 			<Stack
 				direction='row'
@@ -709,71 +712,49 @@ function ExtractedFieldsPanel({
 
 	return (
 		<Paper variant='outlined' sx={{ p: 2 }}>
-			<Stack spacing={1.5}>
+			<Stack spacing={2.5}>
 				<ExtractedField label='Klant' value={opportunity.customerName} />
 				<ExtractedField label='E-mail' value={opportunity.customerEmail} />
-				<Box>
-					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
-						Adres
-					</Typography>
-					<TextField
-						value={address}
-						onChange={e => setAddress(e.target.value)}
-						onBlur={commitAddress}
-						placeholder='—'
-						size='small'
-						fullWidth
-						multiline
-						maxRows={3}
-						slotProps={{ htmlInput: { maxLength: 500 } }}
-					/>
-				</Box>
+				<StandaloneField
+					name='address'
+					label='Adres'
+					value={address}
+					onChange={e => setAddress(e.target.value)}
+					onBlur={commitAddress}
+					placeholder='—'
+					fullWidth
+					maxLength={500}
+				/>
 				<ExtractedField label='Aanvraag' value={opportunity.requestType} />
-				<Box>
-					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
-						Urgentie
-					</Typography>
-					<Select
-						value={opportunity.urgency}
-						size='small'
-						fullWidth
-						onChange={e => commitUrgency(e.target.value as OpportunityUrgency)}
-					>
-						{OPPORTUNITY_URGENCIES.map(u => (
-							<MenuItem key={u} value={u}>
-								{OPPORTUNITY_URGENCY_LABELS_NL[u]}
-							</MenuItem>
-						))}
-					</Select>
-				</Box>
-				<Box>
-					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
-						Deadline
-					</Typography>
-					<DatePicker
-						value={opportunity.customerDeadline ? dayjs(opportunity.customerDeadline) : null}
-						onChange={next => commitDate('customerDeadline', next)}
-						format='DD MMM YYYY'
-						slotProps={{
-							textField: { size: 'small', fullWidth: true },
-							field: { clearable: true }
-						}}
-					/>
-				</Box>
-				<Box>
-					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.25 }}>
-						Afspraak
-					</Typography>
-					<DatePicker
-						value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
-						onChange={next => commitDate('customerAppointment', next)}
-						format='DD MMM YYYY'
-						slotProps={{
-							textField: { size: 'small', fullWidth: true },
-							field: { clearable: true }
-						}}
-					/>
-				</Box>
+				<StandaloneSelect
+					name='urgency'
+					label='Urgentie'
+					value={opportunity.urgency}
+					fullWidth
+					size='small'
+					options={OPPORTUNITY_URGENCIES.map(u => ({
+						id: u,
+						label: OPPORTUNITY_URGENCY_LABELS_NL[u]
+					}))}
+					onChange={e => commitUrgency(e.target.value as OpportunityUrgency)}
+				/>
+				<StandaloneDatePicker
+					name='deadline'
+					label='Deadline'
+					value={opportunity.customerDeadline ? dayjs(opportunity.customerDeadline) : null}
+					fullWidth
+					size='small'
+					onChange={next => commitDate('customerDeadline', next)}
+				/>
+				<StandaloneDatePicker
+					name='appointment'
+					label='Afspraak'
+					value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
+					fullWidth
+					size='small'
+					onChange={next => commitDate('customerAppointment', next)}
+				/>
+
 				{updateFields.isError && (
 					<Alert severity='error'>
 						Bijwerken mislukt:{' '}
