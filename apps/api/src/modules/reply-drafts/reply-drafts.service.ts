@@ -201,18 +201,25 @@ export class ReplyDraftsService {
 			: await this.repository.findOwnerForOrganization(opportunity.organizationId);
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
 
+		// W5.6 bug-fix — Anchor the follow-up draft to the LATEST customer message
+		// attached to the thread (a reply that came in after our last sent draft),
+		// not the originating quote request. Falls back to the originating message
+		// when no customer reply has landed yet (typical for the user-driven
+		// "Concept-vervolg opstellen" button on a fresh-sent draft).
+		const anchorMessage = opportunity.latestThreadMessage ?? opportunity.rawMessage;
+
 		const bodyText = buildRawMessageAIInput({
-			provider: opportunity.rawMessage.provider,
-			subject: opportunity.rawMessage.subject,
-			fromName: opportunity.rawMessage.fromName,
-			fromEmail: opportunity.rawMessage.fromEmail,
-			raw: opportunity.rawMessage.raw
+			provider: anchorMessage.provider,
+			subject: anchorMessage.subject,
+			fromName: anchorMessage.fromName,
+			fromEmail: anchorMessage.fromEmail,
+			raw: anchorMessage.raw
 		}).bodyText;
 
 		const input: ReplyDraftInput = {
-			subject: opportunity.rawMessage.subject,
-			fromName: opportunity.rawMessage.fromName,
-			fromEmail: opportunity.rawMessage.fromEmail,
+			subject: anchorMessage.subject,
+			fromName: anchorMessage.fromName,
+			fromEmail: anchorMessage.fromEmail,
 			bodyText,
 			customerName: opportunity.customerName,
 			address: opportunity.address,
@@ -234,16 +241,19 @@ export class ReplyDraftsService {
 			aiCallId: result.callId
 		});
 
+		const anchoredOn = opportunity.latestThreadMessage ? 'latest_thread_message' : 'originating_message';
 		this.logService.logAction({
 			action: 'reply_draft.followup.created',
-			message: `Follow-up reply draft generated for opportunity ${opportunityId} (${triggeredBy})`,
+			message: `Follow-up reply draft generated for opportunity ${opportunityId} (${triggeredBy}, anchoredOn=${anchoredOn}, bodyTextLen=${bodyText.length})`,
 			metadata: {
+				anchoredOn,
 				opportunityId,
 				organizationId: opportunity.organizationId,
 				aiProvider: `${result.provider}/${result.model}`,
 				usedTonePlaybook: input.tonePlaybookText !== null,
 				voiceUserId: voice?.userId ?? null,
 				bodyLength: result.value.body.length,
+				inputBodyTextPreview: bodyText.slice(0, 200),
 				draftId,
 				triggeredBy
 			},
@@ -269,18 +279,25 @@ export class ReplyDraftsService {
 		const voice = await this.repository.findUserForVoice(requestingUserId);
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
 
+		// W5.6 bug-fix (parallel to `generateFollowupDraft`) — anchor on the LATEST
+		// customer thread message when present, falling back to the originating message
+		// only when no reply has landed yet. Without this, "Regenereer in mijn stijl"
+		// would re-extract the original quote request and ignore everything the customer
+		// has said since.
+		const anchorMessage = opportunity.latestThreadMessage ?? opportunity.rawMessage;
+
 		const bodyText = buildRawMessageAIInput({
-			provider: opportunity.rawMessage.provider,
-			subject: opportunity.rawMessage.subject,
-			fromName: opportunity.rawMessage.fromName,
-			fromEmail: opportunity.rawMessage.fromEmail,
-			raw: opportunity.rawMessage.raw
+			provider: anchorMessage.provider,
+			subject: anchorMessage.subject,
+			fromName: anchorMessage.fromName,
+			fromEmail: anchorMessage.fromEmail,
+			raw: anchorMessage.raw
 		}).bodyText;
 
 		const input: ReplyDraftInput = {
-			subject: opportunity.rawMessage.subject,
-			fromName: opportunity.rawMessage.fromName,
-			fromEmail: opportunity.rawMessage.fromEmail,
+			subject: anchorMessage.subject,
+			fromName: anchorMessage.fromName,
+			fromEmail: anchorMessage.fromEmail,
 			bodyText,
 			customerName: opportunity.customerName,
 			address: opportunity.address,
@@ -302,18 +319,21 @@ export class ReplyDraftsService {
 			aiCallId: result.callId
 		});
 
+		const anchoredOn = opportunity.latestThreadMessage ? 'latest_thread_message' : 'originating_message';
 		this.logService.logAction({
 			action: overwrote ? 'reply_draft.regenerated' : 'reply_draft.regenerate_blocked_sent',
 			message: overwrote
-				? `Reply draft regenerated for opportunity ${opportunityId} by user ${requestingUserId}`
+				? `Reply draft regenerated for opportunity ${opportunityId} by user ${requestingUserId} (anchoredOn=${anchoredOn}, bodyTextLen=${bodyText.length})`
 				: `Reply draft regenerate blocked — already SENT for opportunity ${opportunityId}`,
 			metadata: {
+				anchoredOn,
 				opportunityId,
 				organizationId: opportunity.organizationId,
 				requestingUserId,
 				aiProvider: `${result.provider}/${result.model}`,
 				usedTonePlaybook: input.tonePlaybookText !== null,
-				bodyLength: result.value.body.length
+				bodyLength: result.value.body.length,
+				inputBodyTextPreview: bodyText.slice(0, 200)
 			},
 			context: 'ReplyDraftsService'
 		});

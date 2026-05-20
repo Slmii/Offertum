@@ -48,7 +48,17 @@ export interface OpportunityForReplyDraft {
 	customerDeadline: Date | null;
 	customerAppointment: Date | null;
 	deliverableHints: unknown;
+	/** The ORIGINATING customer message that created the opportunity. */
 	rawMessage: RawMessageForReplyDraft;
+	/**
+	 * W5.6 bug-fix — Latest customer reply attached to this opportunity (via
+	 * `RawMessage.opportunityId`), if any. The follow-up draft generator uses this
+	 * as its primary `bodyText` so the AI responds to what the customer just said,
+	 * not the originating quote request. `null` when no customer reply has landed
+	 * yet (typical for the user-driven "Concept-vervolg opstellen" path on a
+	 * just-sent draft without an inbound response).
+	 */
+	latestThreadMessage: RawMessageForReplyDraft | null;
 }
 
 export interface RawMessageForReplyDraft {
@@ -173,6 +183,21 @@ export class ReplyDraftsRepository {
 						raw: true,
 						emailAccount: { select: { provider: true } }
 					}
+				},
+				// W5.6 bug-fix — include the LATEST attached thread message (a customer
+				// reply that came in after the originating email). The follow-up draft
+				// generator uses this as its `bodyText` so the AI responds to the
+				// customer's most recent words. `take: 1` keeps the payload tiny.
+				threadMessages: {
+					orderBy: { internalDate: 'desc' },
+					take: 1,
+					select: {
+						subject: true,
+						fromName: true,
+						fromEmail: true,
+						raw: true,
+						emailAccount: { select: { provider: true } }
+					}
 				}
 			}
 		});
@@ -184,6 +209,7 @@ export class ReplyDraftsRepository {
 		// Flatten emailAccount.provider up into rawMessage so the service-layer shape stays
 		// neatly nested without an extra level. This matches how OpportunitiesRepository
 		// surfaces provider on `RawMessageForOpportunityProcessing`.
+		const latest = opportunity.threadMessages[0];
 		return {
 			...opportunity,
 			rawMessage: {
@@ -192,7 +218,16 @@ export class ReplyDraftsRepository {
 				fromEmail: opportunity.rawMessage.fromEmail,
 				raw: opportunity.rawMessage.raw,
 				provider: opportunity.rawMessage.emailAccount.provider
-			}
+			},
+			latestThreadMessage: latest
+				? {
+						subject: latest.subject,
+						fromName: latest.fromName,
+						fromEmail: latest.fromEmail,
+						raw: latest.raw,
+						provider: latest.emailAccount.provider
+					}
+				: null
 		};
 	}
 

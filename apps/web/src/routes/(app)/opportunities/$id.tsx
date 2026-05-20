@@ -1,5 +1,6 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
+import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
@@ -47,6 +48,7 @@ import {
 	OPPORTUNITY_STATUSES,
 	OPPORTUNITY_URGENCIES,
 	REPLY_DRAFT_BODY_MAX_LENGTH,
+	type CustomerReplyEntry,
 	type OpportunityStatus,
 	type OpportunityUrgency,
 	type ReplyDraft,
@@ -365,8 +367,12 @@ function OpportunityDetailPage() {
 							</Typography>
 						</Paper>
 					)}
-					{opportunity.replyDraftHistory.length > 0 && (
-						<ReplyDraftHistoryPanel opportunityId={id} history={opportunity.replyDraftHistory} />
+					{(opportunity.replyDraftHistory.length > 0 || opportunity.customerReplies.length > 0) && (
+						<ReplyHistoryPanel
+							opportunityId={id}
+							drafts={opportunity.replyDraftHistory}
+							customerReplies={opportunity.customerReplies}
+						/>
 					)}
 				</Box>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
@@ -695,13 +701,21 @@ function ExtractedFieldsPanel({
 		updateFields.mutate({ address: next });
 	};
 
-	const commitDate = (key: 'customerDeadline' | 'customerAppointment', next: Dayjs | null) => {
+	// Deadlines are date-only ("klant wil voor X klaar"). Appointments include a time
+	// component ("donderdag 10:00") so we send the full ISO datetime — server stores as
+	// DateTime either way, the service-layer no-op check handles same-value writes.
+	const commitDeadline = (next: Dayjs | null) => {
 		const iso = next && next.isValid() ? next.format('YYYY-MM-DD') : null;
-		const currentIso = opportunity[key] ? opportunity[key]!.slice(0, 10) : null;
+		const currentIso = opportunity.customerDeadline ? opportunity.customerDeadline.slice(0, 10) : null;
 		if (iso === currentIso) {
 			return;
 		}
-		updateFields.mutate({ [key]: iso });
+		updateFields.mutate({ customerDeadline: iso });
+	};
+
+	const commitAppointment = (next: Dayjs | null) => {
+		const iso = next && next.isValid() ? next.toISOString() : null;
+		updateFields.mutate({ customerAppointment: iso });
 	};
 
 	const commitUrgency = (next: OpportunityUrgency) => {
@@ -745,15 +759,15 @@ function ExtractedFieldsPanel({
 					value={opportunity.customerDeadline ? dayjs(opportunity.customerDeadline) : null}
 					fullWidth
 					size='small'
-					onChange={next => commitDate('customerDeadline', next)}
+					onChange={commitDeadline}
 				/>
-				<StandaloneDatePicker
+				<StandaloneDateTimePicker
 					name='appointment'
 					label='Afspraak'
 					value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
 					fullWidth
 					size='small'
-					onChange={next => commitDate('customerAppointment', next)}
+					onChange={commitAppointment}
 				/>
 
 				{updateFields.isError && (
@@ -907,47 +921,160 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * W5.6 — Read-only history of prior reply drafts on this opportunity. Renders below the
- * editor when there is more than one draft (i.e., a follow-up has been composed). Each
- * historical draft expands into a panel showing the body the customer received + any
- * attachments that were sent. Status badge distinguishes SENT (the customer received
- * it) from EDITED/PENDING_APPROVAL (an earlier draft that was superseded before send —
- * uncommon, but possible if a customer reply lands while the owner is mid-draft).
+ * W5.6 follow-up — Read-only conversational timeline of the back-and-forth on this
+ * opportunity. Merges two server-side arrays:
+ *  - `drafts` — our SENT replies (+ any rare `Vervangen` versions that were
+ *    superseded mid-edit), newest-first.
+ *  - `customerReplies` — inbound customer messages attached via thread
+ *    reconstitution, newest-first.
  *
- * No edit affordances at all — history is immutable from the UI's perspective. The
- * server side enforces this too (mutations target the latest draft only, per the
- * `findFirst({ orderBy: createdAt desc })` lookups in the repository layer).
+ * Merged + sorted by timestamp DESC so the rendered list reads chronologically.
+ * Each entry expands into a body view (drafts also show attachments). Version
+ * numbers count only the drafts — customer replies aren't "our versions."
+ *
+ * All entries are read-only from the UI's perspective. Server-side mutations target
+ * the latest draft only.
  */
-function ReplyDraftHistoryPanel({ opportunityId, history }: { opportunityId: string; history: ReplyDraft[] }) {
+function ReplyHistoryPanel({
+	opportunityId,
+	drafts,
+	customerReplies
+}: {
+	opportunityId: string;
+	drafts: ReplyDraft[];
+	customerReplies: CustomerReplyEntry[];
+}) {
+	// Heuristic grouping: each customer reply nests under the most-recent SENT draft
+	// whose `sentAt` is strictly before the reply's `receivedAt`. That's "the draft
+	// the customer was responding to" in practice — true for the common case where
+	// they hit Reply on the latest email in their inbox. Replies that arrived BEFORE
+	// any sent draft (rare — usually only happens when the opp was created from an
+	// already-mid-thread email at backfill time) stay as standalone "orphan" entries
+	// merged by timestamp.
+	//
+	// Cheap proxy for the real linkage (which would require capturing each SENT
+	// draft's RFC `Message-Id` from Gmail/Graph and parsing the inbound's
+	// `In-Reply-To` header — schema + send-path work we've deferred). Heuristic
+	// matches the user-visible result for ~all real conversations.
+	const repliesByDraftId = new Map<string, CustomerReplyEntry[]>();
+	const orphanReplies: CustomerReplyEntry[] = [];
+	for (const reply of customerReplies) {
+		// `drafts` is newest-first; the FIRST sent draft whose sentAt < receivedAt
+		// is the most-recent sent draft that predates the reply.
+		const target = drafts.find(d => d.status === 'sent' && d.sentAt !== null && d.sentAt < reply.receivedAt);
+		if (target) {
+			const existing = repliesByDraftId.get(target.id);
+			if (existing) {
+				existing.push(reply);
+			} else {
+				repliesByDraftId.set(target.id, [reply]);
+			}
+		} else {
+			orphanReplies.push(reply);
+		}
+	}
+	// Each draft's reply list: oldest-first (top-down chronological under the draft).
+	for (const list of repliesByDraftId.values()) {
+		list.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+	}
+
+	// Build the merged outer timeline. Drafts in their natural newest-first order,
+	// orphan customer replies merged by timestamp DESC alongside them.
+	const draftEntries = drafts.map((draft, index) => ({
+		kind: 'draft' as const,
+		key: `draft:${draft.id}`,
+		timestamp: draft.sentAt ?? draft.updatedAt,
+		draft,
+		ordinal: drafts.length - index,
+		replies: repliesByDraftId.get(draft.id) ?? []
+	}));
+	const orphanEntries = orphanReplies.map(reply => ({
+		kind: 'customer' as const,
+		key: `customer:${reply.id}`,
+		timestamp: reply.receivedAt,
+		reply
+	}));
+	const merged = [...draftEntries, ...orphanEntries].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+	// Total entry count includes nested replies — what the user actually sees as
+	// "items in this conversation," regardless of where they're rendered.
+	const totalEntries = drafts.length + customerReplies.length;
+
 	return (
 		<Box sx={{ mt: 4 }}>
 			<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
-				Vorige conceptenversies ({history.length})
+				Antwoord-geschiedenis ({totalEntries})
 			</Typography>
 			<Stack spacing={1}>
-				{history.map((draft, index) => (
-					<ReplyDraftHistoryEntry
-						key={draft.id}
-						opportunityId={opportunityId}
-						draft={draft}
-						// Number the entries from newest (1) to oldest. `history` is already
-						// newest-first per the API; this matches what the user sees top-down.
-						ordinal={history.length - index}
-					/>
-				))}
+				{merged.map(entry =>
+					entry.kind === 'draft' ? (
+						<ReplyDraftHistoryEntry
+							key={entry.key}
+							opportunityId={opportunityId}
+							draft={entry.draft}
+							ordinal={entry.ordinal}
+							replies={entry.replies}
+						/>
+					) : (
+						<CustomerReplyHistoryEntry key={entry.key} reply={entry.reply} />
+					)
+				)}
 			</Stack>
 		</Box>
+	);
+}
+
+function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
+	const senderLabel = reply.fromName ?? reply.fromEmail ?? 'Klant';
+
+	return (
+		<Accordion variant='outlined' disableGutters sx={{ backgroundColor: '#F5F1E8' }}>
+			<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
+				<Stack
+					direction='row'
+					spacing={1}
+					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
+				>
+					<Chip size='small' label='Klant' color='info' variant='filled' />
+					<Typography variant='caption' sx={{ fontWeight: 500 }}>
+						{senderLabel}
+					</Typography>
+					<Typography variant='caption' color='text.secondary'>
+						· antwoordde {toReadableDateTime(reply.receivedAt)}
+					</Typography>
+				</Stack>
+			</AccordionSummary>
+			<AccordionDetails sx={{ pt: 0 }}>
+				<Typography
+					variant='body2'
+					component='pre'
+					sx={{
+						whiteSpace: 'pre-wrap',
+						fontFamily: 'inherit',
+						m: 0,
+						color: 'text.primary',
+						borderLeft: '3px solid',
+						borderColor: 'info.light',
+						pl: 2
+					}}
+				>
+					{reply.body || '(geen tekstuele inhoud)'}
+				</Typography>
+			</AccordionDetails>
+		</Accordion>
 	);
 }
 
 function ReplyDraftHistoryEntry({
 	opportunityId,
 	draft,
-	ordinal
+	ordinal,
+	replies
 }: {
 	opportunityId: string;
 	draft: ReplyDraft;
 	ordinal: number;
+	replies: CustomerReplyEntry[];
 }) {
 	const isSent = draft.status === 'sent';
 	const timestamp = draft.sentAt ?? draft.updatedAt;
@@ -979,6 +1106,14 @@ function ReplyDraftHistoryEntry({
 						<Typography variant='caption' color='text.secondary'>
 							· {draft.attachments.length} bijlage{draft.attachments.length === 1 ? '' : 'n'}
 						</Typography>
+					)}
+					{replies.length > 0 && (
+						<Chip
+							size='small'
+							label={`${replies.length} ${replies.length === 1 ? 'antwoord' : 'antwoorden'}`}
+							color='info'
+							variant='outlined'
+						/>
 					)}
 				</Stack>
 			</AccordionSummary>
@@ -1016,6 +1151,20 @@ function ReplyDraftHistoryEntry({
 									rel='noopener'
 								/>
 							))}
+						</Stack>
+					</Box>
+				)}
+				{replies.length > 0 && (
+					<Box sx={{ mt: 2, ml: 1, pl: 1, borderLeft: '2px solid', borderColor: 'info.light' }}>
+						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
+							Antwoorden van de klant op deze versie
+						</Typography>
+						<Stack spacing={0.5}>
+							{replies
+								.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+								.map(reply => (
+									<CustomerReplyHistoryEntry key={reply.id} reply={reply} />
+								))}
 						</Stack>
 					</Box>
 				)}

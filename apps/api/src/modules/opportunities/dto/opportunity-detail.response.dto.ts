@@ -1,6 +1,14 @@
-import type { OpportunityDetail, ReplyDraft, ReplyDraftStatus } from '@quoteom/shared';
+import type { CustomerReplyEntry, OpportunityDetail, ReplyDraft, ReplyDraftStatus } from '@quoteom/shared';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import type { ReplyDraftAttachmentResponseDto } from '@/modules/reply-draft-attachments/dto/reply-draft-attachment.response.dto';
+
+export class CustomerReplyEntryResponseDto implements CustomerReplyEntry {
+	id!: string;
+	fromName!: string | null;
+	fromEmail!: string | null;
+	receivedAt!: string;
+	body!: string;
+}
 
 /**
  * W5.4 — `GET /api/opportunities/:id` response. Concrete classes so the OpenAPI spec
@@ -25,4 +33,5 @@ export class OpportunityDetailResponseDto extends OpportunityResponseDto impleme
 	originalEmailBody!: string;
 	replyDraft!: ReplyDraftResponseDto | null;
 	replyDraftHistory!: ReplyDraftResponseDto[];
+	customerReplies!: CustomerReplyEntryResponseDto[];
 }

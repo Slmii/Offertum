@@ -22,6 +22,7 @@ import {
 } from '@/modules/opportunities/dto/opportunity-detail.response.dto';
 import { OpportunityListResponseDto } from '@/modules/opportunities/dto/opportunity-list.response.dto';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
+import type { UpdateOpportunityFieldsDto } from '@/modules/opportunities/dto/update-opportunity-fields.dto';
 import {
 	OpportunitiesRepository,
 	type OpportunityDetailRecord,
@@ -49,7 +50,6 @@ import {
 	OPPORTUNITY_URGENCY_FROM_WIRE,
 	OPPORTUNITY_URGENCY_TO_WIRE
 } from '@/modules/opportunities/opportunity-urgency.mapper';
-import type { UpdateOpportunityFieldsDto } from '@/modules/opportunities/dto/update-opportunity-fields.dto';
 import { isReplyDraftEditable } from '@/modules/opportunities/reply-draft-editability';
 import { REPLY_DRAFT_STATUS_TO_WIRE } from '@/modules/opportunities/reply-draft-status.mapper';
 import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service';
@@ -901,27 +901,30 @@ export class OpportunitiesService {
 		}
 
 		// Branch 2 — backfill, no existing opp. Thread-as-unit classification.
-		// Walk newest-first; first positive becomes the originating message. Earlier
-		// thread messages (chitchat, our own outbound, marketing) get filtered or
-		// classifier-negative individually. If we find a positive: anchor opp + attach
-		// the rest. If we don't: mark everything negative and skip the thread.
+		// Walk newest-first; first non-self, non-bulk positive becomes the originating
+		// message. Self-emails inside the thread are NOT eligible to originate (they're
+		// our own outbound) but they ARE attached as history later — they're part of
+		// the conversation. Bulk-mails are noise and stay excluded from history.
 		const sortedNewestFirst = [...group].sort((a, b) => b.internalDate.getTime() - a.internalDate.getTime());
 
 		let originatingMessage: RawMessageForOpportunityProcessing | null = null;
 		let originatingOpportunityId: string | null = null;
-		const skippedMessages: RawMessageForOpportunityProcessing[] = [];
+		// Bulk-mail rows that should stay out of the attach loop too — they were
+		// already marked negative and shouldn't appear in the thread history.
+		const bulkSkippedMessages: RawMessageForOpportunityProcessing[] = [];
 
 		for (const candidate of sortedNewestFirst) {
 			result.scanned += 1;
 
 			try {
-				// Self-email: skip the candidate; it's our own outbound, not a quote.
+				// Self-email: not eligible as originating. Don't push to bulkSkippedMessages
+				// — we WANT to attach this message as part of the thread history (it's
+				// our own reply that's part of the conversation). Just skip it for the
+				// "find anchor" search; the attach loop downstream will pick it up.
 				if (candidate.fromEmail && orgEmailAddresses.has(candidate.fromEmail.toLowerCase())) {
-					await this.repository.markRawMessageNegative(candidate.id);
-					result.classifiedNegative += 1;
 					this.logService.logAction({
-						action: 'opportunity.pipeline.self_email_skipped',
-						message: `RawMessage ${candidate.id} short-circuited as own-org outbound (${candidate.fromEmail}) within thread ${threadId}`,
+						action: 'opportunity.pipeline.self_email_in_thread',
+						message: `RawMessage ${candidate.id} flagged as own-org sender within thread ${threadId} — not eligible as anchor but kept for history attach`,
 						metadata: {
 							rawMessageId: candidate.id,
 							emailAccountId: candidate.emailAccountId,
@@ -931,11 +934,11 @@ export class OpportunitiesService {
 						},
 						context: 'OpportunitiesService'
 					});
-					skippedMessages.push(candidate);
 					continue;
 				}
 
-				// Bulk-mail filter: skip — marketing or auto-reply.
+				// Bulk-mail filter: skip + record so the attach loop also excludes it.
+				// Marketing / auto-reply noise doesn't belong in the conversation timeline.
 				const bulkMail = detectBulkMail({ provider: candidate.provider, raw: candidate.raw });
 				if (bulkMail.isBulk) {
 					await this.repository.markRawMessageNegative(candidate.id);
@@ -952,7 +955,7 @@ export class OpportunitiesService {
 						},
 						context: 'OpportunitiesService'
 					});
-					skippedMessages.push(candidate);
+					bulkSkippedMessages.push(candidate);
 					continue;
 				}
 
@@ -1049,7 +1052,7 @@ export class OpportunitiesService {
 			// unclassified messages negative so the next batch doesn't re-scan them; the
 			// loop already marked skipped/classified-negative ones individually.
 			for (const m of group) {
-				if (skippedMessages.includes(m) || failedRawMessageIds.has(m.id)) {
+				if (bulkSkippedMessages.includes(m) || failedRawMessageIds.has(m.id)) {
 					continue;
 				}
 				if (
@@ -1077,13 +1080,14 @@ export class OpportunitiesService {
 		}
 
 		// We have an anchor. Attach all other messages (newer or older) as immutable
-		// thread history. No follow-up event firings — backfill is a snapshot, not a
-		// live customer reply chain.
+		// thread history — including own-org sent replies, so the timeline shows the
+		// full conversation. Bulk-mail noise stays excluded. No follow-up event
+		// firings — backfill is a snapshot, not a live customer reply chain.
 		for (const m of group) {
 			if (m.id === originatingMessage.id) {
 				continue;
 			}
-			if (skippedMessages.includes(m)) {
+			if (bulkSkippedMessages.includes(m)) {
 				continue;
 			}
 			// Classifier may have already marked some negative within the loop above;
@@ -1140,45 +1144,23 @@ export class OpportunitiesService {
 		result.scanned += 1;
 
 		try {
-			// W5.6-followup — Self-email filter. If the `From` address matches another
-			// connected (or formerly-connected) mailbox in the same org, this is our own
-			// outbound email landing in a sibling inbox (e.g., user has both Gmail and
-			// Hotmail connected, sent a reply via Hotmail, Gmail picked up the copy on
-			// arrival). Skip entirely — neither classify nor thread-attach. Without
-			// this filter the classifier would happily flag the AI-generated Dutch text
-			// as a positive (it reads like quote-prep language) and create a phantom
-			// opportunity for what is essentially a sent-mail receipt.
-			//
-			// Sits BEFORE the thread-reconstitution check on purpose: cross-provider
-			// thread match can't find these (Gmail threadId ≠ Graph conversationId), so
-			// without this filter they'd fall all the way through to the classifier.
-			if (rawMessage.fromEmail && orgEmailAddresses.has(rawMessage.fromEmail.toLowerCase())) {
-				await this.repository.markRawMessageNegative(rawMessage.id);
-				result.classifiedNegative += 1;
-				this.logService.logAction({
-					action: 'opportunity.pipeline.self_email_skipped',
-					message: `RawMessage ${rawMessage.id} short-circuited as own-org outbound (${rawMessage.fromEmail})`,
-					metadata: {
-						rawMessageId: rawMessage.id,
-						emailAccountId: rawMessage.emailAccountId,
-						organizationId: rawMessage.organizationId,
-						fromEmail: rawMessage.fromEmail
-					},
-					context: 'OpportunitiesService'
-				});
-				return true;
-			}
+			const fromEmailLower = rawMessage.fromEmail?.toLowerCase() ?? null;
+			const isOrgOwnSender = fromEmailLower !== null && orgEmailAddresses.has(fromEmailLower);
 
-			// W5.6 — Thread reconstitution. Check FIRST (before bulk-mail filter + classifier)
-			// because a threaded reply is overwhelmingly a real customer message — a stronger
-			// positive signal than the AI classifier can give us. If the threadId matches an
-			// existing non-dismissed Opportunity in the same org, attach this RawMessage to
-			// it instead of creating a new Opportunity, flip the opp back to NEW, and fire a
-			// follow-up event so the Inngest function regenerates a fresh draft.
+			// W5.6 — Thread reconstitution runs FIRST. A message whose threadId matches
+			// an existing non-dismissed Opportunity is part of an ongoing conversation —
+			// attach it regardless of who sent it. Two cases:
+			//  - **Customer replied** (`fromEmail` external): standard follow-up flow.
+			//    Attach + fire `OpportunityFollowupReceived` so the Inngest function
+			//    regenerates a fresh draft against the latest customer message.
+			//  - **Own-org sender on a tracked thread** (`fromEmail` in `orgEmailAddresses`):
+			//    typically a sibling-inbox echo of something we sent ourselves. Attach
+			//    (so the timeline shows the message) but DO NOT fire the follow-up event
+			//    — no point regenerating a draft addressed to ourselves.
 			//
-			// Dismissed opportunities are excluded from the match (see `findOpportunityForThread`)
-			// so a customer reply on a thread the owner already rejected (NOT_A_QUOTE / SPAM)
-			// falls through to the classifier — the owner's correction is respected.
+			// W5.6-followup correction: a self-message INSIDE a tracked thread is part
+			// of the conversation. Only a self-message OUTSIDE any tracked thread is
+			// noise — that's what the self-email filter below catches.
 			if (rawMessage.threadId) {
 				const existingOpp = await this.repository.findOpportunityForThread(
 					rawMessage.organizationId,
@@ -1191,11 +1173,9 @@ export class OpportunitiesService {
 					});
 					result.classifiedPositive += 1;
 
-					// W5.6-followup — suppress the follow-up draft event during backfill.
-					// Backfill processes a snapshot of historical messages, not a live
-					// customer reply; firing the event would generate phantom drafts for
-					// every historical message in the thread.
-					if (options.mode === 'live') {
+					// Backfill mode suppresses follow-up events (snapshot, not live).
+					// Own-org sender suppresses too — no point generating a self-reply draft.
+					if (options.mode === 'live' && !isOrgOwnSender) {
 						try {
 							await inngest.send({
 								name: InngestEvents.OpportunityFollowupReceived,
@@ -1223,19 +1203,44 @@ export class OpportunitiesService {
 
 					this.logService.logAction({
 						action: 'opportunity.followup.attached',
-						message: `RawMessage ${rawMessage.id} attached to existing opportunity ${existingOpp.id} via thread match`,
+						message: `RawMessage ${rawMessage.id} attached to existing opportunity ${existingOpp.id} via thread match${isOrgOwnSender ? ' (own-org sender)' : ''}`,
 						metadata: {
 							rawMessageId: rawMessage.id,
 							opportunityId: existingOpp.id,
 							organizationId: rawMessage.organizationId,
 							threadId: rawMessage.threadId,
-							previousStatus: existingOpp.status
+							previousStatus: existingOpp.status,
+							isOrgOwnSender,
+							followupEventFired: options.mode === 'live' && !isOrgOwnSender
 						},
 						context: 'OpportunitiesService'
 					});
 
 					return true;
 				}
+			}
+
+			// W5.6-followup — Self-email filter. Only fires for messages that did NOT
+			// match an existing tracked thread above. Catches the typical own-org noise:
+			// a marketing/operational email from one connected mailbox landing in a
+			// sibling inbox with no prior conversation to attach to. Without this the
+			// classifier would happily flag the Dutch quote-related copy as a positive
+			// and create a phantom opportunity for a sent-mail receipt.
+			if (isOrgOwnSender) {
+				await this.repository.markRawMessageNegative(rawMessage.id);
+				result.classifiedNegative += 1;
+				this.logService.logAction({
+					action: 'opportunity.pipeline.self_email_skipped',
+					message: `RawMessage ${rawMessage.id} short-circuited as own-org outbound (${rawMessage.fromEmail})`,
+					metadata: {
+						rawMessageId: rawMessage.id,
+						emailAccountId: rawMessage.emailAccountId,
+						organizationId: rawMessage.organizationId,
+						fromEmail: rawMessage.fromEmail
+					},
+					context: 'OpportunitiesService'
+				});
+				return true;
 			}
 
 			// Pre-filter: short-circuit obvious bulk/marketing mail BEFORE the AI call.
@@ -1483,12 +1488,27 @@ function toOpportunityDetailResponseDto(
 		// to SENT it stays in `replyDraft` (so the editor keeps showing the read-only
 		// "Verzonden om…" view) AND ALSO appears here (the user's mental model: a sent
 		// draft is "history" the moment it's sent, not when a follow-up supersedes it).
-		// Slight redundancy in the rendered UI — sent body shows in both the read-only
-		// editor and the collapsed accordion — acceptable for a consistent version
-		// numbering story across both views.
 		replyDraftHistory: (opportunity.replyDrafts[0]?.status === 'SENT'
 			? opportunity.replyDrafts
 			: opportunity.replyDrafts.slice(1)
-		).map(toReplyDraftResponseDto)
+		).map(toReplyDraftResponseDto),
+		// W5.6 follow-up — inbound customer replies attached via thread reconstitution.
+		// Newest-first (matches the FE's expected merge order). Body extracted from the
+		// raw provider payload via `buildRawMessageAIInput` (same plain-text rendering
+		// used for the original-email panel + the AI classifier input — keeps the wire
+		// shape consistent across all "show me this message body" surfaces).
+		customerReplies: opportunity.threadMessages.map(m => ({
+			id: m.id,
+			fromName: m.fromName,
+			fromEmail: m.fromEmail,
+			receivedAt: m.internalDate.toISOString(),
+			body: buildRawMessageAIInput({
+				provider: m.emailAccount.provider,
+				subject: m.subject,
+				fromName: m.fromName,
+				fromEmail: m.fromEmail,
+				raw: m.raw
+			}).bodyText
+		}))
 	};
 }

@@ -97,6 +97,22 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 			aiCall: { select: { createdAt: true } },
 			attachments: { orderBy: { createdAt: 'asc' } }
 		}
+	},
+	// W5.6 follow-up — inbound customer replies attached to this opp via thread
+	// reconstitution. Newest-first matches the order the FE wants for the timeline
+	// merge. Includes the raw payload so the mapper can extract the plain-text body
+	// via `buildRawMessageAIInput`.
+	threadMessages: {
+		orderBy: { internalDate: 'desc' },
+		select: {
+			id: true,
+			fromName: true,
+			fromEmail: true,
+			internalDate: true,
+			subject: true,
+			raw: true,
+			emailAccount: { select: { provider: true } }
+		}
 	}
 } as const satisfies Prisma.OpportunityInclude;
 
@@ -471,10 +487,18 @@ export class OpportunitiesRepository {
 		}
 	): Promise<OpportunityRecord> {
 		const data: Prisma.OpportunityUpdateInput = {};
-		if (patch.urgency !== undefined) {data.urgency = patch.urgency;}
-		if (patch.address !== undefined) {data.address = patch.address;}
-		if (patch.customerDeadline !== undefined) {data.customerDeadline = patch.customerDeadline;}
-		if (patch.customerAppointment !== undefined) {data.customerAppointment = patch.customerAppointment;}
+		if (patch.urgency !== undefined) {
+			data.urgency = patch.urgency;
+		}
+		if (patch.address !== undefined) {
+			data.address = patch.address;
+		}
+		if (patch.customerDeadline !== undefined) {
+			data.customerDeadline = patch.customerDeadline;
+		}
+		if (patch.customerAppointment !== undefined) {
+			data.customerAppointment = patch.customerAppointment;
+		}
 
 		return this.prisma.opportunity.update({
 			where: { id },

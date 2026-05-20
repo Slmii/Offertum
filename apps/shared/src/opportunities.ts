@@ -138,13 +138,36 @@ export interface OpportunityDetail extends Opportunity {
 	originalEmailBody: string;
 	replyDraft: ReplyDraft | null;
 	/**
-	 * W5.6 — Prior drafts for this opportunity, newest-first, EXCLUDING the one in
-	 * `replyDraft` above. Each entry is an immutable record of what the customer
-	 * received (or what was prepared and superseded — `status` distinguishes). Empty
-	 * array when only one draft has ever existed. Rendered in the detail view as a
-	 * collapsed read-only history list under the active editor.
+	 * W5.6 — Prior drafts for this opportunity, newest-first. Includes the current
+	 * draft if it's SENT (so the user sees their just-sent reply in history
+	 * immediately, not only after composing a follow-up). Excludes the current draft
+	 * when it's still in-progress (PENDING_APPROVAL / EDITED) — that lives in
+	 * `replyDraft` above. Empty array when only one draft has ever existed and it's
+	 * still being edited.
 	 */
 	replyDraftHistory: ReplyDraft[];
+	/**
+	 * W5.6 follow-up — inbound customer replies on this opportunity's thread (linked
+	 * via `RawMessage.opportunityId` to this opp). Newest-first. Empty when no
+	 * customer reply has landed yet. Rendered alongside `replyDraftHistory` as part
+	 * of the conversational timeline; the FE merges + sorts by timestamp to produce
+	 * a chronological "you sent → klant replied → you sent → …" view.
+	 */
+	customerReplies: CustomerReplyEntry[];
+}
+
+/**
+ * Inbound message from the customer attached to an opportunity's thread. Shown in
+ * the detail-view timeline so the owner can see the back-and-forth without leaving
+ * Quoteom. Body is the plain-text rendering of the provider payload (HTML stripped
+ * + whitespace normalized via `buildRawMessageAIInput`).
+ */
+export interface CustomerReplyEntry {
+	id: string;
+	fromName: string | null;
+	fromEmail: string | null;
+	receivedAt: string;
+	body: string;
 }
 
 /**
