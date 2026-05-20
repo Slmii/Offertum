@@ -1477,9 +1477,18 @@ function toOpportunityDetailResponseDto(
 		// draft exists yet (cold-start window between Opportunity insert and the
 		// `reply-draft-generate` Inngest function finishing).
 		replyDraft: opportunity.replyDrafts[0] ? toReplyDraftResponseDto(opportunity.replyDrafts[0]) : null,
-		// W5.6 — Prior drafts, newest-first, excluding the current one above. Drives the
-		// read-only history panel under the editor. Each entry is the immutable record
-		// of what the customer received at that point in the conversation.
-		replyDraftHistory: opportunity.replyDrafts.slice(1).map(toReplyDraftResponseDto)
+		// W5.6 — Read-only history panel below the editor. Includes ALL drafts NEWEST-
+		// FIRST except the currently-editable one. The latest draft is excluded only
+		// when it's still in-progress (PENDING_APPROVAL / EDITED); once it transitions
+		// to SENT it stays in `replyDraft` (so the editor keeps showing the read-only
+		// "Verzonden om…" view) AND ALSO appears here (the user's mental model: a sent
+		// draft is "history" the moment it's sent, not when a follow-up supersedes it).
+		// Slight redundancy in the rendered UI — sent body shows in both the read-only
+		// editor and the collapsed accordion — acceptable for a consistent version
+		// numbering story across both views.
+		replyDraftHistory: (opportunity.replyDrafts[0]?.status === 'SENT'
+			? opportunity.replyDrafts
+			: opportunity.replyDrafts.slice(1)
+		).map(toReplyDraftResponseDto)
 	};
 }

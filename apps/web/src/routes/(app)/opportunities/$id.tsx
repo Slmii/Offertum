@@ -307,7 +307,8 @@ function OpportunityDetailPage() {
 									sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
 								>
 									<Alert severity='success' sx={{ flex: 1 }}>
-										Verzonden om {toReadableDateTime(replyDraft.sentAt)}.
+										<strong>v{opportunity.replyDraftHistory.length}</strong> · Verzonden om{' '}
+										{toReadableDateTime(replyDraft.sentAt)}.
 									</Alert>
 									{/* W5.6 — "Concept-vervolg opstellen". Manual follow-up entry
 									 * point for cases where the customer responded out-of-band

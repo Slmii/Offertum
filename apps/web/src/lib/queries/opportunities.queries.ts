@@ -285,9 +285,24 @@ export function useSendReplyDraft(opportunityId: string) {
 			// W5.6-followup — opp.status is NO LONGER unconditionally flipped to 'replied'
 			// on send (WON/LOST stay put). Drop the optimistic status update; the
 			// invalidate below re-fetches the authoritative status from the server.
-			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current =>
-				current ? { ...current, replyDraft: nextDraft } : current
-			);
+			//
+			// Also mirror the API mapper rule: once a draft is SENT, it appears in
+			// `replyDraftHistory` alongside staying as the current `replyDraft`. The
+			// cache splice avoids a brief flash where the history panel still shows
+			// "0 versions" between the optimistic update and the refetch landing.
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current => {
+				if (!current) {
+					return current;
+				}
+				const wasAlreadyInHistory = current.replyDraftHistory.some(d => d.id === nextDraft.id);
+				return {
+					...current,
+					replyDraft: nextDraft,
+					replyDraftHistory: wasAlreadyInHistory
+						? current.replyDraftHistory.map(d => (d.id === nextDraft.id ? nextDraft : d))
+						: [nextDraft, ...current.replyDraftHistory]
+				};
+			});
 			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
 		}
 	});
@@ -315,15 +330,21 @@ export function useComposeFollowupReplyDraft(opportunityId: string) {
 			}),
 		onSuccess: nextDraft => {
 			// W5.6-followup — compose-followup no longer flips opp.status; the deal stays
-			// where the owner left it. Splice the new draft in and prepend the prior one
-			// to history; rely on the invalidate below for any other state changes.
+			// where the owner left it. Splice the new draft in. The prior `replyDraft`
+			// (which must have been SENT to enable compose-followup) is ALREADY in
+			// `replyDraftHistory` thanks to the API mapper's "include sent latest in
+			// history" rule — don't prepend again or we'd render a duplicate accordion.
 			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current => {
 				if (!current) {
 					return current;
 				}
-				const nextHistory = current.replyDraft
-					? [current.replyDraft, ...current.replyDraftHistory]
-					: current.replyDraftHistory;
+				const priorDraft = current.replyDraft;
+				const priorAlreadyInHistory =
+					priorDraft !== null && current.replyDraftHistory.some(d => d.id === priorDraft.id);
+				const nextHistory =
+					priorDraft && !priorAlreadyInHistory
+						? [priorDraft, ...current.replyDraftHistory]
+						: current.replyDraftHistory;
 				return { ...current, replyDraft: nextDraft, replyDraftHistory: nextHistory };
 			});
 			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
