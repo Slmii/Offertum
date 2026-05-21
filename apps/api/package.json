@@ -18,6 +18,7 @@
 		"db:studio": "prisma studio",
 		"db:seed": "prisma db seed",
 		"invite": "tsx scripts/invite.ts",
+		"fixtures:export": "tsx scripts/export-classifier-fixtures.ts",
 		"inngest": "inngest-cli dev -u http://localhost:3000/api/inngest",
 		"test": "jest --passWithNoTests",
 		"test:watch": "jest --watch",

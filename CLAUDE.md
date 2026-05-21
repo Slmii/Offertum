@@ -45,6 +45,10 @@ pnpm db:seed                       # prisma db seed (runs prisma/seed.ts via tsx
 pnpm dev                           # rebuilds @quoteom/shared once + then runs `tsc --watch`
                                    # on shared + `nest start --watch` on api, both in parallel
 pnpm invite --email a@b.com --org <uuid> [--role MEMBER|OWNER|EXTERNAL]
+pnpm fixtures:export [--reason NOT_A_QUOTE|SPAM] [--since YYYY-MM-DD] [--org <uuid>] [--limit N]
+                                   # W4.6.6 — export owner-dismissed opportunities as classifier-fixture
+                                   # candidates (JSONL → .fixture-candidates/, gitignored). Review and
+                                   # paste into apps/api/src/modules/ai/classifier/fixtures/.
 pnpm inngest                       # local Inngest CLI dev server (requires inngest-cli build script
                                    # — allowlisted in root `package.json#pnpm.onlyBuiltDependencies`)
 ```
