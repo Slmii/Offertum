@@ -184,13 +184,17 @@ export class GmailBackfillService {
 			return 0;
 		}
 
-		const incomingIds = messages.map(m => m.id);
+		// Defense in depth — see GmailDeltaSyncService for the rationale. Gmail can
+		// briefly carry DRAFT and INBOX simultaneously during autosave; we must never
+		// persist a draft as a RawMessage.
+		const eligible = messages.filter(m => !Array.isArray(m.labelIds) || !m.labelIds.includes('DRAFT'));
+		const incomingIds = eligible.map(m => m.id);
 		const existing = await this.prisma.rawMessage.findMany({
 			where: { emailAccountId, providerMessageId: { in: incomingIds } },
 			select: { providerMessageId: true }
 		});
 		const existingSet = new Set(existing.map(r => r.providerMessageId));
-		const toInsert = messages.filter(m => !existingSet.has(m.id));
+		const toInsert = eligible.filter(m => !existingSet.has(m.id));
 
 		if (toInsert.length === 0) {
 			return 0;

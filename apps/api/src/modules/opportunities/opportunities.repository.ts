@@ -320,9 +320,13 @@ export class OpportunitiesRepository {
 	 *     the owner sees the new draft waiting). The user explicitly asked for the
 	 *     auto-NEW move; revertible via the fully-open transition policy if undesired.
 	 */
-	async attachFollowupMessage(input: { rawMessageId: string; opportunityId: string }): Promise<void> {
+	async attachFollowupMessage(input: {
+		rawMessageId: string;
+		opportunityId: string;
+		resetToNew: boolean;
+	}): Promise<void> {
 		const now = new Date();
-		await this.prisma.$transaction([
+		const writes: Prisma.PrismaPromise<unknown>[] = [
 			this.prisma.rawMessage.update({
 				where: { id: input.rawMessageId },
 				data: {
@@ -330,12 +334,20 @@ export class OpportunitiesRepository {
 					isQuoteRequest: true,
 					classifiedAt: now
 				}
-			}),
-			this.prisma.opportunity.update({
-				where: { id: input.opportunityId },
-				data: { status: PrismaOpportunityStatus.NEW }
 			})
-		]);
+		];
+		// Only flip status when a customer reply lands. Own-org sent copies (Gmail/Graph
+		// returning our outbound message via delta-sync) must NOT clobber the
+		// markSent → REPLIED transition the ReplyDraftsService just wrote.
+		if (input.resetToNew) {
+			writes.push(
+				this.prisma.opportunity.update({
+					where: { id: input.opportunityId },
+					data: { status: PrismaOpportunityStatus.NEW }
+				})
+			);
+		}
+		await this.prisma.$transaction(writes);
 	}
 
 	async markRawMessageNegative(rawMessageId: string): Promise<void> {

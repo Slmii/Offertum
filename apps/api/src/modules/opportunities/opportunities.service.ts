@@ -1150,6 +1150,29 @@ export class OpportunitiesService {
 		result.scanned += 1;
 
 		try {
+			// Quoteom-notification short-circuit MUST run before thread reconstitution.
+			// A notification email matching an existing opp's threadId would otherwise
+			// attach as a "customer reply" and fire a follow-up event. Detect by header
+			// (X-Quoteom-Notification: true) OR sender-domain fallback (RESEND_EMAIL_FROM)
+			// in case a relay strips the header.
+			const bulkCheck = detectBulkMail({ provider: rawMessage.provider, raw: rawMessage.raw });
+			if (bulkCheck.reason === 'quoteom_notification' || isOwnNotificationSender(rawMessage, this.config)) {
+				await this.repository.markRawMessageNegative(rawMessage.id);
+				result.classifiedNegative += 1;
+				this.logService.logAction({
+					action: 'opportunity.pipeline.bulk_mail_skipped',
+					message: `RawMessage ${rawMessage.id} short-circuited as Quoteom notification`,
+					metadata: {
+						rawMessageId: rawMessage.id,
+						emailAccountId: rawMessage.emailAccountId,
+						organizationId: rawMessage.organizationId,
+						reason: 'quoteom_notification'
+					},
+					context: 'OpportunitiesService'
+				});
+				return true;
+			}
+
 			const fromEmailLower = rawMessage.fromEmail?.toLowerCase() ?? null;
 			const isOrgOwnSender = fromEmailLower !== null && orgEmailAddresses.has(fromEmailLower);
 
@@ -1172,9 +1195,39 @@ export class OpportunitiesService {
 					rawMessage.threadId
 				);
 				if (existingOpp) {
+					// LIVE mode + own-org sender = the user's own outbound coming back via
+					// Gmail/Graph delta-sync (Gmail places a copy in INBOX when you send to
+					// yourself, or Sent folder propagates). The ReplyDraft row already
+					// represents the sent message in the timeline (status=SENT, badge
+					// "Verzonden"), so attaching this RawMessage would duplicate it as a
+					// "Klant" reply in `customerReplies`. Skip attach + mark negative.
+					// Backfill keeps the existing attach behavior to preserve historical
+					// thread timeline.
+					if (options.mode === 'live' && isOrgOwnSender) {
+						await this.repository.markRawMessageNegative(rawMessage.id);
+						result.classifiedNegative += 1;
+						this.logService.logAction({
+							action: 'opportunity.pipeline.own_outbound_skipped',
+							message: `RawMessage ${rawMessage.id} skipped as own-org outbound on tracked thread (opp ${existingOpp.id})`,
+							metadata: {
+								rawMessageId: rawMessage.id,
+								opportunityId: existingOpp.id,
+								organizationId: rawMessage.organizationId,
+								threadId: rawMessage.threadId,
+								fromEmail: rawMessage.fromEmail
+							},
+							context: 'OpportunitiesService'
+						});
+						return true;
+					}
+
 					await this.repository.attachFollowupMessage({
 						rawMessageId: rawMessage.id,
-						opportunityId: existingOpp.id
+						opportunityId: existingOpp.id,
+						// Only flip status when this is a real customer reply. Own-org sent
+						// copies (backfill path only — the live-mode branch above already
+						// returned) must NOT clobber the markSent → REPLIED transition.
+						resetToNew: !isOrgOwnSender
 					});
 					result.classifiedPositive += 1;
 
@@ -1254,18 +1307,18 @@ export class OpportunitiesService {
 			// Same negative-result effect as a classifier "no" but avoids the OpenAI cost
 			// and prevents the well-known vendor-direction misclassification (emails with
 			// "offerte aanvragen" / "free quotes" copy from vendors, not from customers).
-			const bulkMail = detectBulkMail({ provider: rawMessage.provider, raw: rawMessage.raw });
-			if (bulkMail.isBulk) {
+			// Reuses `bulkCheck` computed above the thread-reconstitution branch.
+			if (bulkCheck.isBulk) {
 				await this.repository.markRawMessageNegative(rawMessage.id);
 				result.classifiedNegative += 1;
 				this.logService.logAction({
 					action: 'opportunity.pipeline.bulk_mail_skipped',
-					message: `RawMessage ${rawMessage.id} short-circuited as bulk mail (${bulkMail.reason})`,
+					message: `RawMessage ${rawMessage.id} short-circuited as bulk mail (${bulkCheck.reason})`,
 					metadata: {
 						rawMessageId: rawMessage.id,
 						emailAccountId: rawMessage.emailAccountId,
 						organizationId: rawMessage.organizationId,
-						reason: bulkMail.reason
+						reason: bulkCheck.reason
 					},
 					context: 'OpportunitiesService'
 				});
@@ -1425,6 +1478,29 @@ export class OpportunitiesService {
 			});
 		}
 	}
+}
+
+// Defense-in-depth alongside the X-Quoteom-Notification header: if a mail relay strips
+// custom headers in transit, the from-address still matches the configured RESEND
+// sender domain. Conservative — matches the domain part only, so adding a new no-reply
+// address under the same domain is automatically covered.
+function isOwnNotificationSender(
+	rawMessage: { fromEmail: string | null },
+	config: ConfigService<EnvSchema, true>
+): boolean {
+	const fromEmail = rawMessage.fromEmail?.toLowerCase() ?? null;
+	if (!fromEmail) {
+		return false;
+	}
+	const senderAddress = config.get('RESEND_EMAIL_FROM', { infer: true });
+	if (!senderAddress) {
+		return false;
+	}
+	const senderDomain = senderAddress.toLowerCase().split('@')[1];
+	if (!senderDomain) {
+		return false;
+	}
+	return fromEmail.endsWith(`@${senderDomain}`);
 }
 
 function clampLimit(raw: number | null): number {

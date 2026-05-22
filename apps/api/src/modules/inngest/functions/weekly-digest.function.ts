@@ -30,7 +30,13 @@ export class WeeklyDigestFunction {
 					return repository.findEntitledOrganizationIds();
 				});
 
+				// Idempotency window — wider than the cron interval but narrower than the
+				// next scheduled run, so an Inngest retry within minutes of a successful
+				// dispatch skips already-notified users.
+				const idempotencyWindowMs = 12 * 60 * 60 * 1000;
+
 				let dispatched = 0;
+				let skippedDuplicate = 0;
 				for (const organizationId of orgIds) {
 					const [stats, users] = await Promise.all([
 						repository.computeWeeklyDigestStats(organizationId),
@@ -38,6 +44,19 @@ export class WeeklyDigestFunction {
 					]);
 
 					if (users.length === 0) {
+						continue;
+					}
+
+					const userIds = users.map(u => u.id);
+					const alreadyNotified = await repository.findUserIdsWithRecentWeeklyDigest(
+						userIds,
+						organizationId,
+						idempotencyWindowMs
+					);
+					const recipients = userIds.filter(id => !alreadyNotified.has(id));
+					skippedDuplicate += alreadyNotified.size;
+
+					if (recipients.length === 0) {
 						continue;
 					}
 
@@ -50,7 +69,7 @@ export class WeeklyDigestFunction {
 					});
 
 					await notifications.notifyUsers({
-						userIds: users.map(u => u.id),
+						userIds: recipients,
 						organizationId,
 						eventType: PrismaNotificationEventType.WEEKLY_DIGEST,
 						title: `Wekelijks overzicht: ${stats.openCount} open offerteaanvragen`,
@@ -59,18 +78,22 @@ export class WeeklyDigestFunction {
 						metadata: stats,
 						email
 					});
-					dispatched += users.length;
+					dispatched += recipients.length;
 				}
 
 				logService.logAction({
 					action: 'notification.weekly_digest.dispatched',
-					message: `Weekly digest dispatched to ${dispatched} user(s) across ${orgIds.length} org(s)`,
-					metadata: { orgs: orgIds.length, recipients: dispatched },
+					message: `Weekly digest dispatched to ${dispatched} user(s) across ${orgIds.length} org(s) (skipped ${skippedDuplicate} as already-notified within idempotency window)`,
+					metadata: {
+						orgs: orgIds.length,
+						recipients: dispatched,
+						skippedDuplicate
+					},
 					level: 'log',
 					context: 'InngestFn:weekly-digest'
 				});
 
-				return { orgs: orgIds.length, recipients: dispatched };
+				return { orgs: orgIds.length, recipients: dispatched, skippedDuplicate };
 			}
 		);
 	}

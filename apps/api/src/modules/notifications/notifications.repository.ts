@@ -178,6 +178,30 @@ export class NotificationsRepository {
 		return rows.map(r => r.id);
 	}
 
+	// Idempotency check for the weekly digest. Returns the set of user IDs in `userIds`
+	// who already got a WEEKLY_DIGEST notification within the past 24h, so the cron
+	// can skip them on retry/re-invoke without double-dispatching.
+	async findUserIdsWithRecentWeeklyDigest(
+		userIds: ReadonlyArray<string>,
+		organizationId: string,
+		windowMs: number
+	): Promise<Set<string>> {
+		if (userIds.length === 0) {
+			return new Set();
+		}
+		const cutoff = new Date(Date.now() - windowMs);
+		const rows = await this.prisma.notification.findMany({
+			where: {
+				userId: { in: userIds as string[] },
+				organizationId,
+				eventType: PrismaNotificationEventType.WEEKLY_DIGEST,
+				createdAt: { gte: cutoff }
+			},
+			select: { userId: true }
+		});
+		return new Set(rows.map(r => r.userId));
+	}
+
 	// Counts the four metrics surfaced by the weekly digest:
 	//   - openCount       : non-dismissed opps in NEW / WAITING / COLD / REPLIED (anything
 	//                       that's not WON/LOST). The user-facing "open" set.

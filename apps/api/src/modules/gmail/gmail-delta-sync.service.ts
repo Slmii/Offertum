@@ -274,13 +274,19 @@ export class GmailDeltaSyncService {
 			return 0;
 		}
 
-		const incomingIds = messages.map(m => m.id);
+		// Defense in depth: even though `listHistoryPage` filters to `labelId=INBOX`,
+		// Gmail occasionally returns messages with the DRAFT label (transient label-
+		// consistency window during compose/autosave). Drafts must never become
+		// RawMessages — they'd attach to tracked threads via reconstitution and pose
+		// as customer replies.
+		const eligible = messages.filter(m => !isGmailDraft(m));
+		const incomingIds = eligible.map(m => m.id);
 		const existing = await this.prisma.rawMessage.findMany({
 			where: { emailAccountId, providerMessageId: { in: incomingIds } },
 			select: { providerMessageId: true }
 		});
 		const existingSet = new Set(existing.map(r => r.providerMessageId));
-		const toInsert = messages.filter(m => !existingSet.has(m.id));
+		const toInsert = eligible.filter(m => !existingSet.has(m.id));
 
 		if (toInsert.length === 0) {
 			return 0;
@@ -308,6 +314,10 @@ export class GmailDeltaSyncService {
 
 		return result.count;
 	}
+}
+
+function isGmailDraft(message: { labelIds?: string[] | null }): boolean {
+	return Array.isArray(message.labelIds) && message.labelIds.includes('DRAFT');
 }
 
 function findHeader(headers: ReadonlyArray<{ name: string; value: string }>, name: string): string | null {

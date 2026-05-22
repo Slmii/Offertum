@@ -36,15 +36,24 @@ export interface UpdateNotificationPreferencesInput {
 
 export const NOTIFICATION_LIST_LIMIT = 25;
 
+// Events for which the email channel is exposed at all. Per-event transactional
+// emails (`opportunity_created`, `customer_reply`) were dropped because the customer's
+// own email already lands in the user's inbox — a Quoteom-branded notification on top
+// is pure noise. Weekly digest stays because it carries aggregate info the inbox can't
+// derive. The settings UI only renders email toggles for events in this set; the
+// service refuses email dispatch for anything outside it.
+export const EMAIL_CHANNEL_ALLOWED_EVENTS: ReadonlyArray<NotificationEventType> = ['weekly_digest'];
+
+export function isEmailChannelAvailable(eventType: NotificationEventType): boolean {
+	return EMAIL_CHANNEL_ALLOWED_EVENTS.includes(eventType);
+}
+
 // Default policy when no NotificationPreference row exists for a (user, event, channel).
-// In-app defaults ON for every event — the bell icon is non-intrusive and exists to be
-// surfaced. Email defaults are asymmetric:
-//   - weekly_digest:   ON  — opt-in feature, user expects it
-//   - everything else: OFF — per-event emails would flood a typical owner's inbox; users
-//                            can opt in explicitly via the settings page
+// In-app defaults ON for every event. Email defaults ON only for events where it's
+// available (see EMAIL_CHANNEL_ALLOWED_EVENTS).
 export function defaultNotificationPreference(eventType: NotificationEventType, channel: NotificationChannel): boolean {
 	if (channel === 'in_app') {
 		return true;
 	}
-	return eventType === 'weekly_digest';
+	return isEmailChannelAvailable(eventType);
 }

@@ -14,6 +14,7 @@ import {
 	NOTIFICATION_EVENT_TYPES,
 	NOTIFICATION_LIST_LIMIT,
 	defaultNotificationPreference,
+	isEmailChannelAvailable,
 	type NotificationChannel,
 	type NotificationEventType,
 	type NotificationListResponse,
@@ -159,11 +160,19 @@ export class NotificationsService {
 		eventType: PrismaNotificationEventType,
 		channel: PrismaNotificationChannel
 	): Promise<boolean> {
+		const wireEvent = PRISMA_TO_WIRE_EVENT[eventType];
+		const wireChannel = PRISMA_TO_WIRE_CHANNEL[channel];
+		// Email channel is only exposed for a curated set of events. Refuse dispatch
+		// for anything outside that set even if a stale opt-in row says otherwise —
+		// the policy lives in shared so settings UI + service stay in lockstep.
+		if (wireChannel === 'email' && !isEmailChannelAvailable(wireEvent)) {
+			return false;
+		}
 		const stored = await this.repository.findPreference(userId, organizationId, eventType, channel);
 		if (stored !== null) {
 			return stored;
 		}
-		return defaultNotificationPreference(PRISMA_TO_WIRE_EVENT[eventType], PRISMA_TO_WIRE_CHANNEL[channel]);
+		return defaultNotificationPreference(wireEvent, wireChannel);
 	}
 
 	async listForUser(userId: string, organizationId: string): Promise<NotificationListResponse> {
@@ -205,6 +214,12 @@ export class NotificationsService {
 		const preferences: NotificationPreference[] = [];
 		for (const eventType of NOTIFICATION_EVENT_TYPES) {
 			for (const channel of NOTIFICATION_CHANNELS) {
+				// Skip channels that aren't user-toggleable for this event (currently
+				// the email channel for non-digest events). Keeps the wire shape in
+				// sync with what the settings UI actually renders.
+				if (channel === 'email' && !isEmailChannelAvailable(eventType)) {
+					continue;
+				}
 				const key = `${WIRE_TO_PRISMA_EVENT[eventType]}|${WIRE_TO_PRISMA_CHANNEL[channel]}`;
 				const enabled = byKey.get(key) ?? defaultNotificationPreference(eventType, channel);
 				preferences.push({ eventType, channel, enabled });
@@ -218,8 +233,15 @@ export class NotificationsService {
 		organizationId: string,
 		input: UpdateNotificationPreferencesInput
 	): Promise<void> {
+		// Drop incoming rows for disabled (event, channel) pairs — currently any
+		// email row for a non-digest event. Stale clients or hand-crafted requests
+		// can't sneak past the policy.
+		const acceptable = input.preferences.filter(
+			pref => pref.channel !== 'email' || isEmailChannelAvailable(pref.eventType)
+		);
+
 		await Promise.all(
-			input.preferences.map(pref =>
+			acceptable.map(pref =>
 				this.repository.upsertPreference(
 					userId,
 					organizationId,
@@ -236,7 +258,8 @@ export class NotificationsService {
 			metadata: {
 				userId,
 				organizationId,
-				updatedCount: input.preferences.length
+				updatedCount: acceptable.length,
+				droppedCount: input.preferences.length - acceptable.length
 			},
 			level: 'log',
 			context: 'NotificationsService'

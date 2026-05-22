@@ -20,6 +20,7 @@ import Typography from '@mui/material/Typography';
 import {
 	NOTIFICATION_CHANNELS,
 	NOTIFICATION_EVENT_TYPES,
+	isEmailChannelAvailable,
 	type NotificationChannel,
 	type NotificationEventType,
 	type UpdateNotificationPreferencesInput
@@ -60,6 +61,9 @@ function buildDefaults(
 	const map: NotificationPreferencesForm = {};
 	for (const event of NOTIFICATION_EVENT_TYPES) {
 		for (const channel of NOTIFICATION_CHANNELS) {
+			if (channel === 'email' && !isEmailChannelAvailable(event)) {
+				continue;
+			}
 			const stored = preferences.find(p => p.eventType === event && p.channel === channel);
 			map[preferenceKey(event, channel)] = stored?.enabled ?? true;
 		}
@@ -75,11 +79,13 @@ function NotificationsSettingsPage() {
 	const onSubmit = (values: NotificationPreferencesForm) => {
 		const input: UpdateNotificationPreferencesInput = {
 			preferences: NOTIFICATION_EVENT_TYPES.flatMap(event =>
-				NOTIFICATION_CHANNELS.map(channel => ({
-					eventType: event,
-					channel,
-					enabled: values[preferenceKey(event, channel)] === true
-				}))
+				NOTIFICATION_CHANNELS.filter(channel => channel !== 'email' || isEmailChannelAvailable(event)).map(
+					channel => ({
+						eventType: event,
+						channel,
+						enabled: values[preferenceKey(event, channel)] === true
+					})
+				)
 			)
 		};
 		update.mutate(input, {
@@ -124,7 +130,9 @@ function NotificationsSettingsPage() {
 									{EVENT_LABELS_NL[event].description}
 								</Typography>
 								<Stack direction='row' spacing={3}>
-									{NOTIFICATION_CHANNELS.map(channel => (
+									{NOTIFICATION_CHANNELS.filter(
+										channel => channel !== 'email' || isEmailChannelAvailable(event)
+									).map(channel => (
 										<Switch
 											key={channel}
 											name={preferenceKey(event, channel)}
