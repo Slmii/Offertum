@@ -7,8 +7,8 @@ import { describe, expect, it } from '@jest/globals';
  * metadata proves the config we WOULD inject. Catches the common regression "someone
  * tweaked the @Throttle() values and didn't notice."
  *
- * For the real end-to-end behavior (5 requests succeed, 6th 429s with Retry-After) see
- * AUTH-SIGNUP-06 in TEST_CASES.md — that stays a manual smoke until we add supertest.
+ * The real end-to-end behavior (5 requests succeed, 6th 429s with Retry-After) stays a
+ * manual smoke until we add supertest.
  *
  * `BillingController.webhook` uses `@SkipThrottle()`. We don't assert that here because
  * importing BillingController transitively pulls @auth/express (pure ESM) which the

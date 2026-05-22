@@ -41,7 +41,7 @@ export interface MailboxScope {
 
 /**
  * Owns the EmailAccount Prisma row + the encrypt-on-write / decrypt-on-read invariant
- * for every mail provider (Gmail today, Microsoft Graph in W3.2). Every method is keyed
+ * for every mail provider (Gmail today, Microsoft Graph later). Every method is keyed
  * on `(provider, organizationId, userId)` — each user manages their own mailbox per
  * provider inside an org; members can't see/disconnect each other's mailboxes.
  *

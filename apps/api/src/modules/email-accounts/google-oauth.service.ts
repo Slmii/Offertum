@@ -29,8 +29,8 @@ export interface GoogleUserInfo {
 
 /**
  * Wrapper around Google's OAuth2 token + userinfo endpoints. Hand-rolled rather than
- * dependent on `googleapis` because W3.1's needs are tiny — exchanging a code, refreshing
- * a token, and fetching userinfo. When W3.4 backfill needs richer Gmail API helpers
+ * dependent on `googleapis` because 's needs are tiny — exchanging a code, refreshing
+ * a token, and fetching userinfo. When backfill needs richer Gmail API helpers
  * (parsing MIME parts, etc.), revisit and consider adding the library.
  */
 @Injectable()

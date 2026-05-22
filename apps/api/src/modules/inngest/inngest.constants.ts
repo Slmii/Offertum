@@ -22,24 +22,24 @@ export const InngestEvents = {
 	/** Fired by `EmailAccountsService.upsertEmailAccount` after a successful Microsoft OAuth handshake. */
 	MicrosoftAccountConnected: 'microsoft/account.connected',
 	/**
-	 * Fired by the Gmail webhook controller (W3.5) when Gmail's Pub/Sub push tells us the
+	 * Fired by the Gmail webhook controller when Gmail's Pub/Sub push tells us the
 	 * mailbox changed. Payload: `{ emailAccountId }`. Triggers `GmailDeltaSyncFunction`.
 	 */
 	GmailHistoryChanged: 'gmail/history.changed',
 	/**
-	 * Fired by the Microsoft webhook controller (W3.6) when Graph pushes a `created`
+	 * Fired by the Microsoft webhook controller when Graph pushes a `created`
 	 * notification. Payload: `{ emailAccountId }`. Triggers `MicrosoftDeltaSyncFunction`.
 	 */
 	MicrosoftDeltaChanged: 'microsoft/delta.changed',
 	/**
 	 * Fired by `OpportunitiesService.processOneRawMessage` after a new Opportunity row is
 	 * successfully created. Payload: `{ opportunityId, organizationId }`. Triggers
-	 * `ReplyDraftGenerateFunction` (W5.3) which composes the AI reply draft in the org
+	 * `ReplyDraftGenerateFunction` which composes the AI reply draft in the org
 	 * OWNER's voice.
 	 */
 	OpportunityCreated: 'opportunity/created',
 	/**
-	 * W5.6 — Fired when:
+	 * Fired when:
 	 *   1. A customer reply lands on an existing thread (`RawMessage.threadId` matches an
 	 *      Opportunity's originating message); OR
 	 *   2. The owner clicks "Concept-vervolg opstellen" on a SENT draft.
@@ -50,7 +50,7 @@ export const InngestEvents = {
 	 */
 	OpportunityFollowupReceived: 'opportunity/followup.received',
 	/**
-	 * W6.1 — Fan-out event from the daily `FollowUpSchedulerFunction` cron. Payload:
+	 * Fan-out event from the daily `FollowUpSchedulerFunction` cron. Payload:
 	 * `{ opportunityId, organizationId }`. One event per eligible REPLIED opportunity
 	 * per tick. Triggers `FollowUpProcessorFunction` which re-validates eligibility
 	 * (cap / cadence / latest-draft-status) before spending an OpenAI call.
@@ -61,30 +61,30 @@ export const InngestEvents = {
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];
 
 export const InngestFunctionIds = {
-	/** W3.3 smoke — event-triggered (`test/hello`). */
+	/** Smoke — event-triggered (`test/hello`). */
 	Hello: 'hello',
-	/** W3.3 smoke — cron-scheduled `0 * * * *`. */
+	/** Smoke — cron-scheduled `0 * * * *`. */
 	Heartbeat: 'heartbeat',
-	/** W3.4 backfill — fetches last 90 days into `RawMessage` on `GmailAccountConnected`. */
+	/** Backfill — fetches last 90 days into `RawMessage` on `GmailAccountConnected`. */
 	GmailBackfill: 'gmail-backfill',
-	/** W3.2 backfill — same shape as Gmail's, against Microsoft Graph. */
+	/** Backfill — same shape as Gmail's, against Microsoft Graph. */
 	MicrosoftBackfill: 'microsoft-backfill',
-	/** W3.5 delta-sync — runs `users.history.list` from the stored cursor on push. */
+	/** Delta-sync — runs `users.history.list` from the stored cursor on push. */
 	GmailDeltaSync: 'gmail-delta-sync',
-	/** W3.5 renewal cron — re-calls `users.watch` on rows nearing the 7-day expiry. */
+	/** Renewal cron — re-calls `users.watch` on rows nearing the 7-day expiry. */
 	GmailWatchRenewal: 'gmail-watch-renewal',
-	/** W3.6 delta-sync — walks `/me/messages/delta` from the stored cursor on Graph push. */
+	/** Delta-sync — walks `/me/messages/delta` from the stored cursor on Graph push. */
 	MicrosoftDeltaSync: 'microsoft-delta-sync',
-	/** W3.6 renewal cron — PATCHes Graph subscriptions nearing the 3-day expiry. */
+	/** Renewal cron — PATCHes Graph subscriptions nearing the 3-day expiry. */
 	MicrosoftSubscriptionRenewal: 'microsoft-subscription-renewal',
-	/** W5.3 reply-draft generate — fires on `opportunity/created`, composes the AI draft
+	/** Reply-draft generate — fires on `opportunity/created`, composes the AI draft
 	 *  in the org OWNER's voice and persists a `ReplyDraft` row. Idempotent via the
 	 *  `opportunityId @unique` constraint. */
 	ReplyDraftGenerate: 'reply-draft-generate',
-	/** W6.1 — Daily cron at 09:00 UTC. Enumerates eligible REPLIED opportunities per
+	/** Daily cron at 09:00 UTC. Enumerates eligible REPLIED opportunities per
 	 *  org and fans out `opportunity/silence.followup-due` events. */
 	FollowUpScheduler: 'follow-up-scheduler',
-	/** W6.1 — Per-opp processor. Listens to `opportunity/silence.followup-due`,
+	/** Per-opp processor. Listens to `opportunity/silence.followup-due`,
 	 *  re-validates the eligibility window, generates the check-in draft. */
 	FollowUpProcessor: 'follow-up-processor'
 } as const;

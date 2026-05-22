@@ -8,8 +8,8 @@ export const OPPORTUNITY_URGENCIES = ['emergency', 'high', 'normal', 'low'] as c
 export type OpportunityUrgency = (typeof OPPORTUNITY_URGENCIES)[number];
 
 /**
- * W4.6 — Reason an opportunity was dismissed by the owner. Distinct axis from
- * `OpportunityStatus` per D28 — `lost` means "real quote we didn't win," not
+ * Reason an opportunity was dismissed by the owner. Distinct axis from
+ * `OpportunityStatus` per  — `lost` means "real quote we didn't win," not
  * "the classifier was wrong." Surfaced in the dismiss modal + admin precision tile.
  */
 export const OPPORTUNITY_DISMISS_REASONS = ['not_a_quote', 'duplicate', 'spam', 'other'] as const;
@@ -43,7 +43,7 @@ export interface Opportunity {
 	dismissReason: OpportunityDismissReason | null;
 	dismissedByUserId: string | null;
 	/**
-	 * W5.5 follow-up — ISO timestamp the reply draft was sent at via Quoteom, or `null`
+	 *  follow-up — ISO timestamp the reply draft was sent at via Quoteom, or `null`
 	 * when no reply has been sent (no draft yet, or draft is still pending / edited).
 	 * Surfaces on the LIST shape so the dismiss dialog can warn "you already replied;
 	 * dismissing won't unsend the email" without an extra detail-view fetch. Distinct
@@ -53,7 +53,7 @@ export interface Opportunity {
 	 */
 	replyDraftSentAt: string | null;
 	/**
-	 * W6.1 — `true` when the LATEST `ReplyDraft` on this opp has `kind = 'check_in'` AND
+	 * `true` when the LATEST `ReplyDraft` on this opp has `kind = 'check_in'` AND
 	 * is not yet sent (status ≠ `sent`). Drives the "Automatische follow-up" indicator
 	 * on the opportunity list so owners can spot scheduler-generated check-ins waiting
 	 * for review without opening every row. Goes back to `false` the moment the owner
@@ -87,14 +87,14 @@ export interface OpportunityList {
 	/** Opaque cursor for the next page. `null` when this is the last page. */
 	nextCursor: string | null;
 	/**
-	 * Totals across the WHOLE org (not just the filtered/paged subset). W4.6 — dismissed
+	 * Totals across the WHOLE org (not just the filtered/paged subset).  — dismissed
 	 * rows are excluded from every bucket so the tab counts stay honest as a workflow funnel.
 	 */
 	statusCounts: OpportunityStatusCounts;
 }
 
 /**
- * W4.6 — Server-side filter for whether the list includes dismissed rows.
+ * Server-side filter for whether the list includes dismissed rows.
  *   - `active` (default): only rows where `dismissedAt IS NULL`.
  *   - `dismissed`: only rows where `dismissedAt IS NOT NULL`.
  *   - `all`: no filter on `dismissedAt`.
@@ -128,18 +128,18 @@ export interface UpdateOpportunityFieldsInput {
 	address?: string | null;
 	/** ISO date (YYYY-MM-DD) or null to clear. Stored as DateTime at midnight UTC. */
 	customerDeadline?: string | null;
-	/** Same shape as `customerDeadline`. Conceptually distinct (D25): deadline = when
+	/** Same shape as `customerDeadline`. Conceptually distinct : deadline = when
 	 * the customer wants the work done; appointment = when they want to meet. */
 	customerAppointment?: string | null;
 }
 
 /**
- * W5.4 — Detail-view shape for `GET /api/opportunities/:id`. Extends the list-row
+ * Detail-view shape for `GET /api/opportunities/:id`. Extends the list-row
  * `Opportunity` with:
  *  - `originalEmailBody` — plain-text rendering of the customer's email body (HTML
  *    stripped + whitespace normalised via the same `buildRawMessageAIInput` helper the
  *    AI pipeline uses). The detail panel renders it as preformatted text.
- *  - `replyDraft` — the AI-generated reply draft, or `null` if the W5.3 generation
+ *  - `replyDraft` — the AI-generated reply draft, or `null` if the generation
  *    hasn't completed yet (the FE polls or surfaces a "draft is being prepared" state
  *    when null).
  */
@@ -147,7 +147,7 @@ export interface OpportunityDetail extends Opportunity {
 	originalEmailBody: string;
 	replyDraft: ReplyDraft | null;
 	/**
-	 * W5.6 — Prior drafts for this opportunity, newest-first. Includes the current
+	 * Prior drafts for this opportunity, newest-first. Includes the current
 	 * draft if it's SENT (so the user sees their just-sent reply in history
 	 * immediately, not only after composing a follow-up). Excludes the current draft
 	 * when it's still in-progress (PENDING_APPROVAL / EDITED) — that lives in
@@ -156,7 +156,7 @@ export interface OpportunityDetail extends Opportunity {
 	 */
 	replyDraftHistory: ReplyDraft[];
 	/**
-	 * W5.6 follow-up — inbound customer replies on this opportunity's thread (linked
+	 *  follow-up — inbound customer replies on this opportunity's thread (linked
 	 * via `RawMessage.opportunityId` to this opp). Newest-first. Empty when no
 	 * customer reply has landed yet. Rendered alongside `replyDraftHistory` as part
 	 * of the conversational timeline; the FE merges + sorts by timestamp to produce
@@ -180,7 +180,7 @@ export interface CustomerReplyEntry {
 }
 
 /**
- * W4.6 — Payload for `PATCH /api/opportunities/:id/dismiss`. `notes` is optional
+ * Payload for `PATCH /api/opportunities/:id/dismiss`. `notes` is optional
  * free-text the owner can attach when the reason is `other` (or any reason); stored
  * only in the audit log (`LogService.logAction` metadata), not on the row itself.
  */

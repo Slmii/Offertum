@@ -17,8 +17,8 @@ export class CustomerReplyEntryResponseDto implements CustomerReplyEntry {
 }
 
 /**
- * W5.4 — `GET /api/opportunities/:id` response. Concrete classes so the OpenAPI spec
- * (and Orval-generated web types) carry the shape at runtime per D18.
+ * `GET /api/opportunities/:id` response. Concrete classes so the OpenAPI spec
+ * (and Orval-generated web types) carry the shape at runtime.
  */
 export class ReplyDraftResponseDto implements ReplyDraft {
 	id!: string;

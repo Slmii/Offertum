@@ -1,6 +1,6 @@
 import { MembershipRole } from '@/generated/prisma/client';
 import { ACCOUNT_ALREADY_EXISTS } from '@/lib/errors';
-import { PrismaService } from '@/modules/prisma/prisma.service';
+import type { PrismaService } from '@/modules/prisma/prisma.service';
 import { SignupService } from '@/modules/auth/signup.service';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ConflictException } from '@nestjs/common';

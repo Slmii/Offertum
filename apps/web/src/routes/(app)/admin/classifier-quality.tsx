@@ -174,7 +174,7 @@ function BulkMailFilterPanel({
 			classifier ran. Users dismissed <strong>{toReadableNumber(recall.missedCount)}</strong> opportunities as
 			SPAM (the filter missed those). Recall = <strong>{toReadablePercent(recall.recall)}</strong>. Low recall =
 			the filter's signals (List-Unsubscribe header, tracking-domain count, unsubscribe phrases) need tightening —
-			promote the missed bodies to the filter's fixture corpus via the W4.6.6 export CLI.
+			promote the missed bodies to the filter's fixture corpus via the export CLI.
 		</Alert>
 	);
 }

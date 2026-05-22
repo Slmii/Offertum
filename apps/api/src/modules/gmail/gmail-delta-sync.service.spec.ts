@@ -26,7 +26,7 @@ interface FakePrisma {
 function makePrisma(emailAccountRow: object | null, existingRawIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			// `findFirst` (not `findUnique`) per S17: production filters `disconnectedAt: null`.
+			// `findFirst` (not `findUnique`) per project policy:: production filters `disconnectedAt: null`.
 			findFirst: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
 			update: jest.fn().mockReturnValue(Promise.resolve({}))
 		},

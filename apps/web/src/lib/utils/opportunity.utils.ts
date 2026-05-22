@@ -2,11 +2,10 @@ import type { Opportunity, OpportunityDismissReason, OpportunityStatus, Opportun
 
 /**
  * Display constants + small helpers for opportunity rows. Centralized so the upcoming
- * detail view (W5.4), inline status changes elsewhere, dashboard summary cards, etc.
+ * detail view , inline status changes elsewhere, dashboard summary cards, etc.
  * all render the same labels + colors as the list page.
- *
- * Dutch-first per `[[project-launch-scope]]`; en/de/fr alternatives will swap these maps
- * once `Organization.locale` lands (D21).
+ * Dutch-first per ``; en/de/fr alternatives will swap these maps
+ * once `Organization.locale` lands .
  */
 
 export const OPPORTUNITY_STATUS_LABELS_NL: Record<OpportunityStatus, string> = {
@@ -96,8 +95,8 @@ export function opportunityCustomerLabel(opportunity: Opportunity): string {
 }
 
 /**
- * W4.6 — Dutch labels for the dismiss reasons surfaced in the kebab modal + the
- * "Toon afgewezen" badge. Kept Dutch-first per `[[project-launch-scope]]` (D21);
+ * Dutch labels for the dismiss reasons surfaced in the kebab modal + the
+ * "Toon afgewezen" badge. Kept Dutch-first per `` ;
  * en/de/fr variants will sit alongside once `Organization.locale` lands.
  */
 export const OPPORTUNITY_DISMISS_REASON_LABELS_NL: Record<OpportunityDismissReason, string> = {

@@ -1,8 +1,7 @@
 /**
- * W6.2 — Wire-format types for `GET /api/me/follow-up-settings` and
+ * Wire-format types for `GET /api/me/follow-up-settings` and
  * `PATCH /api/me/follow-up-settings`.
- *
- * Per-org cadence + cap for the W6.1 silence-check-in scheduler. Owner-only because
+ * Per-org cadence + cap for the silence-check-in scheduler. Owner-only because
  * the settings affect everyone in the org's mailbox flow. Setting `maxCount = 0`
  * disables the scheduler entirely for the org.
  */

@@ -2,7 +2,7 @@ import type { ReplyDraftInput } from '@/modules/ai/reply-draft/reply-draft.types
 import dedent from 'dedent';
 
 /**
- * W6.1 — Dutch check-in / "haven't heard back" follow-up prompt.
+ * Dutch check-in / "haven't heard back" follow-up prompt.
  *
  * Same input shape as the regular reply-draft prompt (`buildReplyDraftPromptNL`), but
  * different intent: we already replied to this customer some time ago and they've gone

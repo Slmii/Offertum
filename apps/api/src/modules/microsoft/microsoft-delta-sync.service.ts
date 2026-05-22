@@ -26,23 +26,19 @@ export interface MicrosoftDeltaSyncResult {
 }
 
 /**
- * W3.6 — incremental sync triggered by a Microsoft Graph push notification.
- *
+ * Incremental sync triggered by a Microsoft Graph push notification.
  * Walks `/me/messages/delta` from `EmailAccount.deltaLink` (or a fresh delta walk if no
  * cursor exists yet), persists every new message as a `RawMessage` row, and advances the
  * cursor. Idempotent via the same `(emailAccountId, providerMessageId)` unique index the
  * backfill uses.
- *
  * **DeltaLink-expired recovery:** Graph retains delta tokens for ~30 days. If our stored
  * cursor has aged out, the next call returns 410 → we re-acquire by starting a fresh
  * delta walk. The gap (changes between our stale cursor and the new starting point) is
  * lost; the alternative would be backfilling by date range, which is much more complex
  * for a rare path (only fires if the app was offline >30 days).
- *
- * **Per-page commits + null-tolerant fetch:** carried over from the W3.5 audit lessons.
+ * **Per-page commits + null-tolerant fetch:** carried over from the Gmail audit lessons.
  * Mid-walk 410 leaves earlier pages safely in DB; messages deleted between push + fetch
  * are silently skipped instead of crashing the batch.
- *
  * Kept framework-agnostic (no Inngest types here) so unit tests don't need an Inngest
  * dev server. The Inngest function wrapper lives in `modules/inngest/functions/`.
  */
@@ -135,7 +131,7 @@ export class MicrosoftDeltaSyncService {
 				if (page.messages.length > 0) {
 					// Per-page commits: a mid-walk failure (token expired, network error)
 					// leaves earlier pages safely in the DB rather than discarding the
-					// whole batch. Carried over from W3.5 audit fix #1.
+					// whole batch. Carried over from Gmail audit fix #1.
 					const inserted = await this.persistBatch(emailAccountId, account.organizationId, page.messages);
 					messagesInserted += inserted;
 					messagesSkipped += page.messages.length - inserted;
@@ -177,7 +173,6 @@ export class MicrosoftDeltaSyncService {
 				// Walk a fresh delta to its end to capture the new deltaLink. Discard the
 				// messages — they're current-state, not deltas, and we don't want to flood
 				// RawMessage with everything in the inbox.
-				//
 				// Capped at MAX_PAGES so a misbehaving Graph response (deltaLink never
 				// returned, nextLink loops) can't spin forever.
 				let cursor: string | null = null;
@@ -233,7 +228,7 @@ export class MicrosoftDeltaSyncService {
 	/**
 	 * Mirrors `MicrosoftBackfillService.persistBatch`. Same find-existing-then-createMany
 	 * shape; deduplicated from backfill rather than shared because the two services
-	 * may diverge later (e.g. delta-sync emitting `RawMessage.created` events for W4's
+	 * may diverge later (e.g. delta-sync emitting `RawMessage.created` events for the
 	 * AI extractor while backfill batches stay quiet).
 	 */
 	private async persistBatch(

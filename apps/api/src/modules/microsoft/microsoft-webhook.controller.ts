@@ -24,35 +24,29 @@ interface GraphNotificationBody {
 }
 
 /**
- * W3.6 — receives Microsoft Graph push notifications.
- *
+ * receives Microsoft Graph push notifications.
  * Graph push delivery shape:
  *   POST /api/email/microsoft/webhook
  *   Content-Type: application/json
  *   Body: { value: [{ subscriptionId, clientState, changeType, resource, resourceData, ... }] }
- *
  * Two responsibilities:
  *  1. **Validation handshake.** Graph calls our notificationUrl with `?validationToken=<random>`
  *     during subscription creation AND occasionally during renewals to confirm we still own
  *     the endpoint. The response must be the raw plaintext token, content-type `text/plain`,
  *     HTTP 200, within 5 seconds. Our controller short-circuits on the query param BEFORE
  *     any other logic so subscription creation can complete.
- *
  *  2. **Change notifications.** Graph batches multiple notifications per POST. Each item
  *     includes `clientState` — the per-subscription shared secret we generated and stored
  *     encrypted at create-time. We look up the local EmailAccount by `subscriptionId`,
  *     verify clientState equality, then fire `microsoft/delta.changed` so the delta-sync
  *     Inngest function picks it up. Per-mailbox debounce on the function coalesces bursts.
- *
  * Status code conventions follow Graph's contract:
  *   - 200 (validation) → with plaintext token body
  *   - 202 (notifications) → accepted; Graph stops retrying
  *   - 400 → malformed body → Graph retries with backoff
  *   - 4xx auth-style failures → Graph retries; eventually disables the subscription
- *
  * As with Gmail's webhook we return 202 even when the lookup misses (mailbox disconnected
  * after the subscription was registered) — re-trying won't help.
- *
  * `@SkipThrottle` — Graph retries aggressively on transient failures; rate-limiting just
  * cascades into more retries. The `clientState` shared secret is the auth.
  */
@@ -69,7 +63,6 @@ export class MicrosoftWebhookController {
 	 * Single handler for both the validation handshake AND change notifications. Graph
 	 * uses the same URL + verb for both — distinguishes them via the `validationToken`
 	 * query string.
-	 *
 	 * Validation MUST be handled first + return synchronously within 5 s, otherwise Graph
 	 * fails the subscription. NEVER touch the DB or Inngest on that path — keep it
 	 * minimal so even a degraded service can complete the handshake.
@@ -209,7 +202,7 @@ export class MicrosoftWebhookController {
 /**
  * Constant-time string comparison. Standard library `crypto.timingSafeEqual` requires
  * equal-length buffers, so we pad. Used to compare the per-subscription shared secret
- * — not security-critical since the attacker would need to guess the random 32-byte
+ * not security-critical since the attacker would need to guess the random 32-byte
  * hex anyway, but defense-in-depth.
  */
 function safeCompare(a: string, b: string): boolean {

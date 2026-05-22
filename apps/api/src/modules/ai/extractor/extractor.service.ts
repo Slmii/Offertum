@@ -8,9 +8,9 @@ import { buildExtractorPromptNL } from '@/modules/ai/extractor/prompts/nl';
 import { Inject, Injectable } from '@nestjs/common';
 
 /**
- * W4.3 — pulls structured fields out of a classified-positive offerteaanvraag.
+ * Pulls structured fields out of a classified-positive offerteaanvraag.
  *
- * Internal service: no controller, no DTO. Consumed by W4.4's Opportunity creation flow,
+ * Internal service: no controller, no DTO. Consumed by the Opportunity creation flow,
  * which calls `extract()` only when `ClassifierService.classify()` returned `isQuote: true`.
  * Output populates the new `Opportunity` row's customer + scope columns.
  *
@@ -23,11 +23,11 @@ import { Inject, Injectable } from '@nestjs/common';
  *
  * **referenceDateIso** is the time anchor for relative-date resolution. In production this
  * should be the email's received timestamp (so replays over `AICall` rows give stable
- * results); in W4.4 the caller passes `rawMessage.internalDate.toISOString().slice(0, 10)`.
+ * results); the caller passes `rawMessage.internalDate.toISOString().slice(0, 10)`.
  * The harness today uses a fixed reference so the accuracy assertions are deterministic
  * regardless of when the test runs.
  *
- * **Language routing (D21):** today only `buildExtractorPromptNL` exists. When
+ * **Language routing:** today only `buildExtractorPromptNL` exists. When
  * `Organization.locale` lands, `extract()` will route to the matching prompt builder.
  */
 @Injectable()

@@ -6,7 +6,7 @@ import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 /**
- * W6.1 — Daily cron that scans REPLIED opportunities and fans out one
+ * Daily cron that scans REPLIED opportunities and fans out one
  * `opportunity/silence.followup-due` event per eligible row.
  *
  * Schedule: `TZ=Europe/Amsterdam 0 8 * * *` — 08:00 local Amsterdam time year-round

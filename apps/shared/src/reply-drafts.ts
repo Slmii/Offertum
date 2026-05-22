@@ -1,11 +1,10 @@
 /**
- * Wire-format types for the W5.3 reply-draft surface.
- *
+ * Wire-format types for the reply-draft surface.
  * Drafts are 1:1 with `Opportunity` (`opportunityId` is unique in the schema). The AI
  * generates the draft after `Opportunity.status = NEW` is persisted (Inngest function
- * `reply-draft-generate`), so by the time the owner opens the W5.4 detail view the body
+ * `reply-draft-generate`), so by the time the owner opens the detail view the body
  * is ready. `originalBody` is the pristine AI output; `body` is the current state (the
- * user may have edited it). On send (W5.5) the server diffs the two to drive the W5.7
+ * user may have edited it). On send the server diffs the two to drive the
  * edit-driven tone-playbook update.
  */
 
@@ -13,7 +12,7 @@ export const REPLY_DRAFT_STATUSES = ['pending_approval', 'edited', 'sent'] as co
 export type ReplyDraftStatus = (typeof REPLY_DRAFT_STATUSES)[number];
 
 /**
- * W6.1 — Distinguishes scheduler-generated "haven't heard back" check-ins from
+ * Distinguishes scheduler-generated "haven't heard back" check-ins from
  * owner-initiated replies. The UI uses `kind` to label CHECK_IN drafts in the
  * history panel ("Automatische follow-up") so the owner knows the AI wrote a
  * polite nudge rather than a substantive reply.
@@ -34,7 +33,7 @@ export interface ReplyDraft {
 	createdAt: string;
 	updatedAt: string;
 	/**
-	 * W5.4 — ISO timestamp when the *body* was last AI-generated. Sourced from the
+	 * ISO timestamp when the *body* was last AI-generated. Sourced from the
 	 * linked `AICall.createdAt` so it advances on every regenerate (unlike `createdAt`,
 	 * which is fixed at row insert and never changes). Used by the editor banner's
 	 * "your writing style is newer than this draft" comparison. `null` only when the
@@ -43,7 +42,7 @@ export interface ReplyDraft {
 	 */
 	aiBodyGeneratedAt: string | null;
 	/**
-	 * W5.5 follow-up — attachments staged on this draft. Empty array (never `null`)
+	 *  follow-up — attachments staged on this draft. Empty array (never `null`)
 	 * when none are attached so the UI doesn't branch on presence. Ordered by upload
 	 * time ascending so the order is stable across re-renders.
 	 */
@@ -51,9 +50,9 @@ export interface ReplyDraft {
 }
 
 /**
- * W5.5 follow-up — metadata for a file attached to a reply draft. Binary is fetched
+ *  follow-up — metadata for a file attached to a reply draft. Binary is fetched
  * separately via `GET /api/opportunities/:id/reply-draft/attachments/:attachmentId/download`
- * — keeping it out of the JSON payload means a 5 MB PDF doesn't bloat every detail-view
+ * keeping it out of the JSON payload means a 5 MB PDF doesn't bloat every detail-view
  * load.
  */
 export interface ReplyDraftAttachment {
@@ -66,7 +65,7 @@ export interface ReplyDraftAttachment {
 }
 
 /**
- * Request body for `PATCH /api/opportunities/:id/reply-draft`. Autosaved from the W5.4
+ * Request body for `PATCH /api/opportunities/:id/reply-draft`. Autosaved from the
  * editor on debounced typing. The server flips `wasEditedByUser = true` on first
  * non-no-op write + bumps `status` to `EDITED`.
  */

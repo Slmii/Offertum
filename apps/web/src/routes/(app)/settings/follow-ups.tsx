@@ -17,10 +17,9 @@ import { useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 /**
- * W6.2 — Per-org follow-up cadence + cap. Owner-only at the route level (mirrors the
+ * Per-org follow-up cadence + cap. Owner-only at the route level (mirrors the
  * API guard); members get bounced back to `/settings/email` so they don't see a page
  * that won't accept their writes.
- *
  * Form composition: every input — `cadenceDays`, `maxCount`, and the preset dropdown —
  * goes through `react-hook-form` via the in-house `<Field>` / `<Select>` components.
  * `cadencePreset` lives in the form state (Zod schema marks it as a UI-only string)

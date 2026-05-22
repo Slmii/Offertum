@@ -3,11 +3,12 @@ import { z } from 'zod';
 /**
  * Single source of truth for every env var the API reads.
  *
+
  * - Validated at boot via `ConfigModule.forRoot({ validate })` — missing/malformed
- *   values fail loudly with a clear message instead of producing mysterious runtime
- *   bugs hours later.
+ *  values fail loudly with a clear message instead of producing mysterious runtime
+ *  bugs hours later.
  * - All keys are flat (no nested namespaces) so `configService.get('STRIPE_SECRET_KEY')`
- *   matches the actual env var name 1:1.
+ *  matches the actual env var name 1:1.
  * - Optional values are explicit; required values without defaults will reject startup.
  */
 export const envSchema = z.object({
@@ -18,7 +19,7 @@ export const envSchema = z.object({
 	WEB_ORIGIN: z.url().default('http://localhost:3000'),
 
 	// Auth.js (consumed at module-init time by auth.config.ts; ConfigService can't reach
-	// that file, but we still validate the values here so a typo in .env fails fast.)
+	// that file, but we still validate the values here so a typo in.env fails fast.)
 	AUTH_SECRET: z.string().min(32),
 	// Only required on PROD
 	AUTH_URL: z.url().optional(),
@@ -38,23 +39,22 @@ export const envSchema = z.object({
 
 	// Google OAuth — optional, only enabled when both are set. Serves TWO purposes from
 	// the same Google Cloud OAuth client:
-	//   1. Auth.js sign-in (scopes: openid email profile) → callback /api/auth/callback/google.
-	//   2. Gmail inbox connect (scopes: gmail.readonly + gmail.send) → callback /api/email/gmail/callback.
+	// 1. Auth.js sign-in (scopes: openid email profile) → callback /api/auth/callback/google.
+	// 2. Gmail inbox connect (scopes: gmail.readonly + gmail.send) → callback /api/email/gmail/callback.
 	// Both redirect URIs must be registered in the Google Cloud Console for this client.
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
-	// W3.5 — Pub/Sub topic Gmail pushes notifications to. Full resource name:
+	// Pub/Sub topic Gmail pushes notifications to. Full resource name:
 	// `projects/<gcp-project>/topics/<topic>`. Optional: when unset (typical local dev
 	// without GCP setup), GmailWatchService no-ops watch start + renewal so the rest of
-	// the inbox flow still works. Set this once you've provisioned the topic in step 2
-	// of the W3.5 staged execution plan.
+	// the inbox flow still works. Set this once you've provisioned the topic.
 	GOOGLE_PUBSUB_TOPIC: z.string().optional(),
-	// W3.5 — Expected `aud` claim on the JWT Pub/Sub signs and sends with every push
+	// Expected `aud` claim on the JWT Pub/Sub signs and sends with every push
 	// delivery. Set when creating the push subscription. Typically the full webhook URL
 	// (e.g. `https://app.quoteom.com/api/email/gmail/webhook`). Optional in dev — if
 	// unset the webhook returns 503 so misconfigured-prod doesn't silently swallow pushes.
 	GOOGLE_PUBSUB_AUDIENCE: z.string().optional(),
-	// W3.5 — `email` claim on the JWT. Pub/Sub's service account for the GCP project,
+	// `email` claim on the JWT. Pub/Sub's service account for the GCP project,
 	// e.g. `service-NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com`. Pin it to prevent any
 	// other Google-signed JWT with our audience from being accepted. Optional in dev.
 	GOOGLE_PUBSUB_SERVICE_ACCOUNT: z.string().optional(),
@@ -78,18 +78,18 @@ export const envSchema = z.object({
 	// Inngest — workers + scheduled jobs
 	// In dev the Inngest CLI (`npx inngest-cli@latest dev`) handles auth at the localhost
 	// boundary, so both of these may be empty. In production:
-	//  - INNGEST_EVENT_KEY  → required when sending events to Inngest Cloud.
-	//  - INNGEST_SIGNING_KEY → required for the cloud handler to verify it's really us.
+	// - INNGEST_EVENT_KEY → required when sending events to Inngest Cloud.
+	// - INNGEST_SIGNING_KEY → required for the cloud handler to verify it's really us.
 	INNGEST_EVENT_KEY: z.string().optional(),
 	INNGEST_SIGNING_KEY: z.string().optional(),
 
-	// W4.1 — AI provider (OpenAI / Azure OpenAI).
+	// AI provider (OpenAI / Azure OpenAI).
 	// Direct OpenAI mode: leave AZURE_OPENAI_* unset; the client hits api.openai.com using
 	// `OPENAI_API_KEY`. Easiest signup, US-routed by default.
 	// Azure OpenAI mode (EU data residency): set `AZURE_OPENAI_ENDPOINT` to your Azure
 	// resource URL (e.g. `https://quoteom.openai.azure.com`); the client switches to Azure
 	// routing using `AZURE_OPENAI_API_KEY` (falls back to OPENAI_API_KEY if unset).
-	// Both keys optional in dev — when missing, the AI module's `generate()` throws a clear
+	// Both keys optional in dev — when missing, the AI module's `generate` throws a clear
 	// "OpenAI not configured" error rather than silently using a fake.
 	OPENAI_API_KEY: z.string().optional(),
 	OPENAI_MODEL_CLASSIFIER: z.string().default('gpt-4o-mini'),
@@ -106,14 +106,14 @@ export const envSchema = z.object({
 	// Leave empty in environments where no one should have access — the guard returns 403.
 	ADMIN_EMAILS: z.string().optional(),
 
-	// W5.5 attachments — storage backend for ReplyDraft attachments.
-	//   - `local`  : writes to the directory at `ATTACHMENT_STORAGE_LOCAL_DIR` (default
-	//                `.attachments` under the API working dir). Intended for local dev
-	//                + tests only.
-	//   - `spaces` : DigitalOcean Spaces (S3-compatible). Wiring lands when the bucket
-	//                is provisioned; until then, picking `spaces` makes startup fail
-	//                fast so we never accidentally store customer files on a developer
-	//                laptop in production.
+	// Attachments — storage backend for ReplyDraft attachments.
+	// - `local`: writes to the directory at `ATTACHMENT_STORAGE_LOCAL_DIR` (default
+	// `.attachments` under the API working dir). Intended for local dev
+	// + tests only.
+	// - `spaces`: DigitalOcean Spaces. Wiring lands when the bucket
+	// is provisioned; until then, picking `spaces` makes startup fail
+	// fast so we never accidentally store customer files on a developer
+	// laptop in production.
 	ATTACHMENT_STORAGE_DRIVER: z.enum(['local', 'spaces']).default('local'),
 	// Filesystem root for the `local` driver. Resolved relative to the API working dir
 	// (i.e. `apps/api`). Gitignored — see `.gitignore`'s `.attachments/` entry.

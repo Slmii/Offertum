@@ -78,7 +78,7 @@ export class MeController {
 		return this.me.switchActiveOrganization(this.userId(request), body.organizationId);
 	}
 
-	@ApiOperation({ summary: 'Read the current user’s writing-style playbook (W5.2)' })
+	@ApiOperation({ summary: 'Read the current user’s writing-style playbook' })
 	@ApiOkResponse({ type: TonePlaybookResponseDto })
 	@UseGuards(AuthGuard)
 	@Get('tone-playbook')
@@ -86,7 +86,7 @@ export class MeController {
 		return this.me.getTonePlaybook(this.userId(request));
 	}
 
-	@ApiOperation({ summary: 'Update the current user’s writing-style playbook (W5.2)' })
+	@ApiOperation({ summary: 'Update the current user’s writing-style playbook' })
 	@ApiOkResponse({ type: TonePlaybookResponseDto })
 	@UseGuards(AuthGuard)
 	@Put('tone-playbook')
@@ -94,7 +94,7 @@ export class MeController {
 		return this.me.updateTonePlaybook(this.userId(request), body.text);
 	}
 
-	@ApiOperation({ summary: 'Read the active organization’s follow-up cadence + cap (W6.2)' })
+	@ApiOperation({ summary: 'Read the active organization’s follow-up cadence + cap' })
 	@ApiOkResponse({ type: FollowUpSettingsResponseDto })
 	@UseGuards(OrganizationGuard)
 	@Get('follow-up-settings')
@@ -102,7 +102,7 @@ export class MeController {
 		return this.me.getFollowUpSettings(request.organizationId!);
 	}
 
-	@ApiOperation({ summary: 'Update the active organization’s follow-up cadence + cap (owner-only, W6.2)' })
+	@ApiOperation({ summary: 'Update the active organization’s follow-up cadence + cap (owner-only)' })
 	@ApiOkResponse({ type: FollowUpSettingsResponseDto })
 	@UseGuards(OwnerGuard)
 	@Patch('follow-up-settings')
@@ -119,7 +119,7 @@ export class MeController {
 	/**
 	 * Remove a member from the active organization. Owner-only.
 	 *
-	 * `@UseGuards(OwnerGuard)` (NOT `@OwnerWrite()`) — we deliberately don't gate on
+	 * `@UseGuards(OwnerGuard)` (NOT `@OwnerWrite`) — we deliberately don't gate on
 	 * entitlement here. An org that's been canceled / past_due should still be able to
 	 * clean up its team; the remove also reduces seat count which is the *opposite* of
 	 * what you'd want to block during a billing problem.

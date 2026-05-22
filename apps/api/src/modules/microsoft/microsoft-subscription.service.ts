@@ -13,23 +13,20 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 
 /**
- * W3.6 — manages the lifecycle of Microsoft Graph push subscriptions.
- *
+ * manages the lifecycle of Microsoft Graph push subscriptions.
  * Three responsibilities, mirroring `GmailWatchService`:
  *  - `startSubscriptionForAccount` — called by the backfill completion path. POSTs to
  *    Graph's `/subscriptions`, persists the returned subscription id + expiration +
  *    encrypted clientState.
  *  - `stopSubscriptionForAccount` — called by disconnect. Best-effort DELETE.
  *  - `renewExpiringSubscriptions` — called by `MicrosoftSubscriptionRenewalFunction` on
- *    a cron. PATCHes any row with `watchExpiresAt < NOW() + RENEWAL_WINDOW`.
- *
+ *    a cron. PATCHes any row with `watchExpiresAt < NOW + RENEWAL_WINDOW`.
  * Differences from Gmail:
  *  - 3-day TTL instead of 7 → tighter renewal cadence (the cron runs twice daily).
  *  - PATCH-based renewal (vs Gmail's idempotent "call users.watch again").
  *  - `clientState` shared-secret authentication on incoming pushes instead of JWT/JWKS.
  *    Generated at create-time, stored encrypted (because leaking it would let an attacker
  *    post fake notifications), compared on every webhook hit.
- *
  * `MICROSOFT_GRAPH_NOTIFICATION_URL` is OPTIONAL in env. When unset, every method here
  * no-ops with a structured log instead of throwing — keeps the surrounding flows working
  * locally without forcing ngrok + an Entra subscription to exist.
@@ -70,10 +67,8 @@ export class MicrosoftSubscriptionService {
 	 * Start a Graph subscription for a single account. Generates a fresh `clientState`
 	 * (random 32-byte hex), POSTs to Graph, persists subscription id + expiration +
 	 * encrypted clientState on the row.
-	 *
 	 * Returns `null` when the notification URL isn't configured (dev) so callers can
 	 * detect + log that case without treating it as an error.
-	 *
 	 * NOTE on validation: Graph synchronously calls our `notificationUrl?validationToken=...`
 	 * during this POST and expects the plaintext echoed back within ~5 s. The webhook
 	 * handler MUST short-circuit on `?validationToken=` before any auth logic. The
@@ -253,11 +248,9 @@ export class MicrosoftSubscriptionService {
 	 * Find every Microsoft mailbox whose subscription is within the renewal window OR
 	 * is orphaned (backfill completed but `start-subscription` step failed: subscriptionId
 	 * is NULL but `deltaLink` is set). Renew each by PATCHing the expiration.
-	 *
 	 * If Graph returns 404 on the PATCH (subscription was deleted upstream), recreate it
 	 * by calling `startSubscriptionForAccount` — which generates a new id + clientState
 	 * and overwrites the stale ones.
-	 *
 	 * Each per-account failure is logged but doesn't abort the batch.
 	 */
 	async renewExpiringSubscriptions(): Promise<MicrosoftRenewalResult> {

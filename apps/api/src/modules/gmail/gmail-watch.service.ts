@@ -8,7 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
- * W3.5 — manages the lifecycle of Gmail Pub/Sub watch subscriptions.
+ * manages the lifecycle of Gmail Pub/Sub watch subscriptions.
  *
  * Three responsibilities:
  *  - `startWatchForAccount` — called by the backfill completion path. Tells Gmail to
@@ -19,7 +19,7 @@ import { ConfigService } from '@nestjs/config';
  *     deletes our local row so the push will arrive at a dead address and Gmail will
  *     eventually give up).
  *  - `renewExpiringWatches` — called by `GmailWatchRenewalFunction` on a daily cron.
- *     Re-watches any row with `watchExpiresAt < NOW() + RENEWAL_WINDOW`.
+ *     Re-watches any row with `watchExpiresAt < NOW + RENEWAL_WINDOW`.
  *
  * `GOOGLE_PUBSUB_TOPIC` is OPTIONAL in env. When unset (typical dev without GCP setup),
  * every method here no-ops with a structured log instead of throwing — keeps the

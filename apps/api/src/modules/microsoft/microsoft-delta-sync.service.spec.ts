@@ -22,7 +22,7 @@ interface FakePrisma {
 function makePrisma(emailAccountRow: object | null, existingIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			// `findFirst` (not `findUnique`) per S17: production filters `disconnectedAt: null`
+			// `findFirst` (not `findUnique`) per project policy:: production filters `disconnectedAt: null`
 			// so a push that arrives for a soft-disconnected account is treated as missing.
 			findFirst: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
 			update: jest.fn().mockReturnValue(Promise.resolve({}))
@@ -250,7 +250,7 @@ describe('MicrosoftDeltaSyncService.run', () => {
 	it('never overwrites an existing cursor with null when no new deltaLink was captured', async () => {
 		const prisma = makePrisma(SCOPE_ROW, []);
 		// Pages exhaust without ever returning deltaLink — newDeltaLink stays null. The
-		// service should NOT call update() in that case.
+		// service should NOT call update in that case.
 		const service = new MicrosoftDeltaSyncService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),

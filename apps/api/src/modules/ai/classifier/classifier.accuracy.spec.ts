@@ -11,7 +11,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
 /**
- * W4.2 — Live-API accuracy harness for the Dutch classifier.
+ * Live-API accuracy harness for the Dutch classifier.
  *
  * **Runs against the real OpenAI API.** This is the harness we use to iterate on the
  * prompt: change `prompts/nl.ts`, run this, see whether accuracy improved or regressed.
@@ -22,7 +22,7 @@ import { Test } from '@nestjs/testing';
  * checkouts, and contributors without API access don't see false failures. Run manually
  * via `pnpm exec jest classifier.accuracy` once your key is in `.env`.
  *
- * Per the W4.2 plan acceptance criteria: ≥85% overall accuracy on the fixture set.
+ * Acceptance criteria: ≥85% overall accuracy on the fixture set.
  * Per-category accuracy is also printed so we can see which slice the prompt struggles
  * with (typically the `edge` category — that's where prompt iteration pays off).
  */
@@ -31,7 +31,7 @@ const hasApiKey = !!process.env.OPENAI_API_KEY;
 const describeIfKey = hasApiKey ? describe : describe.skip;
 
 // Accuracy threshold for the overall corpus. Tune up as the prompt gets better, but ≥0.85
-// is the W4.2 plan's baseline gate.
+// is the baseline gate.
 const MIN_ACCURACY = 0.85;
 
 describeIfKey('ClassifierService — live OpenAI accuracy', () => {

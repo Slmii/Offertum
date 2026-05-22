@@ -6,7 +6,7 @@ import { z } from 'zod';
  * AND the original email body (so it can pick up any incidental phrasing the customer
  * used — fields the extractor didn't pull out but that would make a reply feel attentive).
  *
- * `tonePlaybookText`: per-user writing-style playbook (D31, W5.2). NULL = use the generic
+ * `tonePlaybookText`: per-user writing-style playbook. NULL = use the generic
  * Dutch neutral-professional baseline. Injected verbatim into the prompt.
  *
  * `senderName`: the name to use in the sign-off when the playbook doesn't override it.
@@ -20,7 +20,7 @@ export interface ReplyDraftInput {
 	fromEmail: string | null;
 	bodyText: string;
 
-	/** Extracted opportunity fields — all from the W4.3 extractor output. */
+	/** Extracted opportunity fields — all from the extractor output. */
 	customerName: string | null;
 	address: string | null;
 	requestType: string;

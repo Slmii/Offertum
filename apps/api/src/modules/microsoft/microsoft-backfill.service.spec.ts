@@ -22,7 +22,7 @@ interface FakePrisma {
 function makePrisma(emailAccountRow: object | null, existingRawIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			// `findFirst` (not `findUnique`) per S17: production code filters
+			// `findFirst` (not `findUnique`) per project policy:: production code filters
 			// `disconnectedAt: null` so a stale Inngest event for a soft-disconnected
 			// account is treated as missing.
 			findFirst: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),

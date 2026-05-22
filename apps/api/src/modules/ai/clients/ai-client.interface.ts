@@ -6,9 +6,9 @@ import type { ZodType } from 'zod';
  * line-item proposer) flows through this single seam.
  *
  * Decoupling caller from provider lets us swap OpenAI for Mistral/Anthropic in one place
- * (the DI binding in `AiModule`) without touching downstream services. The W5.1 spike
- * compares providers by registering each concrete impl under this token and running the
- * same test corpus through each.
+ * (the DI binding in `AiModule`) without touching downstream services. Future provider
+ * comparisons can register each concrete impl under this token and run the same test
+ * corpus through each.
  */
 export interface AIClient {
 	/**

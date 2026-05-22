@@ -8,7 +8,7 @@ import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service'
 import { describe, expect, it, jest } from '@jest/globals';
 
 /**
- * W6.1 — Focused tests for `ReplyDraftsService.generateCheckInDraft`. The hard part
+ * Focused tests for `ReplyDraftsService.generateCheckInDraft`. The hard part
  * is the SQL-driven candidate selection, which runs in `findCheckInCandidates` /
  * `reValidateCheckInCandidate` against the live DB (covered by manual smoke + the
  * scheduler's daily run in staging). These tests pin down the service-layer policy:
@@ -186,7 +186,7 @@ describe('ReplyDraftsService.generateCheckInDraft', () => {
 		const generatorMock = generator.generateCheckIn as jest.Mock;
 		const generatorCall = generatorMock.mock.calls[0]?.[0] as { senderName: string | null };
 		// Null senderName here means the prompt will fall through to `organizationName`
-		// — exactly what we want when there's no human name to sign with.
+		// exactly what we want when there's no human name to sign with.
 		expect(generatorCall.senderName).toBeNull();
 	});
 

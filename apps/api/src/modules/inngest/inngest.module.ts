@@ -20,7 +20,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
  * `app.get(...)` after `NestFactory.create()` and adds its `.inngestFn` to the array
  * passed to `serve()`.
  *
- * Trivial functions that don't need DI (the W3.3 `helloFn` and `heartbeatFn`) live as
+ * Trivial functions that don't need DI (the `helloFn` and `heartbeatFn`) live as
  * free constants in `functions/index.ts` and don't go through Nest. Mixed-mode is fine —
  * the `serve()` array just gets both flavors concatenated.
  */

@@ -3,7 +3,7 @@ import type { FollowUpSettings } from '@quoteom/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**
- * GET /api/me/follow-up-settings — read the active org's cadence + cap (W6.2).
+ * GET /api/me/follow-up-settings — read the active org's cadence + cap .
  * Used by the `/settings/follow-ups` route loader. Members can read; only OWNER
  * can mutate (the PATCH endpoint sits behind `@UseGuards(OwnerGuard)`).
  */

@@ -50,7 +50,7 @@ export class ListOpportunitiesQueryDto {
 	search?: string;
 
 	/**
-	 * W4.6 — Whether to include dismissed rows. Default behavior (omitted) is `active`
+	 * Whether to include dismissed rows. Default behavior (omitted) is `active`
 	 * (hide dismissed). The web "Toon afgewezen" toggle sends `dismissed`. `all`
 	 * exists mostly for tests + the future admin precision panel.
 	 */

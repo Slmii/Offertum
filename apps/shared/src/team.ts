@@ -12,15 +12,15 @@ export interface MembershipUser {
 	name: string | null;
 	isAdmin: boolean;
 	/**
-	 * W5.2 — Whether this user has authored a writing-style playbook
+	 * Whether this user has authored a writing-style playbook
 	 * (`User.tonePlaybookText`). Boolean flag instead of the text itself: avoids leaking
 	 * the playbook into every authenticated page load while still letting the FE render
-	 * the just-in-time "Vertel ons hoe je schrijft" banner in the W5.4 draft editor.
-	 * Per-user (not per-org) per D31 — voice belongs to the person.
+	 * the just-in-time "Vertel ons hoe je schrijft" banner in the draft editor.
+	 * Per-user (not per-org) per  — voice belongs to the person.
 	 */
 	hasTonePlaybook: boolean;
 	/**
-	 * W5.4 — ISO timestamp the playbook was last saved (the dedicated
+	 * ISO timestamp the playbook was last saved (the dedicated
 	 * `User.tonePlaybookUpdatedAt` column, not `User.updatedAt`). `null` when the user
 	 * has never authored a playbook. Used by the detail editor's "your writing style
 	 * changed, regenerate?" banner — compared against `replyDraft.createdAt`. Won't

@@ -48,7 +48,7 @@ async function bootstrap() {
 	// routes (e.g. POST /api/me/switch-organization), so we do it the right way per
 	// Inngest's NestJS docs: tell Nest to install its parsers now.
 	//
-	// 10mb limit covers Gmail's larger full-message payloads on the webhook path (W3.5).
+	// 10mb limit covers Gmail's larger full-message payloads on the webhook path.
 	app.useBodyParser('json', { limit: '10mb' });
 
 	const config = app.get(ConfigService<EnvSchema, true>);

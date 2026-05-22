@@ -6,12 +6,12 @@ import type { InngestFunction } from 'inngest';
 
 /**
  * Daily cron — re-watches any Gmail mailbox whose 7-day Pub/Sub watch is within 24 h of
- * expiry. Wraps `GmailWatchService.renewExpiringWatches()` which does the actual work.
+ * expiry. Wraps `GmailWatchService.renewExpiringWatches` which does the actual work.
  *
  * Cron `0 6 * * *` (06:00 UTC daily): early enough to catch overnight expiries, late
- * enough to avoid colliding with the weekly-digest cron we'll add in W7.3.
+ * enough to avoid colliding with the weekly-digest cron we'll add in.
  *
- * If `GOOGLE_PUBSUB_TOPIC` isn't configured (typical dev), `renewExpiringWatches()` no-ops
+ * If `GOOGLE_PUBSUB_TOPIC` isn't configured (typical dev), `renewExpiringWatches` no-ops
  * with a structured log instead of throwing — keeps the cron registration valid without
  * forcing every dev to provision a GCP topic.
  */

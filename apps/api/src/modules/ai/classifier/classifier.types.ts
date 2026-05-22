@@ -2,9 +2,9 @@ import { z } from 'zod';
 
 /**
  * Input to `ClassifierService.classify()`. Plain-text shape — deliberately decoupled from
- * `RawMessage` so the classifier can run on synthetic fixtures (today's tests), W4.4's
- * RawMessage-derived production calls (later), or any future channel like WhatsApp
- * (W6.4). Caller is responsible for extracting plain text from the provider payload.
+ * `RawMessage` so the classifier can run on synthetic fixtures (today's tests),
+ * RawMessage-derived production calls, or any future channel like WhatsApp.
+ * Caller is responsible for extracting plain text from the provider payload.
  */
 export interface ClassifierInput {
 	subject: string | null;
@@ -26,7 +26,7 @@ export interface ClassifierInput {
  * - `isQuote`: the binary decision the caller cares about.
  * - `confidence`: model's self-reported confidence 0-1. Useful for filtering: at confidence
  *   < 0.5 the caller may want to flag for manual review rather than auto-create an
- *   Opportunity in W4.4.
+ *   Opportunity.
  * - `reason`: one short user-facing sentence in the email's language explaining the
  *   decision. Persisted on the AICall row for debugging. Field name is deliberately
  *   `reason`, not `reasoning` — we don't want chain-of-thought; we want one explanation.

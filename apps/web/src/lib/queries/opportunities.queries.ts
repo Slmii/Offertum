@@ -25,9 +25,9 @@ export const OpportunityKeys = {
 };
 
 /**
- * W5.4 — Detail view + draft editor. Short `staleTime` because the W5.3 Inngest
+ * Detail view + draft editor. Short `staleTime` because the Inngest
  * function may still be writing the `ReplyDraft` row when the user lands on the page;
- * we refetch frequently until it shows up. Loader-driven SSR per D16.
+ * we refetch frequently until it shows up. Loader-driven SSR per .
  */
 export const opportunityDetailQueryOptions = (id: string) =>
 	queryOptions({
@@ -98,7 +98,7 @@ export function useUpdateOpportunityStatus() {
 }
 
 /**
- * W4.6 — `PATCH /api/opportunities/:id/dismiss`. Invalidates every opportunities cache
+ * `PATCH /api/opportunities/:id/dismiss`. Invalidates every opportunities cache
  * so the dismissed row disappears from the default list and shows up under the
  * "Toon afgewezen" view in the same tick.
  */
@@ -118,7 +118,7 @@ export function useDismissOpportunity() {
 }
 
 /**
- * W4.6 — `DELETE /api/opportunities/:id/dismiss`. Reverses a dismiss; the row returns
+ * `DELETE /api/opportunities/:id/dismiss`. Reverses a dismiss; the row returns
  * to the default list under whatever `status` it had before.
  */
 export function useUndismissOpportunity() {
@@ -136,7 +136,7 @@ export function useUndismissOpportunity() {
 }
 
 /**
- * W5.4 — `PATCH /api/opportunities/:id/reply-draft` autosave. Updates only the detail
+ * `PATCH /api/opportunities/:id/reply-draft` autosave. Updates only the detail
  * cache (avoiding a full list refetch on every keystroke — the list response doesn't
  * carry the draft body so it doesn't need to change here). On success we splice the
  * returned `ReplyDraft` into the cached detail object so the editor stays in sync if
@@ -160,9 +160,9 @@ export function useUpdateReplyDraft(opportunityId: string) {
 }
 
 /**
- * W5.4 — `POST /api/opportunities/:id/reply-draft/regenerate`. "Regenereer in mijn
+ * `POST /api/opportunities/:id/reply-draft/regenerate`. "Regenereer in mijn
  * stijl" button. Uses the requesting user's `tonePlaybookText` (not the org OWNER's,
- * unlike the W5.3 first-generation event). Splices the new draft into the cached
+ * unlike the first-generation event). Splices the new draft into the cached
  * detail so the editor immediately swaps to the freshly-regenerated body.
  */
 export function useRegenerateReplyDraft(opportunityId: string) {
@@ -182,17 +182,17 @@ export function useRegenerateReplyDraft(opportunityId: string) {
 }
 
 /**
- * W5.5 — `POST /api/opportunities/:id/reply-draft/send`. Sends the draft body as a
+ * `POST /api/opportunities/:id/reply-draft/send`. Sends the draft body as a
  * threaded reply via the connected inbox. On success, splices the SENT draft (with
  * `sentAt`) into the detail cache so the editor immediately renders the read-only
  * state. Also invalidates the list cache because `Opportunity.status` flips to
  * `replied` and the row should move under the right tab.
  */
 /**
- * W5.5 follow-up — multipart upload for a reply-draft attachment. We don't go through
- * the JSON `api()` wrapper because that always sets `Content-Type: application/json`;
+ *  follow-up — multipart upload for a reply-draft attachment. We don't go through
+ * the JSON `api` wrapper because that always sets `Content-Type: application/json`;
  * for multipart the browser must set the header itself with the boundary. The error
- * shape mirrors `api()` so callers can treat both paths the same.
+ * shape mirrors `api` so callers can treat both paths the same.
  */
 export function useUploadReplyDraftAttachment(opportunityId: string) {
 	const queryClient = useQueryClient();
@@ -239,7 +239,7 @@ export function useUploadReplyDraftAttachment(opportunityId: string) {
 }
 
 /**
- * W5.5 follow-up — remove an attachment. Optimistically removes the chip from the
+ *  follow-up — remove an attachment. Optimistically removes the chip from the
  * detail cache so the UI feels instant; failures rollback by invalidating the detail
  * query so the server's authoritative list lands.
  */
@@ -282,10 +282,9 @@ export function useSendReplyDraft(opportunityId: string) {
 				method: 'POST'
 			}),
 		onSuccess: nextDraft => {
-			// W5.6-followup — opp.status is NO LONGER unconditionally flipped to 'replied'
+			// opp.status is NO LONGER unconditionally flipped to 'replied'
 			// on send (WON/LOST stay put). Drop the optimistic status update; the
 			// invalidate below re-fetches the authoritative status from the server.
-			//
 			// Also mirror the API mapper rule: once a draft is SENT, it appears in
 			// `replyDraftHistory` alongside staying as the current `replyDraft`. The
 			// cache splice avoids a brief flash where the history panel still shows
@@ -309,13 +308,12 @@ export function useSendReplyDraft(opportunityId: string) {
 }
 
 /**
- * W5.6 — `POST /api/opportunities/:id/reply-draft/followup`. Powers the "Concept-vervolg
+ * `POST /api/opportunities/:id/reply-draft/followup`. Powers the "Concept-vervolg
  * opstellen" button on a SENT draft. Server creates a NEW `ReplyDraft` row (the prior
  * SENT one stays put as an immutable record of what the customer received) and flips
  * opp.status back to `new` so the editability rule unlocks the editor for the freshly-
  * generated draft. We splice the new draft into the detail cache + invalidate the list
  * cache so the row jumps under the `Nieuw` tab.
- *
  * Cache update: when the new draft becomes "current," the previously-current draft
  * (almost always a SENT one) is prepended to the history array. Keeps the UI in sync
  * with the server's authoritative ordering without a re-fetch.
@@ -329,7 +327,7 @@ export function useComposeFollowupReplyDraft(opportunityId: string) {
 				method: 'POST'
 			}),
 		onSuccess: nextDraft => {
-			// W5.6-followup — compose-followup no longer flips opp.status; the deal stays
+			// compose-followup no longer flips opp.status; the deal stays
 			// where the owner left it. Splice the new draft in. The prior `replyDraft`
 			// (which must have been SENT to enable compose-followup) is ALREADY in
 			// `replyDraftHistory` thanks to the API mapper's "include sent latest in

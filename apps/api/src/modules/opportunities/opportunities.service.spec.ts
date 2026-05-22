@@ -38,7 +38,7 @@ const EMPTY_STATUS_COUNTS = {
 function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Mock>> = {}): FakeRepository {
 	return {
 		findPendingRawMessagesForAccount: jest.fn().mockReturnValue(Promise.resolve([])),
-		// W5.6-followup — self-email filter source. Default empty so the existing tests
+		// self-email filter source. Default empty so the existing tests
 		// (which use external `fromEmail` addresses) fall through to the classifier
 		// path as before. Tests that exercise the filter override this mock explicitly.
 		findOrganizationEmailAddresses: jest.fn().mockReturnValue(Promise.resolve(new Set<string>())),
@@ -131,7 +131,7 @@ const RAW_MESSAGE: RawMessageForOpportunityProcessing = {
 	subject: 'Offerte',
 	fromEmail: 'alice@example.com',
 	fromName: 'Alice',
-	// W5.6 — null so the thread-reconstitution branch falls through to the classifier
+	// null so the thread-reconstitution branch falls through to the classifier
 	// path. Tests that exercise thread reconstitution explicitly set this themselves.
 	threadId: null,
 	raw: {
@@ -173,8 +173,8 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 			fromName: 'Alice',
 			threadId: 'thread-1'
 		},
-		// W5.5 follow-up — `OPPORTUNITY_INCLUDE` now joins reply-draft scalars used by the
-		// editability guard + `replyDraftSentAt` wire field. W5.6 flipped this to 1:N —
+		//  follow-up — `OPPORTUNITY_INCLUDE` now joins reply-draft scalars used by the
+		// editability guard + `replyDraftSentAt` wire field. flipped this to 1:N —
 		// default to an empty array so the unchanged transition tests still pass.
 		replyDrafts: []
 	};
@@ -363,7 +363,7 @@ describe('OpportunitiesService.updateStatus', () => {
 		expect(result.customerDeadline).toBe('2026-06-01T00:00:00.000Z');
 	});
 
-	// W5.5 follow-up — the per-status transition policy was removed; any pair of statuses
+	//  follow-up — the per-status transition policy was removed; any pair of statuses
 	// is a legal transition. Previous "you can't pretend you didn't act" rules (WON/LOST
 	// as dead ends; no return to NEW from a post-reply state) were aesthetic — solo SMB
 	// owners need misclick recovery more than policy enforcement. The audit log remains

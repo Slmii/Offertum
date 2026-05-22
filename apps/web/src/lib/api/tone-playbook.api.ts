@@ -3,7 +3,7 @@ import type { TonePlaybook } from '@quoteom/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**
- * GET /api/me/tone-playbook — read the current user's writing-style playbook (D31, W5.2).
+ * GET /api/me/tone-playbook — read the current user's writing-style playbook.
  * Used by the `/settings/writing-style` settings page loader.
  */
 export const getTonePlaybookServer = createServerFn({ method: 'GET' })

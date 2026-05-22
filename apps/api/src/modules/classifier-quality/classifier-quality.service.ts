@@ -19,7 +19,7 @@ const RECENT_DISMISSALS_LIMIT = 5;
 const UNKNOWN = 'unknown';
 
 /**
- * W4.6.5 — Aggregations behind the admin classifier-quality dashboard.
+ * Aggregations behind the admin classifier-quality dashboard.
  *
  * Three orthogonal metrics over the requested time window:
  *  - **precision** by `(organizationId, classifierProvider, classifierModel)` —

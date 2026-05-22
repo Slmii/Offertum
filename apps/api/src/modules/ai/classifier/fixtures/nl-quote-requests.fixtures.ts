@@ -2,7 +2,7 @@ import type { ClassifierInput } from '@/modules/ai/classifier/classifier.types';
 import dedent from 'dedent';
 
 /**
- * Hand-curated Dutch fixture corpus for the W4.2 classifier accuracy harness.
+ * Hand-curated Dutch fixture corpus for the classifier accuracy harness.
  *
  * 39 emails across three categories:
  *  - `positive`: clear offerteaanvragen — different trades, different phrasings
@@ -11,7 +11,7 @@ import dedent from 'dedent';
  *    requests, supplier word-traps, scheduling-only emails, existing-customer extra work, etc.)
  *
  * **Synthetic for now**, will be augmented/replaced with real customer data after the
- * first 10 paying customers (per [[project-horizontal-positioning]] follow-on plan).
+ * first 10 paying customers.
  * Edge-case category is where prompts iterate most — track per-category accuracy in the
  * test output to see which sub-population the prompt struggles with.
  */
@@ -700,7 +700,7 @@ export const NL_CLASSIFIER_FIXTURES: ClassifierFixture[] = [
 	{
 		category: 'edge',
 		expectedIsQuote: false,
-		notes: 'EDGE — scheduling-only / pre-quote discovery visit. No explicit price or proposal ask; the customer wants to "bespreken wat er mogelijk is." Classifier scope is narrow: not a quote request yet. W4.4 may still surface this as a lead.',
+		notes: 'EDGE — scheduling-only / pre-quote discovery visit. No explicit price or proposal ask; the customer wants to "bespreken wat er mogelijk is." Classifier scope is narrow: not a quote request yet. The opportunity pipeline may still surface this as a lead.',
 		input: {
 			subject: 'Afspraak opname woning',
 			fromName: 'Karin Smit',

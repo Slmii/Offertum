@@ -65,7 +65,7 @@ export class OpportunitiesController {
 		});
 	}
 
-	@ApiOperation({ summary: 'Detail view: opportunity + original email body + AI reply draft (W5.4)' })
+	@ApiOperation({ summary: 'Detail view: opportunity + original email body + AI reply draft' })
 	@ApiOkResponse({ type: OpportunityDetailResponseDto })
 	@UseGuards(OrganizationGuard)
 	@Get(':id')
@@ -76,7 +76,7 @@ export class OpportunitiesController {
 		return this.opportunities.getDetail(request.organizationId!, id);
 	}
 
-	@ApiOperation({ summary: 'Update the AI reply-draft body — autosave from the W5.4 editor' })
+	@ApiOperation({ summary: 'Update the AI reply-draft body — autosave from the editor' })
 	@ApiOkResponse({ type: ReplyDraftResponseDto })
 	@TenantWrite()
 	@Patch(':id/reply-draft')
@@ -88,7 +88,7 @@ export class OpportunitiesController {
 		return this.opportunities.updateReplyDraft(request.organizationId!, id, body.body);
 	}
 
-	@ApiOperation({ summary: 'Regenerate the reply draft using the requesting user’s writing style (W5.4)' })
+	@ApiOperation({ summary: 'Regenerate the reply draft using the requesting user’s writing style' })
 	@ApiOkResponse({ type: ReplyDraftResponseDto })
 	@TenantWrite()
 	@Post(':id/reply-draft/regenerate')
@@ -100,7 +100,7 @@ export class OpportunitiesController {
 		return this.opportunities.regenerateReplyDraft(request.organizationId!, id, actorUserId);
 	}
 
-	@ApiOperation({ summary: 'Send the reply draft as a threaded email (W5.5)' })
+	@ApiOperation({ summary: 'Send the reply draft as a threaded email' })
 	@ApiOkResponse({ type: ReplyDraftResponseDto })
 	@TenantWrite()
 	@Post(':id/reply-draft/send')
@@ -112,7 +112,7 @@ export class OpportunitiesController {
 		return this.opportunities.sendReplyDraft(request.organizationId!, id, actorUserId);
 	}
 
-	@ApiOperation({ summary: 'Compose a follow-up reply draft on a SENT opportunity (W5.6)' })
+	@ApiOperation({ summary: 'Compose a follow-up reply draft on a SENT opportunity' })
 	@ApiOkResponse({ type: ReplyDraftResponseDto })
 	@TenantWrite()
 	@Post(':id/reply-draft/followup')
@@ -124,7 +124,7 @@ export class OpportunitiesController {
 		return this.opportunities.composeFollowupReplyDraft(request.organizationId!, id, actorUserId);
 	}
 
-	@ApiOperation({ summary: 'List staged attachments on the reply draft (W5.5)' })
+	@ApiOperation({ summary: 'List staged attachments on the reply draft' })
 	@ApiOkResponse({ type: [ReplyDraftAttachmentResponseDto] })
 	@UseGuards(OrganizationGuard)
 	@Get(':id/reply-draft/attachments')
@@ -136,7 +136,7 @@ export class OpportunitiesController {
 		return rows.map(toAttachmentResponseDto);
 	}
 
-	@ApiOperation({ summary: 'Upload an attachment for the reply draft (W5.5)' })
+	@ApiOperation({ summary: 'Upload an attachment for the reply draft' })
 	@ApiConsumes('multipart/form-data')
 	@ApiBody({
 		schema: {
@@ -163,7 +163,7 @@ export class OpportunitiesController {
 		return toAttachmentResponseDto(result.attachment);
 	}
 
-	@ApiOperation({ summary: 'Download a staged attachment (W5.5)' })
+	@ApiOperation({ summary: 'Download a staged attachment' })
 	@UseGuards(OrganizationGuard)
 	@Get(':id/reply-draft/attachments/:attachmentId/download')
 	async downloadReplyDraftAttachment(
@@ -187,7 +187,7 @@ export class OpportunitiesController {
 		response.end(result.data);
 	}
 
-	@ApiOperation({ summary: 'Remove a staged attachment (W5.5)' })
+	@ApiOperation({ summary: 'Remove a staged attachment' })
 	@TenantWrite()
 	@HttpCode(HttpStatus.NO_CONTENT)
 	@Header('Cache-Control', 'no-store')
@@ -250,7 +250,7 @@ export class OpportunitiesController {
 
 /**
  * Pulls the authenticated user's id off the Auth.js session attached by `AuthGuard`.
- * `AuthGuard` is composed into `@TenantWrite()`, so by the time a controller method
+ * `AuthGuard` is composed into `@TenantWrite`, so by the time a controller method
  * runs this is guaranteed to be set — the throw branch is defensive belt-and-braces.
  */
 function requireUserId(request: Request): string {
@@ -264,7 +264,7 @@ function requireUserId(request: Request): string {
 /**
  * Project the repository row to the wire DTO. Local helper (vs a method on the
  * service) because the controller owns the wire-format conversion for attachments
- * — the service layer deals in `Date`s + raw rows.
+ * the service layer deals in `Date`s + raw rows.
  */
 function toAttachmentResponseDto(row: {
 	id: string;

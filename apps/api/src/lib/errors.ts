@@ -136,8 +136,8 @@ export const OPPORTUNITY_NOT_FOUND = 'Opportunity not found';
 // first place. Returned as 409 so the FE can swallow + refresh state without surfacing
 // a scary error toast for what's effectively a duplicate click.
 export const OPPORTUNITY_NOT_DISMISSED = 'Opportunity is not dismissed.';
-// User-facing — surfaced when the W5.4 editor tries to save edits to a draft that
-// hasn't been generated yet (W5.3's Inngest function hasn't run). The FE should poll +
+// User-facing — surfaced when the editor tries to save edits to a draft that
+// hasn't been generated yet (the Inngest function hasn't run). The FE should poll +
 // retry rather than blowing up; this message is the fallback for non-web callers.
 export const REPLY_DRAFT_NOT_FOUND = 'Reply draft has not been generated yet.';
 // User-facing — surfaced when a user tries to regenerate a draft that's already been

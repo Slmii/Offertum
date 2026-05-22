@@ -8,11 +8,11 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 /**
- * W3.4 — how far back we fetch on initial connect.
+ * How far back we fetch on initial connect.
  *
  * 90 days is a sweet spot for SMB inboxes: typical Quoteom users see ~150–600 messages
  * in their last quarter, which is enough corpus to make the post-connect dashboard feel
- * "full" and gives the W4 classifier real material to work against. Fits comfortably
+ * "full" and gives the classifier real material to work against. Fits comfortably
  * within Inngest's 4-hour step timeout even on busy inboxes.
  *
  * Bumping past ~180 days is the point at which we'd want to split the single Inngest
@@ -88,7 +88,7 @@ export class GmailBackfillService {
 			userId: account.userId
 		};
 		const cutoff = formatGmailDateQuery(new Date(Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000));
-		// `in:inbox` scopes to RECEIVED mail only — what the W4 classifier cares about.
+		// `in:inbox` scopes to RECEIVED mail only — what the classifier cares about.
 		// Without it, Gmail's `messages.list` defaults to all labels (Inbox, Sent, Drafts,
 		// archived…) which inflates the corpus with outbound + unrelated content and
 		// makes both the backfill slower and the classifier noisier.
@@ -132,7 +132,7 @@ export class GmailBackfillService {
 			}
 
 			// Capture the mailbox's current historyId AFTER backfill completes — that's the
-			// starting cursor W3.5 push delta sync will use. Done last so any subsequent
+			// starting cursor push delta sync will use. Done last so any subsequent
 			// pushes don't include events we already covered in the backfill.
 			const profile = await this.api.getProfile(accessToken);
 			return profile.historyId;
@@ -239,7 +239,7 @@ function findHeader(headers: ReadonlyArray<{ name: string; value: string }>, nam
  * Parse a Gmail `From` header value: `Name <email@domain>` OR bare `email@domain`.
  *
  * Doesn't try to handle RFC 2047 encoded-words ("=?UTF-8?B?...?=") — those are <1% of
- * real-world senders and the W4 AI extractor will see the raw payload anyway. If display
+ * real-world senders and the AI extractor will see the raw payload anyway. If display
  * matters later we can plug in a full address parser.
  */
 function parseFrom(raw: string | null): ParsedFrom {

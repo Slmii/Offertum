@@ -1,8 +1,8 @@
 import { EmailProvider } from '@/generated/prisma/enums';
-import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
-import { GmailApiService } from '@/modules/gmail/gmail-api.service';
+import type { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
+import type { GmailApiService } from '@/modules/gmail/gmail-api.service';
 import { GmailBackfillService } from '@/modules/gmail/gmail-backfill.service';
-import { PrismaService } from '@/modules/prisma/prisma.service';
+import type { PrismaService } from '@/modules/prisma/prisma.service';
 import { describe, expect, it, jest } from '@jest/globals';
 import { NotFoundException } from '@nestjs/common';
 
@@ -26,7 +26,7 @@ interface FakePrisma {
 function makePrisma(emailAccountRow: object | null, existingRawIds: string[] = []): FakePrisma {
 	return {
 		emailAccount: {
-			// `findFirst` (not `findUnique`) per S17: production filters `disconnectedAt: null`
+			// `findFirst` (not `findUnique`) per project policy:: production filters `disconnectedAt: null`
 			// so a stale Inngest event for a soft-disconnected account is treated as missing.
 			findFirst: jest.fn().mockReturnValue(Promise.resolve(emailAccountRow)),
 			update: jest.fn().mockReturnValue(Promise.resolve({}))

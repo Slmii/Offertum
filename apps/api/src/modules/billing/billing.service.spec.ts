@@ -1,6 +1,6 @@
 import { PER_SEAT_OVERAGE_CENTS, SEATS_INCLUDED } from '@/modules/billing/billing.constants';
 import { BillingService } from '@/modules/billing/billing.service';
-import { PrismaService } from '@/modules/prisma/prisma.service';
+import type { PrismaService } from '@/modules/prisma/prisma.service';
 import { describe, expect, it, jest } from '@jest/globals';
 
 interface FakePrisma {

@@ -52,7 +52,7 @@ export interface MailboxPipelineFunctionConfig<TSyncResult> {
 	/** Used for log `context` field on completion / warn logs. */
 	logContext: string;
 	/**
-	 * W5.6-followup — pipeline mode. Backfill functions pass `'backfill'` to activate
+	 * Pipeline mode. Backfill functions pass `'backfill'` to activate
 	 * thread-as-unit classification + suppress follow-up draft events. Delta-sync
 	 * functions pass `'live'` (default downstream) for per-message processing with
 	 * normal follow-up event firing.

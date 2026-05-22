@@ -16,23 +16,21 @@ import { Inject, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { attachmentTotalTooLarge } from '@/lib/errors';
 
 /**
- * W5.3 — orchestrates draft generation for a freshly-created Opportunity. Called by the
+ * orchestrates draft generation for a freshly-created Opportunity. Called by the
  * `reply-draft-generate` Inngest function.
- *
  * Generate-on-arrival with org-default voice:
  *  1. Fetch the opportunity + its `RawMessage` (for the original body).
- *  2. Find the org's OWNER → use their `tonePlaybookText` as the default voice. The W5.4
+ *  2. Find the org's OWNER → use their `tonePlaybookText` as the default voice. The
  *     detail view will later offer "regenerate in my voice" for non-OWNER members.
- *  3. Call the AI generator. NULL playbook → generic Dutch baseline (D31).
+ *  3. Call the AI generator. NULL playbook → generic Dutch baseline .
  *  4. Persist as a `ReplyDraft` row. The `opportunityId @unique` constraint + the
  *     `createMany({ skipDuplicates: true })` in the repository make this idempotent —
  *     Inngest can retry the function safely without producing duplicate drafts.
- *
  * Failures are best-effort logged + thrown back to Inngest, which retries per its
  * function-level retry policy.
  */
 /**
- * W5.3 — Result of `upsertFromOpportunity`. `alreadyExisted: true` is a signal — not
+ * Result of `upsertFromOpportunity`. `alreadyExisted: true` is a signal — not
  * a failure — that the Inngest function is retrying or that another caller raced us
  * to the row; the caller doesn't need to do anything.
  */
@@ -42,7 +40,7 @@ export interface UpsertReplyDraftResult {
 }
 
 /**
- * W5.4 — Result of `regenerate`. `opportunityFound: false` lets the controller emit a
+ * Result of `regenerate`. `opportunityFound: false` lets the controller emit a
  * 404 cleanly without overloading the `overwrote` flag.
  */
 export interface RegenerateReplyDraftResult {
@@ -51,12 +49,11 @@ export interface RegenerateReplyDraftResult {
 }
 
 /**
- * W5.5 — Discriminated union for `send`. Three terminal states the controller maps to
+ * Discriminated union for `send`. Three terminal states the controller maps to
  * distinct HTTP responses:
  *  - `{ sent: true }` → 200 with the SENT draft.
  *  - `{ sent: false, alreadySent: true }` → 409 ("already sent").
  *  - `{ sent: false, alreadySent: false, reason }` → 404 or 422 depending on reason.
- *
  * Using a union (not a single shape with `success: boolean`) means the type system
  * forces the caller to handle every variant — no silent "we returned an error tuple
  * but the caller treated it as success" bug.
@@ -79,7 +76,7 @@ export class ReplyDraftsService {
 	) {}
 
 	/**
-	 * W5.6 — Convenience passthrough used by the "compose follow-up" controller path.
+	 * Convenience passthrough used by the "compose follow-up" controller path.
 	 * Kept on the service (vs. dipping into the repo from `OpportunitiesService`) so
 	 * the public surface this module exposes stays cohesive.
 	 */
@@ -108,7 +105,7 @@ export class ReplyDraftsService {
 			return { created: false, alreadyExisted: false };
 		}
 
-		// W6.1-followup voice policy:
+		//  voice policy:
 		//   - playbook: requesting user's if any → otherwise generic (no fallback)
 		//   - sign-off: requesting user's name → mailbox user's name → org name
 		// `upsertFromOpportunity` has no requesting user (the Inngest pipeline triggers
@@ -168,19 +165,17 @@ export class ReplyDraftsService {
 	}
 
 	/**
-	 * W5.6 — Generate a follow-up draft for an existing opportunity. Always creates a
+	 * Generate a follow-up draft for an existing opportunity. Always creates a
 	 * NEW `ReplyDraft` row (does not overwrite the prior SENT one — that row stays as
 	 * an immutable record of what the customer received). Two callers:
 	 *  1. The Inngest `OpportunityFollowupReceived` handler when a customer reply lands
 	 *     on the thread (`triggeredBy: 'customer_reply'`).
 	 *  2. The "Concept-vervolg opstellen" endpoint when the owner manually requests a
 	 *     follow-up draft on a SENT opp (`triggeredBy: 'owner_compose'`).
-	 *
-	 * Uses the requesting user's voice when supplied (matches the W5.4 regenerate
-	 * semantics); falls back to the org OWNER's voice otherwise (matches the W5.3
+	 * Uses the requesting user's voice when supplied (matches the regenerate
+	 * semantics); falls back to the org OWNER's voice otherwise (matches the
 	 * generate-on-arrival semantics) so a customer-reply on an opp where the OWNER is
 	 * the inbox connector still produces a draft in their voice.
-	 *
 	 * Returns the newly-inserted draft's id so the caller can echo or audit-log it.
 	 */
 	async generateFollowupDraft(
@@ -200,7 +195,7 @@ export class ReplyDraftsService {
 			return { created: false, draftId: null };
 		}
 
-		// W6.1-followup voice policy:
+		//  voice policy:
 		//   - playbook: requesting user's if any → otherwise generic (no owner fallback)
 		//   - sign-off: requesting user's name → mailbox user's name → org name
 		// The customer-reply branch passes `requestingUserId = null` (no human triggered
@@ -208,7 +203,7 @@ export class ReplyDraftsService {
 		const voice = requestingUserId ? await this.repository.findUserForVoice(requestingUserId) : null;
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
 
-		// W5.6 bug-fix — Anchor the follow-up draft to the LATEST customer message
+		//  bug-fix — Anchor the follow-up draft to the LATEST customer message
 		// attached to the thread (a reply that came in after our last sent draft),
 		// not the originating quote request. Falls back to the originating message
 		// when no customer reply has landed yet (typical for the user-driven
@@ -272,10 +267,9 @@ export class ReplyDraftsService {
 	}
 
 	/**
-	 * W6.1 — Generate a "haven't heard back" check-in draft on a REPLIED opportunity.
+	 * Generate a "haven't heard back" check-in draft on a REPLIED opportunity.
 	 * Called by the scheduler processor; idempotent against races via the repository's
 	 * `reValidateCheckInCandidate` pre-check.
-	 *
 	 * Differs from `generateFollowupDraft`:
 	 *  - Re-validates eligibility (status / cap / cadence / latest-draft-is-SENT) before
 	 *    spending an OpenAI call
@@ -314,7 +308,7 @@ export class ReplyDraftsService {
 			return { created: false, draftId: null, skipReason: 'opportunity_not_found' };
 		}
 
-		// W6.1-followup voice policy: scheduler-triggered, no requesting user. Playbook
+		//  voice policy: scheduler-triggered, no requesting user. Playbook
 		// stays null → generic Dutch baseline. Sign-off uses the mailbox user's name
 		// (whoever owns the inbox this conversation lives in) → org name fallback.
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
@@ -386,7 +380,7 @@ export class ReplyDraftsService {
 	}
 
 	/**
-	 * W5.4 — Regenerate the draft for an opportunity using the *requesting user's*
+	 * Regenerate the draft for an opportunity using the *requesting user's*
 	 * `tonePlaybookText` (not the org OWNER's, unlike `upsertFromOpportunity`). Powers
 	 * the "Regenereer in mijn stijl" button. Refuses to overwrite a SENT draft (the
 	 * email is already out the door). Returns `{ overwrote: false }` in that case so
@@ -401,7 +395,7 @@ export class ReplyDraftsService {
 		const voice = await this.repository.findUserForVoice(requestingUserId);
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
 
-		// W5.6 bug-fix (parallel to `generateFollowupDraft`) — anchor on the LATEST
+		//  bug-fix (parallel to `generateFollowupDraft`) — anchor on the LATEST
 		// customer thread message when present, falling back to the originating message
 		// only when no reply has landed yet. Without this, "Regenereer in mijn stijl"
 		// would re-extract the original quote request and ignore everything the customer
@@ -429,7 +423,7 @@ export class ReplyDraftsService {
 			customerAppointment: opportunity.customerAppointment?.toISOString().slice(0, 10) ?? null,
 			deliverableHints: this.toStringArray(opportunity.deliverableHints),
 			tonePlaybookText: voice?.tonePlaybookText ?? null,
-			// W6.1-followup sign-off chain: requesting user → mailbox user → org name.
+			//  sign-off chain: requesting user → mailbox user → org name.
 			senderName: voice?.name ?? opportunity.mailboxUser?.name ?? null,
 			organizationName
 		};
@@ -465,17 +459,14 @@ export class ReplyDraftsService {
 	}
 
 	/**
-	 * W5.5 — Send the current draft body as a threaded reply via the connected mailbox.
-	 *
+	 * Send the current draft body as a threaded reply via the connected mailbox.
 	 * Sends as the *inbox owner* (the user who connected the mailbox), not the
 	 * requesting user. Customer-facing identity matches the conversation they
 	 * already had with the inbox; the audit log captures the requesting user
 	 * separately so multi-teammate orgs are still attributable.
-	 *
 	 * Two database mutations after the send succeeds — `ReplyDraft.SENT` +
 	 * `Opportunity.REPLIED` — in one transaction so the DB never ends up
 	 * disagreeing with the customer's inbox.
-	 *
 	 * Returns `{ sent, alreadySent, error }`. `alreadySent` is a separate signal
 	 * (controller maps to 409) so the FE can render "this was already sent" rather
 	 * than a generic error.
@@ -492,7 +483,7 @@ export class ReplyDraftsService {
 
 		if (!context.emailAccount.inboxOwnerUserId) {
 			// EmailAccount.userId is NULL — the user who connected this mailbox has been
-			// removed from the org (cascade SET NULL on Membership delete per S17). We
+			// removed from the org (cascade SET NULL on Membership delete per ). We
 			// can't reissue an access token without a user to scope OAuth on, so refuse
 			// the send rather than fall back to some other org member's mailbox.
 			this.logService.logAction({
@@ -525,7 +516,7 @@ export class ReplyDraftsService {
 		const subject = composeReplySubject(context.rawMessage.subject);
 		const recipient = context.rawMessage.fromEmail;
 
-		// W5.5 follow-up — load attachment binaries before opening the OAuth-scoped
+		//  follow-up — load attachment binaries before opening the OAuth-scoped
 		// send block. Pre-loading means a transient storage hiccup fails fast before
 		// the token refresh + provider call, and the provider envelope sees a stable
 		// snapshot of the attachments even if the DB row changes mid-send (which

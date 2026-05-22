@@ -9,17 +9,17 @@ import {
 import { Inject, Injectable } from '@nestjs/common';
 
 /**
- * W5.3 — generates a Dutch reply-draft body for a classified-and-extracted Opportunity.
+ * Generates a Dutch reply-draft body for a classified-and-extracted Opportunity.
  *
  * Internal service: no controller, no DTO. Consumed by `ReplyDraftsService` (the domain-
  * facing module), which calls this from the `reply-draft-generate` Inngest function and
  * persists the result as a `ReplyDraft` row.
  *
  * **Voice routing:** if `input.tonePlaybookText` is non-null, the prompt injects it
- * verbatim as the voice authority (D31). Null → generic Dutch neutral-professional
+ * verbatim as the voice authority. Null → generic Dutch neutral-professional
  * baseline. Owner-authored always wins.
  *
- * **Language routing (D21):** today only `buildReplyDraftPromptNL` exists. When
+ * **Language routing:** today only `buildReplyDraftPromptNL` exists. When
  * `Organization.locale` lands, `generate()` will route to the matching prompt builder.
  *
  * **Temperature 0.4:** higher than classifier/extractor (which are 0 for deterministic
@@ -42,7 +42,7 @@ export class ReplyDraftGenerator {
 	}
 
 	/**
-	 * W6.1 — Generates a short "haven't heard back" check-in. Different prompt, different
+	 * Generates a short "haven't heard back" check-in. Different prompt, different
 	 * `purpose` tag on the AICall row so the AI usage dashboard can split spend by intent.
 	 * Same response schema (single `body` string) so downstream code is unchanged.
 	 */

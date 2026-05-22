@@ -1,8 +1,8 @@
 /**
- * Minimum scopes for the W3.1 inbox-connect flow.
+ * Minimum scopes for the inbox-connect flow.
  *
  *  - `gmail.readonly`: list + fetch messages.
- *  - `gmail.send`:     send replies (W5.5 one-tap send).
+ *  - `gmail.send`:     send replies ( one-tap send).
  *
  * NOT requested:
  *  - `gmail.modify`: would let us mark-as-read / change labels. Defer until we actually

@@ -1,7 +1,7 @@
 import { EmailProvider } from '@/generated/prisma/enums';
 
 /**
- * W5.5 — Pull the `Message-Id` + `References` headers out of a stored `RawMessage.raw`
+ * Pull the `Message-Id` + `References` headers out of a stored `RawMessage.raw`
  * payload. Both providers store the original mail's headers in their own shape:
  *
  *  - **Gmail**: `payload.headers: Array<{ name, value }>`. We scan for `Message-ID` /

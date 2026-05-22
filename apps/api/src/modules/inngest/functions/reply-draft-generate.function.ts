@@ -10,11 +10,11 @@ import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 /**
- * W5.3 + W5.6 — listens for two events emitted by the opportunities pipeline and
+ * Listens for two events emitted by the opportunities pipeline and
  * generates the appropriate AI reply draft:
  *  - `opportunity/created` → first-time draft on a brand-new opportunity. Idempotent
  *    via an explicit "any draft already exists?" check in `createIfAbsent` (the
- *    `@unique` constraint that previously guaranteed this was dropped in W5.6 to allow
+ *    `@unique` constraint that previously guaranteed this was dropped to allow
  *    follow-up drafts).
  *  - `opportunity/followup.received` → fresh draft on an existing opportunity after a
  *    customer reply OR after the owner clicks "Concept-vervolg opstellen." ALWAYS
@@ -25,7 +25,7 @@ import type { InngestFunction } from 'inngest';
  *    consumed-events table or a per-event idempotency key, neither of which is worth
  *    it at MVP scale.
  *
- * AsyncLocalStorage: re-established INSIDE the `step.run` callback per W4 pattern #8.
+ * AsyncLocalStorage: re-established INSIDE the `step.run` callback.
  * Inngest schedules step callbacks on a different async chain than the handler body, so
  * wrapping only the outer handler with `requestContext.run` is not enough — the AICall
  * + Log rows produced inside the generator would otherwise land with the wrong
@@ -76,7 +76,7 @@ export class ReplyDraftGenerateFunction {
 						? // Follow-up path: always creates a new draft. The caller (customer-reply
 							// pipeline or owner-compose endpoint) is the trigger; no user-id is
 							// carried on the customer-reply event, so the org OWNER's voice is used
-							// (matches the W5.3 initial-generation default).
+							// (matches the initial-generation default).
 							replyDrafts.generateFollowupDraft(opportunityId, null, triggeredBy)
 						: replyDrafts.upsertFromOpportunity(opportunityId)
 				);

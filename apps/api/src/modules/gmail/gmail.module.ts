@@ -9,14 +9,14 @@ import { GmailWebhookController } from '@/modules/gmail/gmail-webhook.controller
 import { Module } from '@nestjs/common';
 
 /**
- * Gmail integration (W3.1 + W3.4 + W3.5). Hosts the Gmail-specific HTTP routes, REST
+ * Gmail integration ( +  + ). Hosts the Gmail-specific HTTP routes, REST
  * client, backfill worker, delta-sync worker, and watch lifecycle service.
  *
  * Account-management services (`EmailAccountsService` + `GoogleOAuthService`) come from
  * `EmailAccountsModule` — those are shared across providers and live there to avoid
  * a circular dep with `MicrosoftModule`.
  *
- * Member-or-owner write routes use `@MemberWrite()` (entitlement-gated). Status + messages
+ * Member-or-owner write routes use `@MemberWrite` (entitlement-gated). Status + messages
  * reads use `TenantMemberGuard` alone. EXTERNAL is rejected at the guard layer.
  *
  * Services are exported so the InngestModule's function wrappers can inject them.

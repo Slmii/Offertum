@@ -8,16 +8,15 @@ import { buildClassifierPromptNL } from '@/modules/ai/classifier/prompts/nl';
 import { Inject, Injectable } from '@nestjs/common';
 
 /**
- * W4.2 — decides whether an inbound email is an offerteaanvraag (quote request).
+ * Decides whether an inbound email is an offerteaanvraag (quote request).
  *
- * Internal service: no controller, no DTO. Consumed by W4.4's Opportunity creation flow,
+ * Internal service: no controller, no DTO. Consumed by the Opportunity creation flow,
  * which calls `classify()` on every new `RawMessage` and materializes an `Opportunity`
  * row only when `isQuote === true`. Negative classifications stay in `RawMessage` as the
- * archive (per [[project-horizontal-positioning]] — full corpus retained for re-classification
- * when prompt v2 ships).
+ * archive (full corpus retained for re-classification when prompt v2 ships).
  *
- * **Language routing (W4.2 → W4.3+):** today the only prompt is `buildClassifierPromptNL`.
- * When `Organization.locale` lands (D21), `classify()` will route to the matching prompt
+ * **Language routing:** today the only prompt is `buildClassifierPromptNL`.
+ * When `Organization.locale` lands, `classify()` will route to the matching prompt
  * builder. The classifier output stays language-agnostic — `isQuote` is a boolean, `reason`
  * is in whatever language the prompt was written in.
  */

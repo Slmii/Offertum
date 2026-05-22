@@ -4,46 +4,46 @@
 // - pg driver adapter wires up the actual connection in src/prisma/prisma.service.ts.
 
 generator client {
-    provider     = "prisma-client"
-    output       = "../src/generated/prisma"
-    moduleFormat = "cjs"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
-    provider = "postgresql"
+  provider = "postgresql"
 }
 
 // Users are provisioned by Quoteom admin via invitation; self-signup is disabled.
 // An org can have many users. Roles exist but are informational until a feature enforces them
 // (e.g. billing notifications, "can't delete the org while you're the last OWNER").
 enum MembershipRole {
-    OWNER
-    MEMBER
-    EXTERNAL
+  OWNER
+  MEMBER
+  EXTERNAL
 }
 
 // Pre-Sentry stand-in. `warn`/`error`/`fatal` events from NestJS's Logger are
 // persisted here in addition to the console.
 enum LogLevel {
-    FATAL
-    ERROR
-    WARN
-    INFO
-    DEBUG
+  FATAL
+  ERROR
+  WARN
+  INFO
+  DEBUG
 }
 
-// W3.1 — Per-org connection to an external mail provider (Gmail today; Microsoft Graph
-// in W3.2). Independent of Auth.js's `Account` table because sign-in identity and
+// Per-org connection to an external mail provider (Gmail today; Microsoft Graph
+// later). Independent of Auth.js's `Account` table because sign-in identity and
 // inbox-sync identity are different concerns: a user may sign in via magic link and
 // later connect their Gmail, OR sign in via Google and connect a *different* Gmail for
 // inbox sync. Tokens are encrypted at rest in the same format as `Account` tokens —
 // `v1:<base64(iv ‖ tag ‖ ciphertext)>` via `lib/crypto/token-encryption.ts`.
 enum EmailProvider {
-    GMAIL
-    MICROSOFT
+  GMAIL
+  MICROSOFT
 }
 
-// W4.1 — Per-call log of every AI provider invocation.
+// Per-call log of every AI provider invocation.
 // One row per `AIClient.generate(...)` call. Used for:
 //  - **Replay**: rerun the same prompt against a different model when the prompt is iterated.
 //    The `prompt` + `parsed` columns together let us reconstruct what the AI saw and what
@@ -54,199 +54,198 @@ enum EmailProvider {
 //  - **Year-2 self-improvement**: when classifier accuracy improves later, re-run the new
 //    prompt over historical `AICall` rows to see how many false negatives the old version
 //    missed.
-//
 // We persist the full prompt + response as text — for a typical email + structured output,
 // this is ~2-5kB per row. At 10k emails/month/org that's ~30MB/month — Postgres handles
 // fine, and the value of being able to debug + replay is high.
 enum AICallStatus {
-    SUCCESS
-    FAILED
-    SCHEMA_INVALID
-    TIMEOUT
+  SUCCESS
+  FAILED
+  SCHEMA_INVALID
+  TIMEOUT
 }
 
-// W4.4 — Materialized quote opportunity created from a classified-positive RawMessage.
+// Materialized quote opportunity created from a classified-positive RawMessage.
 // Uppercase per existing schema convention (see `MembershipRole`, `AICallStatus`,
 // `EmailProvider`). Wire-format conversion to lowercase happens in
 // `opportunity-status.mapper.ts`.
 enum OpportunityStatus {
-    NEW
-    REPLIED
-    WAITING
-    COLD
-    WON
-    LOST
+  NEW
+  REPLIED
+  WAITING
+  COLD
+  WON
+  LOST
 }
 
-// W4.4 — Customer-signaled urgency on a quote request. Mirrors the extractor's Zod enum
+// Customer-signaled urgency on a quote request. Mirrors the extractor's Zod enum
 // (see `extractor.types.ts`). Wire-format conversion to lowercase happens in
 // `opportunity-urgency.mapper.ts`.
 enum Urgency {
-    EMERGENCY
-    HIGH
-    NORMAL
-    LOW
+  EMERGENCY
+  HIGH
+  NORMAL
+  LOW
 }
 
-// W4.6 — Reason an Opportunity was dismissed by the owner. Separate axis from
-// `OpportunityStatus` (per D28) so the workflow funnel (`lost`) and the
+// Reason an Opportunity was dismissed by the owner. Separate axis from
+// `OpportunityStatus` so the workflow funnel (`lost`) and the
 // classifier-feedback axis (`NOT_A_QUOTE`) never conflate.
 //   - NOT_A_QUOTE : the classifier was wrong — this email wasn't a quote request.
 //   - DUPLICATE   : same lead already exists as another Opportunity.
 //   - SPAM        : the bulk-mail pre-filter missed it — promotes to filter fixture.
 //   - OTHER       : free-text reason captured in the audit log.
 enum DismissReason {
-    NOT_A_QUOTE
-    DUPLICATE
-    SPAM
-    OTHER
+  NOT_A_QUOTE
+  DUPLICATE
+  SPAM
+  OTHER
 }
 
-// W5.3 — Workflow state of a generated reply draft.
+// Workflow state of a generated reply draft.
 //   - PENDING_APPROVAL : AI generated, user hasn't touched it yet.
-//   - EDITED           : user has modified the body (drives the W5.7 edit-driven
-//                        tone-playbook update prompt + the W14.10 "AI accuracy" metric).
-//   - SENT             : draft has been sent as a reply via Gmail / Graph (W5.5).
+//   - EDITED           : user has modified the body (drives the edit-driven
+//                        tone-playbook update prompt + the "AI accuracy" metric).
+//   - SENT             : draft has been sent as a reply via Gmail / Graph.
 enum ReplyDraftStatus {
-    PENDING_APPROVAL
-    EDITED
-    SENT
+  PENDING_APPROVAL
+  EDITED
+  SENT
 }
 
-// W6.1 — What kind of draft this is.
+// What kind of draft this is.
 //   - REPLY    : a response to an inbound message — the original or a customer follow-up.
-//                Default for everything generated up through W5.
-//   - CHECK_IN : automatic "haven't heard back" follow-up generated by the W6.1
+//                Default for everything generated previously.
+//   - CHECK_IN : automatic "haven't heard back" follow-up generated by the
 //                scheduler cron. Same body shape as a REPLY but tagged so the UI can
 //                surface "Automatische follow-up" and so the cap-counter in the
 //                scheduler doesn't double-count owner-initiated drafts.
 enum ReplyDraftKind {
-    REPLY
-    CHECK_IN
+  REPLY
+  CHECK_IN
 }
 
 model User {
-    id                    String    @id @default(uuid()) @db.Uuid
-    email                 String    @unique
-    name                  String?
-    image                 String?
-    emailVerified         DateTime?
-    // Active organization for this user — session pins to this. Users with multiple
-    // memberships switch via a future "switch org" mutation.
-    currentOrganizationId String?   @db.Uuid
-    // W5.2 — Per-user writing-style playbook (D31). Free-form prose the user writes
-    // in plain Dutch (greeting, sign-off, register, recurring phrases). Injected verbatim
-    // into the reply-draft prompt in W5.3 when generating drafts on opportunities the user
-    // is composing a reply for. Persists across orgs (D5 multi-org: voice is the person's,
-    // not the org's). NULL = use the generic Dutch neutral-professional baseline. Settable
-    // from `/settings/writing-style`.
-    tonePlaybookText      String?   @db.Text
-    // When the playbook was last saved. Distinct from `User.updatedAt` so other
-    // User-row updates (name change, etc.) don't trigger the "your writing style was
-    // updated since this draft was generated" banner in the W5.4 editor. NULL when the
-    // user has never authored a playbook; set to NOW on every successful save; reset to
-    // NULL when the playbook is cleared (text → empty).
-    tonePlaybookUpdatedAt DateTime?
-    createdAt             DateTime  @default(now())
-    updatedAt             DateTime  @updatedAt
+  id                    String    @id @default(uuid()) @db.Uuid
+  email                 String    @unique
+  name                  String?
+  image                 String?
+  emailVerified         DateTime?
+  // Active organization for this user — session pins to this. Users with multiple
+  // memberships switch via a future "switch org" mutation.
+  currentOrganizationId String?   @db.Uuid
+  // Per-user writing-style playbook. Free-form prose the user writes
+  // in plain Dutch (greeting, sign-off, register, recurring phrases). Injected verbatim
+  // into the reply-draft prompt when generating drafts on opportunities the user
+  // is composing a reply for. Persists across orgs (multi-org: voice is the person's,
+  // not the org's). NULL = use the generic Dutch neutral-professional baseline. Settable
+  // from `/settings/writing-style`.
+  tonePlaybookText      String?   @db.Text
+  // When the playbook was last saved. Distinct from `User.updatedAt` so other
+  // User-row updates (name change, etc.) don't trigger the "your writing style was
+  // updated since this draft was generated" banner in the editor. NULL when the
+  // user has never authored a playbook; set to NOW on every successful save; reset to
+  // NULL when the playbook is cleared (text → empty).
+  tonePlaybookUpdatedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-    currentOrganization    Organization?  @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
-    memberships            Membership[]
-    accounts               Account[]
-    sessions               Session[]
-    emailAccounts          EmailAccount[]
-    dismissedOpportunities Opportunity[]  @relation("OpportunityDismissedBy")
+  currentOrganization    Organization?  @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
+  memberships            Membership[]
+  accounts               Account[]
+  sessions               Session[]
+  emailAccounts          EmailAccount[]
+  dismissedOpportunities Opportunity[]  @relation("OpportunityDismissedBy")
 }
 
 model Organization {
-    id        String   @id @default(uuid()) @db.Uuid
-    name      String
-    // W6.2 — Per-org follow-up cadence + cap. The W6.1 scheduler scans REPLIED opps
-    // daily; a follow-up draft is generated when `(now − latestSentAt) ≥
-    // followUpCadenceDays`, capped at `followUpMaxCount` automatic follow-ups per opp.
-    // Defaults align with the original plan: every 4 days, max 2 follow-ups before
-    // we stop nudging. The owner can set `followUpMaxCount = 0` to disable the
-    // scheduler entirely for the org.
-    followUpCadenceDays Int @default(4)
-    followUpMaxCount    Int @default(2)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id                  String   @id @default(uuid()) @db.Uuid
+  name                String
+  // Per-org follow-up cadence + cap. The scheduler scans REPLIED opps
+  // daily; a follow-up draft is generated when `(now − latestSentAt) ≥
+  // followUpCadenceDays`, capped at `followUpMaxCount` automatic follow-ups per opp.
+  // Defaults: every 4 days, max 2 follow-ups before
+  // we stop nudging. The owner can set `followUpMaxCount = 0` to disable the
+  // scheduler entirely for the org.
+  followUpCadenceDays Int      @default(4)
+  followUpMaxCount    Int      @default(2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-    memberships    Membership[]
-    invitations    Invitation[]
-    currentMembers User[]         @relation("CurrentOrganization")
-    subscription   Subscription?
-    emailAccounts  EmailAccount[]
-    opportunities  Opportunity[]
+  memberships    Membership[]
+  invitations    Invitation[]
+  currentMembers User[]         @relation("CurrentOrganization")
+  subscription   Subscription?
+  emailAccounts  EmailAccount[]
+  opportunities  Opportunity[]
 }
 
 model Log {
-    id        String   @id @default(uuid()) @db.Uuid
-    level     LogLevel
-    message   String   @db.Text
-    context   String?
-    stack     String?  @db.Text
-    metadata  Json?
-    createdAt DateTime @default(now())
+  id        String   @id @default(uuid()) @db.Uuid
+  level     LogLevel
+  message   String   @db.Text
+  context   String?
+  stack     String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
 
-    // Correlation fields — populated once auth + request tracing land.
-    requestId      String?
-    userId         String? @db.Uuid
-    organizationId String? @db.Uuid
+  // Correlation fields — populated once auth + request tracing land.
+  requestId      String?
+  userId         String? @db.Uuid
+  organizationId String? @db.Uuid
 
-    @@index([level, createdAt(sort: Desc)])
-    @@index([organizationId, createdAt(sort: Desc)])
-    @@index([requestId])
+  @@index([level, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([requestId])
 }
 
 model AICall {
-    id               String       @id @default(uuid()) @db.Uuid
-    // 'openai' | 'azure-openai' | 'mistral' | 'anthropic' (string, not enum, so adding a
-    // provider doesn't require a Prisma migration).
-    provider         String
-    // The actual model identifier sent to the provider (e.g. 'gpt-4o-mini', 'gpt-4o',
-    // 'mistral-large-latest', 'claude-sonnet-4-5'). Free text — providers add SKUs faster
-    // than we'd want to migrate the schema for.
-    model            String
-    // The application-level intent: 'classifier' | 'extractor' | 'tone-learn' | 'reply-draft'
-    // | etc. Driven by the caller — used for grouping in debug queries ("show me all
-    // classifier calls that returned schema_invalid").
-    purpose          String
-    // The full prompt sent to the provider. May be large (~1-5kB typical). Stored verbatim
-    // so we can replay against a different model later.
-    prompt           String       @db.Text
-    // Raw text response from the provider. Null if the call failed before a response was
-    // received (network error, 5xx after retries exhausted).
-    response         String?      @db.Text
-    // Parsed structured output (Zod-validated). Null if the response wasn't valid against
-    // the schema OR if no response was received. Lets W4+ services skip re-parsing.
-    parsed           Json?
-    status           AICallStatus
-    errorMessage     String?      @db.Text
-    promptTokens     Int?
-    completionTokens Int?
-    // Wall-clock duration of the call including retries. Useful for SLA tracking.
-    latencyMs        Int
-    // Correlation fields — auto-populated by `AICallLogger` from `RequestContext`
-    // AsyncLocalStorage. May be null when the call originates outside a request (e.g.
-    // an Inngest function running on a cron).
-    requestId        String?
-    userId           String?      @db.Uuid
-    organizationId   String?      @db.Uuid
-    createdAt        DateTime     @default(now())
+  id               String       @id @default(uuid()) @db.Uuid
+  // 'openai' | 'azure-openai' | 'mistral' | 'anthropic' (string, not enum, so adding a
+  // provider doesn't require a Prisma migration).
+  provider         String
+  // The actual model identifier sent to the provider (e.g. 'gpt-4o-mini', 'gpt-4o',
+  // 'mistral-large-latest', 'claude-sonnet-4-5'). Free text — providers add SKUs faster
+  // than we'd want to migrate the schema for.
+  model            String
+  // The application-level intent: 'classifier' | 'extractor' | 'tone-learn' | 'reply-draft'
+  // | etc. Driven by the caller — used for grouping in debug queries ("show me all
+  // classifier calls that returned schema_invalid").
+  purpose          String
+  // The full prompt sent to the provider. May be large (~1-5kB typical). Stored verbatim
+  // so we can replay against a different model later.
+  prompt           String       @db.Text
+  // Raw text response from the provider. Null if the call failed before a response was
+  // received (network error, 5xx after retries exhausted).
+  response         String?      @db.Text
+  // Parsed structured output (Zod-validated). Null if the response wasn't valid against
+  // the schema OR if no response was received. Lets services skip re-parsing.
+  parsed           Json?
+  status           AICallStatus
+  errorMessage     String?      @db.Text
+  promptTokens     Int?
+  completionTokens Int?
+  // Wall-clock duration of the call including retries. Useful for SLA tracking.
+  latencyMs        Int
+  // Correlation fields — auto-populated by `AICallLogger` from `RequestContext`
+  // AsyncLocalStorage. May be null when the call originates outside a request (e.g.
+  // an Inngest function running on a cron).
+  requestId        String?
+  userId           String?      @db.Uuid
+  organizationId   String?      @db.Uuid
+  createdAt        DateTime     @default(now())
 
-    // W4.4 — Opportunities link to their originating classifier + extractor calls so we
-    // can drill from a row in the product UI back to the exact prompt/response that
-    // produced it. Two named relations because one Opportunity has two AICalls.
-    classifiedOpportunities Opportunity[] @relation("OpportunityClassifiedAICall")
-    extractedOpportunities  Opportunity[] @relation("OpportunityExtractedAICall")
-    // W5.3 — Reply-draft generation call. Named so it doesn't collide with the
-    // classifier / extractor relations above.
-    replyDrafts             ReplyDraft[]  @relation("ReplyDraftAICall")
+  // Opportunities link to their originating classifier + extractor calls so we
+  // can drill from a row in the product UI back to the exact prompt/response that
+  // produced it. Two named relations because one Opportunity has two AICalls.
+  classifiedOpportunities Opportunity[] @relation("OpportunityClassifiedAICall")
+  extractedOpportunities  Opportunity[] @relation("OpportunityExtractedAICall")
+  // Reply-draft generation call. Named so it doesn't collide with the
+  // classifier / extractor relations above.
+  replyDrafts             ReplyDraft[]  @relation("ReplyDraftAICall")
 
-    @@index([organizationId, createdAt(sort: Desc)])
-    @@index([purpose, status, createdAt(sort: Desc)])
-    @@index([requestId])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([purpose, status, createdAt(sort: Desc)])
+  @@index([requestId])
 }
 
 // Schema dictated by @auth/prisma-adapter; field names use snake_case in places
@@ -256,345 +255,342 @@ model AICall {
 // Ciphertext format: `v1:<base64(iv ‖ tag ‖ ciphertext)>`. Decrypt with
 // `decrypt(...)` from `lib/crypto/token-encryption.ts`.
 model Account {
-    id                String   @id @default(uuid()) @db.Uuid
-    userId            String   @db.Uuid
-    type              String
-    provider          String
-    providerAccountId String
-    refresh_token     String?  @db.Text
-    access_token      String?  @db.Text
-    expires_at        Int?
-    token_type        String?
-    scope             String?
-    id_token          String?  @db.Text
-    session_state     String?
-    createdAt         DateTime @default(now())
-    updatedAt         DateTime @updatedAt
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@unique([provider, providerAccountId])
-    @@index([userId])
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
-    id           String   @id @default(uuid()) @db.Uuid
-    sessionToken String   @unique
-    userId       String   @db.Uuid
-    expires      DateTime
-    createdAt    DateTime @default(now())
-    updatedAt    DateTime @updatedAt
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
+  @@index([userId])
 }
 
 model VerificationToken {
-    identifier String
-    token      String   @unique
-    expires    DateTime
+  identifier String
+  token      String   @unique
+  expires    DateTime
 
-    @@id([identifier, token])
+  @@id([identifier, token])
 }
 
 model Membership {
-    id             String         @id @default(uuid()) @db.Uuid
-    userId         String         @db.Uuid
-    organizationId String         @db.Uuid
-    role           MembershipRole @default(MEMBER)
-    createdAt      DateTime       @default(now())
-    updatedAt      DateTime       @updatedAt
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @db.Uuid
+  organizationId String         @db.Uuid
+  role           MembershipRole @default(MEMBER)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-    user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-    @@unique([userId, organizationId])
-    @@index([organizationId])
+  @@unique([userId, organizationId])
+  @@index([organizationId])
 }
 
 // Pending invitations to join an organization. Created by Quoteom admin; redeemed by
 // the recipient clicking a tokenized link sent via email. On redemption: creates the
 // User row (if one doesn't already exist for that email) and a Membership.
 model Invitation {
-    id             String         @id @default(uuid()) @db.Uuid
-    token          String         @unique
-    email          String
-    organizationId String         @db.Uuid
-    role           MembershipRole @default(MEMBER)
-    acceptedAt     DateTime?
-    expiresAt      DateTime
-    createdAt      DateTime       @default(now())
+  id             String         @id @default(uuid()) @db.Uuid
+  token          String         @unique
+  email          String
+  organizationId String         @db.Uuid
+  role           MembershipRole @default(MEMBER)
+  acceptedAt     DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime       @default(now())
 
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-    @@index([email])
-    @@index([organizationId])
+  @@index([email])
+  @@index([organizationId])
 }
 
 // One row per Organization (1:1). Acts as the local "single source of truth" that we
 // sync from Stripe via webhooks + the post-checkout /sync endpoint. Avoids the split-
 // brain problem of trusting individual webhook payloads — every relevant event triggers
 // a full re-fetch via `BillingService.syncFromStripe(customerId)`.
-//
 // `status` mirrors Stripe's Subscription.Status enum: "active" | "trialing" | "past_due"
 // | "canceled" | "incomplete" | "incomplete_expired" | "unpaid" | "paused" — kept as
 // String (not enum) so Stripe-side additions don't require a Prisma migration.
 model Subscription {
-    id                   String    @id @default(uuid()) @db.Uuid
-    organizationId       String    @unique @db.Uuid
-    stripeCustomerId     String    @unique
-    stripeSubscriptionId String?   @unique
-    status               String?
-    priceId              String?
-    currentPeriodStart   DateTime?
-    currentPeriodEnd     DateTime?
-    cancelAtPeriodEnd    Boolean   @default(false)
-    paymentMethodBrand   String?
-    paymentMethodLast4   String?
-    createdAt            DateTime  @default(now())
-    updatedAt            DateTime  @updatedAt
+  id                   String    @id @default(uuid()) @db.Uuid
+  organizationId       String    @unique @db.Uuid
+  stripeCustomerId     String    @unique
+  stripeSubscriptionId String?   @unique
+  status               String?
+  priceId              String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  paymentMethodBrand   String?
+  paymentMethodLast4   String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model EmailAccount {
-    id                      String        @id @default(uuid()) @db.Uuid
-    organizationId          String        @db.Uuid
-    // The user who connected this mailbox. Useful for audit ("who linked this account")
-    // and a future "only the connector or an OWNER can disconnect" guard. ON DELETE SET
-    // NULL so removing the user doesn't drop the org's inbox connection silently.
-    userId                  String?       @db.Uuid
-    provider                EmailProvider
-    // Provider's stable account identifier (Gmail: the resource id / sub; Graph: oid).
-    providerAccountId       String
-    // The mailbox address itself, for display purposes only. Don't key off this — users
-    // can alias addresses to the same Gmail account.
-    email                   String
-    // Granted OAuth scopes (space-separated). Compared against required scopes on each
-    // start-of-sync; a mismatch triggers a re-consent prompt instead of a silent fail.
-    scope                   String        @db.Text
-    accessToken             String        @db.Text
-    refreshToken            String        @db.Text
-    // When the current access token expires (server time). Lazy-refreshed by the Gmail
-    // service when the call is within ~60s of expiry. Null on first connect until the
-    // first successful exchange writes it.
-    accessTokenExpiresAt    DateTime?
-    // Gmail's `historyId` from the last successful list/sync. Used in W3.5 for delta
-    // sync via `users.history.list`. Null until W3.4 backfill records one.
-    historyId               String?
-    // Microsoft Graph's `@odata.deltaLink` from the last successful `/me/messages/delta`
-    // page walk (W3.6). Stored as the FULL URL Graph returns (includes a server-issued
-    // token), not a synthetic short form. Null until backfill records one. On Graph this
-    // serves the same purpose as `historyId` for Gmail — only one of the two will be set
-    // per row, based on `provider`.
-    deltaLink               String?       @db.Text
-    // Push subscription expiry — applies to BOTH providers but the TTLs differ:
-    //   - Gmail: 7-day TTL, daily cron renews rows with < 24 h remaining.
-    //   - Microsoft Graph: 3-day TTL, twice-daily cron with the same 24 h-remaining buffer.
-    // Renamed semantically from the W3.5-era "watchExpiresAt" since Graph uses
-    // "subscription" terminology, but keeping the column name avoids a destructive
-    // migration.
-    watchExpiresAt          DateTime?
-    // Microsoft Graph subscription resource ID (W3.6). Returned by POST /subscriptions.
-    // Required for PATCH-based renewal and for DELETE on disconnect. Null when provider
-    // is GMAIL or before the subscription has been registered.
-    subscriptionId          String?
-    // Microsoft Graph `clientState` — shared secret echoed back on every push delivery.
-    // We generate it at subscription-create time (random 32 bytes hex), store encrypted
-    // here, and compare equality on every incoming push to authenticate it. Graph's
-    // equivalent of Pub/Sub's JWT (simpler, no JWKS/JWT crypto). Stored encrypted
-    // because leakage would let anyone post fake notifications and trigger delta-syncs.
-    // Null for Gmail rows.
-    subscriptionClientState String?       @db.Text
-    // W4.4 follow-up — soft-disconnect timestamp. When non-null, the user has clicked
-    // Disconnect: we stop the Pub/Sub watch / Graph subscription, revoke the OAuth
-    // refresh token at the provider, and set this column instead of hard-deleting the
-    // row. The row stays so `RawMessage` / `Opportunity` history is preserved (those
-    // FKs cascade-delete and would wipe months of pipeline work otherwise). Re-
-    // connecting the same provider account upserts on the existing row + clears this.
-    // All "is connected" lookups filter `disconnectedAt: null`.
-    disconnectedAt          DateTime?
-    createdAt               DateTime      @default(now())
-    updatedAt               DateTime      @updatedAt
+  id                      String        @id @default(uuid()) @db.Uuid
+  organizationId          String        @db.Uuid
+  // The user who connected this mailbox. Useful for audit ("who linked this account")
+  // and a future "only the connector or an OWNER can disconnect" guard. ON DELETE SET
+  // NULL so removing the user doesn't drop the org's inbox connection silently.
+  userId                  String?       @db.Uuid
+  provider                EmailProvider
+  // Provider's stable account identifier (Gmail: the resource id / sub; Graph: oid).
+  providerAccountId       String
+  // The mailbox address itself, for display purposes only. Don't key off this — users
+  // can alias addresses to the same Gmail account.
+  email                   String
+  // Granted OAuth scopes (space-separated). Compared against required scopes on each
+  // start-of-sync; a mismatch triggers a re-consent prompt instead of a silent fail.
+  scope                   String        @db.Text
+  accessToken             String        @db.Text
+  refreshToken            String        @db.Text
+  // When the current access token expires (server time). Lazy-refreshed by the Gmail
+  // service when the call is within ~60s of expiry. Null on first connect until the
+  // first successful exchange writes it.
+  accessTokenExpiresAt    DateTime?
+  // Gmail's `historyId` from the last successful list/sync. Used for delta
+  // sync via `users.history.list`. Null until backfill records one.
+  historyId               String?
+  // Microsoft Graph's `@odata.deltaLink` from the last successful `/me/messages/delta`
+  // page walk. Stored as the FULL URL Graph returns (includes a server-issued
+  // token), not a synthetic short form. Null until backfill records one. On Graph this
+  // serves the same purpose as `historyId` for Gmail — only one of the two will be set
+  // per row, based on `provider`.
+  deltaLink               String?       @db.Text
+  // Push subscription expiry — applies to BOTH providers but the TTLs differ:
+  //   - Gmail: 7-day TTL, daily cron renews rows with < 24 h remaining.
+  //   - Microsoft Graph: 3-day TTL, twice-daily cron with the same 24 h-remaining buffer.
+  // Semantically distinct from the original "watchExpiresAt" since Graph uses
+  // "subscription" terminology, but keeping the column name avoids a destructive
+  // migration.
+  watchExpiresAt          DateTime?
+  // Microsoft Graph subscription resource ID. Returned by POST /subscriptions.
+  // Required for PATCH-based renewal and for DELETE on disconnect. Null when provider
+  // is GMAIL or before the subscription has been registered.
+  subscriptionId          String?
+  // Microsoft Graph `clientState` — shared secret echoed back on every push delivery.
+  // We generate it at subscription-create time (random 32 bytes hex), store encrypted
+  // here, and compare equality on every incoming push to authenticate it. Graph's
+  // equivalent of Pub/Sub's JWT (simpler, no JWKS/JWT crypto). Stored encrypted
+  // because leakage would let anyone post fake notifications and trigger delta-syncs.
+  // Null for Gmail rows.
+  subscriptionClientState String?       @db.Text
+  // Soft-disconnect timestamp. When non-null, the user has clicked
+  // Disconnect: we stop the Pub/Sub watch / Graph subscription, revoke the OAuth
+  // refresh token at the provider, and set this column instead of hard-deleting the
+  // row. The row stays so `RawMessage` / `Opportunity` history is preserved (those
+  // FKs cascade-delete and would wipe months of pipeline work otherwise). Re-
+  // connecting the same provider account upserts on the existing row + clears this.
+  // All "is connected" lookups filter `disconnectedAt: null`.
+  disconnectedAt          DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 
-    organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-    rawMessages   RawMessage[]
-    opportunities Opportunity[]
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  rawMessages   RawMessage[]
+  opportunities Opportunity[]
 
-    // One row per (org, provider, mailbox). Reconnecting the same Gmail account should
-    // upsert this row, not create a duplicate.
-    @@unique([organizationId, provider, providerAccountId])
-    @@index([organizationId])
+  // One row per (org, provider, mailbox). Reconnecting the same Gmail account should
+  // upsert this row, not create a duplicate.
+  @@unique([organizationId, provider, providerAccountId])
+  @@index([organizationId])
 }
 
-// W3.1 — Raw provider message payload, pre-classification.
-// Populated by the W3.4 backfill worker (Inngest job) on initial connect, and by the
-// W3.5 / W3.6 push-notification handlers thereafter. NOT a long-lived store: once W4
+// Raw provider message payload, pre-classification.
+// Populated by the backfill worker (Inngest job) on initial connect, and by the
+// push-notification handlers thereafter. NOT a long-lived store: once the pipeline
 // classifies + extracts, `RawMessage` is mainly the source-of-truth for re-extraction
 // (year-2 self-improvement story). Keep the full provider JSON in `raw` rather than
 // shredding into typed columns — Gmail / Graph payloads are nested and we'd lose info.
 model RawMessage {
-    id                String    @id @default(uuid()) @db.Uuid
-    emailAccountId    String    @db.Uuid
-    // Denormalized for tenant-scoped queries (so we don't always need to JOIN through
-    // EmailAccount to enforce org isolation).
-    organizationId    String    @db.Uuid
-    providerMessageId String
-    threadId          String?
-    // ISO timestamp from provider (Gmail: `internalDate` in ms; Graph: `receivedDateTime`).
-    internalDate      DateTime
-    subject           String?
-    fromEmail         String?
-    fromName          String?
-    // Full provider payload as JSON. Schema varies by provider.
-    raw               Json
-    fetchedAt         DateTime  @default(now())
-    // W4 fields — written by the classifier/extractor. Nullable until then.
-    isQuoteRequest    Boolean?
-    classifiedAt      DateTime?
-    // W5.6 — Thread reconstitution. Set when this RawMessage is attached to an existing
-    // Opportunity (e.g., a customer reply on a thread we've already classified). NULL
-    // for messages that haven't been linked, including all bulk-mail-filtered and
-    // classifier-negative rows. The 1:N inverse on Opportunity is `threadMessages`.
-    //
-    // Note: the ORIGINATING message of an Opportunity is reachable via
-    // `Opportunity.rawMessageId` (1:1, unique). This nullable FK is the *follow-up*
-    // link — historical rows have it NULL until a future reply lands on the same
-    // threadId and we attach it. No backfill on existing rows; only new follow-ups
-    // populate this column. SetNull on delete so AICall retention purges don't cascade.
-    opportunityId     String?   @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  emailAccountId    String    @db.Uuid
+  // Denormalized for tenant-scoped queries (so we don't always need to JOIN through
+  // EmailAccount to enforce org isolation).
+  organizationId    String    @db.Uuid
+  providerMessageId String
+  threadId          String?
+  // ISO timestamp from provider (Gmail: `internalDate` in ms; Graph: `receivedDateTime`).
+  internalDate      DateTime
+  subject           String?
+  fromEmail         String?
+  fromName          String?
+  // Full provider payload as JSON. Schema varies by provider.
+  raw               Json
+  fetchedAt         DateTime  @default(now())
+  // Classifier/extractor fields. Nullable until the pipeline runs.
+  isQuoteRequest    Boolean?
+  classifiedAt      DateTime?
+  // Thread reconstitution. Set when this RawMessage is attached to an existing
+  // Opportunity (e.g., a customer reply on a thread we've already classified). NULL
+  // for messages that haven't been linked, including all bulk-mail-filtered and
+  // classifier-negative rows. The 1:N inverse on Opportunity is `threadMessages`.
+  // Note: the ORIGINATING message of an Opportunity is reachable via
+  // `Opportunity.rawMessageId` (1:1, unique). This nullable FK is the *follow-up*
+  // link — historical rows have it NULL until a future reply lands on the same
+  // threadId and we attach it. No backfill on existing rows; only new follow-ups
+  // populate this column. SetNull on delete so AICall retention purges don't cascade.
+  opportunityId     String?   @db.Uuid
 
-    emailAccount    EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-    opportunity     Opportunity? @relation("OpportunityOriginatingRawMessage")
-    threadOpportunity Opportunity? @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
+  emailAccount      EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  opportunity       Opportunity? @relation("OpportunityOriginatingRawMessage")
+  threadOpportunity Opportunity? @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
 
-    // Idempotency on backfill + delta sync: re-fetching the same message ID is a no-op.
-    @@unique([emailAccountId, providerMessageId])
-    @@index([organizationId, internalDate(sort: Desc)])
-    @@index([opportunityId])
+  // Idempotency on backfill + delta sync: re-fetching the same message ID is a no-op.
+  @@unique([emailAccountId, providerMessageId])
+  @@index([organizationId, internalDate(sort: Desc)])
+  @@index([opportunityId])
 }
 
-// W4.4 — The user-facing quote request entity. RawMessage remains the immutable source
+// The user-facing quote request entity. RawMessage remains the immutable source
 // payload; Opportunity is the indexed, editable workflow record.
 model Opportunity {
-    id                   String            @id @default(uuid()) @db.Uuid
-    organizationId       String            @db.Uuid
-    emailAccountId       String            @db.Uuid
-    rawMessageId         String            @unique @db.Uuid
-    status               OpportunityStatus @default(NEW)
-    // `provider/model` of the call that produced this opportunity's structured fields
-    // (the extractor call). E.g. `openai/gpt-4o`, `azure-openai/gpt-4o-mini`. Kept as
-    // String because providers add SKUs faster than we'd want to migrate the schema.
-    aiProvider           String
-    // FK to the AICall row that ran the classifier for this RawMessage. Nullable because
-    // the AICall log persist is best-effort — a DB hiccup on the AICall write shouldn't
-    // block the Opportunity from being created. SetNull on delete so an AICall retention
-    // policy that purges old rows doesn't cascade-delete real product data.
-    classifiedAiCallId   String?           @db.Uuid
-    // FK to the AICall row that ran the extractor for this RawMessage. Same nullability +
-    // SetNull semantics as `classifiedAiCallId`.
-    extractedAiCallId    String?           @db.Uuid
-    classifierConfidence Float?
-    classifierReason     String?           @db.Text
-    customerName         String?
-    customerEmail        String?
-    address              String?           @db.Text
-    requestType          String
-    urgency              Urgency
-    customerDeadline     DateTime?
-    customerAppointment  DateTime?
-    deliverableHints     Json
-    // W4.6 — Soft-disable (NOT hard-delete) when the owner marks this opportunity as
-    // not a real lead. Preserving the row keeps `classifiedAiCallId` reachable for the
-    // year-2 self-improvement story (W4.4 audit trail) and lets the admin precision
-    // tile compute `1 − dismissed(NOT_A_QUOTE) / total`.
-    // Invariant enforced in DB via raw SQL CHECK: (dismissedAt IS NULL) = (dismissReason IS NULL).
-    dismissedAt          DateTime?
-    dismissReason        DismissReason?
-    dismissedById        String?           @db.Uuid
-    createdAt            DateTime          @default(now())
-    updatedAt            DateTime          @updatedAt
+  id                   String            @id @default(uuid()) @db.Uuid
+  organizationId       String            @db.Uuid
+  emailAccountId       String            @db.Uuid
+  rawMessageId         String            @unique @db.Uuid
+  status               OpportunityStatus @default(NEW)
+  // `provider/model` of the call that produced this opportunity's structured fields
+  // (the extractor call). E.g. `openai/gpt-4o`, `azure-openai/gpt-4o-mini`. Kept as
+  // String because providers add SKUs faster than we'd want to migrate the schema.
+  aiProvider           String
+  // FK to the AICall row that ran the classifier for this RawMessage. Nullable because
+  // the AICall log persist is best-effort — a DB hiccup on the AICall write shouldn't
+  // block the Opportunity from being created. SetNull on delete so an AICall retention
+  // policy that purges old rows doesn't cascade-delete real product data.
+  classifiedAiCallId   String?           @db.Uuid
+  // FK to the AICall row that ran the extractor for this RawMessage. Same nullability +
+  // SetNull semantics as `classifiedAiCallId`.
+  extractedAiCallId    String?           @db.Uuid
+  classifierConfidence Float?
+  classifierReason     String?           @db.Text
+  customerName         String?
+  customerEmail        String?
+  address              String?           @db.Text
+  requestType          String
+  urgency              Urgency
+  customerDeadline     DateTime?
+  customerAppointment  DateTime?
+  deliverableHints     Json
+  // Soft-disable (NOT hard-delete) when the owner marks this opportunity as
+  // not a real lead. Preserving the row keeps `classifiedAiCallId` reachable for the
+  // year-2 self-improvement story (audit trail) and lets the admin precision
+  // tile compute `1 − dismissed(NOT_A_QUOTE) / total`.
+  // Invariant enforced in DB via raw SQL CHECK: (dismissedAt IS NULL) = (dismissReason IS NULL).
+  dismissedAt          DateTime?
+  dismissReason        DismissReason?
+  dismissedById        String?           @db.Uuid
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
-    organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    emailAccount     EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-    rawMessage       RawMessage   @relation("OpportunityOriginatingRawMessage", fields: [rawMessageId], references: [id], onDelete: Cascade)
-    threadMessages   RawMessage[] @relation("OpportunityThreadMessages")
-    classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
-    extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
-    dismissedBy      User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
-    // W5.6 — 1:N drafts (formerly 1:1 via `@unique` on `ReplyDraft.opportunityId`). One opp
-    // can have multiple drafts: the original + one or more follow-ups composed after a
-    // customer reply or via the "Concept-vervolg opstellen" button. Read sites use
-    // `orderBy: createdAt desc, take: 1` to surface the *current* draft.
-    replyDrafts      ReplyDraft[]
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  emailAccount     EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  rawMessage       RawMessage   @relation("OpportunityOriginatingRawMessage", fields: [rawMessageId], references: [id], onDelete: Cascade)
+  threadMessages   RawMessage[] @relation("OpportunityThreadMessages")
+  classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
+  extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
+  dismissedBy      User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+  // 1:N drafts (formerly 1:1 via `@unique` on `ReplyDraft.opportunityId`). One opp
+  // can have multiple drafts: the original + one or more follow-ups composed after a
+  // customer reply or via the "Concept-vervolg opstellen" button. Read sites use
+  // `orderBy: createdAt desc, take: 1` to surface the *current* draft.
+  replyDrafts      ReplyDraft[]
 
-    @@index([organizationId, status, createdAt(sort: Desc)])
-    @@index([organizationId, customerDeadline])
-    @@index([emailAccountId])
-    @@index([classifiedAiCallId])
-    @@index([extractedAiCallId])
-    // Index supporting the dismissedAt filter on list queries. The default list path
-    // benefits from a partial index (WHERE "dismissedAt" IS NULL) which Prisma's schema
-    // language doesn't express — it's appended to the generated migration SQL by hand:
-    //   CREATE INDEX "Opportunity_org_createdAt_active_idx"
-    //     ON "Opportunity" ("organizationId", "createdAt" DESC) WHERE "dismissedAt" IS NULL;
-    @@index([organizationId, dismissedAt])
+  @@index([organizationId, status, createdAt(sort: Desc)])
+  @@index([organizationId, customerDeadline])
+  @@index([emailAccountId])
+  @@index([classifiedAiCallId])
+  @@index([extractedAiCallId])
+  // Index supporting the dismissedAt filter on list queries. The default list path
+  // benefits from a partial index (WHERE "dismissedAt" IS NULL) which Prisma's schema
+  // language doesn't express — it's appended to the generated migration SQL by hand:
+  //   CREATE INDEX "Opportunity_org_createdAt_active_idx"
+  //     ON "Opportunity" ("organizationId", "createdAt" DESC) WHERE "dismissedAt" IS NULL;
+  @@index([organizationId, dismissedAt])
 }
 
-// W5.3 — AI-generated reply draft for an Opportunity. 1:1 with Opportunity (the
-// `opportunityId @unique` enforces idempotency — the Inngest function can retry a
-// generation event safely without producing duplicate drafts). `originalBody` keeps
-// the pristine AI output so W5.7 can compute the diff against `body` when the owner
+// AI-generated reply draft for an Opportunity. Idempotency on initial generation is
+// enforced by checking for an existing draft before creating a new one. `originalBody`
+// keeps the pristine AI output so we can compute the diff against `body` when the owner
 // sends, and surface the "Wil je dit aan je schrijfstijl toevoegen?" prompt.
 model ReplyDraft {
-    id              String           @id @default(uuid()) @db.Uuid
-    // W5.6 — dropped `@unique`. An opp now has 1:N drafts: the original plus one or
-    // more follow-ups created when a customer reply lands on the same thread, or when
-    // the owner clicks "Concept-vervolg opstellen" on a SENT draft. Read sites pick the
-    // current draft via `orderBy: createdAt desc, take: 1`; the editability gate keeps
-    // mutations on the latest non-SENT row.
-    opportunityId   String           @db.Uuid
-    // The original AI-generated body. Never mutated after creation — used as the
-    // baseline for the W5.7 edit-detection diff and as a "revert to AI version"
-    // affordance in the W5.4 editor if we want one later.
-    originalBody    String           @db.Text
-    // The current body. Starts == originalBody; mutates as the user edits.
-    body            String           @db.Text
-    status          ReplyDraftStatus @default(PENDING_APPROVAL)
-    // W6.1 — Distinguishes scheduler-generated "haven't heard back" check-ins from
-    // owner-initiated replies. Drives the "Automatische follow-up" chip in the history
-    // panel and lets the scheduler count its own work without double-counting owner
-    // sends. Default REPLY so every pre-W6 row + every owner-driven future row stays
-    // typed correctly without a backfill.
-    kind            ReplyDraftKind   @default(REPLY)
-    // W14.10 + W5.7 — flips true on first user edit so the dashboard can compute
-    // "% of AI drafts sent without modification."
-    wasEditedByUser Boolean          @default(false)
-    // FK to the AICall that produced the draft. Same SetNull semantics as the
-    // classifier / extractor links so an AICall retention purge doesn't cascade
-    // into product data. Null when the AICall persist failed (best-effort).
-    aiCallId        String?          @db.Uuid
-    // Timestamp the draft was sent (W5.5). Null until then. Separate from `status`
-    // so we can query "drafts sent in window X" without parsing audit logs.
-    sentAt          DateTime?
-    createdAt       DateTime         @default(now())
-    updatedAt       DateTime         @updatedAt
+  id              String           @id @default(uuid()) @db.Uuid
+  // Dropped `@unique`. An opp now has 1:N drafts: the original plus one or
+  // more follow-ups created when a customer reply lands on the same thread, or when
+  // the owner clicks "Concept-vervolg opstellen" on a SENT draft. Read sites pick the
+  // current draft via `orderBy: createdAt desc, take: 1`; the editability gate keeps
+  // mutations on the latest non-SENT row.
+  opportunityId   String           @db.Uuid
+  // The original AI-generated body. Never mutated after creation — used as the
+  // baseline for the edit-detection diff and as a "revert to AI version"
+  // affordance in the editor if we want one later.
+  originalBody    String           @db.Text
+  // The current body. Starts == originalBody; mutates as the user edits.
+  body            String           @db.Text
+  status          ReplyDraftStatus @default(PENDING_APPROVAL)
+  // Distinguishes scheduler-generated "haven't heard back" check-ins from
+  // owner-initiated replies. Drives the "Automatische follow-up" chip in the history
+  // panel and lets the scheduler count its own work without double-counting owner
+  // sends. Default REPLY so every pre-existing row + every owner-driven future row
+  // stays typed correctly without a backfill.
+  kind            ReplyDraftKind   @default(REPLY)
+  // Flips true on first user edit so the dashboard can compute
+  // "% of AI drafts sent without modification."
+  wasEditedByUser Boolean          @default(false)
+  // FK to the AICall that produced the draft. Same SetNull semantics as the
+  // classifier / extractor links so an AICall retention purge doesn't cascade
+  // into product data. Null when the AICall persist failed (best-effort).
+  aiCallId        String?          @db.Uuid
+  // Timestamp the draft was sent. Null until then. Separate from `status`
+  // so we can query "drafts sent in window X" without parsing audit logs.
+  sentAt          DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-    opportunity Opportunity            @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-    aiCall      AICall?                @relation("ReplyDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
-    attachments ReplyDraftAttachment[]
+  opportunity Opportunity            @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  aiCall      AICall?                @relation("ReplyDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
+  attachments ReplyDraftAttachment[]
 
-    // W5.6 — fast "latest draft for this opp" lookup. Replaces the implicit index that
-    // the dropped `@unique([opportunityId])` provided. Critical for the editor reads
-    // and the editability gate which run on every detail-view load.
-    @@index([opportunityId, createdAt(sort: Desc)])
-    @@index([status, createdAt(sort: Desc)])
-    @@index([aiCallId])
+  // Fast "latest draft for this opp" lookup. Replaces the implicit index that
+  // the dropped `@unique([opportunityId])` provided. Critical for the editor reads
+  // and the editability gate which run on every detail-view load.
+  @@index([opportunityId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([aiCallId])
 }
 
-// W5.5 follow-up — attachments staged on a reply draft. Persisted alongside the draft
+// Attachments staged on a reply draft. Persisted alongside the draft
 // so a regenerate doesn't lose them and a read-only SENT view can list what went out.
 // Binary lives in the configured storage backend (local FS in dev, DigitalOcean Spaces
 // in prod); this table only holds metadata. Cascade-delete on the draft cleans up the
@@ -602,24 +598,24 @@ model ReplyDraft {
 // hands off to Prisma (best-effort: orphaned blobs on the local driver are harmless
 // noise and the prod driver handles them via a separate sweeper).
 model ReplyDraftAttachment {
-    id            String   @id @default(uuid()) @db.Uuid
-    replyDraftId  String   @db.Uuid
-    // Display name, taken from the upload. Sanitized at write-time (path separators
-    // stripped) so it's safe to surface in the UI verbatim and to use in the Content-
-    // Disposition header on send.
-    filename      String
-    contentType   String
-    sizeBytes     Int
-    // Opaque storage-backend pointer. Local FS driver = relative path under the
-    // configured root (`<replyDraftId>/<uuid>-<filename>`). Spaces driver = the object
-    // key (`reply-drafts/<replyDraftId>/<uuid>-<filename>`). The driver column below
-    // captures which backend produced this key so a future migration can know what
-    // to migrate FROM.
-    storageKey    String   @db.Text
-    storageDriver String   @default("local")
-    createdAt     DateTime @default(now())
+  id            String   @id @default(uuid()) @db.Uuid
+  replyDraftId  String   @db.Uuid
+  // Display name, taken from the upload. Sanitized at write-time (path separators
+  // stripped) so it's safe to surface in the UI verbatim and to use in the Content-
+  // Disposition header on send.
+  filename      String
+  contentType   String
+  sizeBytes     Int
+  // Opaque storage-backend pointer. Local FS driver = relative path under the
+  // configured root (`<replyDraftId>/<uuid>-<filename>`). Spaces driver = the object
+  // key (`reply-drafts/<replyDraftId>/<uuid>-<filename>`). The driver column below
+  // captures which backend produced this key so a future migration can know what
+  // to migrate FROM.
+  storageKey    String   @db.Text
+  storageDriver String   @default("local")
+  createdAt     DateTime @default(now())
 
-    replyDraft ReplyDraft @relation(fields: [replyDraftId], references: [id], onDelete: Cascade)
+  replyDraft ReplyDraft @relation(fields: [replyDraftId], references: [id], onDelete: Cascade)
 
-    @@index([replyDraftId])
+  @@index([replyDraftId])
 }

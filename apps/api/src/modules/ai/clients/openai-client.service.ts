@@ -47,7 +47,7 @@ function defaultModelFor(purpose: string, config: ConfigService<EnvSchema, true>
  * Responses chaining (`previous_response_id`) but that doesn't matter for our one-shot
  * extraction calls.
  *
- * Provider lock-in (W5.1) still goes through the `AI_CLIENT` token in `AiModule` —
+ * Provider lock-in still goes through the `AI_CLIENT` token in `AiModule` —
  * replacing `useExisting: OpenAIClient` with `useExisting: MistralClient` swaps providers
  * without touching downstream code.
  */

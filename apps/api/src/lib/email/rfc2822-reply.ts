@@ -1,5 +1,5 @@
 /**
- * W5.5 — RFC 2822 message builder for Gmail's `users.messages.send` endpoint.
+ * RFC 2822 message builder for Gmail's `users.messages.send` endpoint.
  *
  * Gmail's send API requires `raw`: a base64url-encoded RFC 2822 byte stream containing
  * headers + body. For a threaded reply, the `In-Reply-To` + `References` headers are
@@ -46,8 +46,8 @@ export interface BuildRfc2822ReplyInput {
 	 */
 	references: string | null;
 	/**
-	 * W5.5 follow-up — files to attach. Empty array means "no attachments" and the
-	 * builder emits a plain `text/plain` body (the original W5.5 send path). Any non-
+	 * Files to attach. Empty array means "no attachments" and the
+	 * builder emits a plain `text/plain` body (the original send path). Any non-
 	 * empty array switches to `multipart/mixed` with the body as the first part.
 	 */
 	attachments?: ReadonlyArray<BuildRfc2822ReplyAttachment>;
@@ -59,7 +59,7 @@ export interface BuildRfc2822ReplyInput {
  *
  * Two output modes depending on `attachments`:
  *  - Empty / undefined → single-part `text/plain; charset=UTF-8` body (the historical
- *    W5.5 shape; unchanged so the no-attachment path stays identical byte-for-byte).
+ *    shape; unchanged so the no-attachment path stays identical byte-for-byte).
  *  - One or more → `multipart/mixed; boundary=…` envelope: first part is the
  *    text/plain body, subsequent parts are each attachment base64-encoded with a
  *    `Content-Disposition: attachment; filename=…` header. RFC 2047 encoded-word

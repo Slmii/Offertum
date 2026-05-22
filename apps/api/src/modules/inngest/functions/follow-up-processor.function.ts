@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 /**
- * W6.1 — Per-opportunity processor for the silence-check-in fan-out.
+ * Per-opportunity processor for the silence-check-in fan-out.
  *
  * Receives `opportunity/silence.followup-due` events from `FollowUpSchedulerFunction`.
  * Each event maps 1:1 to a single opportunity. The processor re-validates eligibility

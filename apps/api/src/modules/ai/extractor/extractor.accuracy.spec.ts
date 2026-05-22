@@ -19,7 +19,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
 /**
- * W4.3 — Live-API accuracy harness for the Dutch extractor.
+ * Live-API accuracy harness for the Dutch extractor.
  *
  * Runs against the real OpenAI API; costs ~€0.10 per run (~14 fixtures × gpt-4o × ~1500
  * tokens each). Skipped automatically when `OPENAI_API_KEY` isn't set.
@@ -30,7 +30,7 @@ import { Test } from '@nestjs/testing';
  *  - `customerDeadline`: ±2 days, or both null
  *  - `deliverableHints`: ≥50% of expected hints appear as substrings in extracted list
  *
- * Per the W4.3 plan: ≥25/30 cases produce stable, schema-valid extractions. Our corpus
+ * Target: ≥25/30 cases produce stable, schema-valid extractions. Our corpus
  * is 18 positives, so the equivalent gate is ≥0.85 pass rate (~15/18).
  */
 

@@ -22,13 +22,11 @@ import { useEffect, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 /**
- * W5.2 — Per-user writing-style playbook editor (D31). Free-form prose the user
- * writes in plain Dutch; the W5.3 reply-draft generator injects it verbatim into
+ * Per-user writing-style playbook editor . Free-form prose the user
+ * writes in plain Dutch; the reply-draft generator injects it verbatim into
  * the prompt. NULL = generic Dutch neutral-professional baseline.
- *
  * Per-user (not per-org): each team member's drafts sound like that person, not a
  * homogenized house style. Persists across orgs — voice belongs to the person.
- *
  * Form composition: `<Form>` owns the `text` field via react-hook-form with a Zod
  * schema in `lib/schemas/writing-style.schema.ts`. Save flows through the form's
  * action; Wissen (clear) is a separate mutation that bypasses the form so it works

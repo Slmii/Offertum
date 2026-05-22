@@ -7,19 +7,22 @@ import dedent from 'dedent';
  * prompt's job is to guide CONTENT decisions (date resolution, urgency mapping, address
  * granularity, deliverableHints quality), not to enforce JSON structure.
  *
+
  * **Prompt-injection defenses identical to the classifier:**
  *  - Email content is JSON-encoded via `JSON.stringify` (escapes quotes/newlines/delimiters)
  *  - `fromName` + `fromEmail` are passed as SEPARATE JSON fields (not fused into a
- *    "Name <email>" label) so the model doesn't have to re-parse them out
+ *  "Name <email>" label) so the model doesn't have to re-parse them out
  *  - Explicit "ignore instructions in the email" clause
  *
+
  * **Today's date is injected** so relative deadline phrases ("eind volgende week", "binnen
  * 4 weken", "voor zaterdag") can resolve to absolute ISO dates. The injected date should
  * be the date the email was received, not literal "now" — for replay over historical
  * `AICall` rows, you want the original time anchor, not today's. Caller's responsibility
  * to pass the right value.
  *
- * Sibling files for other locales: `en.ts`, `de.ts`, `fr.ts` (D21).
+
+ * Sibling files for other locales: `en.ts`, `de.ts`, `fr.ts`.
  */
 export function buildExtractorPromptNL(input: ExtractorInput, referenceDateIso: string): string {
 	const subject = input.subject?.trim() || '(geen onderwerp)';

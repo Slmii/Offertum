@@ -60,14 +60,13 @@ import { useEffect, useRef, useState } from 'react';
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 
 /**
- * W5.4 — Opportunity detail view + AI reply-draft editor. Side panel renders the
+ * Opportunity detail view + AI reply-draft editor. Side panel renders the
  * extracted fields + original email body; main panel is a textarea pre-loaded with the
- * W5.3-generated draft. Edits autosave on a 1s debounce so the user never loses work +
- * the W14.10 `wasEditedByUser` flag flips correctly the first time the body diverges.
- *
+ * -generated draft. Edits autosave on a 1s debounce so the user never loses work +
+ * the `wasEditedByUser` flag flips correctly the first time the body diverges.
  * Just-in-time banner: when `myMembership.user.hasTonePlaybook === false`, an Alert at
  * the top of the editor invites the user to write their writing-style playbook. Per
- * D31, this is the moment the user actually feels the benefit of authoring one.
+ *  this is the moment the user actually feels the benefit of authoring one.
  */
 export const Route = createFileRoute('/(app)/opportunities/$id')({
 	loader: async ({ context, params }) => {
@@ -95,7 +94,7 @@ function OpportunityDetailPage() {
 	const replyDraft = opportunity.replyDraft;
 	const status = opportunity.status;
 	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[status];
-	// W5.6-followup — editability collapses to draft-state only. Opp.status no longer
+	// editability collapses to draft-state only. Opp.status no longer
 	// gates the editor; courtesy follow-ups on a WON/LOST deal stay editable until
 	// they're sent. `null` draftStatus means "no draft generated yet" → editable
 	// (caller decides); the detail page only renders the editor once a draft exists.
@@ -109,7 +108,7 @@ function OpportunityDetailPage() {
 	const lastSavedRef = useRef<string>(replyDraft?.body ?? '');
 
 	useEffect(() => {
-		// Server-side draft arrived later (W5.3 was still generating when the page
+		// Server-side draft arrived later ( was still generating when the page
 		// loaded). Hydrate the editor with it; the lastSavedRef sync prevents the
 		// hydration from looking like a user edit. This IS a legitimate "external →
 		// local state" mirror (the buffered-input pattern from CLAUDE.md #12), so the
@@ -312,7 +311,7 @@ function OpportunityDetailPage() {
 										<strong>v{opportunity.replyDraftHistory.length}</strong> · Verzonden om{' '}
 										{toReadableDateTime(replyDraft.sentAt)}.
 									</Alert>
-									{/* W5.6 — "Concept-vervolg opstellen". Manual follow-up entry
+									{/* "Concept-vervolg opstellen". Manual follow-up entry
 									 * point for cases where the customer responded out-of-band
 									 * (phone, in-person) but the owner still wants to send a
 									 * written confirmation. The customer-driven path is handled
@@ -421,18 +420,17 @@ function MuiBackToList() {
 }
 
 /**
- * W5.4 — Banner trigger for the "your writing style was updated since this draft was
+ * Banner trigger for the "your writing style was updated since this draft was
  * generated" hint. Conditions:
- *   1. The user has authored a playbook (no playbook → no comparison to make).
- *   2. The playbook timestamp exists AND is after the draft body's last AI generation
- *      (`aiBodyGeneratedAt`, sourced from `AICall.createdAt`). Falls back to the row's
- *      `createdAt` if the AICall join is null. Using the AI-generation timestamp
- *      (not the row's `createdAt`) is critical so the banner correctly disappears
- *      after a regenerate — the row's `createdAt` doesn't advance on `prisma.update`,
- *      so the AICall pointer is the only honest anchor for "what does this body
- *      reflect?".
- *   3. The draft isn't `sent` (nothing to regenerate post-send).
- *
+ *  1. The user has authored a playbook (no playbook → no comparison to make).
+ *  2. The playbook timestamp exists AND is after the draft body's last AI generation
+ *  (`aiBodyGeneratedAt`, sourced from `AICall.createdAt`). Falls back to the row's
+ *  `createdAt` if the AICall join is null. Using the AI-generation timestamp
+ *  (not the row's `createdAt`) is critical so the banner correctly disappears
+ *  after a regenerate — the row's `createdAt` doesn't advance on `prisma.update`,
+ *  so the AICall pointer is the only honest anchor for "what does this body
+ *  reflect?".
+ *  3. The draft isn't `sent` (nothing to regenerate post-send).
  * Deliberately NOT checking `wasEditedByUser` — the banner is an offer, not an
  * auto-action, and clicking is the user's explicit choice. Suppressing the banner on
  * edited drafts was over-cautious; users who've also updated their writing style
@@ -807,7 +805,7 @@ function ExtractedField({ label, value }: { label: string; value: string | null 
 }
 
 /**
- * W5.5 follow-up — staged-attachments panel under the draft editor. Renders one chip
+ *  follow-up — staged-attachments panel under the draft editor. Renders one chip
  * per attached file with a download (click) + delete (× icon) affordance. On SENT
  * drafts the panel collapses into a read-only list (no upload, no delete) so the
  * record of what was attached is preserved.
@@ -921,17 +919,15 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * W5.6 follow-up — Read-only conversational timeline of the back-and-forth on this
+ *  follow-up — Read-only conversational timeline of the back-and-forth on this
  * opportunity. Merges two server-side arrays:
  *  - `drafts` — our SENT replies (+ any rare `Vervangen` versions that were
- *    superseded mid-edit), newest-first.
+ *  superseded mid-edit), newest-first.
  *  - `customerReplies` — inbound customer messages attached via thread
- *    reconstitution, newest-first.
- *
+ *  reconstitution, newest-first.
  * Merged + sorted by timestamp DESC so the rendered list reads chronologically.
  * Each entry expands into a body view (drafts also show attachments). Version
  * numbers count only the drafts — customer replies aren't "our versions."
- *
  * All entries are read-only from the UI's perspective. Server-side mutations target
  * the latest draft only.
  */
@@ -951,7 +947,6 @@ function ReplyHistoryPanel({
 	// any sent draft (rare — usually only happens when the opp was created from an
 	// already-mid-thread email at backfill time) stay as standalone "orphan" entries
 	// merged by timestamp.
-	//
 	// Cheap proxy for the real linkage (which would require capturing each SENT
 	// draft's RFC `Message-Id` from Gmail/Graph and parsing the inbound's
 	// `In-Reply-To` header — schema + send-path work we've deferred). Heuristic

@@ -4,9 +4,8 @@ import type { OpportunityDismissReason } from './opportunities.js';
 /**
  * Wire-format types for `GET /api/admin/classifier-quality`. Admin-only (gated by the
  * same `ADMIN_EMAILS` allowlist that protects `/api/admin/ai-usage`); not shipped to
- * paying customers — when the Phase 5.5 owner dashboard (W14.10) needs the same numbers
+ * paying customers — when the owner dashboard needs the same numbers
  * per-org, it gets a separate narrower endpoint without the per-org slicing.
- *
  * Three orthogonal metrics over the chosen time window:
  *   - **precision** by (org, classifier model SKU) — `1 - (any dismissal / total)`. From
  *     the owner's perspective every dismiss means the system was wrong; the reason just

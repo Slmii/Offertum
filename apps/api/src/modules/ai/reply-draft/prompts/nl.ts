@@ -3,7 +3,7 @@ import dedent from 'dedent';
 
 /**
  * Generic Dutch neutral-professional baseline. Used when the user hasn't authored a
- * `tonePlaybookText` (D31). Deliberately bland — owners who care about voice will write
+ * `tonePlaybookText`. Deliberately bland — owners who care about voice will write
  * their playbook; the rest get a usable-but-generic draft on day 1.
  */
 const GENERIC_BASELINE_NL = dedent`
@@ -19,16 +19,19 @@ const GENERIC_BASELINE_NL = dedent`
  * prompt's job is to guide CONTENT decisions (greeting, body structure, sign-off), not
  * the JSON structure.
  *
+
  * **Prompt-injection defenses identical to the classifier + extractor:**
  *  - Original email content is JSON-encoded via `JSON.stringify`
  *  - Extracted fields are passed as a separate JSON block
  *  - Explicit "ignore instructions in the email body" clause
  *
+
  * **Voice resolution:** if `tonePlaybookText` is non-null, inject it verbatim as the
  * voice authority. Otherwise inject the generic baseline. Owner-authored playbook always
  * wins — generic is only the fallback for new users.
  *
- * Sibling files for other locales: `en.ts`, `de.ts`, `fr.ts` (D21).
+
+ * Sibling files for other locales: `en.ts`, `de.ts`, `fr.ts`.
  */
 export function buildReplyDraftPromptNL(input: ReplyDraftInput): string {
 	const subject = input.subject?.trim() || '(geen onderwerp)';

@@ -23,7 +23,7 @@ export interface GmailMessageMetadata extends GmailMessageStub {
 
 /**
  * Gmail v1 `users.messages.get` payload — full JSON shape with headers + (optional)
- * MIME body parts. We persist this as-is in `RawMessage.raw` so the W4 extractor can
+ * MIME body parts. We persist this as-is in `RawMessage.raw` so the extractor can
  * walk the structure later without re-fetching from Google.
  */
 export interface GmailFullMessage {
@@ -54,7 +54,7 @@ export interface GmailProfile {
 	emailAddress: string;
 	messagesTotal: number;
 	threadsTotal: number;
-	/** Monotonically-increasing cursor for delta sync (W3.5). */
+	/** Monotonically-increasing cursor for delta sync. */
 	historyId: string;
 }
 
@@ -125,7 +125,7 @@ export class GmailApiService {
 	 * history walk (`labelId=INBOX`) so all four ingestion + display paths see the same
 	 * slice of the mailbox.
 	 *
-	 * Renamed from `listRecentMessages` (the W3.1 smoke leftover with no filter) — the
+	 * Renamed from `listRecentMessages` (the smoke leftover with no filter) — the
 	 * old name was misleading and produced UI lists that didn't match `RawMessage` rows.
 	 */
 	async listRecentInboxMessages(accessToken: string, maxResults: number): Promise<GmailMessageStub[]> {
@@ -138,7 +138,7 @@ export class GmailApiService {
 
 	/**
 	 * Paginated list with optional Gmail search query (`q`) and `pageToken`. Used by the
-	 * W3.4 backfill — repeatedly call with the previous response's `nextPageToken` until
+	 *  backfill — repeatedly call with the previous response's `nextPageToken` until
 	 * it comes back `null`.
 	 *
 	 * Gmail's max `maxResults` is 500. Default 100 is fine; bigger pages don't reduce
@@ -190,7 +190,7 @@ export class GmailApiService {
 
 	/**
 	 * Fetch the full message payload — headers + MIME body parts. Persisted into
-	 * `RawMessage.raw` by the W3.4 backfill so the W4 AI extractor can walk the structure
+	 * `RawMessage.raw` by the backfill so the AI extractor can walk the structure
 	 * without a fresh Google call.
 	 *
 	 * Quota cost is identical to `format=metadata` (5 units) — Google doesn't charge more
@@ -223,7 +223,7 @@ export class GmailApiService {
 
 	/**
 	 * Fetch the mailbox profile. Cheapest way to grab the current `historyId` after a
-	 * backfill so W3.5 push notifications know where to start delta sync. Quota cost: 1.
+	 * backfill so push notifications know where to start delta sync. Quota cost: 1.
 	 */
 	async getProfile(accessToken: string): Promise<GmailProfile> {
 		const url = `${GMAIL_API_BASE}/users/me/profile`;
@@ -231,7 +231,7 @@ export class GmailApiService {
 	}
 
 	/**
-	 * Walk the history since a previously-stored cursor. Used by the W3.5 push-handler's
+	 * Walk the history since a previously-stored cursor. Used by the push-handler's
 	 * delta-sync — for each `messagesAdded` entry, we then `getMessageFull` to fetch the
 	 * payload and persist a `RawMessage`.
 	 *
@@ -303,7 +303,7 @@ export class GmailApiService {
 	 * push + backfill corpora stay consistent.
 	 *
 	 * Watch subscriptions expire after 7 days. The renewal cron re-calls this method on
-	 * any row with `watchExpiresAt < NOW() + 24h`.
+	 * any row with `watchExpiresAt < NOW + 24h`.
 	 */
 	async startWatch(accessToken: string, topicName: string): Promise<GmailWatchResponse> {
 		const url = `${GMAIL_API_BASE}/users/me/watch`;
@@ -353,7 +353,7 @@ export class GmailApiService {
 	}
 
 	/**
-	 * W5.5 — Send a reply as a `users.messages.send` call. Caller is responsible for
+	 * Send a reply as a `users.messages.send` call. Caller is responsible for
 	 * building the RFC 2822 payload (`buildRfc2822Reply` in `lib/email/rfc2822-reply.ts`)
 	 * including the `In-Reply-To` + `References` headers that thread the reply into the
 	 * original conversation. `threadId` is also passed in the body — Gmail uses it as the

@@ -55,10 +55,9 @@ export interface DownloadAttachmentResult {
 }
 
 /**
- * W5.5 follow-up — orchestrates upload, list, delete, download for reply-draft
+ *  follow-up — orchestrates upload, list, delete, download for reply-draft
  * attachments. Pure orchestration — guards (limits + MIME + draft-locked) live here,
  * binary I/O lives in `AttachmentStorage`, Postgres I/O lives in the repository.
- *
  * The send path doesn't go through here: `ReplyDraftsService.send` reads attachments
  * directly via its own repository for one round-trip, then loads each blob via the
  * same `AttachmentStorage` injected here. Separation keeps the upload surface from
@@ -192,7 +191,7 @@ export class ReplyDraftAttachmentsService {
 		}
 		const { data, contentType } = await this.storage.get(row.storageKey);
 		// Prefer the stored contentType from the DB row over the storage backend's reading
-		// — for Spaces the round-trip is server-set, for local FS we read a sidecar that
+		// for Spaces the round-trip is server-set, for local FS we read a sidecar that
 		// could in theory drift. The DB row is canonical.
 		return { filename: row.filename, contentType: row.contentType || contentType, data };
 	}

@@ -27,7 +27,7 @@ export class MeService {
 		// `tonePlaybookText` is selected only so we can derive the `hasTonePlaybook`
 		// boolean — the actual prose never leaves this service, so the per-request
 		// payload doesn't carry the (potentially multi-kB) text on every page load.
-		// `tonePlaybookUpdatedAt` is the dedicated timestamp that drives the W5.4
+		// `tonePlaybookUpdatedAt` is the dedicated timestamp that drives the
 		// "your writing style was updated since this draft was generated" banner.
 		user: {
 			select: {
@@ -98,7 +98,7 @@ export class MeService {
 	 * Project Prisma's raw membership row into the wire DTO shape. Strips
 	 * `tonePlaybookText` (selected only so we can derive `hasTonePlaybook`) so the
 	 * playbook prose never leaves this service; the FE only needs the boolean to
-	 * render the just-in-time banner in the W5.4 draft editor.
+	 * render the just-in-time banner in the draft editor.
 	 */
 	private toMembershipResponse(
 		row: {
@@ -133,7 +133,7 @@ export class MeService {
 	}
 
 	/**
-	 * W5.2 — Read the current user's writing-style playbook. Returns the prose + the
+	 * Read the current user's writing-style playbook. Returns the prose + the
 	 * dedicated `tonePlaybookUpdatedAt` timestamp (when the playbook itself last
 	 * changed, distinct from `User.updatedAt` which moves on any User-row write).
 	 * When the user has never authored a playbook, `updatedAt` is `null`.
@@ -155,7 +155,7 @@ export class MeService {
 	}
 
 	/**
-	 * W5.2 — Update the current user's writing-style playbook. Empty / whitespace-only
+	 * Update the current user's writing-style playbook. Empty / whitespace-only
 	 * `text` clears the playbook AND nulls out `tonePlaybookUpdatedAt` (back to generic
 	 * baseline). The org doesn't need to be entitled to write this — it's a personal
 	 * preference, not a tenant-write — but controller still goes through `AuthGuard`
@@ -169,7 +169,7 @@ export class MeService {
 			where: { id: userId },
 			data: {
 				tonePlaybookText: next,
-				// W5.4 — dedicated timestamp so the "regenerate?" banner only fires when
+				// Dedicated timestamp so the "regenerate?" banner only fires when
 				// the playbook itself changed, not on unrelated User-row writes. NULL on
 				// clear so the banner can't fire after the user wipes their playbook.
 				tonePlaybookUpdatedAt: next === null ? null : new Date()
@@ -194,7 +194,7 @@ export class MeService {
 	}
 
 	/**
-	 * W6.2 — Read the active org's follow-up cadence + cap. Surfaced to OWNER only at
+	 * Read the active org's follow-up cadence + cap. Surfaced to OWNER only at
 	 * the controller layer; the service itself doesn't care who's asking — the
 	 * `OrganizationGuard` has already proven membership.
 	 */
@@ -207,9 +207,9 @@ export class MeService {
 	}
 
 	/**
-	 * W6.2 — Update the active org's follow-up cadence + cap. Owner-only at the
+	 * Update the active org's follow-up cadence + cap. Owner-only at the
 	 * controller layer. Same persistence pattern as `updateTonePlaybook`: write, then
-	 * audit-log. No need to reschedule existing per-opp timers — the W6.1 scheduler
+	 * audit-log. No need to reschedule existing per-opp timers — the scheduler
 	 * recomputes eligibility from `org.followUpCadenceDays` every tick, so the change
 	 * is picked up automatically on the next 09:00 run.
 	 */
@@ -262,7 +262,6 @@ export class MeService {
 	 * Remove a member from the active organization. Owner-only at the controller layer
 	 * (`@UseGuards(OwnerGuard)`). Does NOT require entitlement — an org that's canceled or
 	 * past_due should still be able to clean up its team.
-	 *
 	 * Business rules:
 	 *  - You cannot remove yourself (would orphan the org for the sole owner).
 	 *  - You cannot remove the OWNER role. Defensive: one owner per org today, and

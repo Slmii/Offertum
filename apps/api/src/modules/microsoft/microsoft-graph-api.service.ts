@@ -18,7 +18,7 @@ export interface MicrosoftMessageMetadata extends MicrosoftMessageStub {
 
 /**
  * Microsoft Graph v1 `messages` payload — superset of the metadata fields plus full
- * MIME body. Persisted as-is into `RawMessage.raw` so the W4 extractor can walk the
+ * MIME body. Persisted as-is into `RawMessage.raw` so the extractor can walk the
  * structure without a fresh Graph call.
  */
 export interface MicrosoftFullMessage {
@@ -49,11 +49,9 @@ export interface MicrosoftProfile {
 
 /**
  * One page of `/me/messages/delta` results.
- *
  * Graph's delta endpoint returns either:
  *  - `@odata.nextLink` — mid-walk, pass back to fetch the next page
  *  - `@odata.deltaLink` — end of walk, save this as the cursor for the next call
- *
  * Exactly one of the two is present on any given response (per Graph spec). We surface
  * both as nullable so the caller can branch.
  */
@@ -123,7 +121,7 @@ export interface ListInboxMessagesPageOptions {
 }
 
 /**
- * W5.5 — Input for `sendMail`. Graph composes the SMTP envelope itself, so this carries
+ * Input for `sendMail`. Graph composes the SMTP envelope itself, so this carries
  * the structured fields rather than a raw RFC 2822 string (Gmail's `sendMessage` path
  * takes the encoded raw — different shape per provider).
  */
@@ -134,7 +132,7 @@ export interface GraphSendMailInput {
 	body: string;
 	inReplyTo: string | null;
 	references: string | null;
-	/** W5.5 follow-up — attachments to inline in the Graph message payload. */
+	/**  follow-up — attachments to inline in the Graph message payload. */
 	attachments?: ReadonlyArray<GraphSendMailAttachment>;
 }
 
@@ -146,11 +144,9 @@ export interface GraphSendMailAttachment {
 
 /**
  * Minimal Microsoft Graph client. Direct fetch wrappers — no Graph SDK dep.
- *
  * 401 handling: every method throws `MailboxUnauthorizedException` on a 401 so the caller
  * (typically `EmailAccountsService.withFreshAccessToken`) can force a token refresh +
  * retry exactly once. Same shape as `GmailApiService`.
- *
  * Pagination model differs from Gmail's: Graph returns a full `@odata.nextLink` URL
  * (already including query parameters) — we just fetch it as-is.
  */
@@ -169,7 +165,7 @@ export class MicrosoftGraphApiService {
 	}
 
 	/**
-	 * List the N most recent inbox messages (W3.2 smoke). Uses `$top` + `$select` to
+	 * List the N most recent inbox messages ( smoke). Uses `$top` + `$select` to
 	 * pull only the fields we need for the smoke list.
 	 */
 	async listRecentInboxMessages(accessToken: string, top: number): Promise<MicrosoftMessageMetadata[]> {
@@ -187,9 +183,8 @@ export class MicrosoftGraphApiService {
 
 	/**
 	 * Paginated list with `$filter` for date filtering (`receivedDateTime ge ISO`).
-	 * Used by the W3.2 backfill — repeatedly call with the previous response's
+	 * Used by the backfill — repeatedly call with the previous response's
 	 * `nextLink` until it comes back `null`.
-	 *
 	 * Returns the full message payload (no separate `messages.get` round trip) — Graph
 	 * lets us request the body up front via `$select`, which avoids the 100 individual
 	 * GET calls per page that Gmail's API requires. Cheaper + faster.
@@ -221,18 +216,15 @@ export class MicrosoftGraphApiService {
 
 	/**
 	 * Walk `/me/messages/delta` from a stored `deltaLink`, OR start a fresh delta walk if
-	 * no cursor exists yet. Used by the W3.6 push-handler's delta-sync.
-	 *
+	 * no cursor exists yet. Used by the push-handler's delta-sync.
 	 * Three modes by `cursor` shape:
 	 *  - `null` / undefined: start fresh — Graph returns a `deltaLink` immediately for an
 	 *    empty inbox, or a `nextLink` to paginate through current state.
 	 *  - A `@odata.nextLink` URL: mid-walk pagination.
 	 *  - A `@odata.deltaLink` URL: changes since the last walk completed.
-	 *
 	 * Graph returns 410 Gone when the cursor has expired (~30 day retention). We surface
 	 * this as `MicrosoftDeltaTokenExpiredException` so the caller can re-acquire by
 	 * calling again with no cursor.
-	 *
 	 * `$select` requests the same fields as backfill so the persisted RawMessage rows
 	 * have a consistent payload shape regardless of which path created them.
 	 */
@@ -269,19 +261,16 @@ export class MicrosoftGraphApiService {
 	 * Create a Graph subscription for inbox `created` notifications. The caller passes a
 	 * freshly-generated `clientState` (stored encrypted on our side), which Graph echoes
 	 * back on every push delivery so we can authenticate them.
-	 *
 	 * Resource defaults to `/me/mailFolders/Inbox/messages` — scopes pushes to inbox
 	 * arrivals only, matching the backfill, recent-list, and delta walk so all four
 	 * ingestion + display paths see the same INBOX-only slice of the mailbox. Both the
 	 * OData "function-call" form (`/me/mailFolders('Inbox')/messages`) and the modern
 	 * "key-as-segment" form used here are accepted by Graph; we standardize on the
 	 * segment form for codebase consistency.
-	 *
 	 * Graph's expiration ceiling for messages is ~4230 minutes (~2.94 days). The caller
 	 * computes the desired expiration and passes it in; Graph rejects out-of-bounds values
 	 * with 400.
-	 *
-	 * Validation gotcha (W3.6 staged plan): Graph synchronously calls `notificationUrl`
+	 * Validation gotcha ( staged plan): Graph synchronously calls `notificationUrl`
 	 * with `?validationToken=<random>` during this POST and expects the plaintext echoed
 	 * back within ~5 seconds. The webhook handler MUST short-circuit on that query param
 	 * before any auth/parsing logic, or subscription creation fails outright with 400 here.
@@ -320,7 +309,6 @@ export class MicrosoftGraphApiService {
 	/**
 	 * Renew an existing subscription by pushing its `expirationDateTime` further out.
 	 * Graph's renewal is a PATCH (vs Gmail's "call users.watch again" idempotent shape).
-	 *
 	 * If the subscription was already deleted upstream (user revoked our app at
 	 * account.microsoft.com, or it aged out), Graph returns 404. Caller decides whether
 	 * to recreate or log + drop.
@@ -360,13 +348,12 @@ export class MicrosoftGraphApiService {
 	 * subscription was already gone) or treat as "already disconnected, fine."
 	 */
 	/**
-	 * W5.5 — Send a reply via Graph's `/me/sendMail`. Graph composes the SMTP envelope
+	 * Send a reply via Graph's `/me/sendMail`. Graph composes the SMTP envelope
 	 * itself (no raw RFC 2822 to build); threading is signaled via
 	 * `internetMessageHeaders` (`In-Reply-To` + `References`) AND `conversationId`
 	 * passthrough when we have one. `saveToSentItems: true` so the user's Sent folder
 	 * mirrors what we sent — important for the customer trust story (owner sees their
 	 * outbound trail in Outlook).
-	 *
 	 * Graph returns 202 Accepted (no body) on success. The new message's id is NOT
 	 * returned — Graph emits it asynchronously into the Sent folder. We log "submitted"
 	 * here; matching the Sent-folder row back to this submission is a future polish.

@@ -57,9 +57,9 @@ export const listOpportunitiesServer = createServerFn({ method: 'GET' })
 	});
 
 /**
- * GET /api/opportunities/:id — detail view loaded by the W5.4 editor route. Includes
+ * GET /api/opportunities/:id — detail view loaded by the editor route. Includes
  * the extracted Opportunity fields, the original email body as plain text, and the
- * AI-generated `ReplyDraft` (or `null` when W5.3 generation hasn't completed yet).
+ * AI-generated `ReplyDraft` (or `null` when generation hasn't completed yet).
  */
 export const getOpportunityDetailServer = createServerFn({ method: 'GET' })
 	.inputValidator((data: { id: string }) => data)

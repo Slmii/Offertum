@@ -8,7 +8,7 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 /**
- * W3.2 — same backfill window as Gmail. See `gmail-backfill.service.ts` for rationale.
+ * same backfill window as Gmail. See `gmail-backfill.service.ts` for rationale.
  */
 const BACKFILL_DAYS = 90;
 
@@ -33,12 +33,11 @@ export interface MicrosoftBackfillResult {
  * messages` for the last `BACKFILL_DAYS`, persisting each one as a `RawMessage` row.
  * Same idempotency contract as `GmailBackfillService` — re-runs hit the same unique
  * index on `(emailAccountId, providerMessageId)` and skip duplicates.
- *
  * Key differences from Gmail's backfill (encapsulated in `MicrosoftGraphApiService`):
  *  - Graph returns the full message body in `messages.list` (no per-message GET call needed)
  *  - Pagination via `@odata.nextLink` (full URL), not a token
  *  - `$filter=receivedDateTime ge ISO` instead of Gmail's `q=after:YYYY/MM/DD` syntax
- *  - No equivalent of Gmail's `historyId` — Graph push subscriptions (W3.6) use a
+ *  - No equivalent of Gmail's `historyId` — Graph push subscriptions use a
  *    different cursor model. We leave `EmailAccount.historyId` null for Microsoft.
  */
 @Injectable()
@@ -169,7 +168,6 @@ export class MicrosoftBackfillService {
 	 * discarded — they're either already in `RawMessage` from the date-filtered backfill
 	 * (and would be deduped on insert anyway) OR they're older than the 90-day window
 	 * and we don't want them processed.
-	 *
 	 * Capped at `MAX_PAGES` so a malformed Graph response (deltaLink never returned,
 	 * nextLink looping) can't hang forever.
 	 */

@@ -84,7 +84,7 @@ const LIST_DEFAULT_PAGE_SIZE = 25;
 const LIST_MAX_PAGE_SIZE = 100;
 
 /**
- * W5.6-followup — Caller-supplied context for the opportunities pipeline. Drives two
+ * Caller-supplied context for the opportunities pipeline. Drives two
  * runtime choices:
  *  - `'backfill'`: first-time ingest of a mailbox. Multi-message threads use the
  *    *thread-as-unit* flow (classify newest-first, anchor opp to first positive,
@@ -297,11 +297,11 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W4.6 — Soft-disable an opportunity. Reason becomes a feedback signal for the
+	 * Soft-disable an opportunity. Reason becomes a feedback signal for the
 	 * classifier (`NOT_A_QUOTE`) or for the bulk-mail filter (`SPAM`). Audit-log
 	 * breadcrumb records the actor, reason, before/after, and optional free-text
 	 * notes so the row stays auditable even though we don't persist notes on the
-	 * row itself. Owners can dismiss already-WON rows (see W4.6.2 spec — uncommon
+	 * row itself. Owners can dismiss already-WON rows (see spec — uncommon
 	 * but valid: they realise the original email wasn't really an offerteaanvraag
 	 * after the fact); the breadcrumb flags it so the precision metric can ignore.
 	 */
@@ -339,12 +339,12 @@ export class OpportunitiesService {
 				notes: notes ?? null,
 				actorUserId,
 				classifiedAiCallId: opportunity.classifiedAiCallId ?? null,
-				// W5.5 follow-up — separates "caught quickly" from "caught after work was
+				//  follow-up — separates "caught quickly" from "caught after work was
 				// done." A `dismissedAfterSend: true` row is a more costly false-positive:
 				// the customer received an irrelevant reply before the classifier mistake
 				// was caught. `/admin/classifier-quality` can split precision metrics by
 				// this axis to surface the costlier mistakes.
-				// W5.6 — `replyDrafts` is 1:N. Any historical SENT draft sticks the flag on,
+				// `replyDrafts` is 1:N. Any historical SENT draft sticks the flag on,
 				// even after a follow-up draft has been composed on top.
 				dismissedAfterSend: opportunity.replyDrafts.some(d => d.sentAt !== null)
 			},
@@ -355,7 +355,7 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W4.6 — Reverse a dismiss. Returns 409 if the row wasn't dismissed in the first
+	 * Reverse a dismiss. Returns 409 if the row wasn't dismissed in the first
 	 * place so the FE can swallow duplicate clicks without surfacing a 4xx toast.
 	 */
 	async undismiss(
@@ -394,20 +394,18 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W5.4 — Detail-view read. Fetches the opportunity + raw provider payload + the
-	 * W5.3 reply draft (if generated). The `replyDraft` field is `null` when the
+	 * Detail-view read. Fetches the opportunity + raw provider payload + the
+	 *  reply draft (if generated). The `replyDraft` field is `null` when the
 	 * Inngest function hasn't completed yet (cold-start race on a freshly-created
 	 * opportunity); the FE polls in that case.
-	 *
 	 * **Self-healing for missing drafts:** if the opportunity has no `ReplyDraft` row
 	 * AND it isn't dismissed, this method re-fires the `opportunity/created` event
 	 * before returning. Covers three real failure modes:
-	 *  1. Opportunities created before W5.3 shipped (no emit ran for them).
+	 *  1. Opportunities created before shipped (no emit ran for them).
 	 *  2. Emit succeeded but the Inngest function later failed terminally (transient
 	 *     OpenAI error, AICall persist hiccup, etc.).
 	 *  3. The emit itself failed at insert time (the error-handler in
 	 *     `processOneRawMessage` swallows + logs but doesn't retry).
-	 *
 	 * Re-firing is safe: `ReplyDraft.opportunityId` is unique, and the Inngest function
 	 * short-circuits if a row already exists. The fire-and-forget cost is one extra
 	 * event per missed-draft detail-view open — negligible.
@@ -426,8 +424,8 @@ export class OpportunitiesService {
 			raw: opportunity.rawMessage.raw
 		}).bodyText;
 
-		// W5.6 — `replyDrafts` is 1:N. Lazy-emit only when there are NO drafts at all
-		// (cold-start window or pre-W5.3 opportunity). When there's at least one draft,
+		// `replyDrafts` is 1:N. Lazy-emit only when there are NO drafts at all
+		// (cold-start window or pre- opportunity). When there's at least one draft,
 		// the customer-reply path will fire its own follow-up event; this lazy path is
 		// only for the initial-generation gap.
 		if (opportunity.replyDrafts.length === 0 && !opportunity.dismissedAt) {
@@ -468,11 +466,10 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W5.4 — Regenerate the reply draft for an opportunity using the *requesting user's*
+	 * Regenerate the reply draft for an opportunity using the *requesting user's*
 	 * `tonePlaybookText`. Powers the "Regenereer in mijn stijl" button. The service
 	 * verifies the opportunity belongs to the org (cross-tenant guard) then delegates
 	 * to `ReplyDraftsService.regenerate`. Returns the freshly-generated draft.
-	 *
 	 * Refuses to regenerate a SENT draft (409) — the email is already out.
 	 */
 	async regenerateReplyDraft(
@@ -487,7 +484,7 @@ export class OpportunitiesService {
 
 		if (!isReplyDraftEditable({ draftStatus: opportunity.replyDrafts[0]?.status ?? null })) {
 			// SENT case still surfaces as REPLY_DRAFT_ALREADY_SENT from the service-layer
-			// `regenerate()` call (`overwrote: false`) — that one is friendlier copy. This
+			// `regenerate` call (`overwrote: false`) — that one is friendlier copy. This
 			// branch only fires when the lock comes from the OPPORTUNITY-status leg (replied
 			// without sending via Quoteom, won, or lost).
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
@@ -513,29 +510,26 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W5.5 — Send the reply draft as a threaded email via the connected mailbox.
+	 * Send the reply draft as a threaded email via the connected mailbox.
 	 * Verifies tenant ownership of the opportunity, then delegates the heavy lifting
 	 * (provider routing, OAuth token refresh, threading headers) to
 	 * `ReplyDraftsService.send`. Returns the post-send draft for the editor to render
 	 * the read-only "Verzonden" state.
-	 *
 	 * Status mapping:
 	 *  - 404 → opportunity not in this org.
 	 *  - 409 → draft is already SENT.
 	 *  - 422 → inbox owner removed or original had no From-address.
 	 */
 	/**
-	 * W5.6 — "Concept-vervolg opstellen" (compose follow-up). User-driven entry point
+	 * "Concept-vervolg opstellen" (compose follow-up). User-driven entry point
 	 * for creating a new draft on a SENT opportunity. Generates synchronously here
 	 * (rather than enqueuing the Inngest follow-up event) so the FE can read the new
 	 * draft on the response — same pattern as `regenerateReplyDraft`. The endpoint:
-	 *
 	 *  - 404 → opportunity not in this org.
 	 *  - 409 → the latest draft is NOT yet SENT (there's already an editable draft —
 	 *    use that one instead of creating another).
 	 *  - 200 → freshly-generated draft in the user's voice.
-	 *
-	 * **W5.6-followup:** No longer touches `opp.status`. The editability rule keys off
+	 * **:** No longer touches `opp.status`. The editability rule keys off
 	 * draft-state only (a brand-new PENDING_APPROVAL draft is editable regardless of
 	 * opp.status), so the prior `updateStatus(NEW)` here is dead. Owners can compose a
 	 * courtesy follow-up on a WON deal and the deal stays WON through send.
@@ -596,7 +590,7 @@ export class OpportunitiesService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
-		// W5.5 follow-up — sending a draft on a `won` / `lost` / already-`replied`-without-
+		//  follow-up — sending a draft on a `won` / `lost` / already-`replied`-without-
 		// Quoteom opp doesn't make sense. The SENT case still surfaces via the
 		// `alreadySent: true` branch below with a more specific message.
 		if (!isReplyDraftEditable({ draftStatus: opportunity.replyDrafts[0]?.status ?? null })) {
@@ -626,7 +620,7 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W5.4 — Update the reply-draft body. Called by the autosave debounce in the editor.
+	 * Update the reply-draft body. Called by the autosave debounce in the editor.
 	 * Idempotent: re-saving the same body is a no-op for the `wasEditedByUser` flag
 	 * (only the first divergence from `originalBody` flips it). Throws 404 if the draft
 	 * doesn't exist yet — caller surfaces a "draft is being prepared, retry shortly"
@@ -742,7 +736,7 @@ export class OpportunitiesService {
 			return { result, failedRawMessageIds: [], exhausted: true };
 		}
 
-		// W5.6-followup — Fetch the org's own connected email addresses once per batch
+		// Fetch the org's own connected email addresses once per batch
 		// so the self-email filter inside per-message + per-thread-group flows is an
 		// O(1) Set lookup. All rows in a batch share an emailAccountId (and therefore
 		// an organizationId), so a single fetch covers the slice.
@@ -750,7 +744,7 @@ export class OpportunitiesService {
 			rawMessages[0]?.organizationId ?? ''
 		);
 
-		// W5.6-followup — Group by threadId. Null-threadId messages are treated as
+		// Group by threadId. Null-threadId messages are treated as
 		// individual (no group). Multi-message groups within ONE batch are the canonical
 		// shape of a backfill pass over a historical thread; they need to run serially
 		// AND newest-first so the thread-as-unit classifier can anchor the opp to the
@@ -787,7 +781,7 @@ export class OpportunitiesService {
 
 		let aiNotConfigured = false;
 
-		// Phase 1 — standalone (no thread / single-message thread group). Chunked parallel.
+		// standalone (no thread / single-message thread group). Chunked parallel.
 		// Single-message thread groups fall here because they still need the per-message
 		// thread-reconstitution check (the existing opp may have been created in a prior
 		// run, e.g. live delta-sync of a brand-new customer reply on a tracked thread).
@@ -806,7 +800,7 @@ export class OpportunitiesService {
 			}
 		}
 
-		// Phase 2 — multi-message thread groups. Parallel BETWEEN groups (so a backfill
+		// multi-message thread groups. Parallel BETWEEN groups (so a backfill
 		// touching many threads doesn't serialize sequentially), serial WITHIN each
 		// group (so thread reconstitution + thread-as-unit logic can rely on a stable
 		// per-thread DB state).
@@ -835,26 +829,23 @@ export class OpportunitiesService {
 	}
 
 	/**
-	 * W5.6-followup — Thread-as-unit processing for a multi-message thread group within
+	 * Thread-as-unit processing for a multi-message thread group within
 	 * a single batch. Three branches:
-	 *
 	 *  1. An Opportunity already exists for this thread → process each message via the
 	 *     existing per-message flow. Each one hits the thread-reconstitution check and
 	 *     attaches. This branch fires `OpportunityFollowupReceived` for each attach in
 	 *     live mode (default behavior); backfill mode suppresses those events.
-	 *
 	 *  2. No existing opp AND the mode is `'backfill'` → classify newest-first, anchor
 	 *     the opp to the first positive message, attach all others as immutable history,
 	 *     mark everything classified. No follow-up events fire (this is a snapshot, not
 	 *     a live customer reply). If no positive is found, mark all messages negative
 	 *     and skip the thread entirely (chitchat thread, not a lead).
-	 *
 	 *  3. No existing opp AND the mode is `'live'` → fall through to per-message
 	 *     processing. The "live" path implies messages arrive one at a time; a batch
 	 *     containing multiple messages of a brand-new thread is unusual but handled by
 	 *     letting each message classify individually + relying on the per-message
 	 *     thread-reconstitution check to attach later ones to the first one. (Same
-	 *     race-prone shape as before W5.6-followup, but vanishingly rare in live mode.)
+	 *     race-prone shape as before , but vanishingly rare in live mode.)
 	 */
 	private async processThreadGroup(
 		group: RawMessageForOpportunityProcessing[],
@@ -922,7 +913,7 @@ export class OpportunitiesService {
 
 			try {
 				// Self-email: not eligible as originating. Don't push to bulkSkippedMessages
-				// — we WANT to attach this message as part of the thread history (it's
+				// we WANT to attach this message as part of the thread history (it's
 				// our own reply that's part of the conversation). Just skip it for the
 				// "find anchor" search; the attach loop downstream will pick it up.
 				if (candidate.fromEmail && orgEmailAddresses.has(candidate.fromEmail.toLowerCase())) {
@@ -1151,7 +1142,7 @@ export class OpportunitiesService {
 			const fromEmailLower = rawMessage.fromEmail?.toLowerCase() ?? null;
 			const isOrgOwnSender = fromEmailLower !== null && orgEmailAddresses.has(fromEmailLower);
 
-			// W5.6 — Thread reconstitution runs FIRST. A message whose threadId matches
+			// Thread reconstitution runs FIRST. A message whose threadId matches
 			// an existing non-dismissed Opportunity is part of an ongoing conversation —
 			// attach it regardless of who sent it. Two cases:
 			//  - **Customer replied** (`fromEmail` external): standard follow-up flow.
@@ -1160,9 +1151,8 @@ export class OpportunitiesService {
 			//  - **Own-org sender on a tracked thread** (`fromEmail` in `orgEmailAddresses`):
 			//    typically a sibling-inbox echo of something we sent ourselves. Attach
 			//    (so the timeline shows the message) but DO NOT fire the follow-up event
-			//    — no point regenerating a draft addressed to ourselves.
-			//
-			// W5.6-followup correction: a self-message INSIDE a tracked thread is part
+			// no point regenerating a draft addressed to ourselves.
+			//  correction: a self-message INSIDE a tracked thread is part
 			// of the conversation. Only a self-message OUTSIDE any tracked thread is
 			// noise — that's what the self-email filter below catches.
 			if (rawMessage.threadId) {
@@ -1224,7 +1214,7 @@ export class OpportunitiesService {
 				}
 			}
 
-			// W5.6-followup — Self-email filter. Only fires for messages that did NOT
+			// Self-email filter. Only fires for messages that did NOT
 			// match an existing tracked thread above. Catches the typical own-org noise:
 			// a marketing/operational email from one connected mailbox landing in a
 			// sibling inbox with no prior conversation to attach to. Without this the
@@ -1300,7 +1290,7 @@ export class OpportunitiesService {
 			result.classifiedPositive += 1;
 			if (created) {
 				result.opportunitiesCreated += 1;
-				// W5.3 — fan out to the reply-draft generator. Best-effort: a send failure
+				// fan out to the reply-draft generator. Best-effort: a send failure
 				// shouldn't abort the per-RawMessage processing (the opportunity is already
 				// persisted; the only loss is the auto-draft). A future "find opportunities
 				// without a ReplyDraft and re-emit" backfill cron will close the gap if
@@ -1402,11 +1392,11 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
-		// W5.6 — `replyDrafts` is 1:N, ordered `createdAt DESC` by the include. Picking
+		// `replyDrafts` is 1:N, ordered `createdAt DESC` by the include. Picking
 		// the *first* draft with a `sentAt` gives us the most-recent send, which is what
 		// the dismiss-dialog warning + the `dismissedAfterSend` audit flag care about.
 		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
-		// W6.1 — suppress the indicator on dismissed rows. A check-in is only ever
+		// suppress the indicator on dismissed rows. A check-in is only ever
 		// "actionable" if the owner is still working the opp; on a dismissed row the
 		// pill would be noise (and a stale CHECK_IN could exist from a race where the
 		// opp was dismissed between scheduler enumeration and processor run).
@@ -1419,7 +1409,7 @@ interface PendingCheckInProbe {
 	status: PrismaReplyDraftStatus;
 }
 
-// W6.1 — Latest draft is the head of the `createdAt DESC` array. A pending check-in
+// Latest draft is the head of the `createdAt DESC` array. A pending check-in
 // surfaces when that head is a scheduler-generated CHECK_IN and hasn't been sent yet —
 // once sent, the regular status chip + sent timestamp carry the signal so the dedicated
 // indicator stands down.
@@ -1446,8 +1436,8 @@ function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][n
 		originalBody: draft.originalBody,
 		body: draft.body,
 		status: REPLY_DRAFT_STATUS_TO_WIRE[draft.status],
-		// W6.1 — `kind` is a Prisma enum mirrored 1:1 to the lowercased wire format.
-		// Direct `.toLowerCase()` is safe because the wire union is `'reply' | 'check_in'`,
+		// `kind` is a Prisma enum mirrored 1:1 to the lowercased wire format.
+		// Direct `.toLowerCase` is safe because the wire union is `'reply' | 'check_in'`,
 		// matching `REPLY` / `CHECK_IN` lowercased.
 		kind: draft.kind.toLowerCase() as 'reply' | 'check_in',
 		wasEditedByUser: draft.wasEditedByUser,
@@ -1455,11 +1445,11 @@ function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][n
 		sentAt: draft.sentAt?.toISOString() ?? null,
 		createdAt: draft.createdAt.toISOString(),
 		updatedAt: draft.updatedAt.toISOString(),
-		// W5.4 — sourced from the linked AICall's `createdAt`. Advances on regenerate.
+		// sourced from the linked AICall's `createdAt`. Advances on regenerate.
 		// Falls back to `null` when `aiCallId` is unset OR the join didn't pull the row
 		// (best-effort persist failure); the FE then uses `createdAt` as a fallback.
 		aiBodyGeneratedAt: draft.aiCall?.createdAt.toISOString() ?? null,
-		// W5.5 follow-up — staged attachments. Always an array (never `null`) so the UI
+		//  follow-up — staged attachments. Always an array (never `null`) so the UI
 		// doesn't branch on presence.
 		attachments: draft.attachments.map(a => ({
 			id: a.id,
@@ -1505,7 +1495,7 @@ function toOpportunityDetailResponseDto(
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
-		// W5.6 — `replyDrafts` is 1:N. See the list mapper for the same `find()` logic.
+		// `replyDrafts` is 1:N. See the list mapper for the same `find` logic.
 		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
 		originalEmailBody,
@@ -1513,7 +1503,7 @@ function toOpportunityDetailResponseDto(
 		// draft exists yet (cold-start window between Opportunity insert and the
 		// `reply-draft-generate` Inngest function finishing).
 		replyDraft: opportunity.replyDrafts[0] ? toReplyDraftResponseDto(opportunity.replyDrafts[0]) : null,
-		// W5.6 — Read-only history panel below the editor. Includes ALL drafts NEWEST-
+		// Read-only history panel below the editor. Includes ALL drafts NEWEST-
 		// FIRST except the currently-editable one. The latest draft is excluded only
 		// when it's still in-progress (PENDING_APPROVAL / EDITED); once it transitions
 		// to SENT it stays in `replyDraft` (so the editor keeps showing the read-only
@@ -1523,7 +1513,7 @@ function toOpportunityDetailResponseDto(
 			? opportunity.replyDrafts
 			: opportunity.replyDrafts.slice(1)
 		).map(toReplyDraftResponseDto),
-		// W5.6 follow-up — inbound customer replies attached via thread reconstitution.
+		//  follow-up — inbound customer replies attached via thread reconstitution.
 		// Newest-first (matches the FE's expected merge order). Body extracted from the
 		// raw provider payload via `buildRawMessageAIInput` (same plain-text rendering
 		// used for the original-email panel + the AI classifier input — keeps the wire

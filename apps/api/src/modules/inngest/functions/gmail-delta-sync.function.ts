@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 /**
- * Gmail delta-sync: triggered by `gmail/history.changed` (emitted by the W3.5 webhook),
+ * Gmail delta-sync: triggered by `gmail/history.changed` (emitted by the webhook),
  * walks `users.history.list` from the stored cursor, persists new RawMessage rows, then
  * processes them. Per-mailbox concurrency + debounce coalesces push bursts into one walk.
  */

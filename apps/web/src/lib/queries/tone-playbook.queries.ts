@@ -22,7 +22,7 @@ export const tonePlaybookQueryOptions = queryOptions({
 /**
  * `PUT /api/me/tone-playbook` — replace the playbook text. Empty string clears it back
  * to the generic baseline. Invalidates the membership cache so the `hasTonePlaybook`
- * boolean (which gates the W5.4 just-in-time banner) updates everywhere else.
+ * boolean (which gates the just-in-time banner) updates everywhere else.
  */
 export function useUpdateTonePlaybook() {
 	const queryClient = useQueryClient();

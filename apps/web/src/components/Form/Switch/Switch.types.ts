@@ -1,4 +1,4 @@
-import { SwitchProps as MuiSwitchProps } from '@mui/material';
+import type { SwitchProps as MuiSwitchProps } from '@mui/material';
 
 export interface StandaloneSwitchProps extends Omit<MuiSwitchProps, 'onChange'> {
 	name: string;

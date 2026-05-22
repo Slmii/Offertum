@@ -8,7 +8,7 @@ export const FollowUpSettingsKeys = {
 };
 
 /**
- * W6.2 — Loader-driven read for the follow-up settings page. Short `staleTime` because
+ * Loader-driven read for the follow-up settings page. Short `staleTime` because
  * the page is the only consumer + the user expects their saves to appear immediately.
  */
 export const followUpSettingsQueryOptions = queryOptions({

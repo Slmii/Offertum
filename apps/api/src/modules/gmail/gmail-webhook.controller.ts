@@ -37,13 +37,13 @@ interface GmailNotificationPayload {
 }
 
 /**
- * W3.5 — receives Gmail push notifications via Google Cloud Pub/Sub.
+ * receives Gmail push notifications via Google Cloud Pub/Sub.
  *
  * Pub/Sub push delivery shape:
  *   POST /api/email/gmail/webhook
  *   Authorization: Bearer <Google-signed JWT>
  *   Content-Type: application/json
- *   Body: { message: { data: <base64 JSON>, ... }, subscription: ... }
+ *   Body: { message: { data: <base64 JSON>,... }, subscription:... }
  *
  * Auth is the JWT, not a session cookie. We verify it via `verifyPubSubJWT` (RS256 + JWKS
  * + iss/aud/exp/service-account-email checks). On success: decode the base64 message data

@@ -1,8 +1,8 @@
 import { trialSeatLimitReached } from '@/lib/errors';
 import { SEATS_INCLUDED, TRIAL_SEAT_LIMIT_CODE } from '@/modules/billing/billing.constants';
-import { BillingService } from '@/modules/billing/billing.service';
+import type { BillingService } from '@/modules/billing/billing.service';
 import { InvitationsService } from '@/modules/invitations/invitations.service';
-import { PrismaService } from '@/modules/prisma/prisma.service';
+import type { PrismaService } from '@/modules/prisma/prisma.service';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { HttpException, HttpStatus } from '@nestjs/common';
 

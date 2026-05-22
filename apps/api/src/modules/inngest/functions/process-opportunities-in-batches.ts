@@ -37,7 +37,7 @@ export interface ProcessOpportunitiesInBatchesArgs {
 	 */
 	correlation: { requestId: string; organizationId?: string };
 	/**
-	 * W5.6-followup — pipeline mode. `'backfill'` activates thread-as-unit classification
+	 * pipeline mode. `'backfill'` activates thread-as-unit classification
 	 * and suppresses `OpportunityFollowupReceived` events; `'live'` is the per-message
 	 * flow with follow-up events firing on thread attaches. See `PipelineMode` for the
 	 * full rationale.

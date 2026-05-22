@@ -6,7 +6,7 @@ import type { InngestFunction } from 'inngest';
 const logger = new Logger('InngestFn:hello');
 
 /**
- * W3.3 smoke function — event-triggered, runs once per event.
+ * Smoke function — event-triggered, runs once per event.
  *
  * Send the trigger from the Inngest dev UI (http://localhost:8288 → New event):
  *   { "name": "test/hello", "data": { "name": "Quoteom" } }

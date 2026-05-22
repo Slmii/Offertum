@@ -9,11 +9,9 @@ import { MicrosoftWebhookController } from '@/modules/microsoft/microsoft-webhoo
 import { Module } from '@nestjs/common';
 
 /**
- * Microsoft Graph integration (W3.2). Parallels `GmailModule` for the second provider.
- *
+ * Microsoft Graph integration . Parallels `GmailModule` for the second provider.
  * Account-management services (`EmailAccountsService` + `MicrosoftOAuthService`) come
  * from `EmailAccountsModule` — same pattern as `GmailModule`.
- *
  * Same role + entitlement gates as Gmail: OWNER + MEMBER can connect; EXTERNAL is
  * blocked at the guard layer; new connections require an entitled billing state.
  */

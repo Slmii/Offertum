@@ -7,21 +7,21 @@ import { ReplyDraftGenerator } from '@/modules/ai/reply-draft/reply-draft-genera
 import { Module } from '@nestjs/common';
 
 /**
- * W4.1+W4.2 — AI extraction pipeline.
+ * AI extraction pipeline.
  *
  * Surface:
  *  - `AI_CLIENT` token bound to a concrete `AIClient` implementation (today: `OpenAIClient`,
- *    swappable later for Mistral/Anthropic in the W5.1 spike).
+ *    swappable later for Mistral/Anthropic).
  *  - `AICallLogger` — exported so non-AI services can also log calls if they fire LLMs
  *    via custom paths (none today; future-proofing).
- *  - `ClassifierService` (W4.2) — "is this an offerteaanvraag?" decision. Consumed by W4.4's
- *    Opportunity creation flow once that ships.
+ *  - `ClassifierService` — "is this an offerteaanvraag?" decision. Consumed by the
+ *    Opportunity creation flow.
  *
- * Downstream consumers (`ClassifierService`, `ExtractorService` in W4.3, etc.) inject the
+ * Downstream consumers (`ClassifierService`, `ExtractorService`, etc.) inject the
  * AI client via `@Inject(AI_CLIENT) private readonly ai: AIClient`. They don't know or
  * care which provider sits behind it.
  *
- * Provider lock-in (W5.1) is mechanical: swap `useClass: OpenAIClient` for `useClass:
+ * Provider lock-in is mechanical: swap `useClass: OpenAIClient` for `useClass:
  * MistralClient` or `useClass: AnthropicClient`. Caller code doesn't change.
  */
 @Module({

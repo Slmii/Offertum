@@ -66,7 +66,7 @@ const SearchSchema = z.object({
 	// at the form layer so a paste of an email body doesn't end up in the URL.
 	search: z.string().trim().max(80).optional(),
 	sort: z.enum(OPPORTUNITY_SORT_OPTIONS).optional(),
-	// W4.6 — `showDismissed=true` flips the list into the dismissed-only view. Default
+	// `showDismissed=true` flips the list into the dismissed-only view. Default
 	// (undefined) shows the active list. Kept as a boolean toggle in the URL rather than
 	// exposing the full `active | dismissed | all` enum because the UI only offers a
 	// binary switch — the `all` mode is for admin tooling, not the owner inbox.

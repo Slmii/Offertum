@@ -10,7 +10,7 @@ function makePrisma(createCount: number): {
 } {
 	const opportunityCreateMany = jest.fn().mockReturnValue(Promise.resolve({ count: createCount }));
 	const rawMessageUpdate = jest.fn().mockReturnValue(Promise.resolve({}));
-	// W5.3 — repo now does an in-transaction `findUnique` after a successful insert to
+	// repo now does an in-transaction `findUnique` after a successful insert to
 	// return the new row's id (needed for the `opportunity/created` event emit). Mock
 	// returns a deterministic id only when the createMany "inserted" something —
 	// matches the real Prisma behaviour where the lookup would only find a row that
@@ -38,7 +38,7 @@ const CREATE_INPUT = {
 		subject: 'Offerte',
 		fromEmail: 'alice@example.com',
 		fromName: 'Alice',
-		// W5.6 — `threadId` on RawMessageForOpportunityProcessing; null here because the
+		// `threadId` on RawMessageForOpportunityProcessing; null here because the
 		// thread-reconstitution check runs upstream of `createOpportunityFromRawMessage`,
 		// which only exercises the new-opportunity insert path.
 		threadId: null,

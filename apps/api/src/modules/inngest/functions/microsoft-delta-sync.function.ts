@@ -8,7 +8,7 @@ import type { InngestFunction } from 'inngest';
 
 /**
  * Microsoft delta-sync mirror of `GmailDeltaSyncFunction`: triggered by
- * `microsoft/delta.changed` (W3.6 webhook), walks `/me/messages/delta` from the stored
+ * `microsoft/delta.changed` ( webhook), walks `/me/messages/delta` from the stored
  * cursor, persists new RawMessage rows, then processes them. Same per-mailbox
  * concurrency-1 + debounce as Gmail to coalesce push bursts.
  */

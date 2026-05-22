@@ -12,10 +12,10 @@ import type { EmailProvider } from '../src/generated/prisma/enums';
 import { buildRawMessageAIInput } from '../src/lib/email/raw-message-ai-input';
 
 /**
- * W4.6.6 — Fixture-candidate export CLI.
+ * Fixture-candidate export CLI.
  *
  * Walks owner-dismissed opportunities (reason `NOT_A_QUOTE` or `SPAM`) and emits one
- * candidate per line as JSONL. The shape mirrors the W4.2 classifier corpus's
+ * candidate per line as JSONL. The shape mirrors the classifier corpus's
  * `ClassifierFixture` so the output can be reviewed by a human and pasted into
  * `apps/api/src/modules/ai/classifier/fixtures/nl-quote-requests.fixtures.ts`.
  *

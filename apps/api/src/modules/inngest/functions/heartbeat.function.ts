@@ -6,11 +6,11 @@ import type { InngestFunction } from 'inngest';
 const logger = new Logger('InngestFn:heartbeat');
 
 /**
- * W3.3 smoke function — cron-scheduled, fires automatically on its own schedule.
+ * Smoke function — cron-scheduled, fires automatically on its own schedule.
  *
  * Schedule is intentionally infrequent (1×/hour) — purely a "scheduled functions
  * arrive on time" smoke. Real cron jobs (follow-up sweep, watch renewal, etc.) land
- * in W3.5+ with their own appropriate cadences.
+ * with their own appropriate cadences.
  *
  * In the Inngest dev UI you can also fire it manually via "Invoke" → no need to wait
  * for the hourly tick during testing.

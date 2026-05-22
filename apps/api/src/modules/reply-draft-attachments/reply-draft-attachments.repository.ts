@@ -48,7 +48,7 @@ export interface AttachmentForAuthorization {
 
 /**
  * Shape returned by `findDraftForUpload`. The editability gate keys off `status` alone
- * (W5.6-followup dropped the opp-status leg).
+ * ( dropped the opp-status leg).
  */
 export interface DraftForUpload {
 	draftId: string;
@@ -68,7 +68,7 @@ export class ReplyDraftAttachmentsRepository {
 	 * leakage across tenants).
 	 */
 	async findDraftForUpload(organizationId: string, opportunityId: string): Promise<DraftForUpload | null> {
-		// W5.6 — Pick the LATEST draft for the opp (was: unique-by-opportunityId).
+		// Pick the LATEST draft for the opp (was: unique-by-opportunityId).
 		// The editability gate in the service layer refuses uploads when the latest is
 		// SENT, so we don't filter by status here — keeps the error message coherent
 		// ("draft is closed" rather than "no draft found").

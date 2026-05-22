@@ -31,7 +31,7 @@ interface ParsedFrom {
 }
 
 /**
- * W3.5 — incremental sync triggered by a Gmail push notification.
+ * incremental sync triggered by a Gmail push notification.
  *
  * Walks `users.history.list` from `EmailAccount.historyId`, fetches every `messageAdded`
  * payload via `messages.get?format=full`, and persists each as a `RawMessage` row. Idempotent

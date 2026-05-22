@@ -57,7 +57,7 @@ export interface OpportunityForReplyDraft {
 	/** The ORIGINATING customer message that created the opportunity. */
 	rawMessage: RawMessageForReplyDraft;
 	/**
-	 * W5.6 bug-fix — Latest customer reply attached to this opportunity (via
+	 *  bug-fix — Latest customer reply attached to this opportunity (via
 	 * `RawMessage.opportunityId`), if any. The follow-up draft generator uses this
 	 * as its primary `bodyText` so the AI responds to what the customer just said,
 	 * not the originating quote request. `null` when no customer reply has landed
@@ -69,16 +69,14 @@ export interface OpportunityForReplyDraft {
 	 * The User who owns the EmailAccount that received this opportunity's original
 	 * message. Used as the SECOND-PRIORITY sign-off name when there's no requesting
 	 * user with a name set (auto-generated drafts on opp-create, customer-reply
-	 * follow-ups, W6.1 scheduler check-ins). Falls back to the org name in the prompt
+	 * follow-ups, scheduler check-ins). Falls back to the org name in the prompt
 	 * if this is also null. Replaces the prior "owner of the org" fallback so the
 	 * draft signs as the person whose inbox the conversation actually lives in, not
 	 * the org's billing-owner (which might be a different person).
-	 *
 	 * Note: this is the NAME source only. The writing-style playbook is NEVER pulled
 	 * from the mailbox user — only the requesting user's playbook is honored, else
 	 * the generic Dutch baseline. The mailbox user's playbook field exists but isn't
 	 * authored on their behalf.
-	 *
 	 * `null` only in the defensive case where the EmailAccount was deleted between
 	 * opp-creation and draft-generation — shouldn't happen in normal operation given
 	 * the FK cascade.
@@ -96,7 +94,7 @@ export interface RawMessageForReplyDraft {
 
 /**
  * Voice fields for the requesting user — only `findUserForVoice` populates this now.
- * (W6.1-followup) The previous "fall back to org OWNER's playbook" path was dropped
+ *  The previous "fall back to org OWNER's playbook" path was dropped
  * because it baked one person's voice into every team member's drafts. Today: either
  * the requesting user has a playbook → use it, or they don't → generic Dutch baseline.
  * The mailbox-user's NAME (not their playbook) provides the sign-off fallback.
@@ -108,19 +106,19 @@ export interface UserVoice {
 }
 
 /**
- * Input for `createIfAbsent` (initial draft, W5.3) and `createFollowup` (follow-up
- * draft, W5.6). Same payload shape — the methods differ in their pre-flight checks.
+ * Input for `createIfAbsent` (initial draft, ) and `createFollowup` (follow-up
+ * draft, ). Same payload shape — the methods differ in their pre-flight checks.
  */
 export interface CreateReplyDraftInput {
 	opportunityId: string;
 	body: string;
 	aiCallId: string | null;
-	/** W6.1 — tag scheduler-generated check-ins. Defaults to REPLY. */
+	/** tag scheduler-generated check-ins. Defaults to REPLY. */
 	kind?: PrismaReplyDraftKind;
 }
 
 /**
- * W6.1 — Candidate row for the follow-up scheduler. One per opportunity that's
+ * Candidate row for the follow-up scheduler. One per opportunity that's
  * eligible for a fresh check-in this tick. Owner+org settings are denormalised into
  * the row so the processor can re-check conditions without a second query.
  */
@@ -188,7 +186,7 @@ export interface SendContextRawMessage {
 }
 
 /**
- * W5.5 follow-up — attachment metadata the send path needs. Binary bytes live in the
+ *  follow-up — attachment metadata the send path needs. Binary bytes live in the
  * storage backend; the service loads them via `AttachmentStorage.get(storageKey)`
  * just before composing the provider envelope.
  */
@@ -218,7 +216,7 @@ export class ReplyDraftsRepository {
 				customerDeadline: true,
 				customerAppointment: true,
 				deliverableHints: true,
-				// W6.1-followup — mailbox user (who connected the inbox this opp lives in)
+				// mailbox user (who connected the inbox this opp lives in)
 				// surfaces as the second-priority sign-off name when there's no requesting
 				// user with a name. Replaces the prior "org OWNER" fallback.
 				emailAccount: {
@@ -235,7 +233,7 @@ export class ReplyDraftsRepository {
 						emailAccount: { select: { provider: true } }
 					}
 				},
-				// W5.6 bug-fix — include the LATEST attached thread message (a customer
+				//  bug-fix — include the LATEST attached thread message (a customer
 				// reply that came in after the originating email). The follow-up draft
 				// generator uses this as its `bodyText` so the AI responds to the
 				// customer's most recent words. `take: 1` keeps the payload tiny.
@@ -294,7 +292,7 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.4 — fetch the requesting user's voice fields. Used by `regenerate()` so the
+	 * fetch the requesting user's voice fields. Used by `regenerate` so the
 	 * "Regenereer in mijn stijl" button uses *their* playbook, not the org owner's.
 	 */
 	async findUserForVoice(userId: string): Promise<UserVoice | null> {
@@ -311,17 +309,16 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.4 — Overwrite the *current editable* draft with a freshly-generated body.
+	 * Overwrite the *current editable* draft with a freshly-generated body.
 	 * Differs from `createIfAbsent`:
 	 *  - Resets `originalBody` to the new generation (the user is choosing a new
-	 *    baseline; the W5.7 edit-detection prompt should diff against this).
+	 *    baseline; the edit-detection prompt should diff against this).
 	 *  - Resets `wasEditedByUser = false` (the new draft hasn't been touched yet).
 	 *  - Resets `status = PENDING_APPROVAL`.
 	 *  - Refuses to overwrite when the latest draft is `SENT` — the email is already out
 	 *    the door and there's nothing to "regenerate." Returns null in that case so the
 	 *    caller can surface 409.
-	 *
-	 * W5.6 — Operates on the LATEST draft for the opp (1:N). Picks by `createdAt DESC`
+	 * Operates on the LATEST draft for the opp (1:N). Picks by `createdAt DESC`
 	 * so the follow-up flow (multiple drafts) regenerates the most recent unsent one.
 	 */
 	async overwriteAfterRegenerate(input: OverwriteAfterRegenerateInput): Promise<OverwriteAfterRegenerateResult> {
@@ -371,11 +368,10 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.3 — Persist the *first* draft for an opportunity. Idempotent: re-running the
+	 * Persist the *first* draft for an opportunity. Idempotent: re-running the
 	 * Inngest function on the same opportunity is a no-op if any draft row already
 	 * exists for it (regardless of `status`).
-	 *
-	 * W5.6 — Idempotency is now an explicit "any draft exists?" check (was previously
+	 * Idempotency is now an explicit "any draft exists?" check (was previously
 	 * `@unique` on `opportunityId`, which the schema dropped to allow follow-up drafts).
 	 * Use `createFollowup` instead when the second-or-later draft is intentional.
 	 */
@@ -402,13 +398,12 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.6 — Persist a follow-up draft. Differs from `createIfAbsent`:
+	 * Persist a follow-up draft. Differs from `createIfAbsent`:
 	 *  - No "exists" pre-check — the caller has already validated that the latest draft
 	 *    is SENT (`composeFollowup` endpoint) or that this is the customer-driven path
 	 *    (which always creates a new draft on thread reconstitution).
 	 *  - Inserts unconditionally — the row will have a newer `createdAt` than prior
 	 *    drafts, becoming the "current" draft for the opp.
-	 *
 	 * Callers should hold their own concurrency guard before this lands (e.g., the
 	 * Inngest function's per-event retry budget + the controller's TenantWrite gate);
 	 * we don't lock here because two follow-up drafts in flight is an exceedingly rare
@@ -430,24 +425,21 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W6.1 — Enumerate opportunities eligible for an auto check-in this scheduler tick.
-	 *
+	 * Enumerate opportunities eligible for an auto check-in this scheduler tick.
 	 * Eligibility:
 	 *  - `status = REPLIED` (we sent something; customer hasn't replied on the thread —
 	 *    a customer reply would have flipped status back to NEW via `attachFollowupMessage`)
 	 *  - Not dismissed
 	 *  - At least one ReplyDraft with `status = SENT`
 	 *  - Latest ReplyDraft is SENT (no pending owner-facing draft already waiting on them
-	 *    — we don't want to stack check-ins on top of unsent work)
+	 * we don't want to stack check-ins on top of unsent work)
 	 *  - `(now − latestSentAt) ≥ org.followUpCadenceDays`
 	 *  - Count of prior CHECK_IN drafts on the opp `< org.followUpMaxCount`
 	 *  - Org's `followUpMaxCount > 0` (`0` disables the scheduler for the org)
 	 *  - Org is entitled (trialing / active / past_due) — same set as `EntitlementGuard`
-	 *
 	 * Returned `lastSentAt` + `priorCheckInCount` are re-validated by the processor
 	 * before generation so a race (owner sent a fresh draft between scheduler tick and
 	 * processor run) can't produce a stale check-in.
-	 *
 	 * Uses raw SQL because the conditions span four joins + an aggregate; expressing
 	 * this through Prisma's nested-where would require fetching too many rows client-
 	 * side and counting in Node.
@@ -522,7 +514,7 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W6.1 — Cheap defense-in-depth re-check before the processor calls the AI. Returns
+	 * Cheap defense-in-depth re-check before the processor calls the AI. Returns
 	 * `null` if the opp is no longer eligible (status changed, draft was sent in the
 	 * intervening seconds, owner started a draft, etc.). Caller treats null as "skip".
 	 */
@@ -573,7 +565,7 @@ export class ReplyDraftsRepository {
 
 		// Re-check entitlement at processor time. If a sub was canceled between the
 		// scheduler tick and the processor run we must NOT spend an OpenAI call on it
-		// — the org has lost write entitlement everywhere else, the scheduler should
+		// the org has lost write entitlement everywhere else, the scheduler should
 		// stand down in lockstep.
 		const subEntitled = opp?.subStatus === null || ENTITLED_STRIPE_STATUSES.includes(opp?.subStatus ?? '');
 
@@ -609,7 +601,7 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.6 — Latest draft for an opportunity (1:N replacement for the prior unique
+	 * Latest draft for an opportunity (1:N replacement for the prior unique
 	 * lookup). Ordered by `createdAt DESC` so a freshly-inserted follow-up always
 	 * surfaces ahead of older originals. Returns `null` when no draft has been
 	 * generated yet (cold-start window between Opportunity insert and the Inngest
@@ -624,7 +616,7 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.6 — Returns true when the LATEST draft for the opp is `SENT`. Used by the
+	 * Returns true when the LATEST draft for the opp is `SENT`. Used by the
 	 * "Concept-vervolg opstellen" endpoint to validate that a follow-up is appropriate
 	 * (there's nothing newer that's still being drafted).
 	 */
@@ -638,13 +630,13 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.5 — Fetch everything the send orchestrator needs in one round-trip: the draft,
+	 * Fetch everything the send orchestrator needs in one round-trip: the draft,
 	 * the opportunity (for status + organizationId), the email account (for OAuth scope
 	 * routing + From-address), the inbox owner's display name, the customer's contact
 	 * + threading headers from the original RawMessage.
 	 */
 	async findSendContext(opportunityId: string): Promise<SendContext | null> {
-		// W5.6 — Pick the LATEST draft regardless of status. The caller decides what to
+		// Pick the LATEST draft regardless of status. The caller decides what to
 		// do based on `context.status` (already-SENT → 409 alreadySent). Latest semantics
 		// matter when a follow-up draft is pending: the SENT original is still on disk
 		// but we want to operate on the new draft.
@@ -731,18 +723,17 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * W5.5 — Mark the draft as `SENT` + the opportunity as `REPLIED` in one transaction.
+	 * Mark the draft as `SENT` + the opportunity as `REPLIED` in one transaction.
 	 * Wraps both because the customer-visible-effect (the email actually went out) is
 	 * already irrevocable when this runs — leaving the DB half-updated would create the
 	 * worst kind of split-brain (status says "still drafting" but the customer has the
 	 * email). Either both transitions persist or neither does.
 	 */
 	/**
-	 * W5.6 — Mark a *specific* draft as SENT. Takes `draftId` (not `opportunityId`)
+	 * Mark a *specific* draft as SENT. Takes `draftId` (not `opportunityId`)
 	 * because an opp can have multiple drafts and the caller (`ReplyDraftsService.send`)
 	 * has already resolved the right one via `findSendContext`.
-	 *
-	 * **W5.6-followup:** Opp status transition is now CONDITIONAL. Skipped for terminal
+	 * **:** Opp status transition is now CONDITIONAL. Skipped for terminal
 	 * funnel states (`WON` / `LOST`) so a courtesy follow-up on a won deal doesn't
 	 * silently flip it back to `REPLIED`. The customer-visible state of the deal stays
 	 * what the owner said it was; only progression-relevant states get advanced to
