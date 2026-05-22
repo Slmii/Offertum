@@ -86,7 +86,10 @@ export const InngestFunctionIds = {
 	FollowUpScheduler: 'follow-up-scheduler',
 	/** Per-opp processor. Listens to `opportunity/silence.followup-due`,
 	 *  re-validates the eligibility window, generates the check-in draft. */
-	FollowUpProcessor: 'follow-up-processor'
+	FollowUpProcessor: 'follow-up-processor',
+	/** Weekly digest — Monday 08:00 Amsterdam cron. Enumerates orgs and sends a
+	 *  digest email to every user with WEEKLY_DIGEST EMAIL enabled. */
+	WeeklyDigest: 'notifications-weekly-digest'
 } as const;
 
 /**
@@ -154,5 +157,9 @@ export const InngestSteps = {
 	FollowUpProcessor: {
 		/** Single step: re-validate eligibility + generate the check-in draft. */
 		Generate: 'follow-up-processor-generate'
+	},
+	WeeklyDigest: {
+		/** Single step: enumerate orgs + their users + send digest emails. */
+		Dispatch: 'weekly-digest-dispatch'
 	}
 } as const;

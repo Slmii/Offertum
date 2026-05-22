@@ -119,7 +119,11 @@ function makeService(
 			send: jest
 				.fn()
 				.mockReturnValue(Promise.resolve({ sent: true, sentAt: new Date('2026-05-19T14:00:00.000Z') }))
-		} as unknown as ConstructorParameters<typeof OpportunitiesService>[5]
+		} as unknown as ConstructorParameters<typeof OpportunitiesService>[5],
+		{
+			notifyUsers: jest.fn().mockReturnValue(Promise.resolve()),
+			webOrigin: jest.fn().mockReturnValue('http://localhost:3000')
+		} as unknown as ConstructorParameters<typeof OpportunitiesService>[6]
 	);
 }
 

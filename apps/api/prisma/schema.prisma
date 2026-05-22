@@ -124,6 +124,27 @@ enum ReplyDraftKind {
   CHECK_IN
 }
 
+// Events the in-app + email notification system can surface to users.
+//   - OPPORTUNITY_CREATED : a new Opportunity was materialized from a classified-positive
+//                           RawMessage.
+//   - CUSTOMER_REPLY      : an inbound message landed on a tracked thread (status flipped
+//                           REPLIED → NEW via attachFollowupMessage).
+//   - WEEKLY_DIGEST       : aggregated Monday-morning summary (open opps, cold opps,
+//                           pending follow-ups, estimated value).
+enum NotificationEventType {
+  OPPORTUNITY_CREATED
+  CUSTOMER_REPLY
+  WEEKLY_DIGEST
+}
+
+// Delivery channels for a notification. IN_APP writes a Notification row that the bell
+// icon surfaces; EMAIL renders a Resend template and sends to the user's address. Slack
+// + Teams are deferred to post-MVP.
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
 model User {
   id                    String    @id @default(uuid()) @db.Uuid
   email                 String    @unique
@@ -149,12 +170,14 @@ model User {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  currentOrganization    Organization?  @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
-  memberships            Membership[]
-  accounts               Account[]
-  sessions               Session[]
-  emailAccounts          EmailAccount[]
-  dismissedOpportunities Opportunity[]  @relation("OpportunityDismissedBy")
+  currentOrganization      Organization?              @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
+  memberships              Membership[]
+  accounts                 Account[]
+  sessions                 Session[]
+  emailAccounts            EmailAccount[]
+  dismissedOpportunities   Opportunity[]              @relation("OpportunityDismissedBy")
+  notifications            Notification[]
+  notificationPreferences  NotificationPreference[]
 }
 
 model Organization {
@@ -171,12 +194,14 @@ model Organization {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  memberships    Membership[]
-  invitations    Invitation[]
-  currentMembers User[]         @relation("CurrentOrganization")
-  subscription   Subscription?
-  emailAccounts  EmailAccount[]
-  opportunities  Opportunity[]
+  memberships             Membership[]
+  invitations             Invitation[]
+  currentMembers          User[]                     @relation("CurrentOrganization")
+  subscription            Subscription?
+  emailAccounts           EmailAccount[]
+  opportunities           Opportunity[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
 }
 
 model Log {
@@ -618,4 +643,56 @@ model ReplyDraftAttachment {
   replyDraft ReplyDraft @relation(fields: [replyDraftId], references: [id], onDelete: Cascade)
 
   @@index([replyDraftId])
+}
+
+// One in-app notification row. Bell icon in the header queries the
+// most-recent N rows for the current user. Rows are kept indefinitely; future
+// pruning lives in a separate sweeper if the table grows uncomfortably.
+//
+// `link` is a relative web path the bell-dropdown deep-links to (e.g.
+// `/opportunities/<uuid>`). `metadata` is a small Json bag for renderer-specific
+// fields (e.g. customer name, deadline) so the dropdown can show a richer
+// preview without re-fetching the opportunity.
+model Notification {
+  id             String                @id @default(uuid()) @db.Uuid
+  userId         String                @db.Uuid
+  organizationId String                @db.Uuid
+  eventType      NotificationEventType
+  title          String
+  body           String                @db.Text
+  link           String?
+  metadata       Json?
+  readAt         DateTime?
+  createdAt      DateTime              @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Unread-first listing for the bell icon: filters by user + readAt IS NULL
+  // ordered by createdAt DESC. Composite index covers both legs.
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@index([organizationId])
+}
+
+// Per-user × per-org × per-event × per-channel opt-in toggle. Missing rows are
+// treated as default-enabled at read time (see NotificationService.shouldDeliver).
+// Inserting a row is only required to opt OUT — saves a write per (user, event,
+// channel) tuple on every signup.
+//
+// Org-scoped because a user could be in multiple orgs and want different
+// noise levels in each (e.g. work org: noisy, personal org: silent).
+model NotificationPreference {
+  id             String                @id @default(uuid()) @db.Uuid
+  userId         String                @db.Uuid
+  organizationId String                @db.Uuid
+  eventType      NotificationEventType
+  channel        NotificationChannel
+  enabled        Boolean               @default(true)
+  updatedAt      DateTime              @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId, eventType, channel])
+  @@index([organizationId])
 }

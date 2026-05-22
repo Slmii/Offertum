@@ -243,6 +243,48 @@ export class OpportunitiesRepository {
 		});
 	}
 
+	// Context needed to render an Opportunity notification (in-app body + email template):
+	// who owns the mailbox the conversation lives in + the customer/request labels.
+	// Returns null when the opp or its emailAccount.user is missing — caller treats
+	// that as "skip notification" (delivery is best-effort).
+	async findOpportunityNotificationContext(opportunityId: string): Promise<{
+		opportunityId: string;
+		organizationId: string;
+		customerName: string | null;
+		requestType: string;
+		urgency: PrismaUrgency;
+		customerDeadline: Date | null;
+		emailSubject: string | null;
+		mailboxUserId: string | null;
+	} | null> {
+		const opp = await this.prisma.opportunity.findUnique({
+			where: { id: opportunityId },
+			select: {
+				id: true,
+				organizationId: true,
+				customerName: true,
+				requestType: true,
+				urgency: true,
+				customerDeadline: true,
+				rawMessage: { select: { subject: true, fromName: true } },
+				emailAccount: { select: { userId: true } }
+			}
+		});
+		if (!opp) {
+			return null;
+		}
+		return {
+			opportunityId: opp.id,
+			organizationId: opp.organizationId,
+			customerName: opp.customerName ?? opp.rawMessage.fromName,
+			requestType: opp.requestType,
+			urgency: opp.urgency,
+			customerDeadline: opp.customerDeadline,
+			emailSubject: opp.rawMessage.subject,
+			mailboxUserId: opp.emailAccount?.userId ?? null
+		};
+	}
+
 	/**
 	 * Attach a historical thread message to an Opportunity. Used by the
 	 * thread-as-unit backfill flow: when a thread is processed for the first time, the

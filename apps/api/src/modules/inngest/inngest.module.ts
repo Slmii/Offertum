@@ -9,7 +9,9 @@ import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
+import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
 import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 
@@ -25,7 +27,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
  * the `serve()` array just gets both flavors concatenated.
  */
 @Module({
-	imports: [GmailModule, MicrosoftModule, OpportunitiesModule, ReplyDraftsModule],
+	imports: [GmailModule, MicrosoftModule, OpportunitiesModule, ReplyDraftsModule, NotificationsModule],
 	providers: [
 		GmailBackfillFunction,
 		GmailDeltaSyncFunction,
@@ -35,7 +37,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		MicrosoftSubscriptionRenewalFunction,
 		ReplyDraftGenerateFunction,
 		FollowUpSchedulerFunction,
-		FollowUpProcessorFunction
+		FollowUpProcessorFunction,
+		WeeklyDigestFunction
 	],
 	exports: [
 		GmailBackfillFunction,
@@ -46,7 +49,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		MicrosoftSubscriptionRenewalFunction,
 		ReplyDraftGenerateFunction,
 		FollowUpSchedulerFunction,
-		FollowUpProcessorFunction
+		FollowUpProcessorFunction,
+		WeeklyDigestFunction
 	]
 })
 export class InngestModule {}

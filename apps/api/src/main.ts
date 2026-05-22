@@ -17,6 +17,7 @@ import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsof
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
+import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { LogService } from '@/modules/logger/log.service';
@@ -106,6 +107,7 @@ async function bootstrap() {
 	const replyDraftGenerate = app.get(ReplyDraftGenerateFunction);
 	const followUpScheduler = app.get(FollowUpSchedulerFunction);
 	const followUpProcessor = app.get(FollowUpProcessorFunction);
+	const weeklyDigest = app.get(WeeklyDigestFunction);
 	app.use(
 		'/api/inngest',
 		inngestServe({
@@ -120,7 +122,8 @@ async function bootstrap() {
 				microsoftSubscriptionRenewal.inngestFn,
 				replyDraftGenerate.inngestFn,
 				followUpScheduler.inngestFn,
-				followUpProcessor.inngestFn
+				followUpProcessor.inngestFn,
+				weeklyDigest.inngestFn
 			]
 		})
 	);

@@ -14,9 +14,13 @@ import {
 	REPLY_DRAFT_LOCKED,
 	REPLY_DRAFT_NOT_FOUND
 } from '@/lib/errors';
+import { buildCustomerReplyEmail } from '@/lib/mails/notifications/customer-reply.email';
+import { buildOpportunityCreatedEmail } from '@/lib/mails/notifications/opportunity-created.email';
 import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
+import { NotificationsService } from '@/modules/notifications/notifications.service';
+import { NotificationEventType as PrismaNotificationEventType } from '@/generated/prisma/enums';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
@@ -110,7 +114,8 @@ export class OpportunitiesService {
 		private readonly extractor: ExtractorService,
 		private readonly config: ConfigService<EnvSchema, true>,
 		private readonly logService: LogService,
-		private readonly replyDrafts: ReplyDraftsService
+		private readonly replyDrafts: ReplyDraftsService,
+		private readonly notifications: NotificationsService
 	) {}
 
 	/**
@@ -1014,6 +1019,12 @@ export class OpportunitiesService {
 							context: 'OpportunitiesService'
 						});
 					}
+
+					// This branch only runs in 'backfill' mode (the 'live' branch above
+					// returns earlier). Backfill is a snapshot of historical state — we
+					// intentionally do NOT fire user-facing notifications here to avoid
+					// flooding the inbox on first connect. The single-message live path
+					// in `processOneRawMessage` handles the notify call.
 				}
 
 				break; // Found the anchor; stop scanning candidates.
@@ -1193,6 +1204,8 @@ export class OpportunitiesService {
 								context: 'OpportunitiesService'
 							});
 						}
+
+						await this.dispatchOpportunityNotification(existingOpp.id, 'customer_reply');
 					}
 
 					this.logService.logAction({
@@ -1317,6 +1330,10 @@ export class OpportunitiesService {
 							context: 'OpportunitiesService'
 						});
 					}
+
+					if (options.mode === 'live') {
+						await this.dispatchOpportunityNotification(opportunityId, 'opportunity_created');
+					}
 				}
 			} else {
 				result.opportunitiesSkipped += 1;
@@ -1340,6 +1357,72 @@ export class OpportunitiesService {
 			});
 
 			return !(error instanceof AINotConfiguredError);
+		}
+	}
+
+	// Best-effort notification dispatch after an Opportunity event commits. Looks up
+	// the mailbox owner (the User who connected the inbox the conversation lives in)
+	// and fires through NotificationsService. Swallows errors — never blocks the
+	// originating mutation.
+	private async dispatchOpportunityNotification(
+		opportunityId: string,
+		eventType: 'opportunity_created' | 'customer_reply'
+	): Promise<void> {
+		try {
+			const ctx = await this.repository.findOpportunityNotificationContext(opportunityId);
+			if (!ctx?.mailboxUserId) {
+				return;
+			}
+			const opportunityUrl = `${this.notifications.webOrigin()}/opportunities/${ctx.opportunityId}`;
+			const customer = ctx.customerName ?? 'klant';
+
+			if (eventType === 'opportunity_created') {
+				const email = buildOpportunityCreatedEmail({
+					customerName: ctx.customerName,
+					requestType: ctx.requestType,
+					urgency: ctx.urgency.toLowerCase(),
+					deadline: ctx.customerDeadline?.toISOString().slice(0, 10) ?? null,
+					opportunityUrl
+				});
+				await this.notifications.notifyUsers({
+					userIds: [ctx.mailboxUserId],
+					organizationId: ctx.organizationId,
+					eventType: PrismaNotificationEventType.OPPORTUNITY_CREATED,
+					title: `Nieuwe offerteaanvraag van ${customer}`,
+					body: ctx.requestType,
+					link: `/opportunities/${ctx.opportunityId}`,
+					email
+				});
+				return;
+			}
+
+			const email = buildCustomerReplyEmail({
+				customerName: ctx.customerName,
+				requestType: ctx.requestType,
+				subject: ctx.emailSubject,
+				opportunityUrl
+			});
+			await this.notifications.notifyUsers({
+				userIds: [ctx.mailboxUserId],
+				organizationId: ctx.organizationId,
+				eventType: PrismaNotificationEventType.CUSTOMER_REPLY,
+				title: `Reactie van ${customer}`,
+				body: ctx.requestType,
+				link: `/opportunities/${ctx.opportunityId}`,
+				email
+			});
+		} catch (error) {
+			this.logService.logAction({
+				action: 'notification.dispatch_failed',
+				message: `Failed to dispatch ${eventType} notification for opp ${opportunityId}`,
+				metadata: {
+					opportunityId,
+					eventType,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				level: 'warn',
+				context: 'OpportunitiesService'
+			});
 		}
 	}
 }
