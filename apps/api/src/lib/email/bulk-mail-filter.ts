@@ -21,8 +21,20 @@ export interface BulkMailFilterInput {
 export interface BulkMailFilterResult {
 	isBulk: boolean;
 	/** Why we decided it's bulk — stored as `metadata.reason` on the skip log. */
-	reason: 'list_unsubscribe_header' | 'body_unsubscribe_phrase' | 'tracking_link_density' | null;
+	reason:
+		| 'list_unsubscribe_header'
+		| 'body_unsubscribe_phrase'
+		| 'tracking_link_density'
+		| 'quoteom_notification'
+		| null;
 }
+
+// Header stamped on every outbound notification email. Inbound RawMessages carrying
+// it are Quoteom's own emails arriving in a user's connected mailbox — short-circuit
+// them before the classifier sees the body (which would otherwise look like a real
+// quote request and trigger an infinite create-opp → email → create-opp loop).
+export const QUOTEOM_NOTIFICATION_HEADER = 'X-Quoteom-Notification';
+export const QUOTEOM_NOTIFICATION_HEADER_VALUE = 'true';
 
 const TRACKING_LINK_THRESHOLD = 2;
 
@@ -64,6 +76,10 @@ const TRACKING_HOST_PATTERNS = [
 ];
 
 export function detectBulkMail(input: BulkMailFilterInput): BulkMailFilterResult {
+	if (hasQuoteomNotificationHeader(input)) {
+		return { isBulk: true, reason: 'quoteom_notification' };
+	}
+
 	if (input.provider === EmailProvider.GMAIL && hasGmailListUnsubscribeHeader(input.raw)) {
 		return { isBulk: true, reason: 'list_unsubscribe_header' };
 	}
@@ -86,6 +102,33 @@ export function detectBulkMail(input: BulkMailFilterInput): BulkMailFilterResult
 	}
 
 	return { isBulk: false, reason: null };
+}
+
+function hasQuoteomNotificationHeader(input: BulkMailFilterInput): boolean {
+	const target = QUOTEOM_NOTIFICATION_HEADER.toLowerCase();
+
+	if (input.provider === EmailProvider.GMAIL) {
+		const headers = asRecord(input.raw)?.payload as { headers?: unknown } | undefined;
+		const headerArray = headers?.headers;
+		if (!Array.isArray(headerArray)) {
+			return false;
+		}
+		return headerArray.some(h => {
+			const header = asRecord(h);
+			const name = typeof header?.name === 'string' ? header.name.toLowerCase() : '';
+			return name === target;
+		});
+	}
+
+	const headers = asRecord(input.raw)?.internetMessageHeaders;
+	if (!Array.isArray(headers)) {
+		return false;
+	}
+	return headers.some(h => {
+		const header = asRecord(h);
+		const name = typeof header?.name === 'string' ? header.name.toLowerCase() : '';
+		return name === target;
+	});
 }
 
 function hasGmailListUnsubscribeHeader(raw: unknown): boolean {
