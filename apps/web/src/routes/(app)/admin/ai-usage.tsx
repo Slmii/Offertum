@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
 import { aiUsageQueryOptions } from '@/lib/queries/ai-usage.queries';
@@ -33,7 +34,8 @@ export const Route = createFileRoute('/(app)/admin/ai-usage')({
 	validateSearch: SearchSchema,
 	loaderDeps: ({ search: { range } }) => ({ range }),
 	loader: ({ context, deps }) => context.queryClient.ensureQueryData(aiUsageQueryOptions(deps.range)),
-	component: AIUsagePage
+	component: AIUsagePage,
+	errorComponent: SectionError
 });
 
 const RANGE_LABELS: Record<AIUsageRange, string> = {

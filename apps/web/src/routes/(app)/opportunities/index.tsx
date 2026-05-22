@@ -1,4 +1,5 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { SectionError } from '@/components/SectionError.component';
 import { Field, StandaloneField } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
@@ -86,7 +87,8 @@ export const Route = createFileRoute('/(app)/opportunities/')({
 		context.queryClient.ensureQueryData(
 			opportunitiesListQueryOptions(deps.status, deps.search, deps.showDismissed ? 'dismissed' : 'active')
 		),
-	component: OpportunitiesIndexPage
+	component: OpportunitiesIndexPage,
+	errorComponent: SectionError
 });
 
 function OpportunitiesIndexPage() {

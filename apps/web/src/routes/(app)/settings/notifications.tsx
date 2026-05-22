@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { Form } from '@/components/Form/Form.component';
 import { Switch } from '@/components/Form/Switch/Switch.component';
 import {
@@ -49,7 +50,8 @@ const CHANNEL_LABELS_NL: Record<NotificationChannel, string> = {
 
 export const Route = createFileRoute('/(app)/settings/notifications')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(notificationPreferencesQueryOptions),
-	component: NotificationsSettingsPage
+	component: NotificationsSettingsPage,
+	errorComponent: SectionError
 });
 
 function buildDefaults(

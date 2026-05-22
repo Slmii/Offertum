@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { createPageMeta } from '@/lib/createPageMeta';
 import { useSignOut } from '@/lib/queries/auth.queries';
@@ -30,7 +31,8 @@ export const Route = createFileRoute('/(app)/')({
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
 			context.queryClient.ensureQueryData(myOrganizationsQueryOptions)
 		]),
-	component: HomePage
+	component: HomePage,
+	errorComponent: SectionError
 });
 
 function HomePage() {

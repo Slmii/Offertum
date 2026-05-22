@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
@@ -42,7 +43,8 @@ export const Route = createFileRoute('/(app)/settings/email')({
 			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(myMembershipQueryOptions)
 		]),
-	component: EmailSettingsPage
+	component: EmailSettingsPage,
+	errorComponent: SectionError
 });
 
 /** Unified row shape — both Gmail and Microsoft messages render the same way. */

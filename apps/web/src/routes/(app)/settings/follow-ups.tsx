@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
@@ -33,7 +34,8 @@ export const Route = createFileRoute('/(app)/settings/follow-ups')({
 		}
 	},
 	loader: ({ context }) => context.queryClient.ensureQueryData(followUpSettingsQueryOptions),
-	component: FollowUpsSettingsPage
+	component: FollowUpsSettingsPage,
+	errorComponent: SectionError
 });
 
 const PRESET_CADENCES = [3, 5, 7] as const;

@@ -1,4 +1,5 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { SectionError } from '@/components/SectionError.component';
 import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
 import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
@@ -75,7 +76,8 @@ export const Route = createFileRoute('/(app)/opportunities/$id')({
 			context.queryClient.ensureQueryData(myMembershipQueryOptions)
 		]);
 	},
-	component: OpportunityDetailPage
+	component: OpportunityDetailPage,
+	errorComponent: SectionError
 });
 
 function OpportunityDetailPage() {
@@ -357,6 +359,12 @@ function OpportunityDetailPage() {
 								</Stack>
 							)}
 						</>
+					) : opportunity.dismissedAt ? (
+						<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
+							<Typography variant='body2' color='text.secondary'>
+								Deze offerteaanvraag is afgewezen — er wordt geen concept-antwoord opgesteld.
+							</Typography>
+						</Paper>
 					) : (
 						<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 							<CircularProgress size={20} sx={{ mb: 1 }} />

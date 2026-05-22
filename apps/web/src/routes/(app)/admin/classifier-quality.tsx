@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
 import { classifierQualityQueryOptions } from '@/lib/queries/classifier-quality.queries';
@@ -41,7 +42,8 @@ export const Route = createFileRoute('/(app)/admin/classifier-quality')({
 	validateSearch: SearchSchema,
 	loaderDeps: ({ search: { range } }) => ({ range }),
 	loader: ({ context, deps }) => context.queryClient.ensureQueryData(classifierQualityQueryOptions(deps.range)),
-	component: ClassifierQualityPage
+	component: ClassifierQualityPage,
+	errorComponent: SectionError
 });
 
 const RANGE_LABELS: Record<AIUsageRange, string> = {

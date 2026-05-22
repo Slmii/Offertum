@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { billingStatusQueryOptions, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
 import { toReadableDate } from '@/lib/utils/date.utils';
@@ -15,7 +16,8 @@ import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/(app)/billing/')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions),
-	component: BillingPage
+	component: BillingPage,
+	errorComponent: SectionError
 });
 
 function BillingPage() {

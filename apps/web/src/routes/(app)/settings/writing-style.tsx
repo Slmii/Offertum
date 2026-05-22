@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
@@ -34,7 +35,8 @@ import { useFormContext, useWatch } from 'react-hook-form';
  */
 export const Route = createFileRoute('/(app)/settings/writing-style')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(tonePlaybookQueryOptions),
-	component: WritingStylePage
+	component: WritingStylePage,
+	errorComponent: SectionError
 });
 
 function WritingStylePage() {

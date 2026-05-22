@@ -1,3 +1,4 @@
+import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
@@ -48,7 +49,8 @@ export const Route = createFileRoute('/(app)/team')({
 			context.queryClient.ensureQueryData(myMembershipQueryOptions)
 		]);
 	},
-	component: TeamPage
+	component: TeamPage,
+	errorComponent: SectionError
 });
 
 function TeamPage() {
