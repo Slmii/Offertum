@@ -56,7 +56,7 @@ const OPPORTUNITY_INCLUDE = {
 	// W5.6 — 1:N relation now (was 1:1). Fetch all drafts ordered by `createdAt DESC`
 	// so the mapper can pluck `[0]` for "latest" and `.find(d => d.sentAt)` for "any
 	// sent." Typical row has 1-3 drafts; payload cost is negligible.
-	replyDrafts: { orderBy: { createdAt: 'desc' }, select: { sentAt: true, status: true } }
+	replyDrafts: { orderBy: { createdAt: 'desc' }, select: { sentAt: true, status: true, kind: true } }
 } as const satisfies Prisma.OpportunityInclude;
 
 /**

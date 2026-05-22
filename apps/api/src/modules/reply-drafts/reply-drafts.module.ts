@@ -22,6 +22,9 @@ import { Module } from '@nestjs/common';
 @Module({
 	imports: [AiModule, EmailAccountsModule, GmailModule, MicrosoftModule],
 	providers: [ReplyDraftsService, ReplyDraftsRepository],
-	exports: [ReplyDraftsService]
+	// `ReplyDraftsRepository` exported so the W6.1 `FollowUpSchedulerFunction` (in
+	// InngestModule) can run its candidate-enumeration query directly without going
+	// through the service. The processor still uses the service.
+	exports: [ReplyDraftsService, ReplyDraftsRepository]
 })
 export class ReplyDraftsModule {}

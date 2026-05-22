@@ -15,6 +15,8 @@ import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-wat
 import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft-backfill.function';
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
+import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
+import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { LogService } from '@/modules/logger/log.service';
@@ -102,6 +104,8 @@ async function bootstrap() {
 	const microsoftDeltaSync = app.get(MicrosoftDeltaSyncFunction);
 	const microsoftSubscriptionRenewal = app.get(MicrosoftSubscriptionRenewalFunction);
 	const replyDraftGenerate = app.get(ReplyDraftGenerateFunction);
+	const followUpScheduler = app.get(FollowUpSchedulerFunction);
+	const followUpProcessor = app.get(FollowUpProcessorFunction);
 	app.use(
 		'/api/inngest',
 		inngestServe({
@@ -114,7 +118,9 @@ async function bootstrap() {
 				microsoftBackfill.inngestFn,
 				microsoftDeltaSync.inngestFn,
 				microsoftSubscriptionRenewal.inngestFn,
-				replyDraftGenerate.inngestFn
+				replyDraftGenerate.inngestFn,
+				followUpScheduler.inngestFn,
+				followUpProcessor.inngestFn
 			]
 		})
 	);

@@ -1,4 +1,5 @@
 import { AI_CLIENT, type AIClient, type AIGenerateResult } from '@/modules/ai/clients/ai-client.interface';
+import { buildCheckInPromptNL, type CheckInPromptInput } from '@/modules/ai/reply-draft/prompts/nl-check-in';
 import { buildReplyDraftPromptNL } from '@/modules/ai/reply-draft/prompts/nl';
 import {
 	ReplyDraftResultSchema,
@@ -34,6 +35,21 @@ export class ReplyDraftGenerator {
 		const prompt = buildReplyDraftPromptNL(input);
 		return this.ai.generate({
 			purpose: 'reply-draft',
+			prompt,
+			schema: ReplyDraftResultSchema,
+			temperature: 0.4
+		});
+	}
+
+	/**
+	 * W6.1 — Generates a short "haven't heard back" check-in. Different prompt, different
+	 * `purpose` tag on the AICall row so the AI usage dashboard can split spend by intent.
+	 * Same response schema (single `body` string) so downstream code is unchanged.
+	 */
+	async generateCheckIn(input: CheckInPromptInput): Promise<AIGenerateResult<ReplyDraftResult>> {
+		const prompt = buildCheckInPromptNL(input);
+		return this.ai.generate({
+			purpose: 'reply-draft-check-in',
 			prompt,
 			schema: ReplyDraftResultSchema,
 			temperature: 0.4

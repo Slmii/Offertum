@@ -23,6 +23,7 @@ export * from './billing.js';
 export * from './classifier-quality.js';
 export * from './common.js';
 export * from './email.js';
+export * from './follow-up-settings.js';
 export * from './invitations.js';
 export * from './opportunities.js';
 export * from './reply-drafts.js';

@@ -32,4 +32,5 @@ export class OpportunityResponseDto implements Opportunity {
 	dismissReason!: OpportunityDismissReason | null;
 	dismissedByUserId!: string | null;
 	replyDraftSentAt!: string | null;
+	hasPendingCheckIn!: boolean;
 }

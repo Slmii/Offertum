@@ -1,4 +1,10 @@
-import type { CustomerReplyEntry, OpportunityDetail, ReplyDraft, ReplyDraftStatus } from '@quoteom/shared';
+import type {
+	CustomerReplyEntry,
+	OpportunityDetail,
+	ReplyDraft,
+	ReplyDraftKind,
+	ReplyDraftStatus
+} from '@quoteom/shared';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import type { ReplyDraftAttachmentResponseDto } from '@/modules/reply-draft-attachments/dto/reply-draft-attachment.response.dto';
 
@@ -20,6 +26,7 @@ export class ReplyDraftResponseDto implements ReplyDraft {
 	originalBody!: string;
 	body!: string;
 	status!: ReplyDraftStatus;
+	kind!: ReplyDraftKind;
 	wasEditedByUser!: boolean;
 	aiCallId!: string | null;
 	sentAt!: string | null;

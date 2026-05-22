@@ -48,7 +48,14 @@ export const InngestEvents = {
 	 * handler routes follow-up events to `generateFollowupDraft` (no idempotency short-
 	 * circuit — always creates a new draft row).
 	 */
-	OpportunityFollowupReceived: 'opportunity/followup.received'
+	OpportunityFollowupReceived: 'opportunity/followup.received',
+	/**
+	 * W6.1 — Fan-out event from the daily `FollowUpSchedulerFunction` cron. Payload:
+	 * `{ opportunityId, organizationId }`. One event per eligible REPLIED opportunity
+	 * per tick. Triggers `FollowUpProcessorFunction` which re-validates eligibility
+	 * (cap / cadence / latest-draft-status) before spending an OpenAI call.
+	 */
+	OpportunitySilenceFollowupDue: 'opportunity/silence.followup-due'
 } as const;
 
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];
@@ -73,7 +80,13 @@ export const InngestFunctionIds = {
 	/** W5.3 reply-draft generate — fires on `opportunity/created`, composes the AI draft
 	 *  in the org OWNER's voice and persists a `ReplyDraft` row. Idempotent via the
 	 *  `opportunityId @unique` constraint. */
-	ReplyDraftGenerate: 'reply-draft-generate'
+	ReplyDraftGenerate: 'reply-draft-generate',
+	/** W6.1 — Daily cron at 09:00 UTC. Enumerates eligible REPLIED opportunities per
+	 *  org and fans out `opportunity/silence.followup-due` events. */
+	FollowUpScheduler: 'follow-up-scheduler',
+	/** W6.1 — Per-opp processor. Listens to `opportunity/silence.followup-due`,
+	 *  re-validates the eligibility window, generates the check-in draft. */
+	FollowUpProcessor: 'follow-up-processor'
 } as const;
 
 /**
@@ -133,5 +146,13 @@ export const InngestSteps = {
 	ReplyDraftGenerate: {
 		/** Single step: fetch opportunity + owner voice → call generator → persist row. */
 		Generate: 'reply-draft-generate-compose'
+	},
+	FollowUpScheduler: {
+		/** Single step: query candidates + fan out one event per opp. */
+		FanOut: 'follow-up-scheduler-fan-out'
+	},
+	FollowUpProcessor: {
+		/** Single step: re-validate eligibility + generate the check-in draft. */
+		Generate: 'follow-up-processor-generate'
 	}
 } as const;

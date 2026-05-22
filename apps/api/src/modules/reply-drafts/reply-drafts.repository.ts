@@ -1,5 +1,11 @@
 import { Prisma } from '@/generated/prisma/client';
-import { EmailProvider, MembershipRole, ReplyDraftStatus as PrismaReplyDraftStatus } from '@/generated/prisma/enums';
+import {
+	EmailProvider,
+	OpportunityStatus as PrismaOpportunityStatus,
+	ReplyDraftKind as PrismaReplyDraftKind,
+	ReplyDraftStatus as PrismaReplyDraftStatus
+} from '@/generated/prisma/enums';
+import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
@@ -59,6 +65,25 @@ export interface OpportunityForReplyDraft {
 	 * just-sent draft without an inbound response).
 	 */
 	latestThreadMessage: RawMessageForReplyDraft | null;
+	/**
+	 * The User who owns the EmailAccount that received this opportunity's original
+	 * message. Used as the SECOND-PRIORITY sign-off name when there's no requesting
+	 * user with a name set (auto-generated drafts on opp-create, customer-reply
+	 * follow-ups, W6.1 scheduler check-ins). Falls back to the org name in the prompt
+	 * if this is also null. Replaces the prior "owner of the org" fallback so the
+	 * draft signs as the person whose inbox the conversation actually lives in, not
+	 * the org's billing-owner (which might be a different person).
+	 *
+	 * Note: this is the NAME source only. The writing-style playbook is NEVER pulled
+	 * from the mailbox user — only the requesting user's playbook is honored, else
+	 * the generic Dutch baseline. The mailbox user's playbook field exists but isn't
+	 * authored on their behalf.
+	 *
+	 * `null` only in the defensive case where the EmailAccount was deleted between
+	 * opp-creation and draft-generation — shouldn't happen in normal operation given
+	 * the FK cascade.
+	 */
+	mailboxUser: { id: string; name: string | null } | null;
 }
 
 export interface RawMessageForReplyDraft {
@@ -70,9 +95,11 @@ export interface RawMessageForReplyDraft {
 }
 
 /**
- * Voice fields used by both `findOwnerForOrganization` (org-OWNER default for W5.3
- * generate-on-arrival) and `findUserForVoice` (requesting user for W5.4 regenerate-
- * in-my-style). One interface, two retrieval paths.
+ * Voice fields for the requesting user — only `findUserForVoice` populates this now.
+ * (W6.1-followup) The previous "fall back to org OWNER's playbook" path was dropped
+ * because it baked one person's voice into every team member's drafts. Today: either
+ * the requesting user has a playbook → use it, or they don't → generic Dutch baseline.
+ * The mailbox-user's NAME (not their playbook) provides the sign-off fallback.
  */
 export interface UserVoice {
 	userId: string;
@@ -88,6 +115,22 @@ export interface CreateReplyDraftInput {
 	opportunityId: string;
 	body: string;
 	aiCallId: string | null;
+	/** W6.1 — tag scheduler-generated check-ins. Defaults to REPLY. */
+	kind?: PrismaReplyDraftKind;
+}
+
+/**
+ * W6.1 — Candidate row for the follow-up scheduler. One per opportunity that's
+ * eligible for a fresh check-in this tick. Owner+org settings are denormalised into
+ * the row so the processor can re-check conditions without a second query.
+ */
+export interface CheckInCandidate {
+	opportunityId: string;
+	organizationId: string;
+	cadenceDays: number;
+	maxCount: number;
+	lastSentAt: Date;
+	priorCheckInCount: number;
 }
 
 /** Input for `overwriteAfterRegenerate` — same shape as the create path. */
@@ -175,6 +218,14 @@ export class ReplyDraftsRepository {
 				customerDeadline: true,
 				customerAppointment: true,
 				deliverableHints: true,
+				// W6.1-followup — mailbox user (who connected the inbox this opp lives in)
+				// surfaces as the second-priority sign-off name when there's no requesting
+				// user with a name. Replaces the prior "org OWNER" fallback.
+				emailAccount: {
+					select: {
+						user: { select: { id: true, name: true } }
+					}
+				},
 				rawMessage: {
 					select: {
 						subject: true,
@@ -211,7 +262,15 @@ export class ReplyDraftsRepository {
 		// surfaces provider on `RawMessageForOpportunityProcessing`.
 		const latest = opportunity.threadMessages[0];
 		return {
-			...opportunity,
+			id: opportunity.id,
+			organizationId: opportunity.organizationId,
+			customerName: opportunity.customerName,
+			address: opportunity.address,
+			requestType: opportunity.requestType,
+			urgency: opportunity.urgency,
+			customerDeadline: opportunity.customerDeadline,
+			customerAppointment: opportunity.customerAppointment,
+			deliverableHints: opportunity.deliverableHints,
 			rawMessage: {
 				subject: opportunity.rawMessage.subject,
 				fromName: opportunity.rawMessage.fromName,
@@ -227,30 +286,10 @@ export class ReplyDraftsRepository {
 						raw: latest.raw,
 						provider: latest.emailAccount.provider
 					}
+				: null,
+			mailboxUser: opportunity.emailAccount?.user
+				? { id: opportunity.emailAccount.user.id, name: opportunity.emailAccount.user.name }
 				: null
-		};
-	}
-
-	/**
-	 * Find the org's OWNER user — their `User.tonePlaybookText` is the default voice for
-	 * drafts generated for this org (W5.3 "generate-on-arrival with org-default"). The
-	 * "regenerate in my voice" affordance (W5.4) uses `findUserForVoice` instead so a
-	 * non-OWNER member can swap to their own playbook.
-	 */
-	async findOwnerForOrganization(organizationId: string): Promise<UserVoice | null> {
-		const ownerMembership = await this.prisma.membership.findFirst({
-			where: { organizationId, role: MembershipRole.OWNER },
-			select: { user: { select: { id: true, name: true, tonePlaybookText: true } } }
-		});
-
-		if (!ownerMembership) {
-			return null;
-		}
-
-		return {
-			userId: ownerMembership.user.id,
-			name: ownerMembership.user.name,
-			tonePlaybookText: ownerMembership.user.tonePlaybookText
 		};
 	}
 
@@ -355,7 +394,8 @@ export class ReplyDraftsRepository {
 				originalBody: input.body,
 				body: input.body,
 				status: PrismaReplyDraftStatus.PENDING_APPROVAL,
-				aiCallId: input.aiCallId
+				aiCallId: input.aiCallId,
+				kind: input.kind ?? PrismaReplyDraftKind.REPLY
 			}
 		});
 		return true;
@@ -381,11 +421,191 @@ export class ReplyDraftsRepository {
 				originalBody: input.body,
 				body: input.body,
 				status: PrismaReplyDraftStatus.PENDING_APPROVAL,
-				aiCallId: input.aiCallId
+				aiCallId: input.aiCallId,
+				kind: input.kind ?? PrismaReplyDraftKind.REPLY
 			},
 			select: { id: true }
 		});
 		return { draftId: row.id };
+	}
+
+	/**
+	 * W6.1 — Enumerate opportunities eligible for an auto check-in this scheduler tick.
+	 *
+	 * Eligibility:
+	 *  - `status = REPLIED` (we sent something; customer hasn't replied on the thread —
+	 *    a customer reply would have flipped status back to NEW via `attachFollowupMessage`)
+	 *  - Not dismissed
+	 *  - At least one ReplyDraft with `status = SENT`
+	 *  - Latest ReplyDraft is SENT (no pending owner-facing draft already waiting on them
+	 *    — we don't want to stack check-ins on top of unsent work)
+	 *  - `(now − latestSentAt) ≥ org.followUpCadenceDays`
+	 *  - Count of prior CHECK_IN drafts on the opp `< org.followUpMaxCount`
+	 *  - Org's `followUpMaxCount > 0` (`0` disables the scheduler for the org)
+	 *  - Org is entitled (trialing / active / past_due) — same set as `EntitlementGuard`
+	 *
+	 * Returned `lastSentAt` + `priorCheckInCount` are re-validated by the processor
+	 * before generation so a race (owner sent a fresh draft between scheduler tick and
+	 * processor run) can't produce a stale check-in.
+	 *
+	 * Uses raw SQL because the conditions span four joins + an aggregate; expressing
+	 * this through Prisma's nested-where would require fetching too many rows client-
+	 * side and counting in Node.
+	 */
+	async findCheckInCandidates(now: Date, batchSize: number): Promise<CheckInCandidate[]> {
+		const rows = await this.prisma.$queryRaw<
+			Array<{
+				opportunityId: string;
+				organizationId: string;
+				cadenceDays: number;
+				maxCount: number;
+				lastSentAt: Date;
+				priorCheckInCount: bigint;
+			}>
+		>(Prisma.sql`
+			WITH latest_sent AS (
+				SELECT
+					rd."opportunityId" AS "opportunityId",
+					MAX(rd."sentAt")    AS "lastSentAt",
+					(
+						SELECT rd2."id" FROM "ReplyDraft" rd2
+						WHERE rd2."opportunityId" = rd."opportunityId"
+						ORDER BY rd2."createdAt" DESC
+						LIMIT 1
+					)                    AS "latestDraftId",
+					(
+						SELECT rd3."status" FROM "ReplyDraft" rd3
+						WHERE rd3."opportunityId" = rd."opportunityId"
+						ORDER BY rd3."createdAt" DESC
+						LIMIT 1
+					)                    AS "latestDraftStatus",
+					COUNT(*) FILTER (
+						WHERE rd."kind" = ${PrismaReplyDraftKind.CHECK_IN}::"ReplyDraftKind"
+					)                    AS "priorCheckInCount"
+				FROM "ReplyDraft" rd
+				WHERE rd."status" = ${PrismaReplyDraftStatus.SENT}::"ReplyDraftStatus"
+				GROUP BY rd."opportunityId"
+			)
+			SELECT
+				o."id"                              AS "opportunityId",
+				o."organizationId"                  AS "organizationId",
+				org."followUpCadenceDays"           AS "cadenceDays",
+				org."followUpMaxCount"              AS "maxCount",
+				ls."lastSentAt"                     AS "lastSentAt",
+				ls."priorCheckInCount"              AS "priorCheckInCount"
+			FROM "Opportunity" o
+			JOIN "Organization" org ON org."id" = o."organizationId"
+			JOIN latest_sent ls     ON ls."opportunityId" = o."id"
+			LEFT JOIN "Subscription" sub ON sub."organizationId" = o."organizationId"
+			WHERE o."status" = ${PrismaOpportunityStatus.REPLIED}::"OpportunityStatus"
+			  AND o."dismissedAt" IS NULL
+			  AND org."followUpMaxCount" > 0
+			  AND org."followUpCadenceDays" >= 1
+			  AND ls."latestDraftStatus" = ${PrismaReplyDraftStatus.SENT}::"ReplyDraftStatus"
+			  AND ls."priorCheckInCount" < org."followUpMaxCount"
+			  AND ${now} - ls."lastSentAt" >= make_interval(days => org."followUpCadenceDays")
+			  AND (
+				  sub."status" = ANY(${ENTITLED_STRIPE_STATUSES as string[]}::text[])
+				  OR sub."status" IS NULL
+			  )
+			ORDER BY ls."lastSentAt" ASC
+			LIMIT ${batchSize}
+		`);
+		return rows.map(r => ({
+			opportunityId: r.opportunityId,
+			organizationId: r.organizationId,
+			cadenceDays: r.cadenceDays,
+			maxCount: r.maxCount,
+			lastSentAt: r.lastSentAt,
+			priorCheckInCount: Number(r.priorCheckInCount)
+		}));
+	}
+
+	/**
+	 * W6.1 — Cheap defense-in-depth re-check before the processor calls the AI. Returns
+	 * `null` if the opp is no longer eligible (status changed, draft was sent in the
+	 * intervening seconds, owner started a draft, etc.). Caller treats null as "skip".
+	 */
+	async reValidateCheckInCandidate(opportunityId: string, now: Date): Promise<CheckInCandidate | null> {
+		const [opp] = await this.prisma.$queryRaw<
+			Array<{
+				opportunityId: string;
+				organizationId: string;
+				cadenceDays: number;
+				maxCount: number;
+				oppStatus: PrismaOpportunityStatus;
+				dismissedAt: Date | null;
+				subStatus: string | null;
+				lastSentAt: Date | null;
+				latestDraftStatus: PrismaReplyDraftStatus | null;
+				priorCheckInCount: bigint;
+			}>
+		>(Prisma.sql`
+			SELECT
+				o."id"                    AS "opportunityId",
+				o."organizationId"        AS "organizationId",
+				org."followUpCadenceDays" AS "cadenceDays",
+				org."followUpMaxCount"    AS "maxCount",
+				o."status"                AS "oppStatus",
+				o."dismissedAt"           AS "dismissedAt",
+				sub."status"              AS "subStatus",
+				(
+					SELECT MAX(rd."sentAt") FROM "ReplyDraft" rd
+					WHERE rd."opportunityId" = o."id"
+					  AND rd."status" = ${PrismaReplyDraftStatus.SENT}::"ReplyDraftStatus"
+				) AS "lastSentAt",
+				(
+					SELECT rd2."status" FROM "ReplyDraft" rd2
+					WHERE rd2."opportunityId" = o."id"
+					ORDER BY rd2."createdAt" DESC
+					LIMIT 1
+				) AS "latestDraftStatus",
+				(
+					SELECT COUNT(*) FROM "ReplyDraft" rd3
+					WHERE rd3."opportunityId" = o."id"
+					  AND rd3."kind" = ${PrismaReplyDraftKind.CHECK_IN}::"ReplyDraftKind"
+				) AS "priorCheckInCount"
+			FROM "Opportunity" o
+			JOIN "Organization" org ON org."id" = o."organizationId"
+			LEFT JOIN "Subscription" sub ON sub."organizationId" = o."organizationId"
+			WHERE o."id" = ${opportunityId}::uuid
+		`);
+
+		// Re-check entitlement at processor time. If a sub was canceled between the
+		// scheduler tick and the processor run we must NOT spend an OpenAI call on it
+		// — the org has lost write entitlement everywhere else, the scheduler should
+		// stand down in lockstep.
+		const subEntitled = opp?.subStatus === null || ENTITLED_STRIPE_STATUSES.includes(opp?.subStatus ?? '');
+
+		if (
+			!opp ||
+			opp.oppStatus !== PrismaOpportunityStatus.REPLIED ||
+			opp.dismissedAt !== null ||
+			opp.lastSentAt === null ||
+			opp.latestDraftStatus !== PrismaReplyDraftStatus.SENT ||
+			opp.maxCount === 0 ||
+			opp.cadenceDays < 1 ||
+			!subEntitled
+		) {
+			return null;
+		}
+		const priorCheckInCount = Number(opp.priorCheckInCount);
+		if (priorCheckInCount >= opp.maxCount) {
+			return null;
+		}
+		const cadenceMs = opp.cadenceDays * 24 * 60 * 60 * 1000;
+		if (now.getTime() - opp.lastSentAt.getTime() < cadenceMs) {
+			return null;
+		}
+
+		return {
+			opportunityId: opp.opportunityId,
+			organizationId: opp.organizationId,
+			cadenceDays: opp.cadenceDays,
+			maxCount: opp.maxCount,
+			lastSentAt: opp.lastSentAt,
+			priorCheckInCount
+		};
 	}
 
 	/**

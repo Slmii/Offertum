@@ -98,6 +98,11 @@ function HomePage() {
 								Schrijfstijl
 							</Button>
 						)}
+						{isOwner && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/settings/follow-ups' })}>
+								Follow-ups
+							</Button>
+						)}
 						{me.user.isAdmin && (
 							<Button variant='outlined' onClick={() => navigate({ to: '/admin/ai-usage' })}>
 								AI usage (dev)

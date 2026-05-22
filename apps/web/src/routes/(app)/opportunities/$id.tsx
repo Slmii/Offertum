@@ -249,9 +249,14 @@ function OpportunityDetailPage() {
 						spacing={1}
 						sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
 					>
-						<Typography variant='h2' sx={{ fontSize: 18 }}>
-							Concept-antwoord
-						</Typography>
+						<Stack direction='row' spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+							<Typography variant='h2' sx={{ fontSize: 18 }}>
+								Concept-antwoord
+							</Typography>
+							{replyDraft?.kind === 'check_in' && (
+								<Chip size='small' label='Automatische follow-up' color='info' variant='outlined' />
+							)}
+						</Stack>
 						{replyDraft && isDraftEditable && me.user.hasTonePlaybook && (
 							<Button
 								size='small'
@@ -1099,6 +1104,9 @@ function ReplyDraftHistoryEntry({
 						color={isSent ? 'success' : 'default'}
 						variant={isSent ? 'filled' : 'outlined'}
 					/>
+					{draft.kind === 'check_in' && (
+						<Chip size='small' label='Automatische follow-up' color='info' variant='outlined' />
+					)}
 					<Typography variant='caption' color='text.secondary'>
 						{headerText}
 					</Typography>

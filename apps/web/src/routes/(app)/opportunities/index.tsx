@@ -352,6 +352,24 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 								Afgewezen · {OPPORTUNITY_DISMISS_REASON_LABELS_NL[opportunity.dismissReason]}
 							</Box>
 						)}
+						{opportunity.hasPendingCheckIn && (
+							<Box
+								component='span'
+								sx={{
+									fontSize: '0.65rem',
+									fontWeight: 500,
+									letterSpacing: '0.02em',
+									textTransform: 'uppercase',
+									color: '#1A237E',
+									backgroundColor: '#E8EAF6',
+									borderRadius: '999px',
+									padding: '2px 8px'
+								}}
+								title='Een automatische follow-up wacht op je beoordeling'
+							>
+								Auto follow-up
+							</Box>
+						)}
 						<Typography
 							variant='body2'
 							sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}

@@ -1,5 +1,7 @@
 import { GmailModule } from '@/modules/gmail/gmail.module';
 import { MicrosoftModule } from '@/modules/microsoft/microsoft.module';
+import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
+import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfill.function';
 import { GmailDeltaSyncFunction } from '@/modules/inngest/functions/gmail-delta-sync.function';
 import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-watch-renewal.function';
@@ -31,7 +33,9 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		MicrosoftBackfillFunction,
 		MicrosoftDeltaSyncFunction,
 		MicrosoftSubscriptionRenewalFunction,
-		ReplyDraftGenerateFunction
+		ReplyDraftGenerateFunction,
+		FollowUpSchedulerFunction,
+		FollowUpProcessorFunction
 	],
 	exports: [
 		GmailBackfillFunction,
@@ -40,7 +44,9 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		MicrosoftBackfillFunction,
 		MicrosoftDeltaSyncFunction,
 		MicrosoftSubscriptionRenewalFunction,
-		ReplyDraftGenerateFunction
+		ReplyDraftGenerateFunction,
+		FollowUpSchedulerFunction,
+		FollowUpProcessorFunction
 	]
 })
 export class InngestModule {}

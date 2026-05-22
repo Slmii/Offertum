@@ -1,5 +1,9 @@
 import type { EnvSchema } from '@/config/env.schema';
-import { OpportunityStatus as PrismaOpportunityStatus } from '@/generated/prisma/enums';
+import {
+	OpportunityStatus as PrismaOpportunityStatus,
+	ReplyDraftKind as PrismaReplyDraftKind,
+	ReplyDraftStatus as PrismaReplyDraftStatus
+} from '@/generated/prisma/enums';
 import { detectBulkMail } from '@/lib/email/bulk-mail-filter';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import {
@@ -1401,8 +1405,30 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		// W5.6 — `replyDrafts` is 1:N, ordered `createdAt DESC` by the include. Picking
 		// the *first* draft with a `sentAt` gives us the most-recent send, which is what
 		// the dismiss-dialog warning + the `dismissedAfterSend` audit flag care about.
-		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null
+		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
+		// W6.1 — suppress the indicator on dismissed rows. A check-in is only ever
+		// "actionable" if the owner is still working the opp; on a dismissed row the
+		// pill would be noise (and a stale CHECK_IN could exist from a race where the
+		// opp was dismissed between scheduler enumeration and processor run).
+		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts)
 	};
+}
+
+interface PendingCheckInProbe {
+	kind: PrismaReplyDraftKind;
+	status: PrismaReplyDraftStatus;
+}
+
+// W6.1 — Latest draft is the head of the `createdAt DESC` array. A pending check-in
+// surfaces when that head is a scheduler-generated CHECK_IN and hasn't been sent yet —
+// once sent, the regular status chip + sent timestamp carry the signal so the dedicated
+// indicator stands down.
+function hasPendingCheckIn(replyDrafts: ReadonlyArray<PendingCheckInProbe>): boolean {
+	const latest = replyDrafts[0];
+	if (!latest) {
+		return false;
+	}
+	return latest.kind === PrismaReplyDraftKind.CHECK_IN && latest.status !== PrismaReplyDraftStatus.SENT;
 }
 
 function toStringArray(value: unknown): string[] {
@@ -1420,6 +1446,10 @@ function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][n
 		originalBody: draft.originalBody,
 		body: draft.body,
 		status: REPLY_DRAFT_STATUS_TO_WIRE[draft.status],
+		// W6.1 — `kind` is a Prisma enum mirrored 1:1 to the lowercased wire format.
+		// Direct `.toLowerCase()` is safe because the wire union is `'reply' | 'check_in'`,
+		// matching `REPLY` / `CHECK_IN` lowercased.
+		kind: draft.kind.toLowerCase() as 'reply' | 'check_in',
 		wasEditedByUser: draft.wasEditedByUser,
 		aiCallId: draft.aiCallId ?? null,
 		sentAt: draft.sentAt?.toISOString() ?? null,
@@ -1477,6 +1507,7 @@ function toOpportunityDetailResponseDto(
 		dismissedByUserId: opportunity.dismissedById ?? null,
 		// W5.6 — `replyDrafts` is 1:N. See the list mapper for the same `find()` logic.
 		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
+		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
 		originalEmailBody,
 		// Latest draft (`createdAt DESC` already applied in the include) — null when no
 		// draft exists yet (cold-start window between Opportunity insert and the

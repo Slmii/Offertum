@@ -52,6 +52,15 @@ export interface Opportunity {
 	 * mentions the SENT email — keep the two signals decoupled.
 	 */
 	replyDraftSentAt: string | null;
+	/**
+	 * W6.1 — `true` when the LATEST `ReplyDraft` on this opp has `kind = 'check_in'` AND
+	 * is not yet sent (status ≠ `sent`). Drives the "Automatische follow-up" indicator
+	 * on the opportunity list so owners can spot scheduler-generated check-ins waiting
+	 * for review without opening every row. Goes back to `false` the moment the owner
+	 * sends it (the SENT draft no longer needs a UI cue — the regular status chip + sent
+	 * timestamp covers it).
+	 */
+	hasPendingCheckIn: boolean;
 }
 
 /**

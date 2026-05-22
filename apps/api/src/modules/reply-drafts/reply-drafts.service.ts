@@ -108,7 +108,11 @@ export class ReplyDraftsService {
 			return { created: false, alreadyExisted: false };
 		}
 
-		const owner = await this.repository.findOwnerForOrganization(opportunity.organizationId);
+		// W6.1-followup voice policy:
+		//   - playbook: requesting user's if any → otherwise generic (no fallback)
+		//   - sign-off: requesting user's name → mailbox user's name → org name
+		// `upsertFromOpportunity` has no requesting user (the Inngest pipeline triggers
+		// it on opp-create), so playbook = null (generic) and sign-off = mailbox user.
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
 
 		const bodyText = buildRawMessageAIInput({
@@ -131,8 +135,8 @@ export class ReplyDraftsService {
 			customerDeadline: opportunity.customerDeadline?.toISOString().slice(0, 10) ?? null,
 			customerAppointment: opportunity.customerAppointment?.toISOString().slice(0, 10) ?? null,
 			deliverableHints: this.toStringArray(opportunity.deliverableHints),
-			tonePlaybookText: owner?.tonePlaybookText ?? null,
-			senderName: owner?.name ?? null,
+			tonePlaybookText: null,
+			senderName: opportunity.mailboxUser?.name ?? null,
 			organizationName
 		};
 
@@ -153,8 +157,8 @@ export class ReplyDraftsService {
 				opportunityId,
 				organizationId: opportunity.organizationId,
 				aiProvider: `${result.provider}/${result.model}`,
-				usedTonePlaybook: input.tonePlaybookText !== null,
-				ownerUserId: owner?.userId ?? null,
+				usedTonePlaybook: false,
+				mailboxUserId: opportunity.mailboxUser?.id ?? null,
 				bodyLength: result.value.body.length
 			},
 			context: 'ReplyDraftsService'
@@ -196,9 +200,12 @@ export class ReplyDraftsService {
 			return { created: false, draftId: null };
 		}
 
-		const voice = requestingUserId
-			? await this.repository.findUserForVoice(requestingUserId)
-			: await this.repository.findOwnerForOrganization(opportunity.organizationId);
+		// W6.1-followup voice policy:
+		//   - playbook: requesting user's if any → otherwise generic (no owner fallback)
+		//   - sign-off: requesting user's name → mailbox user's name → org name
+		// The customer-reply branch passes `requestingUserId = null` (no human triggered
+		// this); the owner-compose branch passes the clicking user's id.
+		const voice = requestingUserId ? await this.repository.findUserForVoice(requestingUserId) : null;
 		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
 
 		// W5.6 bug-fix — Anchor the follow-up draft to the LATEST customer message
@@ -229,7 +236,7 @@ export class ReplyDraftsService {
 			customerAppointment: opportunity.customerAppointment?.toISOString().slice(0, 10) ?? null,
 			deliverableHints: this.toStringArray(opportunity.deliverableHints),
 			tonePlaybookText: voice?.tonePlaybookText ?? null,
-			senderName: voice?.name ?? null,
+			senderName: voice?.name ?? opportunity.mailboxUser?.name ?? null,
 			organizationName
 		};
 
@@ -252,10 +259,125 @@ export class ReplyDraftsService {
 				aiProvider: `${result.provider}/${result.model}`,
 				usedTonePlaybook: input.tonePlaybookText !== null,
 				voiceUserId: voice?.userId ?? null,
+				mailboxUserId: opportunity.mailboxUser?.id ?? null,
 				bodyLength: result.value.body.length,
 				inputBodyTextPreview: bodyText.slice(0, 200),
 				draftId,
 				triggeredBy
+			},
+			context: 'ReplyDraftsService'
+		});
+
+		return { created: true, draftId };
+	}
+
+	/**
+	 * W6.1 — Generate a "haven't heard back" check-in draft on a REPLIED opportunity.
+	 * Called by the scheduler processor; idempotent against races via the repository's
+	 * `reValidateCheckInCandidate` pre-check.
+	 *
+	 * Differs from `generateFollowupDraft`:
+	 *  - Re-validates eligibility (status / cap / cadence / latest-draft-is-SENT) before
+	 *    spending an OpenAI call
+	 *  - Uses the dedicated check-in prompt (`buildCheckInPromptNL`) — short, polite, no
+	 *    re-quote, no marketing colour
+	 *  - Writes `ReplyDraft.kind = CHECK_IN` so the history UI tags it and the next
+	 *    scheduler tick counts it correctly
+	 *  - Anchors on the originating customer message (the customer has been silent —
+	 *    there is no `latestThreadMessage` to anchor on by definition)
+	 */
+	async generateCheckInDraft(
+		opportunityId: string,
+		now: Date = new Date()
+	): Promise<{ created: boolean; draftId: string | null; skipReason?: string }> {
+		const candidate = await this.repository.reValidateCheckInCandidate(opportunityId, now);
+		if (!candidate) {
+			this.logService.logAction({
+				action: 'reply_draft.check_in.skipped_stale',
+				message: `Check-in skipped — opportunity ${opportunityId} no longer eligible at processor time`,
+				metadata: { opportunityId },
+				level: 'log',
+				context: 'ReplyDraftsService'
+			});
+			return { created: false, draftId: null, skipReason: 'no_longer_eligible' };
+		}
+
+		const opportunity = await this.repository.findOpportunityForGeneration(opportunityId);
+		if (!opportunity) {
+			this.logService.logAction({
+				action: 'reply_draft.check_in.opportunity_not_found',
+				message: `Opportunity ${opportunityId} disappeared between candidate query and processor`,
+				metadata: { opportunityId },
+				level: 'warn',
+				context: 'ReplyDraftsService'
+			});
+			return { created: false, draftId: null, skipReason: 'opportunity_not_found' };
+		}
+
+		// W6.1-followup voice policy: scheduler-triggered, no requesting user. Playbook
+		// stays null → generic Dutch baseline. Sign-off uses the mailbox user's name
+		// (whoever owns the inbox this conversation lives in) → org name fallback.
+		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
+
+		// Anchor on the originating customer message. The customer has been silent, so
+		// `latestThreadMessage` is by definition either null or our own outbound (and
+		// `findOpportunityForGeneration` only surfaces inbound messages on the thread).
+		const anchorMessage = opportunity.rawMessage;
+		const bodyText = buildRawMessageAIInput({
+			provider: anchorMessage.provider,
+			subject: anchorMessage.subject,
+			fromName: anchorMessage.fromName,
+			fromEmail: anchorMessage.fromEmail,
+			raw: anchorMessage.raw
+		}).bodyText;
+
+		const daysSinceSent = Math.max(
+			1,
+			Math.round((now.getTime() - candidate.lastSentAt.getTime()) / (24 * 60 * 60 * 1000))
+		);
+
+		const input: ReplyDraftInput = {
+			subject: anchorMessage.subject,
+			fromName: anchorMessage.fromName,
+			fromEmail: anchorMessage.fromEmail,
+			bodyText,
+			customerName: opportunity.customerName,
+			address: opportunity.address,
+			requestType: opportunity.requestType,
+			urgency: this.toWireUrgency(opportunity.urgency),
+			customerDeadline: opportunity.customerDeadline?.toISOString().slice(0, 10) ?? null,
+			customerAppointment: opportunity.customerAppointment?.toISOString().slice(0, 10) ?? null,
+			deliverableHints: this.toStringArray(opportunity.deliverableHints),
+			tonePlaybookText: null,
+			senderName: opportunity.mailboxUser?.name ?? null,
+			organizationName
+		};
+
+		const result = await this.generator.generateCheckIn({ ...input, daysSinceSent });
+
+		const { draftId } = await this.repository.createFollowup({
+			opportunityId,
+			body: result.value.body,
+			aiCallId: result.callId,
+			kind: 'CHECK_IN'
+		});
+
+		this.logService.logAction({
+			action: 'reply_draft.check_in.created',
+			message: `Check-in draft generated for opportunity ${opportunityId} after ${daysSinceSent} day(s) silence (prior=${candidate.priorCheckInCount}, cap=${candidate.maxCount})`,
+			metadata: {
+				// `triggeredBy` distinguishes scheduler-driven check-ins from any future
+				// user-initiated path (none today, but future-proofs the audit query).
+				triggeredBy: 'scheduler',
+				opportunityId,
+				organizationId: opportunity.organizationId,
+				daysSinceSent,
+				priorCheckInCount: candidate.priorCheckInCount,
+				maxCount: candidate.maxCount,
+				aiProvider: `${result.provider}/${result.model}`,
+				mailboxUserId: opportunity.mailboxUser?.id ?? null,
+				draftId,
+				bodyLength: result.value.body.length
 			},
 			context: 'ReplyDraftsService'
 		});
@@ -307,7 +429,8 @@ export class ReplyDraftsService {
 			customerAppointment: opportunity.customerAppointment?.toISOString().slice(0, 10) ?? null,
 			deliverableHints: this.toStringArray(opportunity.deliverableHints),
 			tonePlaybookText: voice?.tonePlaybookText ?? null,
-			senderName: voice?.name ?? null,
+			// W6.1-followup sign-off chain: requesting user → mailbox user → org name.
+			senderName: voice?.name ?? opportunity.mailboxUser?.name ?? null,
 			organizationName
 		};
 

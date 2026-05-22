@@ -7,7 +7,7 @@ import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto'
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { TonePlaybook } from '@quoteom/shared';
+import type { FollowUpSettings, TonePlaybook } from '@quoteom/shared';
 
 /**
  * Reads + writes scoped to the current user. Controller stays thin — orchestrates
@@ -191,6 +191,55 @@ export class MeService {
 			text: updated.tonePlaybookText,
 			updatedAt: updated.tonePlaybookUpdatedAt?.toISOString() ?? null
 		};
+	}
+
+	/**
+	 * W6.2 — Read the active org's follow-up cadence + cap. Surfaced to OWNER only at
+	 * the controller layer; the service itself doesn't care who's asking — the
+	 * `OrganizationGuard` has already proven membership.
+	 */
+	async getFollowUpSettings(organizationId: string): Promise<FollowUpSettings> {
+		const row = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { followUpCadenceDays: true, followUpMaxCount: true }
+		});
+		return { cadenceDays: row.followUpCadenceDays, maxCount: row.followUpMaxCount };
+	}
+
+	/**
+	 * W6.2 — Update the active org's follow-up cadence + cap. Owner-only at the
+	 * controller layer. Same persistence pattern as `updateTonePlaybook`: write, then
+	 * audit-log. No need to reschedule existing per-opp timers — the W6.1 scheduler
+	 * recomputes eligibility from `org.followUpCadenceDays` every tick, so the change
+	 * is picked up automatically on the next 09:00 run.
+	 */
+	async updateFollowUpSettings(
+		actingUserId: string,
+		organizationId: string,
+		input: { cadenceDays: number; maxCount: number }
+	): Promise<FollowUpSettings> {
+		const updated = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: {
+				followUpCadenceDays: input.cadenceDays,
+				followUpMaxCount: input.maxCount
+			},
+			select: { followUpCadenceDays: true, followUpMaxCount: true }
+		});
+
+		this.logService.logAction({
+			action: 'organization.follow_up_settings_updated',
+			message: `Follow-up settings updated for org ${organizationId} → cadence=${input.cadenceDays}d, cap=${input.maxCount}`,
+			metadata: {
+				organizationId,
+				updatedBy: actingUserId,
+				cadenceDays: input.cadenceDays,
+				maxCount: input.maxCount
+			},
+			context: 'MeService'
+		});
+
+		return { cadenceDays: updated.followUpCadenceDays, maxCount: updated.followUpMaxCount };
 	}
 
 	/**

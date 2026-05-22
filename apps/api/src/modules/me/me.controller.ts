@@ -2,9 +2,11 @@ import { AuthGuard } from '@/common/guards/auth.guard';
 import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { OwnerGuard } from '@/common/guards/owner.guard';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
+import { FollowUpSettingsResponseDto } from '@/modules/me/dto/follow-up-settings.response.dto';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { SwitchOrganizationDto } from '@/modules/me/dto/switch-organization.dto';
 import { TonePlaybookResponseDto } from '@/modules/me/dto/tone-playbook.response.dto';
+import { UpdateFollowUpSettingsDto } from '@/modules/me/dto/update-follow-up-settings.dto';
 import { UpdateTonePlaybookDto } from '@/modules/me/dto/update-tone-playbook.dto';
 import { MeService } from '@/modules/me/me.service';
 import {
@@ -16,6 +18,7 @@ import {
 	HttpStatus,
 	Param,
 	ParseUUIDPipe,
+	Patch,
 	Post,
 	Put,
 	Req,
@@ -89,6 +92,28 @@ export class MeController {
 	@Put('tone-playbook')
 	updateTonePlaybook(@Req() request: Request, @Body() body: UpdateTonePlaybookDto): Promise<TonePlaybookResponseDto> {
 		return this.me.updateTonePlaybook(this.userId(request), body.text);
+	}
+
+	@ApiOperation({ summary: 'Read the active organization’s follow-up cadence + cap (W6.2)' })
+	@ApiOkResponse({ type: FollowUpSettingsResponseDto })
+	@UseGuards(OrganizationGuard)
+	@Get('follow-up-settings')
+	getFollowUpSettings(@Req() request: Request): Promise<FollowUpSettingsResponseDto> {
+		return this.me.getFollowUpSettings(request.organizationId!);
+	}
+
+	@ApiOperation({ summary: 'Update the active organization’s follow-up cadence + cap (owner-only, W6.2)' })
+	@ApiOkResponse({ type: FollowUpSettingsResponseDto })
+	@UseGuards(OwnerGuard)
+	@Patch('follow-up-settings')
+	updateFollowUpSettings(
+		@Req() request: Request,
+		@Body() body: UpdateFollowUpSettingsDto
+	): Promise<FollowUpSettingsResponseDto> {
+		return this.me.updateFollowUpSettings(this.userId(request), request.organizationId!, {
+			cadenceDays: body.cadenceDays,
+			maxCount: body.maxCount
+		});
 	}
 
 	/**

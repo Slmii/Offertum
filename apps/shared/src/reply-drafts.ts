@@ -12,12 +12,22 @@
 export const REPLY_DRAFT_STATUSES = ['pending_approval', 'edited', 'sent'] as const;
 export type ReplyDraftStatus = (typeof REPLY_DRAFT_STATUSES)[number];
 
+/**
+ * W6.1 — Distinguishes scheduler-generated "haven't heard back" check-ins from
+ * owner-initiated replies. The UI uses `kind` to label CHECK_IN drafts in the
+ * history panel ("Automatische follow-up") so the owner knows the AI wrote a
+ * polite nudge rather than a substantive reply.
+ */
+export const REPLY_DRAFT_KINDS = ['reply', 'check_in'] as const;
+export type ReplyDraftKind = (typeof REPLY_DRAFT_KINDS)[number];
+
 export interface ReplyDraft {
 	id: string;
 	opportunityId: string;
 	originalBody: string;
 	body: string;
 	status: ReplyDraftStatus;
+	kind: ReplyDraftKind;
 	wasEditedByUser: boolean;
 	aiCallId: string | null;
 	sentAt: string | null;

@@ -417,17 +417,19 @@ opportunities/
                                              # ReplyDraftResponseDto, UpdateReplyDraftDto, ...)
 ```
 
-W5.3–W5.6 add the AI-reply-generation + send mechanics under `apps/api/src/modules/reply-drafts/`:
+W5.3–W6.1 add the AI-reply-generation + send mechanics under `apps/api/src/modules/reply-drafts/`:
 
 ```
 reply-drafts/
 ├── reply-drafts.service.ts                  # upsertFromOpportunity (W5.3 initial draft) +
 │                                            # regenerate (W5.4 in-my-style) + send (W5.5 Gmail/Graph) +
-│                                            # generateFollowupDraft (W5.6 customer-reply OR owner-compose)
+│                                            # generateFollowupDraft (W5.6 customer-reply OR owner-compose) +
+│                                            # generateCheckInDraft (W6.1 silence check-in, re-validates eligibility)
 ├── reply-drafts.repository.ts               # findByOpportunityId (latest by createdAt DESC) +
-│                                            # createIfAbsent (first draft) + createFollowup (always new) +
+│                                            # createIfAbsent (first draft) + createFollowup (always new, accepts kind) +
 │                                            # overwriteAfterRegenerate + markSent (conditional opp.status) +
-│                                            # findSendContext (+ thread-reply headers)
+│                                            # findSendContext (+ thread-reply headers) +
+│                                            # findCheckInCandidates + reValidateCheckInCandidate (W6.1, raw SQL)
 └── reply-drafts.module.ts                   # Imports AiModule, EmailAccountsModule, GmailModule,
                                              # MicrosoftModule; @Inject(ATTACHMENT_STORAGE) on the service
 ```
@@ -501,6 +503,17 @@ The Inngest backfill + delta-sync functions chain the pipeline via `processOppor
 **19. RFC 2822 multipart for Gmail attachments, JSON array for Graph.** `buildRfc2822Reply` switches to `multipart/mixed` with a random 128-bit boundary when `attachments` is non-empty; each part has `Content-Type` + `Content-Disposition: attachment` + RFC 2231 `filename*=UTF-8''<encoded>` for non-ASCII names; base64 body wrapped at 76 cols per RFC 2045. Graph's `sendMail` takes a structured `attachments: [{ '@odata.type': '#microsoft.graph.fileAttachment', name, contentType, contentBytes: base64 }]` array. Service-layer `ReplyDraftsService.send` loads each blob from `AttachmentStorage.get(storageKey)` in parallel before opening the OAuth-scoped send block, runs a final defense-in-depth total-bytes guard (25 MB cap), then hands provider-specific shapes to Gmail/Graph.
 
 **20. Fully-open opportunity status transitions.** `isOpportunityStatusTransitionAllowed` was deleted (it always returned true after W5.5-followup; the per-status policy table was aesthetic). Any status → any other. Misclicks on WON/LOST recoverable. The same-status no-op short-circuit stays in `updateStatus` to avoid a wasted DB write. Audit-log (`Log` table) remains the authoritative trail of every transition for forensics.
+
+**21a. Voice + sign-off resolution (W6.1-followup).** Every reply-draft generation path resolves two things separately: the **writing-style playbook** (the prose voice) and the **sign-off name** (the human who's signing the email). Policy:
+
+|                                                                                 | Playbook                                      | Sign-off name                                       |
+| ------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------- |
+| Has requesting user (W5.4 regenerate, owner-compose followup)                   | requesting user's playbook → generic baseline | requesting user.name → mailbox user.name → org name |
+| No requesting user (W5.3 initial draft, customer-reply followup, W6.1 check-in) | generic baseline                              | mailbox user.name → org name                        |
+
+Where "mailbox user" = `Opportunity.emailAccount.user` (whoever connected the inbox the conversation lives in). The prior "fall back to org OWNER's playbook" rule was retired because it baked one person's voice into every team member's drafts, and was conceptually wrong on multi-user mailboxes. No one else's playbook is ever used as a fallback for someone else's draft — the explicit choice is generic over wrong-voice. The mailbox user's NAME (not their playbook) provides the sign-off fallback because they're the legal sender of the email even when they didn't write this specific reply.
+
+**21. Silence-check-in scheduler is a cron + fan-out + per-opp processor (W6.1).** Two Inngest functions: `FollowUpSchedulerFunction` (cron `TZ=Europe/Amsterdam 0 8 * * *` daily — 08:00 Amsterdam local time, DST-aware) enumerates eligible REPLIED opps via raw SQL in `repository.findCheckInCandidates` (cap=500/tick) and fans out one `opportunity/silence.followup-due` event per candidate; `FollowUpProcessorFunction` (concurrency=5) receives each event, re-validates eligibility via `reValidateCheckInCandidate` _inside_ the step.run, then calls `ReplyDraftsService.generateCheckInDraft`. Eligibility = `status = REPLIED ∧ not dismissed ∧ latest draft is SENT ∧ (now - latestSentAt) ≥ org.followUpCadenceDays ∧ priorCheckInCount < org.followUpMaxCount ∧ org entitled`. Cap is on `ReplyDraft.kind = CHECK_IN` rows only — owner-initiated drafts don't consume the cap. Setting `Organization.followUpMaxCount = 0` disables the scheduler for the org. Dedicated `buildCheckInPromptNL` prompt (short, polite, no re-quote) keeps the AI from re-pitching; `ReplyDraftGenerator.generateCheckIn` tags the AICall with `purpose: 'reply-draft-check-in'` so the admin AI-usage dashboard can split spend by intent.
 
 ### Accuracy harness workflow (`pnpm test:ai`)
 
