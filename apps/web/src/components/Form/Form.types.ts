@@ -1,7 +1,6 @@
 import type { CSSProperties, JSX, ReactNode, Ref } from 'react';
 import type { DefaultValues, FieldValues, Mode, SubmitHandler, UseFormReturn } from 'react-hook-form';
-import type { ZodType, ZodTypeDef } from 'zod';
-import type { $ZodTypeInternals } from 'zod/v4/core';
+import type { ZodType } from 'zod';
 
 export interface FormNavigationPromptProps {
 	message: string;
@@ -17,9 +16,11 @@ export interface FormProps<T extends FieldValues> {
 	 */
 	action: SubmitHandler<T>;
 	/**
-	 * Validator schema. Either a joi or yup schema.
+	 * Zod schema used as the resolver. Single-generic typing — Zod v3 returns
+	 * `ZodObject<...>` which doesn't satisfy v4's multi-generic `ZodType<T, ZodTypeDef, ...>`,
+	 * so we accept any schema whose parsed output matches `T`.
 	 */
-	schema?: ZodType<T, ZodTypeDef, $ZodTypeInternals<T, unknown>>;
+	schema?: ZodType<T>;
 	/**
 	 * Default values in a form
 	 */

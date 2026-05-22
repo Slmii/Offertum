@@ -1,5 +1,6 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
-import { StandaloneField } from '@/components/Form/Field/Field.component';
+import { Field, StandaloneField } from '@/components/Form/Field/Field.component';
+import { Form } from '@/components/Form/Form.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
@@ -11,6 +12,7 @@ import {
 	useUndismissOpportunity,
 	useUpdateOpportunityStatus
 } from '@/lib/queries/opportunities.queries';
+import { DismissOpportunitySchema, type DismissOpportunityForm } from '@/lib/schemas/dismiss-opportunity.schema';
 import { toReadableDate, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
 	OPPORTUNITY_DISMISS_REASON_LABELS_NL,
@@ -41,11 +43,9 @@ import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type {
 	Opportunity,
@@ -57,6 +57,7 @@ import { OPPORTUNITY_DISMISS_REASONS, OPPORTUNITY_STATUSES } from '@quoteom/shar
 import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
+import { Controller } from 'react-hook-form';
 import { z } from 'zod';
 
 const SearchSchema = z.object({
@@ -307,7 +308,8 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 				/>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
 					<Stack direction='row' spacing={1} sx={{ mb: 0.25, alignItems: 'center' }}>
-						<Select
+						<StandaloneSelect
+							name={`status-${opportunity.id}`}
 							size='small'
 							value={status}
 							onChange={e =>
@@ -316,6 +318,12 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							disabled={updateStatus.isPending || isDismissed}
 							variant='standard'
 							disableUnderline
+							naked
+							options={OPPORTUNITY_STATUSES.map(s => ({
+								id: s,
+								label: OPPORTUNITY_STATUS_LABELS_NL[s]
+							}))}
+							renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
 							sx={{
 								'& .MuiSelect-select': {
 									backgroundColor: chip.bg,
@@ -327,14 +335,7 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 									minWidth: 0
 								}
 							}}
-							renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
-						>
-							{OPPORTUNITY_STATUSES.map(s => (
-								<MenuItem key={s} value={s}>
-									{OPPORTUNITY_STATUS_LABELS_NL[s]}
-								</MenuItem>
-							))}
-						</Select>
+						/>
 						{isDismissed && opportunity.dismissReason && (
 							<Box
 								component='span'
@@ -449,6 +450,8 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 	);
 }
 
+const DISMISS_FORM_ID = 'dismiss-opportunity-form';
+
 function DismissDialog({
 	opportunityId,
 	replyDraftSentAt,
@@ -459,22 +462,19 @@ function DismissDialog({
 	onClose: () => void;
 }) {
 	const dismiss = useDismissOpportunity();
-	const [reason, setReason] = useState<OpportunityDismissReason>('not_a_quote');
-	const [notes, setNotes] = useState('');
 
-	const onConfirm = () => {
+	const onSubmit = (values: DismissOpportunityForm) => {
 		dismiss.mutate(
-			{
-				id: opportunityId,
-				reason,
-				notes: notes.trim() || undefined
-			},
+			{ id: opportunityId, reason: values.reason, notes: values.notes },
 			{ onSuccess: () => onClose() }
 		);
 	};
 
 	const hasSentReply = replyDraftSentAt !== null;
 
+	// The form lives inside DialogContent; the submit button lives in DialogActions
+	// (outside that `<form>` element because DialogActions is a sibling Box). HTML's
+	// `form=<id>` attribute on the button links them across the DOM gap.
 	return (
 		<Dialog open onClose={dismiss.isPending ? undefined : onClose} maxWidth='xs' fullWidth>
 			<DialogTitle>Waarom afwijzen?</DialogTitle>
@@ -488,42 +488,55 @@ function DismissDialog({
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
 					Je feedback helpt onze AI om in de toekomst beter te herkennen wat wél en geen offerteaanvraag is.
 				</Typography>
-				<FormControl>
-					<FormLabel>Reden</FormLabel>
-					<RadioGroup value={reason} onChange={e => setReason(e.target.value as OpportunityDismissReason)}>
-						{OPPORTUNITY_DISMISS_REASONS.map(r => (
-							<FormControlLabel
-								key={r}
-								value={r}
-								control={<Radio size='small' />}
-								label={OPPORTUNITY_DISMISS_REASON_LABELS_NL[r]}
-							/>
-						))}
-					</RadioGroup>
-				</FormControl>
-				<TextField
-					label='Toelichting (optioneel)'
-					value={notes}
-					onChange={e => setNotes(e.target.value)}
-					multiline
-					rows={2}
-					fullWidth
-					size='small'
-					slotProps={{ htmlInput: { maxLength: 500 } }}
-					sx={{ mt: 2 }}
-				/>
-				{dismiss.isError && (
-					<Alert severity='error' sx={{ mt: 2 }}>
-						{dismiss.error instanceof Error ? dismiss.error.message : 'Afwijzen mislukt'}
-					</Alert>
-				)}
+				<Form<DismissOpportunityForm>
+					id={DISMISS_FORM_ID}
+					action={onSubmit}
+					schema={DismissOpportunitySchema}
+					defaultValues={{ reason: 'not_a_quote', notes: '' }}
+				>
+					<Controller<DismissOpportunityForm, 'reason'>
+						name='reason'
+						render={({ field }) => (
+							<FormControl>
+								<FormLabel>Reden</FormLabel>
+								<RadioGroup
+									value={field.value}
+									onChange={e => field.onChange(e.target.value as OpportunityDismissReason)}
+								>
+									{OPPORTUNITY_DISMISS_REASONS.map(r => (
+										<FormControlLabel
+											key={r}
+											value={r}
+											control={<Radio size='small' />}
+											label={OPPORTUNITY_DISMISS_REASON_LABELS_NL[r]}
+										/>
+									))}
+								</RadioGroup>
+							</FormControl>
+						)}
+					/>
+					<Field
+						name='notes'
+						label='Toelichting (optioneel)'
+						multiline
+						fullWidth
+						maxLength={500}
+						size='small'
+					/>
+					{dismiss.isError && (
+						<Alert severity='error'>
+							{dismiss.error instanceof Error ? dismiss.error.message : 'Afwijzen mislukt'}
+						</Alert>
+					)}
+				</Form>
 			</DialogContent>
 			<DialogActions>
 				<Button onClick={onClose} disabled={dismiss.isPending}>
 					Annuleren
 				</Button>
 				<Button
-					onClick={onConfirm}
+					type='submit'
+					form={DISMISS_FORM_ID}
 					variant='contained'
 					disabled={dismiss.isPending}
 					startIcon={dismiss.isPending ? <CircularProgress size={14} /> : null}

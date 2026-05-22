@@ -39,9 +39,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import {
@@ -166,7 +164,8 @@ function OpportunityDetailPage() {
 					}}
 					aria-label={`Urgentie: ${opportunity.urgency}`}
 				/>
-				<Select
+				<StandaloneSelect
+					name={`status-${opportunity.id}`}
 					size='small'
 					value={status}
 					onChange={e =>
@@ -175,6 +174,9 @@ function OpportunityDetailPage() {
 					disabled={updateStatus.isPending}
 					variant='standard'
 					disableUnderline
+					naked
+					options={OPPORTUNITY_STATUSES.map(s => ({ id: s, label: OPPORTUNITY_STATUS_LABELS_NL[s] }))}
+					renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
 					sx={{
 						'& .MuiSelect-select': {
 							backgroundColor: chip.bg,
@@ -186,14 +188,7 @@ function OpportunityDetailPage() {
 							minWidth: 0
 						}
 					}}
-					renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
-				>
-					{OPPORTUNITY_STATUSES.map(s => (
-						<MenuItem key={s} value={s}>
-							{OPPORTUNITY_STATUS_LABELS_NL[s]}
-						</MenuItem>
-					))}
-				</Select>
+				/>
 				<Typography variant='caption' color='text.secondary'>
 					Binnengekomen {toReadableTimestamp(opportunity.internalDate)}
 				</Typography>

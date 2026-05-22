@@ -44,7 +44,11 @@ export function StandaloneSelect({
 	startElement,
 	endElement,
 	color,
-	size = 'small'
+	size = 'small',
+	naked = false,
+	variant = 'outlined',
+	disableUnderline = false,
+	renderValue: renderValueProp
 }: StandaloneSelectProps & { ref?: Ref<HTMLInputElement> }) {
 	const labelId = `${slugify(name)}-select-label`;
 	const slugified = `select-${slugify(name)}`;
@@ -67,6 +71,123 @@ export function StandaloneSelect({
 		);
 	}, [options]);
 
+	const menuItems =
+		Object.keys(grouped).length > 0 ? (
+			Object.entries(grouped).flatMap(([key, groupedValue]) => {
+				const items = [];
+
+				if (key !== UNGROUPED) {
+					items.push(
+						<MyListSubheader key={`${key}-subheader`}>{groupedValue.groupByLabel || key}</MyListSubheader>
+					);
+				}
+
+				items.push(
+					...groupedValue.options.map(option => (
+						<MenuItem key={option.id} value={option.id} disabled={option.disabled}>
+							<ListItemText>{option.label}</ListItemText>
+						</MenuItem>
+					))
+				);
+
+				return items;
+			})
+		) : (
+			<MenuItem disabled>
+				<i>No Options</i>
+			</MenuItem>
+		);
+
+	const renderValue = (rawValue: unknown) => {
+		const stringValue = typeof rawValue === 'string' ? rawValue : '';
+		if (renderValueProp) {
+			return renderValueProp(stringValue);
+		}
+		const selectedOption = options.find(option => option.id === stringValue);
+		if (!stringValue || !selectedOption) {
+			return placeholder;
+		}
+		return selectedOption.label;
+	};
+
+	const muiSelect = (
+		<MuiSelect
+			data-testid={dataTestId}
+			error={Boolean(error)}
+			id={slugified}
+			label={naked ? undefined : label}
+			value={value}
+			name={name}
+			autoWidth={autoWidth}
+			required={required}
+			variant={variant}
+			disableUnderline={disableUnderline}
+			disabled={disabled}
+			fullWidth={fullWidth && naked}
+			slotProps={{
+				input: {
+					required
+				}
+			}}
+			size={size}
+			color={color}
+			MenuProps={{
+				anchorOrigin: {
+					vertical: 'bottom',
+					horizontal: 'left'
+				},
+				transformOrigin: {
+					vertical: 'top',
+					horizontal: 'left'
+				}
+			}}
+			onChange={onChange}
+			inputRef={ref}
+			displayEmpty
+			renderValue={renderValue}
+			startAdornment={
+				startElement ? (
+					<InputAdornment position='start'>
+						{cloneElement(startElement, {
+							size: 'medium',
+							fontSize: 'medium'
+						})}
+					</InputAdornment>
+				) : null
+			}
+			endAdornment={
+				loading ? (
+					<InputAdornment
+						position='end'
+						sx={{
+							padding: 0.5
+						}}
+					>
+						<CircularProgress size={20} />
+					</InputAdornment>
+				) : endElement ? (
+					<InputAdornment position='end'>
+						{cloneElement(endElement, {
+							size: 'medium',
+							fontSize: 'medium'
+						})}
+					</InputAdornment>
+				) : null
+			}
+			sx={naked ? sx : undefined}
+		>
+			{menuItems}
+		</MuiSelect>
+	);
+
+	// `naked` skips the FormControl/InputLabel/helper-text scaffolding so callers can
+	// render compact pill/chip-shaped status selectors in list rows where the wrapper
+	// chrome would conflict with the visual treatment. Loading + label + helperText
+	// only apply in the wrapped (default) form — naked is data-entry's "raw" mode.
+	if (naked) {
+		return muiSelect;
+	}
+
 	return (
 		<FormControl fullWidth={fullWidth} disabled={disabled} required={required} sx={sx}>
 			{label && (
@@ -74,105 +195,7 @@ export function StandaloneSelect({
 					{label}
 				</InputLabel>
 			)}
-			{loading ? (
-				<Skeleton height={54} variant='rounded' />
-			) : (
-				<MuiSelect
-					data-testid={dataTestId}
-					error={Boolean(error)}
-					id={slugified}
-					label={label}
-					value={value}
-					name={name}
-					autoWidth={autoWidth}
-					required={required}
-					slotProps={{
-						input: {
-							required
-						}
-					}}
-					size={size}
-					color={color}
-					MenuProps={{
-						anchorOrigin: {
-							vertical: 'bottom',
-							horizontal: 'left'
-						},
-						transformOrigin: {
-							vertical: 'top',
-							horizontal: 'left'
-						}
-					}}
-					onChange={onChange}
-					inputRef={ref}
-					displayEmpty
-					renderValue={value => {
-						const selectedOption = options.find(option => option.id === value);
-						if (!value || (Array.isArray(value) && value.length === 0) || !selectedOption) {
-							return placeholder;
-						}
-
-						return selectedOption.label;
-					}}
-					startAdornment={
-						startElement ? (
-							<InputAdornment position='start'>
-								{cloneElement(startElement, {
-									size: 'medium',
-									fontSize: 'medium'
-								})}
-							</InputAdornment>
-						) : null
-					}
-					endAdornment={
-						loading ? (
-							<InputAdornment
-								position='end'
-								sx={{
-									padding: 0.5
-								}}
-							>
-								<CircularProgress size={20} />
-							</InputAdornment>
-						) : endElement ? (
-							<InputAdornment position='end'>
-								{cloneElement(endElement, {
-									size: 'medium',
-									fontSize: 'medium'
-								})}
-							</InputAdornment>
-						) : null
-					}
-				>
-					{Object.keys(grouped).length > 0 ? (
-						Object.entries(grouped).flatMap(([key, groupedValue]) => {
-							const items = [];
-
-							if (key !== UNGROUPED) {
-								items.push(
-									<MyListSubheader key={`${key}-subheader`}>
-										{groupedValue.groupByLabel || key}
-									</MyListSubheader>
-								);
-							}
-
-							items.push(
-								...groupedValue.options.map(option => (
-									<MenuItem key={option.id} value={option.id} disabled={option.disabled}>
-										<ListItemText>{option.label}</ListItemText>
-									</MenuItem>
-								))
-							);
-
-							return items;
-						})
-					) : (
-						<MenuItem disabled>
-							<i>No Options</i>
-						</MenuItem>
-					)}
-				</MuiSelect>
-			)}
+			{loading ? <Skeleton height={54} variant='rounded' /> : muiSelect}
 			{helperText && <FormHelperText>{helperText}</FormHelperText>}
 			{error && <FormHelperText error>{error}</FormHelperText>}
 		</FormControl>

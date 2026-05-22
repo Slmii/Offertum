@@ -1,6 +1,7 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
-import { StandaloneField } from '@/components/Form/Field/Field.component';
-import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { Field } from '@/components/Form/Field/Field.component';
+import { Form } from '@/components/Form/Form.component';
+import { Select } from '@/components/Form/Select/Select.component';
 import { WrapperApiError } from '@/lib/api/client';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
@@ -11,6 +12,7 @@ import {
 	useRemoveMember,
 	useRevokeInvitation
 } from '@/lib/queries/team.queries';
+import { TeamInviteSchema, type TeamInviteForm } from '@/lib/schemas/team-invite.schema';
 import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -28,7 +30,7 @@ import Typography from '@mui/material/Typography';
 import type { BillingState, MembershipRole } from '@quoteom/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useWatch } from 'react-hook-form';
 
 // OWNER is omitted intentionally — every org has exactly one owner, set at org creation.
 // Ownership transfer (if we ever build it) is a separate flow, not via invitation.
@@ -60,9 +62,6 @@ function TeamPage() {
 	const revokeInvitation = useRevokeInvitation();
 	const removeMember = useRemoveMember();
 
-	const [email, setEmail] = useState('');
-	const [role, setRole] = useState<MembershipRole>('MEMBER');
-
 	const isOwner = me.role === 'OWNER';
 	const isTrial = status.state === 'trialing';
 	const seatsTaken = memberships.length + invitations.length;
@@ -71,22 +70,6 @@ function TeamPage() {
 	// submission time, so disable the invite form proactively. A brand-new org with
 	// state='none' falls into the disabled branch — they need to Checkout first.
 	const billingEntitled = status.state === 'trialing' || status.state === 'active' || status.state === 'past_due';
-
-	const handleSubmit = (event: React.FormEvent) => {
-		event.preventDefault();
-		if (!email.trim()) {
-			return;
-		}
-		createInvitation.mutate(
-			{ email: email.trim(), role },
-			{
-				onSuccess: () => {
-					setEmail('');
-					setRole('MEMBER');
-				}
-			}
-		);
-	};
 
 	const inviteError = createInvitation.error;
 	const isTrialSeatLimit = inviteError instanceof WrapperApiError && inviteError.apiCode === 'trial_seat_limit';
@@ -253,43 +236,16 @@ function TeamPage() {
 							</Alert>
 						)}
 
-						<Box component='form' onSubmit={handleSubmit}>
-							<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-								<StandaloneField
-									type='email'
-									name='email'
-									fullWidth
-									required
-									placeholder='teammate@example.com'
-									value={email}
-									onChange={e => setEmail(e.target.value)}
-									disabled={createInvitation.isPending || trialCapReached}
-								/>
-								<StandaloneSelect
-									name='role'
-									fullWidth
-									value={role}
-									onChange={e => setRole(e.target.value as MembershipRole)}
-									disabled={createInvitation.isPending || trialCapReached}
-									options={ROLE_OPTIONS.map(role => ({
-										id: role.value,
-										label: role.label
-									}))}
-								/>
-
-								<Button
-									type='submit'
-									variant='contained'
-									disabled={createInvitation.isPending || trialCapReached || !email.trim()}
-									sx={{ minWidth: 'fit-content' }}
-								>
-									{createInvitation.isPending ? 'Sending...' : 'Send invite'}
-								</Button>
-							</Stack>
-							<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1 }}>
-								{ROLE_OPTIONS.find(o => o.value === role)?.hint}
-							</Typography>
-						</Box>
+						<Form<TeamInviteForm>
+							action={values => {
+								createInvitation.mutate({ email: values.email.trim(), role: values.role });
+							}}
+							schema={TeamInviteSchema}
+							defaultValues={{ email: '', role: 'MEMBER' }}
+							isDisabled={createInvitation.isPending || trialCapReached}
+						>
+							<InviteFormBody isSending={createInvitation.isPending} trialCapReached={trialCapReached} />
+						</Form>
 					</>
 				)}
 
@@ -300,6 +256,37 @@ function TeamPage() {
 				)}
 			</Paper>
 		</Container>
+	);
+}
+
+function InviteFormBody({ isSending, trialCapReached }: { isSending: boolean; trialCapReached: boolean }) {
+	const role = useWatch<TeamInviteForm, 'role'>({ name: 'role' });
+	const disabled = isSending || trialCapReached;
+	return (
+		<>
+			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+				<Field
+					type='email'
+					name='email'
+					fullWidth
+					required
+					placeholder='teammate@example.com'
+					disabled={disabled}
+				/>
+				<Select
+					name='role'
+					fullWidth
+					disabled={disabled}
+					options={ROLE_OPTIONS.map(option => ({ id: option.value, label: option.label }))}
+				/>
+				<Button type='submit' variant='contained' disabled={disabled} sx={{ minWidth: 'fit-content' }}>
+					{isSending ? 'Sending...' : 'Send invite'}
+				</Button>
+			</Stack>
+			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1 }}>
+				{ROLE_OPTIONS.find(o => o.value === role)?.hint}
+			</Typography>
+		</>
 	);
 }
 

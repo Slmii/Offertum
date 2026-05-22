@@ -1,20 +1,18 @@
+import { Field } from '@/components/Form/Field/Field.component';
+import { Form } from '@/components/Form/Form.component';
 import { signInWithOAuth, useSignInWithEmail } from '@/lib/queries/auth.queries';
-import type { OAuthProviderId } from '@quoteom/shared';
 import { type SignInForm, SignInSchema } from '@/lib/schemas/auth.schema';
-import { zodResolver } from '@hookform/resolvers/zod';
 import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import type { OAuthProviderId } from '@quoteom/shared';
 import { createFileRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
 
 export const Route = createFileRoute('/(auth)/sign-in')({
 	component: SignInPage
@@ -26,15 +24,10 @@ function SignInPage() {
 	const navigate = useNavigate();
 	const signIn = useSignInWithEmail();
 
-	const form = useForm<SignInForm>({
-		resolver: zodResolver(SignInSchema),
-		defaultValues: { email: '' }
-	});
-
-	const onSubmit = form.handleSubmit(async ({ email }) => {
+	const onSubmit = async ({ email }: SignInForm) => {
 		await signIn.mutateAsync(email);
 		navigate({ to: '/verify-request', search: { email } });
-	});
+	};
 
 	const handleOAuth = async (providerId: OAuthProviderId) => {
 		setLoadingProvider(providerId);
@@ -80,24 +73,15 @@ function SignInPage() {
 					</Typography>
 				</Divider>
 
-				<Box component='form' onSubmit={onSubmit} noValidate>
-					<TextField
-						{...form.register('email')}
-						type='email'
-						label='Email address'
-						autoComplete='email'
-						fullWidth
-						margin='normal'
-						error={!!form.formState.errors.email}
-						helperText={form.formState.errors.email?.message}
-						disabled={oauthBusy}
-					/>
+				<Form<SignInForm>
+					action={onSubmit}
+					schema={SignInSchema}
+					defaultValues={{ email: '' }}
+					isDisabled={oauthBusy}
+				>
+					<Field name='email' type='email' label='Email address' fullWidth />
 
-					{signIn.isError && (
-						<Alert severity='error' sx={{ mt: 2 }}>
-							Something went wrong. Please try again.
-						</Alert>
-					)}
+					{signIn.isError && <Alert severity='error'>Something went wrong. Please try again.</Alert>}
 
 					<Button
 						type='submit'
@@ -105,11 +89,11 @@ function SignInPage() {
 						fullWidth
 						size='large'
 						disabled={signIn.isPending || oauthBusy}
-						sx={{ mt: 3 }}
+						sx={{ mt: 1 }}
 					>
 						{signIn.isPending ? 'Sending...' : 'Send magic link'}
 					</Button>
-				</Box>
+				</Form>
 
 				<Typography variant='body2' color='text.secondary' sx={{ mt: 3, textAlign: 'center' }}>
 					Don't have an account?{' '}

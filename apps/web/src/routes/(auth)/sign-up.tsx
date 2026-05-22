@@ -1,17 +1,15 @@
+import { Field } from '@/components/Form/Field/Field.component';
+import { Form } from '@/components/Form/Form.component';
 import { WrapperApiError } from '@/lib/api/client';
 import { useSignUp } from '@/lib/queries/auth.queries';
 import { type SignUpForm, SignUpSchema } from '@/lib/schemas/auth.schema';
-import { zodResolver } from '@hookform/resolvers/zod';
 import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { createFileRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
-import { useForm } from 'react-hook-form';
 
 export const Route = createFileRoute('/(auth)/sign-up')({
 	component: SignUpPage
@@ -21,15 +19,10 @@ function SignUpPage() {
 	const navigate = useNavigate();
 	const signUp = useSignUp();
 
-	const form = useForm<SignUpForm>({
-		resolver: zodResolver(SignUpSchema),
-		defaultValues: { email: '', companyName: '' }
-	});
-
-	const onSubmit = form.handleSubmit(async ({ email, companyName }) => {
+	const onSubmit = async ({ email, companyName }: SignUpForm) => {
 		await signUp.mutateAsync({ email, companyName });
 		navigate({ to: '/verify-request', search: { email } });
-	});
+	};
 
 	const errorMessage =
 		signUp.error instanceof WrapperApiError
@@ -48,34 +41,15 @@ function SignUpPage() {
 					Start a 14-day free trial. No credit card required.
 				</Typography>
 
-				<Box component='form' onSubmit={onSubmit} noValidate>
-					<TextField
-						{...form.register('companyName')}
-						label='Company name'
-						autoComplete='organization'
-						autoFocus
-						fullWidth
-						margin='normal'
-						error={!!form.formState.errors.companyName}
-						helperText={form.formState.errors.companyName?.message}
-					/>
+				<Form<SignUpForm>
+					action={onSubmit}
+					schema={SignUpSchema}
+					defaultValues={{ email: '', companyName: '' }}
+				>
+					<Field name='companyName' label='Company name' autoFocus fullWidth />
+					<Field name='email' type='email' label='Work email' fullWidth />
 
-					<TextField
-						{...form.register('email')}
-						type='email'
-						label='Work email'
-						autoComplete='email'
-						fullWidth
-						margin='normal'
-						error={!!form.formState.errors.email}
-						helperText={form.formState.errors.email?.message}
-					/>
-
-					{errorMessage && (
-						<Alert severity='error' sx={{ mt: 2 }}>
-							{errorMessage}
-						</Alert>
-					)}
+					{errorMessage && <Alert severity='error'>{errorMessage}</Alert>}
 
 					<Button
 						type='submit'
@@ -83,11 +57,11 @@ function SignUpPage() {
 						fullWidth
 						size='large'
 						disabled={signUp.isPending}
-						sx={{ mt: 3 }}
+						sx={{ mt: 1 }}
 					>
 						{signUp.isPending ? 'Creating account...' : 'Create account'}
 					</Button>
-				</Box>
+				</Form>
 
 				<Typography variant='body2' color='text.secondary' sx={{ mt: 3, textAlign: 'center' }}>
 					Already have an account?{' '}

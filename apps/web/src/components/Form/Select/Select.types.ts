@@ -15,12 +15,16 @@ export interface SelectProps {
 	required?: boolean;
 	disabled?: boolean;
 	autoWidth?: boolean;
+	naked?: boolean;
+	disableUnderline?: boolean;
 	helperText?: string;
 	loading?: boolean;
 	color?: 'primary' | 'secondary';
+	variant?: 'outlined' | 'standard' | 'filled';
 	startElement?: JSX.Element;
 	endElement?: JSX.Element;
 	size?: 'small' | 'medium';
+	renderValue?: (value: string) => ReactNode;
 }
 
 export interface Option<T = string> {
