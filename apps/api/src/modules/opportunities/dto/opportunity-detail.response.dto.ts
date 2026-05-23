@@ -1,6 +1,7 @@
 import type {
 	CustomerReplyEntry,
 	OpportunityDetail,
+	OpportunityTimelineEvent,
 	ReplyDraft,
 	ReplyDraftKind,
 	ReplyDraftStatus
@@ -42,4 +43,5 @@ export class OpportunityDetailResponseDto extends OpportunityResponseDto impleme
 	replyDraft!: ReplyDraftResponseDto | null;
 	replyDraftHistory!: ReplyDraftResponseDto[];
 	customerReplies!: CustomerReplyEntryResponseDto[];
+	timeline!: OpportunityTimelineEvent[];
 }

@@ -370,7 +370,7 @@ describe('OpportunitiesService.updateStatus', () => {
 		});
 		const service = makeService({ repository });
 
-		const result = await service.updateStatus('org-1', 'opp-1', 'cold');
+		const result = await service.updateStatus('org-1', 'opp-1', 'cold', 'user-1');
 
 		expect(repository.updateStatus).toHaveBeenCalledWith('opp-1', PrismaOpportunityStatus.COLD);
 		expect(result.status).toBe('cold');
@@ -392,7 +392,7 @@ describe('OpportunitiesService.updateStatus', () => {
 		});
 		const service = makeService({ repository });
 
-		const result = await service.updateStatus('org-1', 'opp-1', 'new');
+		const result = await service.updateStatus('org-1', 'opp-1', 'new', 'user-1');
 
 		expect(repository.updateStatus).toHaveBeenCalledWith('opp-1', PrismaOpportunityStatus.NEW);
 		expect(result.status).toBe('new');
@@ -407,7 +407,7 @@ describe('OpportunitiesService.updateStatus', () => {
 		});
 		const service = makeService({ repository });
 
-		const result = await service.updateStatus('org-1', 'opp-1', 'new');
+		const result = await service.updateStatus('org-1', 'opp-1', 'new', 'user-1');
 
 		expect(repository.updateStatus).toHaveBeenCalledWith('opp-1', PrismaOpportunityStatus.NEW);
 		expect(result.status).toBe('new');
@@ -416,6 +416,8 @@ describe('OpportunitiesService.updateStatus', () => {
 	it('returns 404 when the opportunity is not in the active organization', async () => {
 		const service = makeService({ repository: makeRepository() });
 
-		await expect(service.updateStatus('org-1', 'missing', 'cold')).rejects.toBeInstanceOf(NotFoundException);
+		await expect(service.updateStatus('org-1', 'missing', 'cold', 'user-1')).rejects.toBeInstanceOf(
+			NotFoundException
+		);
 	});
 });

@@ -66,7 +66,10 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import type {
 	OpportunityDismissReason as WireDismissReason,
-	OpportunityStatus as WireOpportunityStatus
+	OpportunityFieldChange,
+	OpportunityStatus as WireOpportunityStatus,
+	OpportunityTimelineEvent,
+	OpportunityUrgency as WireOpportunityUrgency
 } from '@quoteom/shared';
 
 // Soft cap on rows scanned per Inngest `step.run` invocation. The cap is sized so that
@@ -284,7 +287,8 @@ export class OpportunitiesService {
 	async updateStatus(
 		organizationId: string,
 		opportunityId: string,
-		status: WireOpportunityStatus
+		status: WireOpportunityStatus,
+		actorUserId: string
 	): Promise<OpportunityResponseDto> {
 		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
 		if (!opportunity) {
@@ -299,7 +303,22 @@ export class OpportunitiesService {
 			return toOpportunityResponseDto(opportunity);
 		}
 
+		const previousStatus = OPPORTUNITY_STATUS_TO_WIRE[opportunity.status];
 		const updated = await this.repository.updateStatus(opportunity.id, nextStatus);
+
+		this.logService.logAction({
+			action: 'opportunity.status.updated',
+			message: `Opportunity ${opportunity.id} status ${previousStatus} → ${status} by user ${actorUserId}`,
+			metadata: {
+				organizationId,
+				opportunityId: opportunity.id,
+				previousStatus,
+				nextStatus: status,
+				actorUserId
+			},
+			context: 'OpportunitiesService'
+		});
+
 		return toOpportunityResponseDto(updated);
 	}
 
@@ -418,7 +437,10 @@ export class OpportunitiesService {
 	 * event per missed-draft detail-view open — negligible.
 	 */
 	async getDetail(organizationId: string, opportunityId: string): Promise<OpportunityDetailResponseDto> {
-		const opportunity = await this.repository.findDetailByIdForOrganization(organizationId, opportunityId);
+		const [opportunity, timelineRows] = await Promise.all([
+			this.repository.findDetailByIdForOrganization(organizationId, opportunityId),
+			this.repository.findTimelineEvents(organizationId, opportunityId)
+		]);
 		if (!opportunity) {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
@@ -439,7 +461,23 @@ export class OpportunitiesService {
 			void this.requestReplyDraftGeneration(opportunity.id, opportunity.organizationId);
 		}
 
-		return toOpportunityDetailResponseDto(opportunity, originalEmailBody);
+		const actorIds = new Set<string>();
+		for (const row of timelineRows) {
+			const actorUserId = typeof row.metadata.actorUserId === 'string' ? row.metadata.actorUserId : null;
+			if (actorUserId !== null) {
+				actorIds.add(actorUserId);
+			}
+		}
+		const actorLabels =
+			actorIds.size > 0
+				? await this.repository.findUserDisplayLabels(Array.from(actorIds))
+				: new Map<string, string>();
+
+		const timeline = timelineRows
+			.map(row => toOpportunityTimelineEvent(row, actorLabels))
+			.filter((event): event is OpportunityTimelineEvent => event !== null);
+
+		return toOpportunityDetailResponseDto(opportunity, originalEmailBody, timeline);
 	}
 
 	/**
@@ -1688,7 +1726,8 @@ function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][n
 
 function toOpportunityDetailResponseDto(
 	opportunity: OpportunityDetailRecord,
-	originalEmailBody: string
+	originalEmailBody: string,
+	timeline: OpportunityTimelineEvent[]
 ): OpportunityDetailResponseDto {
 	return {
 		// Re-uses the same field projection as the list response — keeps the shapes in
@@ -1755,6 +1794,175 @@ function toOpportunityDetailResponseDto(
 				raw: m.raw
 			}).bodyText,
 			wasDetectedAsCloser: m.wasDetectedAsCloser
-		}))
+		})),
+		timeline
 	};
+}
+
+const WIRE_OPPORTUNITY_STATUSES = new Set<WireOpportunityStatus>(['new', 'waiting', 'replied', 'cold', 'won', 'lost']);
+const WIRE_DISMISS_REASONS = new Set<WireDismissReason>(['not_a_quote', 'duplicate', 'spam', 'other']);
+const WIRE_URGENCIES = new Set<WireOpportunityUrgency>(['emergency', 'high', 'normal', 'low']);
+const TIMELINE_FIELD_KEYS = new Set(['urgency', 'address', 'customerDeadline', 'customerAppointment']);
+
+function readString(metadata: Record<string, unknown>, key: string): string | null {
+	const value = metadata[key];
+	return typeof value === 'string' ? value : null;
+}
+
+function readNumber(metadata: Record<string, unknown>, key: string): number | null {
+	const value = metadata[key];
+	return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readStatus(metadata: Record<string, unknown>, key: string): WireOpportunityStatus | null {
+	const value = readString(metadata, key);
+	return value !== null && WIRE_OPPORTUNITY_STATUSES.has(value as WireOpportunityStatus)
+		? (value as WireOpportunityStatus)
+		: null;
+}
+
+function readReason(metadata: Record<string, unknown>, key: string): WireDismissReason | null {
+	const value = readString(metadata, key);
+	return value !== null && WIRE_DISMISS_REASONS.has(value as WireDismissReason) ? (value as WireDismissReason) : null;
+}
+
+function readNullableString(value: unknown): string | null {
+	if (value === null) {
+		return null;
+	}
+	return typeof value === 'string' ? value : null;
+}
+
+function readNullableUrgency(value: unknown): WireOpportunityUrgency | null {
+	if (value === null) {
+		return null;
+	}
+	return typeof value === 'string' && WIRE_URGENCIES.has(value as WireOpportunityUrgency)
+		? (value as WireOpportunityUrgency)
+		: null;
+}
+
+/**
+ * Decode one `(field, before, after)` slice of an `opportunity.fields_updated`
+ * log into a typed `OpportunityFieldChange`. Returns `null` for unknown fields
+ * so the caller drops them silently.
+ */
+function decodeFieldChange(field: string, before: unknown, after: unknown): OpportunityFieldChange | null {
+	if (!TIMELINE_FIELD_KEYS.has(field)) {
+		return null;
+	}
+	if (field === 'urgency') {
+		return { field: 'urgency', before: readNullableUrgency(before), after: readNullableUrgency(after) };
+	}
+	return {
+		field: field as 'address' | 'customerDeadline' | 'customerAppointment',
+		before: readNullableString(before),
+		after: readNullableString(after)
+	};
+}
+
+/**
+ * Maps an audit-log row to a typed timeline event. Returns `null` when the row's
+ * metadata is malformed (missing required keys or invalid enum values) so the
+ * caller can drop it rather than render garbage.
+ */
+function toOpportunityTimelineEvent(
+	row: { id: string; createdAt: Date; metadata: Record<string, unknown> },
+	actorLabels: ReadonlyMap<string, string>
+): OpportunityTimelineEvent | null {
+	const action = readString(row.metadata, 'action');
+	const occurredAt = row.createdAt.toISOString();
+	const actorUserId = readString(row.metadata, 'actorUserId');
+	const actorName = actorUserId !== null ? (actorLabels.get(actorUserId) ?? null) : null;
+
+	switch (action) {
+		case 'opportunity.status.updated': {
+			const nextStatus = readStatus(row.metadata, 'nextStatus');
+			if (nextStatus === null) {
+				return null;
+			}
+			return {
+				id: row.id,
+				kind: 'status_changed',
+				occurredAt,
+				actorUserId,
+				actorName,
+				previousStatus: readStatus(row.metadata, 'previousStatus'),
+				nextStatus
+			};
+		}
+		case 'opportunity.auto_cold.flipped': {
+			const daysSinceSent = readNumber(row.metadata, 'daysSinceSent');
+			const coldAfterDays = readNumber(row.metadata, 'coldAfterDays');
+			if (daysSinceSent === null || coldAfterDays === null) {
+				return null;
+			}
+			return {
+				id: row.id,
+				kind: 'auto_cold',
+				occurredAt,
+				actorUserId: null,
+				actorName: null,
+				daysSinceSent,
+				coldAfterDays
+			};
+		}
+		case 'opportunity.dismissed': {
+			const reason = readReason(row.metadata, 'reason');
+			if (reason === null) {
+				return null;
+			}
+			return {
+				id: row.id,
+				kind: 'dismissed',
+				occurredAt,
+				actorUserId,
+				actorName,
+				reason,
+				previousReason: readReason(row.metadata, 'previousReason'),
+				previousStatus: readStatus(row.metadata, 'previousStatus'),
+				notes: readString(row.metadata, 'notes')
+			};
+		}
+		case 'opportunity.undismissed': {
+			return {
+				id: row.id,
+				kind: 'undismissed',
+				occurredAt,
+				actorUserId,
+				actorName,
+				previousReason: readReason(row.metadata, 'previousReason')
+			};
+		}
+		case 'opportunity.fields_updated': {
+			const changedKeys = row.metadata.changedKeys;
+			const diff = row.metadata.diff;
+			if (!Array.isArray(changedKeys) || typeof diff !== 'object' || diff === null) {
+				return null;
+			}
+			const changes: OpportunityFieldChange[] = [];
+			for (const rawKey of changedKeys) {
+				if (typeof rawKey !== 'string') {
+					continue;
+				}
+				const slice = (diff as Record<string, unknown>)[rawKey];
+				if (typeof slice !== 'object' || slice === null) {
+					continue;
+				}
+				const { before, after } = slice as { before: unknown; after: unknown };
+				const change = decodeFieldChange(rawKey, before, after);
+				if (change !== null) {
+					changes.push(change);
+				}
+			}
+			if (changes.length === 0) {
+				// All changed keys were unknown to the renderer (e.g. only a not-yet-
+				// supported field changed). Drop the event rather than show an empty row.
+				return null;
+			}
+			return { id: row.id, kind: 'fields_updated', occurredAt, actorUserId, actorName, changes };
+		}
+		default:
+			return null;
+	}
 }

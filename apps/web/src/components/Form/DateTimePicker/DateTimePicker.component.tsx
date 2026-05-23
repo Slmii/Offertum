@@ -3,7 +3,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { DateTimePicker as MuiDateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { MobileDateTimePicker } from '@mui/x-date-pickers/MobileDateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
 import slugify from 'slugify';
 import type { DateTimePickerProps } from './DateTimePicker.types';
@@ -26,6 +26,7 @@ export const StandaloneDateTimePicker = ({
 	name,
 	label,
 	onChange,
+	onAccept,
 	minDate,
 	maxDate,
 	fullWidth,
@@ -40,15 +41,32 @@ export const StandaloneDateTimePicker = ({
 	const [isOpen, setIsOpen] = useState(false);
 	const { isMdDown } = useDevice();
 
+	// MUI v6+ pickers need the parent to reflect onChange into the value prop for
+	// the multi-view flow (year → month → day → hour → minute) to advance. Local
+	// mirror lets the picker progress through views while consumers only see the
+	// committed value via onAccept. Re-syncs from the external value prop on change
+	// (parent's controlled value won, e.g. server-side update on save).
+	const [internalValue, setInternalValue] = useState<Dayjs | null>(value);
+	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setInternalValue(value);
+	}, [value]);
+
+	const handleInternalChange = (date: Dayjs | null) => {
+		setInternalValue(date);
+		onChange?.(date);
+	};
+
 	const labelId = `${slugify(name)}-label`;
 
 	return (
 		<>
 			{isMdDown ? (
 				<MobileDateTimePicker
-					value={value ? dayjs(value) : null}
-					onChange={date => {
-						onChange?.(date ?? null);
+					value={internalValue ? dayjs(internalValue) : null}
+					onChange={date => handleInternalChange(date ?? null)}
+					onAccept={date => {
+						onAccept?.(date ?? null);
 					}}
 					label={label}
 					disabled={disabled}
@@ -76,9 +94,10 @@ export const StandaloneDateTimePicker = ({
 				/>
 			) : (
 				<MuiDateTimePicker
-					value={value ? dayjs(value) : null}
-					onChange={date => {
-						onChange?.(date ?? null);
+					value={internalValue ? dayjs(internalValue) : null}
+					onChange={date => handleInternalChange(date ?? null)}
+					onAccept={date => {
+						onAccept?.(date ?? null);
 					}}
 					label={label}
 					disabled={disabled}

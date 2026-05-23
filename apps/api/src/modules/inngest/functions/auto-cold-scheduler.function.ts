@@ -3,6 +3,7 @@ import { buildAutoColdEmail } from '@/lib/mails/notifications/auto-cold.email';
 import { MS_PER_DAY } from '@/lib/time/duration';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
+import { logContext as requestContext } from '@/modules/logger/log-context';
 import { LogService } from '@/modules/logger/log.service';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
@@ -42,7 +43,7 @@ export class AutoColdSchedulerFunction {
 				triggers: [{ cron: 'TZ=Europe/Amsterdam 0 7 * * *' }],
 				retries: 1
 			},
-			async ({ step }) => {
+			async ({ runId, step }) => {
 				const result = await step.run(InngestSteps.AutoColdScheduler.FlipColdCandidates, async () => {
 					const now = new Date();
 					const candidates = await repository.findColdCandidates(now, AUTO_COLD_BATCH_CAP);
@@ -50,61 +51,76 @@ export class AutoColdSchedulerFunction {
 						return { scanned: 0, flipped: 0 };
 					}
 
-					const flipped = await repository.markOpportunitiesCold(candidates.map(c => c.opportunityId));
+					const flippedIds = await repository.markOpportunitiesCold(candidates.map(c => c.opportunityId));
+					const flippedSet = new Set(flippedIds);
 					const webOrigin = notifications.webOrigin();
 
-					for (const c of candidates) {
+					// Iterate only candidates that ACTUALLY flipped. The race-narrowing UPDATE
+					// (`WHERE status = REPLIED`) may have skipped some — typically because the
+					// owner manually transitioned the opp between the candidate fetch and the
+					// write. Side-effects (notification + audit log) MUST mirror the DB truth.
+					for (const c of candidates.filter(x => flippedSet.has(x.opportunityId))) {
 						const daysSinceSent = Math.max(
 							1,
 							Math.round((now.getTime() - c.latestSentAt.getTime()) / MS_PER_DAY)
 						);
-						logService.logAction({
-							action: 'opportunity.auto_cold.flipped',
-							message: `Opportunity ${c.opportunityId} auto-flipped REPLIED → COLD after ${daysSinceSent} day(s) of silence (threshold=${c.coldAfterDays})`,
-							metadata: {
-								opportunityId: c.opportunityId,
-								organizationId: c.organizationId,
-								daysSinceSent,
-								coldAfterDays: c.coldAfterDays
-							},
-							context: 'InngestFn:auto-cold-scheduler'
-						});
+						// Re-establish AsyncLocalStorage per-candidate so the Log + Notification
+						// rows produced inside carry `organizationId` on the table column (not just
+						// in metadata) — otherwise org-scoped log queries (the opportunity-detail
+						// timeline included) silently exclude them. See CLAUDE.md #8.
+						await requestContext.run({ requestId: runId, organizationId: c.organizationId }, async () => {
+							logService.logAction({
+								action: 'opportunity.auto_cold.flipped',
+								message: `Opportunity ${c.opportunityId} auto-flipped REPLIED → COLD after ${daysSinceSent} day(s) of silence (threshold=${c.coldAfterDays})`,
+								metadata: {
+									opportunityId: c.opportunityId,
+									organizationId: c.organizationId,
+									daysSinceSent,
+									coldAfterDays: c.coldAfterDays
+								},
+								context: 'InngestFn:auto-cold-scheduler'
+							});
 
-						if (c.mailboxUserId) {
-							const opportunityUrl = `${webOrigin}/opportunities/${c.opportunityId}`;
-							const customer = c.customerName ?? 'klant';
-							const email = buildAutoColdEmail({
-								customerName: c.customerName,
-								requestType: c.requestType,
-								daysSinceSent,
-								opportunityUrl
-							});
-							await notifications.notifyUsers({
-								userIds: [c.mailboxUserId],
-								organizationId: c.organizationId,
-								eventType: PrismaNotificationEventType.OPPORTUNITY_AUTO_COLD,
-								title: `Aanvraag van ${customer} op koud`,
-								body: `${c.requestType} — ${daysSinceSent} dag${daysSinceSent === 1 ? '' : 'en'} geen reactie`,
-								link: `/opportunities/${c.opportunityId}`,
-								metadata: { daysSinceSent, coldAfterDays: c.coldAfterDays },
-								email
-							});
-						}
+							if (c.mailboxUserId) {
+								const opportunityUrl = `${webOrigin}/opportunities/${c.opportunityId}`;
+								const customer = c.customerName ?? 'klant';
+								const email = buildAutoColdEmail({
+									customerName: c.customerName,
+									requestType: c.requestType,
+									daysSinceSent,
+									opportunityUrl
+								});
+								await notifications.notifyUsers({
+									userIds: [c.mailboxUserId],
+									organizationId: c.organizationId,
+									eventType: PrismaNotificationEventType.OPPORTUNITY_AUTO_COLD,
+									title: `Aanvraag van ${customer} op koud`,
+									body: `${c.requestType} — ${daysSinceSent} dag${daysSinceSent === 1 ? '' : 'en'} geen reactie`,
+									link: `/opportunities/${c.opportunityId}`,
+									metadata: { daysSinceSent, coldAfterDays: c.coldAfterDays },
+									email
+								});
+							}
+						});
 					}
 
-					return { scanned: candidates.length, flipped };
+					return { scanned: candidates.length, flipped: flippedIds.length };
 				});
 
-				logService.logAction({
-					action: 'opportunity.auto_cold.tick',
-					message: `Auto-cold tick flipped ${result.flipped}/${result.scanned} candidate(s) to COLD`,
-					metadata: {
-						scanned: result.scanned,
-						flipped: result.flipped,
-						batchCapReached: result.scanned === AUTO_COLD_BATCH_CAP
-					},
-					level: 'log',
-					context: 'InngestFn:auto-cold-scheduler'
+				// Tick log has no org (cross-org enumeration) — just correlate by runId
+				// so it can be cross-referenced with the per-candidate rows.
+				await requestContext.run({ requestId: runId }, () => {
+					logService.logAction({
+						action: 'opportunity.auto_cold.tick',
+						message: `Auto-cold tick flipped ${result.flipped}/${result.scanned} candidate(s) to COLD`,
+						metadata: {
+							scanned: result.scanned,
+							flipped: result.flipped,
+							batchCapReached: result.scanned === AUTO_COLD_BATCH_CAP
+						},
+						level: 'log',
+						context: 'InngestFn:auto-cold-scheduler'
+					});
 				});
 
 				return result;

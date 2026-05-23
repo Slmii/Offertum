@@ -17,7 +17,7 @@ import {
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
-import { toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
+import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
 	getStatusOptionsForCurrent,
 	OPPORTUNITY_STATUS_CHIP_COLORS,
@@ -45,11 +45,12 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import {
-	OPPORTUNITY_STATUSES,
 	OPPORTUNITY_URGENCIES,
 	REPLY_DRAFT_BODY_MAX_LENGTH,
 	type CustomerReplyEntry,
+	type OpportunityFieldChange,
 	type OpportunityStatus,
+	type OpportunityTimelineEvent,
 	type OpportunityUrgency,
 	type ReplyDraft,
 	type ReplyDraftAttachment
@@ -378,11 +379,14 @@ function OpportunityDetailPage() {
 							</Typography>
 						</Paper>
 					)}
-					{(opportunity.replyDraftHistory.length > 0 || opportunity.customerReplies.length > 0) && (
-						<ReplyHistoryPanel
+					{(opportunity.replyDraftHistory.length > 0 ||
+						opportunity.customerReplies.length > 0 ||
+						opportunity.timeline.length > 0) && (
+						<TimelinePanel
 							opportunityId={id}
 							drafts={opportunity.replyDraftHistory}
 							customerReplies={opportunity.customerReplies}
+							timeline={opportunity.timeline}
 						/>
 					)}
 				</Box>
@@ -725,6 +729,13 @@ function ExtractedFieldsPanel({
 
 	const commitAppointment = (next: Dayjs | null) => {
 		const iso = next && next.isValid() ? next.toISOString() : null;
+		const currentIso = opportunity.customerAppointment ?? null;
+		if (iso === currentIso) {
+			// Picker can fire onAccept with the unchanged value (e.g. user opened the
+			// picker, didn't change anything, dismissed it). Skip the no-op write so the
+			// audit log stays clean.
+			return;
+		}
 		updateFields.mutate({ customerAppointment: iso });
 	};
 
@@ -769,7 +780,7 @@ function ExtractedFieldsPanel({
 					value={opportunity.customerDeadline ? dayjs(opportunity.customerDeadline) : null}
 					fullWidth
 					size='small'
-					onChange={commitDeadline}
+					onAccept={commitDeadline}
 				/>
 				<StandaloneDateTimePicker
 					name='appointment'
@@ -777,7 +788,7 @@ function ExtractedFieldsPanel({
 					value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
 					fullWidth
 					size='small'
-					onChange={commitAppointment}
+					onAccept={commitAppointment}
 				/>
 
 				{updateFields.isError && (
@@ -931,26 +942,24 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- *  follow-up — Read-only conversational timeline of the back-and-forth on this
- * opportunity. Merges two server-side arrays:
- *  - `drafts` — our SENT replies (+ any rare `Vervangen` versions that were
- *  superseded mid-edit), newest-first.
- *  - `customerReplies` — inbound customer messages attached via thread
- *  reconstitution, newest-first.
- * Merged + sorted by timestamp DESC so the rendered list reads chronologically.
- * Each entry expands into a body view (drafts also show attachments). Version
- * numbers count only the drafts — customer replies aren't "our versions."
- * All entries are read-only from the UI's perspective. Server-side mutations target
- * the latest draft only.
+ * Read-only conversational + system timeline. Merges three server arrays into one
+ * newest-first list:
+ *  - `drafts` — our SENT replies (+ rare `Vervangen` versions superseded mid-edit).
+ *  - `customerReplies` — inbound customer messages from thread reconstitution.
+ *  - `timeline` — system + owner events (status changes, dismiss/undismiss, auto-cold).
+ * Customer replies are nested under their parent SENT draft when the timestamps
+ * place them there; everything else lands at the top level sorted by timestamp DESC.
  */
-function ReplyHistoryPanel({
+function TimelinePanel({
 	opportunityId,
 	drafts,
-	customerReplies
+	customerReplies,
+	timeline
 }: {
 	opportunityId: string;
 	drafts: ReplyDraft[];
 	customerReplies: CustomerReplyEntry[];
+	timeline: OpportunityTimelineEvent[];
 }) {
 	// Heuristic grouping: each customer reply nests under the most-recent SENT draft
 	// whose `sentAt` is strictly before the reply's `receivedAt`. That's "the draft
@@ -1001,33 +1010,171 @@ function ReplyHistoryPanel({
 		timestamp: reply.receivedAt,
 		reply
 	}));
-	const merged = [...draftEntries, ...orphanEntries].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+	const systemEntries = timeline.map(event => ({
+		kind: 'system' as const,
+		key: `system:${event.id}`,
+		timestamp: event.occurredAt,
+		event
+	}));
+	const merged = [...draftEntries, ...orphanEntries, ...systemEntries].sort((a, b) =>
+		b.timestamp.localeCompare(a.timestamp)
+	);
 
-	// Total entry count includes nested replies — what the user actually sees as
+	// Total entry count includes nested customer replies + every system event —
 	// "items in this conversation," regardless of where they're rendered.
-	const totalEntries = drafts.length + customerReplies.length;
+	const totalEntries = drafts.length + customerReplies.length + timeline.length;
 
 	return (
 		<Box sx={{ mt: 4 }}>
 			<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
-				Antwoord-geschiedenis ({totalEntries})
+				Tijdlijn ({totalEntries})
 			</Typography>
 			<Stack spacing={1}>
-				{merged.map(entry =>
-					entry.kind === 'draft' ? (
-						<ReplyDraftHistoryEntry
-							key={entry.key}
-							opportunityId={opportunityId}
-							draft={entry.draft}
-							ordinal={entry.ordinal}
-							replies={entry.replies}
-						/>
-					) : (
-						<CustomerReplyHistoryEntry key={entry.key} reply={entry.reply} />
-					)
-				)}
+				{merged.map(entry => {
+					if (entry.kind === 'draft') {
+						return (
+							<ReplyDraftHistoryEntry
+								key={entry.key}
+								opportunityId={opportunityId}
+								draft={entry.draft}
+								ordinal={entry.ordinal}
+								replies={entry.replies}
+							/>
+						);
+					}
+					if (entry.kind === 'customer') {
+						return <CustomerReplyHistoryEntry key={entry.key} reply={entry.reply} />;
+					}
+					return <TimelineEventEntry key={entry.key} event={entry.event} />;
+				})}
 			</Stack>
 		</Box>
+	);
+}
+
+const TIMELINE_DISMISS_REASON_LABELS_NL: Record<'not_a_quote' | 'duplicate' | 'spam' | 'other', string> = {
+	not_a_quote: 'Geen offerteaanvraag',
+	duplicate: 'Duplicaat',
+	spam: 'Spam',
+	other: 'Andere reden'
+};
+
+interface TimelineEventCopy {
+	chipLabel: string;
+	chipColor: 'default' | 'info' | 'success' | 'warning' | 'error';
+	headline: string;
+	detail: string | null;
+}
+
+function describeTimelineEvent(event: OpportunityTimelineEvent): TimelineEventCopy {
+	switch (event.kind) {
+		case 'status_changed': {
+			const prev = event.previousStatus ? OPPORTUNITY_STATUS_LABELS_NL[event.previousStatus] : null;
+			const next = OPPORTUNITY_STATUS_LABELS_NL[event.nextStatus];
+			return {
+				chipLabel: 'Status',
+				chipColor: 'default',
+				headline: prev ? `Status: ${prev} → ${next}` : `Status: ${next}`,
+				detail: null
+			};
+		}
+		case 'auto_cold':
+			return {
+				chipLabel: 'Auto-koud',
+				chipColor: 'info',
+				headline: `Automatisch op Koud gezet na ${event.daysSinceSent} dag${event.daysSinceSent === 1 ? '' : 'en'} stilte`,
+				detail: `Drempel: ${event.coldAfterDays} dag${event.coldAfterDays === 1 ? '' : 'en'}.`
+			};
+		case 'dismissed': {
+			const reasonLabel = TIMELINE_DISMISS_REASON_LABELS_NL[event.reason];
+			return {
+				chipLabel: 'Afgewezen',
+				chipColor: 'warning',
+				headline: `Aanvraag afgewezen — ${reasonLabel}`,
+				detail: event.notes
+			};
+		}
+		case 'undismissed':
+			return {
+				chipLabel: 'Hersteld',
+				chipColor: 'success',
+				headline: 'Aanvraag teruggezet uit afgewezen',
+				detail: event.previousReason
+					? `Eerdere reden: ${TIMELINE_DISMISS_REASON_LABELS_NL[event.previousReason]}`
+					: null
+			};
+		case 'fields_updated': {
+			const fieldLabels = event.changes.map(c => TIMELINE_FIELD_LABELS_NL[c.field]);
+			return {
+				chipLabel: 'Gegevens',
+				chipColor: 'default',
+				headline:
+					event.changes.length === 1
+						? `${fieldLabels[0]} bijgewerkt`
+						: `${event.changes.length} velden bijgewerkt: ${fieldLabels.join(', ')}`,
+				detail: event.changes.map(formatFieldChange).join('\n')
+			};
+		}
+	}
+}
+
+const TIMELINE_FIELD_LABELS_NL: Record<OpportunityFieldChange['field'], string> = {
+	urgency: 'Urgentie',
+	address: 'Adres',
+	customerDeadline: 'Deadline',
+	customerAppointment: 'Afspraak'
+};
+
+function formatFieldValue(change: OpportunityFieldChange, side: 'before' | 'after'): string {
+	const value = change[side];
+	if (value === null) {
+		return '—';
+	}
+	switch (change.field) {
+		case 'urgency':
+			return OPPORTUNITY_URGENCY_LABELS_NL[value as OpportunityUrgency];
+		case 'customerDeadline':
+			return toReadableDate(value);
+		case 'customerAppointment':
+			return toReadableDateTime(value);
+		case 'address':
+			return value;
+	}
+}
+
+function formatFieldChange(change: OpportunityFieldChange): string {
+	return `${TIMELINE_FIELD_LABELS_NL[change.field]}: ${formatFieldValue(change, 'before')} → ${formatFieldValue(change, 'after')}`;
+}
+
+function TimelineEventEntry({ event }: { event: OpportunityTimelineEvent }) {
+	const copy = describeTimelineEvent(event);
+
+	return (
+		<Paper variant='outlined' sx={{ px: 2, py: 1.25, backgroundColor: 'var(--surface-2, #fafafa)' }}>
+			<Stack
+				direction='row'
+				spacing={1}
+				sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
+			>
+				<Chip size='small' label={copy.chipLabel} color={copy.chipColor} variant='outlined' />
+				<Typography variant='caption' sx={{ fontWeight: 500 }}>
+					{copy.headline}
+				</Typography>
+				<Typography variant='caption' color='text.secondary'>
+					· {toReadableDateTime(event.occurredAt)}
+					{event.actorName && ` · door ${event.actorName}`}
+				</Typography>
+			</Stack>
+			{copy.detail && (
+				<Typography
+					variant='caption'
+					color='text.secondary'
+					sx={{ display: 'block', mt: 0.5, pl: 0.25, whiteSpace: 'pre-wrap' }}
+				>
+					{copy.detail}
+				</Typography>
+			)}
+		</Paper>
 	);
 }
 

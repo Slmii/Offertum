@@ -1,5 +1,6 @@
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents, InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
+import { logContext as requestContext } from '@/modules/logger/log-context';
 import { LogService } from '@/modules/logger/log.service';
 import { ReplyDraftsRepository } from '@/modules/reply-drafts/reply-drafts.repository';
 import { Injectable } from '@nestjs/common';
@@ -40,43 +41,47 @@ export class FollowUpSchedulerFunction {
 				triggers: [{ cron: 'TZ=Europe/Amsterdam 0 8 * * *' }],
 				retries: 2
 			},
-			async ({ step }) => {
+			async ({ runId, step }) => {
 				const now = new Date();
 				const candidates = await step.run(InngestSteps.FollowUpScheduler.FanOut, () =>
 					repository.findCheckInCandidates(now, SCHEDULER_BATCH_CAP)
 				);
 
-				if (candidates.length === 0) {
+				// Re-establish AsyncLocalStorage for the tick logs — cross-org enumeration,
+				// no organizationId. The runId is the correlation key. See CLAUDE.md #8.
+				return requestContext.run({ requestId: runId }, async () => {
+					if (candidates.length === 0) {
+						logService.logAction({
+							action: 'follow_up.scheduler.tick',
+							message: 'Follow-up scheduler tick — no eligible candidates',
+							metadata: { now: now.toISOString() },
+							level: 'log',
+							context: 'InngestFn:follow-up-scheduler'
+						});
+						return { fanOut: 0 };
+					}
+
+					await inngest.send(
+						candidates.map(c => ({
+							name: InngestEvents.OpportunitySilenceFollowupDue,
+							data: { opportunityId: c.opportunityId, organizationId: c.organizationId }
+						}))
+					);
+
 					logService.logAction({
-						action: 'follow_up.scheduler.tick',
-						message: 'Follow-up scheduler tick — no eligible candidates',
-						metadata: { now: now.toISOString() },
+						action: 'follow_up.scheduler.fan_out',
+						message: `Follow-up scheduler fanned out ${candidates.length} check-in event(s)`,
+						metadata: {
+							now: now.toISOString(),
+							count: candidates.length,
+							batchCapReached: candidates.length === SCHEDULER_BATCH_CAP
+						},
 						level: 'log',
 						context: 'InngestFn:follow-up-scheduler'
 					});
-					return { fanOut: 0 };
-				}
 
-				await inngest.send(
-					candidates.map(c => ({
-						name: InngestEvents.OpportunitySilenceFollowupDue,
-						data: { opportunityId: c.opportunityId, organizationId: c.organizationId }
-					}))
-				);
-
-				logService.logAction({
-					action: 'follow_up.scheduler.fan_out',
-					message: `Follow-up scheduler fanned out ${candidates.length} check-in event(s)`,
-					metadata: {
-						now: now.toISOString(),
-						count: candidates.length,
-						batchCapReached: candidates.length === SCHEDULER_BATCH_CAP
-					},
-					level: 'log',
-					context: 'InngestFn:follow-up-scheduler'
+					return { fanOut: candidates.length };
 				});
-
-				return { fanOut: candidates.length };
 			}
 		);
 	}

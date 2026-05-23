@@ -163,7 +163,81 @@ export interface OpportunityDetail extends Opportunity {
 	 * a chronological "you sent → klant replied → you sent → …" view.
 	 */
 	customerReplies: CustomerReplyEntry[];
+	/**
+	 * System + owner activity events for the opportunity (status changes, dismiss /
+	 * undismiss, auto-cold flips). Newest-first. Sourced from the `Log` table — anything
+	 * not in {@link OPPORTUNITY_TIMELINE_EVENT_KINDS} is excluded server-side. Rendered
+	 * by the detail-view timeline panel interleaved with drafts + customer replies.
+	 */
+	timeline: OpportunityTimelineEvent[];
 }
+
+export const OPPORTUNITY_TIMELINE_EVENT_KINDS = [
+	'status_changed',
+	'auto_cold',
+	'dismissed',
+	'undismissed',
+	'fields_updated'
+] as const;
+export type OpportunityTimelineEventKind = (typeof OPPORTUNITY_TIMELINE_EVENT_KINDS)[number];
+
+/**
+ * Per-field change captured on an `opportunity.fields_updated` log. The wire format
+ * carries the discriminator + typed before/after for each editable field. Unknown
+ * fields are dropped server-side so the FE only sees ones it knows how to render.
+ */
+export type OpportunityFieldChange =
+	| { field: 'urgency'; before: OpportunityUrgency | null; after: OpportunityUrgency | null }
+	| { field: 'address'; before: string | null; after: string | null }
+	| { field: 'customerDeadline'; before: string | null; after: string | null }
+	| { field: 'customerAppointment'; before: string | null; after: string | null };
+
+interface OpportunityTimelineEventBase {
+	id: string;
+	occurredAt: string;
+	actorUserId: string | null;
+	/** Display name of the actor (User.name with email fallback). `null` for
+	 * system-driven events (auto-cold) or rows whose actor user has since been
+	 * deleted. */
+	actorName: string | null;
+}
+
+export interface OpportunityStatusChangedEvent extends OpportunityTimelineEventBase {
+	kind: 'status_changed';
+	previousStatus: OpportunityStatus | null;
+	nextStatus: OpportunityStatus;
+}
+
+export interface OpportunityAutoColdEvent extends OpportunityTimelineEventBase {
+	kind: 'auto_cold';
+	daysSinceSent: number;
+	coldAfterDays: number;
+}
+
+export interface OpportunityDismissedEvent extends OpportunityTimelineEventBase {
+	kind: 'dismissed';
+	reason: OpportunityDismissReason;
+	previousReason: OpportunityDismissReason | null;
+	previousStatus: OpportunityStatus | null;
+	notes: string | null;
+}
+
+export interface OpportunityUndismissedEvent extends OpportunityTimelineEventBase {
+	kind: 'undismissed';
+	previousReason: OpportunityDismissReason | null;
+}
+
+export interface OpportunityFieldsUpdatedEvent extends OpportunityTimelineEventBase {
+	kind: 'fields_updated';
+	changes: OpportunityFieldChange[];
+}
+
+export type OpportunityTimelineEvent =
+	| OpportunityStatusChangedEvent
+	| OpportunityAutoColdEvent
+	| OpportunityDismissedEvent
+	| OpportunityUndismissedEvent
+	| OpportunityFieldsUpdatedEvent;
 
 /**
  * Inbound message from the customer attached to an opportunity's thread. Shown in

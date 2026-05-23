@@ -20,6 +20,24 @@ import { Injectable } from '@nestjs/common';
  */
 export type OpportunityDismissedFilter = 'active' | 'dismissed' | 'all';
 
+/**
+ * Audit-log actions that compose the opportunity-detail timeline. Sourced from
+ * `Log.metadata->>'action'` rows where `Log.metadata->>'opportunityId'` matches.
+ */
+const OPPORTUNITY_TIMELINE_ACTIONS = [
+	'opportunity.status.updated',
+	'opportunity.auto_cold.flipped',
+	'opportunity.dismissed',
+	'opportunity.undismissed',
+	'opportunity.fields_updated'
+] as const;
+
+const TIMELINE_QUERY_CAP = 200;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export interface RawMessageForOpportunityProcessing {
 	id: string;
 	emailAccountId: string;
@@ -367,6 +385,8 @@ export class OpportunitiesRepository {
 	//   - latest SENT draft is older than (now − org.coldAfterDays)
 	//   - org's silence-check-in budget already spent OR disabled
 	//     (priorSentCheckIns >= followUpMaxCount, including the followUpMaxCount = 0 case)
+	//   - NO unsent draft exists (PENDING_APPROVAL / EDITED) — the owner is actively
+	//     working on a reply, or a check-in is queued; cooling now would be wrong.
 	// Returns the list of opportunity ids to flip; caller writes the status update
 	// + audit log per opp. Raw SQL because the conditions span the per-org config table
 	// + a correlated draft aggregate.
@@ -423,24 +443,37 @@ export class OpportunitiesRepository {
 			  AND org."coldAfterDays" > 0
 			  AND ${now} - ls."latestSentAt" >= make_interval(days => org."coldAfterDays")
 			  AND ls."priorCheckInCount" >= org."followUpMaxCount"
+			  AND NOT EXISTS (
+			      SELECT 1 FROM "ReplyDraft" rd2
+			      WHERE rd2."opportunityId" = o."id"
+			        AND rd2."status" IN (${PrismaReplyDraftStatus.PENDING_APPROVAL}::"ReplyDraftStatus",
+			                             ${PrismaReplyDraftStatus.EDITED}::"ReplyDraftStatus")
+			  )
 			ORDER BY ls."latestSentAt" ASC
 			LIMIT ${batchCap}
 		`);
 		return rows;
 	}
 
-	async markOpportunitiesCold(opportunityIds: ReadonlyArray<string>): Promise<number> {
+	/**
+	 * Flip eligible REPLIED opportunities to COLD. Returns the IDs that ACTUALLY
+	 * flipped (a subset of the input if a candidate's status changed between the
+	 * `findColdCandidates` snapshot and this write — e.g. the owner clicked WON in
+	 * the gap). Caller iterates the returned set for notifications + audit logs so
+	 * side-effects can't fire for an opp that didn't actually cool.
+	 */
+	async markOpportunitiesCold(opportunityIds: ReadonlyArray<string>): Promise<string[]> {
 		if (opportunityIds.length === 0) {
-			return 0;
+			return [];
 		}
-		const result = await this.prisma.opportunity.updateMany({
-			where: {
-				id: { in: opportunityIds as string[] },
-				status: PrismaOpportunityStatus.REPLIED
-			},
-			data: { status: PrismaOpportunityStatus.COLD }
-		});
-		return result.count;
+		const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+			UPDATE "Opportunity"
+			SET "status" = ${PrismaOpportunityStatus.COLD}::"OpportunityStatus"
+			WHERE "id" = ANY(${opportunityIds as string[]}::uuid[])
+			  AND "status" = ${PrismaOpportunityStatus.REPLIED}::"OpportunityStatus"
+			RETURNING "id"
+		`);
+		return rows.map(r => r.id);
 	}
 
 	async createOpportunityFromRawMessage(
@@ -595,6 +628,59 @@ export class OpportunitiesRepository {
 			where: { id, organizationId },
 			include: OPPORTUNITY_DETAIL_INCLUDE
 		});
+	}
+
+	/**
+	 * Fetch the audit-log rows that compose the opportunity timeline (status changes,
+	 * dismiss/undismiss, auto-cold flips). Filtered by `organizationId` for tenant
+	 * isolation + `metadata->>'opportunityId'` for the row. Newest-first; cap protects
+	 * against runaway logs.
+	 */
+	async findTimelineEvents(
+		organizationId: string,
+		opportunityId: string
+	): Promise<Array<{ id: string; createdAt: Date; metadata: Record<string, unknown> }>> {
+		const rows = await this.prisma.log.findMany({
+			where: {
+				organizationId,
+				AND: [
+					{ metadata: { path: ['opportunityId'], equals: opportunityId } },
+					{
+						OR: OPPORTUNITY_TIMELINE_ACTIONS.map(action => ({
+							metadata: { path: ['action'], equals: action }
+						}))
+					}
+				]
+			},
+			orderBy: { createdAt: 'desc' },
+			take: TIMELINE_QUERY_CAP,
+			select: { id: true, createdAt: true, metadata: true }
+		});
+
+		return rows
+			.filter((row): row is typeof row & { metadata: Record<string, unknown> } => isRecord(row.metadata))
+			.map(row => ({ id: row.id, createdAt: row.createdAt, metadata: row.metadata }));
+	}
+
+	/**
+	 * Resolve a set of user IDs to display labels (`name` if present, else `email`).
+	 * Used by the timeline mapper to surface "door <X>" on owner-driven events. One
+	 * batched query rather than N joins on the Log fetch. Unknown IDs are silently
+	 * dropped — caller renders `null` for them.
+	 */
+	async findUserDisplayLabels(userIds: ReadonlyArray<string>): Promise<Map<string, string>> {
+		if (userIds.length === 0) {
+			return new Map();
+		}
+		const rows = await this.prisma.user.findMany({
+			where: { id: { in: userIds as string[] } },
+			select: { id: true, name: true, email: true }
+		});
+		const labels = new Map<string, string>();
+		for (const row of rows) {
+			labels.set(row.id, row.name?.trim() || row.email);
+		}
+		return labels;
 	}
 
 	async updateStatus(id: string, status: PrismaOpportunityStatus): Promise<OpportunityRecord> {

@@ -209,7 +209,8 @@ export class OpportunitiesController {
 		@Param('id', new ParseUUIDPipe()) id: string,
 		@Body() body: UpdateOpportunityStatusDto
 	): Promise<OpportunityResponseDto> {
-		return this.opportunities.updateStatus(request.organizationId!, id, body.status);
+		const actorUserId = requireUserId(request);
+		return this.opportunities.updateStatus(request.organizationId!, id, body.status, actorUserId);
 	}
 
 	@ApiOperation({ summary: 'Patch owner-editable extracted fields (urgency / address / dates)' })
