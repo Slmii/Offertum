@@ -477,6 +477,10 @@ model RawMessage {
   // Classifier/extractor fields. Nullable until the pipeline runs.
   isQuoteRequest    Boolean?
   classifiedAt      DateTime?
+  // Set when the should-reply classifier flagged this message as a conversation
+  // closer ("Bedankt, tot dan!" etc.) and the pipeline deliberately skipped draft
+  // generation. Surfaced on the detail view's customer-replies chip.
+  wasDetectedAsCloser Boolean  @default(false)
   // Thread reconstitution. Set when this RawMessage is attached to an existing
   // Opportunity (e.g., a customer reply on a thread we've already classified). NULL
   // for messages that haven't been linked, including all bulk-mail-filtered and

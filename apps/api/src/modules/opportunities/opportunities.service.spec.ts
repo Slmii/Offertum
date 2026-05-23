@@ -123,7 +123,17 @@ function makeService(
 		{
 			notifyUsers: jest.fn().mockReturnValue(Promise.resolve()),
 			webOrigin: jest.fn().mockReturnValue('http://localhost:3000')
-		} as unknown as ConstructorParameters<typeof OpportunitiesService>[6]
+		} as unknown as ConstructorParameters<typeof OpportunitiesService>[6],
+		{
+			classify: jest.fn().mockReturnValue(
+				Promise.resolve({
+					value: { shouldReply: true, confidence: 0.9, reason: 'Test default — draft anyway' },
+					provider: 'openai',
+					model: 'gpt-4o-mini',
+					callId: 'should-reply-call-1'
+				})
+			)
+		} as unknown as ConstructorParameters<typeof OpportunitiesService>[7]
 	);
 }
 

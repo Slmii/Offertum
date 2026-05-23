@@ -1045,6 +1045,15 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 					<Typography variant='caption' color='text.secondary'>
 						· antwoordde {toReadableDateTime(reply.receivedAt)}
 					</Typography>
+					{reply.wasDetectedAsCloser && (
+						<Chip
+							size='small'
+							label='Afsluiter — geen concept'
+							color='default'
+							variant='outlined'
+							title='Quoteom herkende dit bericht als een afronding. Klik "Concept-vervolg opstellen" als je toch wilt antwoorden.'
+						/>
+					)}
 				</Stack>
 			</AccordionSummary>
 			<AccordionDetails sx={{ pt: 0 }}>

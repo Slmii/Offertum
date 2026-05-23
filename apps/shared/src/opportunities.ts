@@ -177,6 +177,13 @@ export interface CustomerReplyEntry {
 	fromEmail: string | null;
 	receivedAt: string;
 	body: string;
+	/**
+	 * `true` when the should-reply classifier marked this message as a conversation
+	 * closer ("Bedankt, tot dan!", "Akkoord", thumbs-up acknowledgment). Quoteom
+	 * deliberately did NOT generate a follow-up draft for it. UI surfaces this with
+	 * a small chip so the owner knows the absence-of-draft is intentional, not a bug.
+	 */
+	wasDetectedAsCloser: boolean;
 }
 
 /**

@@ -4,6 +4,7 @@ import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
 import { ReplyDraftGenerator } from '@/modules/ai/reply-draft/reply-draft-generator.service';
+import { ShouldReplyClassifier } from '@/modules/ai/should-reply/should-reply.service';
 import { Module } from '@nestjs/common';
 
 /**
@@ -34,8 +35,9 @@ import { Module } from '@nestjs/common';
 		},
 		ClassifierService,
 		ExtractorService,
-		ReplyDraftGenerator
+		ReplyDraftGenerator,
+		ShouldReplyClassifier
 	],
-	exports: [AI_CLIENT, AICallLogger, ClassifierService, ExtractorService, ReplyDraftGenerator]
+	exports: [AI_CLIENT, AICallLogger, ClassifierService, ExtractorService, ReplyDraftGenerator, ShouldReplyClassifier]
 })
 export class AiModule {}

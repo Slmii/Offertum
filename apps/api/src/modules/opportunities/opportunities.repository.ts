@@ -109,6 +109,7 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 			internalDate: true,
 			subject: true,
 			raw: true,
+			wasDetectedAsCloser: true,
 			emailAccount: { select: { provider: true } }
 		}
 	}
@@ -324,6 +325,7 @@ export class OpportunitiesRepository {
 		rawMessageId: string;
 		opportunityId: string;
 		resetToNew: boolean;
+		wasDetectedAsCloser?: boolean;
 	}): Promise<void> {
 		const now = new Date();
 		const writes: Prisma.PrismaPromise<unknown>[] = [
@@ -332,7 +334,8 @@ export class OpportunitiesRepository {
 				data: {
 					opportunityId: input.opportunityId,
 					isQuoteRequest: true,
-					classifiedAt: now
+					classifiedAt: now,
+					wasDetectedAsCloser: input.wasDetectedAsCloser ?? false
 				}
 			})
 		];

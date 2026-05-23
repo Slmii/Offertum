@@ -19,6 +19,7 @@ import { buildOpportunityCreatedEmail } from '@/lib/mails/notifications/opportun
 import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
+import { ShouldReplyClassifier } from '@/modules/ai/should-reply/should-reply.service';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 import { NotificationEventType as PrismaNotificationEventType } from '@/generated/prisma/enums';
 import { inngest } from '@/modules/inngest/inngest.client';
@@ -115,7 +116,8 @@ export class OpportunitiesService {
 		private readonly config: ConfigService<EnvSchema, true>,
 		private readonly logService: LogService,
 		private readonly replyDrafts: ReplyDraftsService,
-		private readonly notifications: NotificationsService
+		private readonly notifications: NotificationsService,
+		private readonly shouldReply: ShouldReplyClassifier
 	) {}
 
 	/**
@@ -1221,19 +1223,67 @@ export class OpportunitiesService {
 						return true;
 					}
 
+					// Live customer follow-up: ask the should-reply classifier whether the
+					// message expects a written response, or is a conversation closer
+					// ("Bedankt, tot dan!", "Akkoord", etc.). On `shouldReply: false`:
+					//   - attach as a thread message for timeline visibility
+					//   - keep opp status (don't flip REPLIED → NEW)
+					//   - skip the follow-up event + draft generation + notification
+					// Backfill + own-org paths never need this check (they don't generate
+					// drafts in the first place).
+					const isLiveCustomerReply = options.mode === 'live' && !isOrgOwnSender;
+					let closerSkip = false;
+					let shouldReplyCallId: string | null = null;
+					let shouldReplyReason: string | null = null;
+					if (isLiveCustomerReply) {
+						try {
+							const { bodyText } = buildRawMessageAIInput({
+								provider: rawMessage.provider,
+								subject: rawMessage.subject,
+								fromName: rawMessage.fromName,
+								fromEmail: rawMessage.fromEmail,
+								raw: rawMessage.raw
+							});
+							const shouldReplyResult = await this.shouldReply.classify({
+								subject: rawMessage.subject,
+								fromName: rawMessage.fromName,
+								fromEmail: rawMessage.fromEmail,
+								bodyText
+							});
+							closerSkip = !shouldReplyResult.value.shouldReply;
+							shouldReplyCallId = shouldReplyResult.callId;
+							shouldReplyReason = shouldReplyResult.value.reason;
+						} catch (error) {
+							// Classifier failure must not block the follow-up. Default to
+							// "draft anyway" — a missed closure detection is recoverable
+							// (owner ignores the draft); blocking on AI errors loses real
+							// customer replies.
+							this.logService.logAction({
+								action: 'opportunity.followup.should_reply_failed',
+								message: `should-reply classifier errored on ${rawMessage.id} — defaulting to draft`,
+								metadata: {
+									rawMessageId: rawMessage.id,
+									opportunityId: existingOpp.id,
+									organizationId: rawMessage.organizationId,
+									error: error instanceof Error ? error.message : String(error)
+								},
+								level: 'warn',
+								context: 'OpportunitiesService'
+							});
+						}
+					}
+
 					await this.repository.attachFollowupMessage({
 						rawMessageId: rawMessage.id,
 						opportunityId: existingOpp.id,
-						// Only flip status when this is a real customer reply. Own-org sent
-						// copies (backfill path only — the live-mode branch above already
-						// returned) must NOT clobber the markSent → REPLIED transition.
-						resetToNew: !isOrgOwnSender
+						// Real customer reply (not own-org echo, not closer) → flip to NEW.
+						// Closer or own-org → keep current status (REPLIED stays REPLIED).
+						resetToNew: !isOrgOwnSender && !closerSkip,
+						wasDetectedAsCloser: closerSkip
 					});
 					result.classifiedPositive += 1;
 
-					// Backfill mode suppresses follow-up events (snapshot, not live).
-					// Own-org sender suppresses too — no point generating a self-reply draft.
-					if (options.mode === 'live' && !isOrgOwnSender) {
+					if (isLiveCustomerReply && !closerSkip) {
 						try {
 							await inngest.send({
 								name: InngestEvents.OpportunityFollowupReceived,
@@ -1259,6 +1309,21 @@ export class OpportunitiesService {
 						}
 
 						await this.dispatchOpportunityNotification(existingOpp.id, 'customer_reply');
+					}
+
+					if (closerSkip) {
+						this.logService.logAction({
+							action: 'opportunity.followup.closer_detected',
+							message: `RawMessage ${rawMessage.id} classified as conversation closer — draft suppressed`,
+							metadata: {
+								rawMessageId: rawMessage.id,
+								opportunityId: existingOpp.id,
+								organizationId: rawMessage.organizationId,
+								shouldReplyCallId,
+								reason: shouldReplyReason
+							},
+							context: 'OpportunitiesService'
+						});
 					}
 
 					this.logService.logAction({
@@ -1688,7 +1753,8 @@ function toOpportunityDetailResponseDto(
 				fromName: m.fromName,
 				fromEmail: m.fromEmail,
 				raw: m.raw
-			}).bodyText
+			}).bodyText,
+			wasDetectedAsCloser: m.wasDetectedAsCloser
 		}))
 	};
 }
