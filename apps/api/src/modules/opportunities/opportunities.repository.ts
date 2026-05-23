@@ -3,6 +3,7 @@ import {
 	EmailProvider,
 	DismissReason as PrismaDismissReason,
 	OpportunityStatus as PrismaOpportunityStatus,
+	ReplyDraftKind as PrismaReplyDraftKind,
 	ReplyDraftStatus as PrismaReplyDraftStatus,
 	Urgency as PrismaUrgency
 } from '@/generated/prisma/enums';
@@ -358,6 +359,88 @@ export class OpportunitiesRepository {
 			where: { id: rawMessageId },
 			data: { isQuoteRequest: false, classifiedAt: new Date() }
 		});
+	}
+
+	// Find REPLIED opportunities eligible to auto-cold. Eligibility:
+	//   - status = REPLIED ∧ not dismissed
+	//   - org.coldAfterDays > 0 (0 disables the cron for the org)
+	//   - latest SENT draft is older than (now − org.coldAfterDays)
+	//   - org's silence-check-in budget already spent OR disabled
+	//     (priorSentCheckIns >= followUpMaxCount, including the followUpMaxCount = 0 case)
+	// Returns the list of opportunity ids to flip; caller writes the status update
+	// + audit log per opp. Raw SQL because the conditions span the per-org config table
+	// + a correlated draft aggregate.
+	async findColdCandidates(
+		now: Date,
+		batchCap: number
+	): Promise<
+		Array<{
+			opportunityId: string;
+			organizationId: string;
+			latestSentAt: Date;
+			coldAfterDays: number;
+			customerName: string | null;
+			requestType: string;
+			mailboxUserId: string | null;
+		}>
+	> {
+		const rows = await this.prisma.$queryRaw<
+			Array<{
+				opportunityId: string;
+				organizationId: string;
+				latestSentAt: Date;
+				coldAfterDays: number;
+				customerName: string | null;
+				requestType: string;
+				mailboxUserId: string | null;
+			}>
+		>(Prisma.sql`
+			WITH latest_sent AS (
+				SELECT
+					rd."opportunityId" AS "opportunityId",
+					MAX(rd."sentAt")    AS "latestSentAt",
+					COUNT(*) FILTER (
+						WHERE rd."kind" = ${PrismaReplyDraftKind.CHECK_IN}::"ReplyDraftKind"
+					)                    AS "priorCheckInCount"
+				FROM "ReplyDraft" rd
+				WHERE rd."status" = ${PrismaReplyDraftStatus.SENT}::"ReplyDraftStatus"
+				GROUP BY rd."opportunityId"
+			)
+			SELECT
+				o."id"                AS "opportunityId",
+				o."organizationId"    AS "organizationId",
+				ls."latestSentAt"     AS "latestSentAt",
+				org."coldAfterDays"   AS "coldAfterDays",
+				o."customerName"      AS "customerName",
+				o."requestType"       AS "requestType",
+				ea."userId"           AS "mailboxUserId"
+			FROM "Opportunity" o
+			JOIN "Organization" org ON org."id" = o."organizationId"
+			JOIN latest_sent ls     ON ls."opportunityId" = o."id"
+			LEFT JOIN "EmailAccount" ea ON ea."id" = o."emailAccountId"
+			WHERE o."status" = ${PrismaOpportunityStatus.REPLIED}::"OpportunityStatus"
+			  AND o."dismissedAt" IS NULL
+			  AND org."coldAfterDays" > 0
+			  AND ${now} - ls."latestSentAt" >= make_interval(days => org."coldAfterDays")
+			  AND ls."priorCheckInCount" >= org."followUpMaxCount"
+			ORDER BY ls."latestSentAt" ASC
+			LIMIT ${batchCap}
+		`);
+		return rows;
+	}
+
+	async markOpportunitiesCold(opportunityIds: ReadonlyArray<string>): Promise<number> {
+		if (opportunityIds.length === 0) {
+			return 0;
+		}
+		const result = await this.prisma.opportunity.updateMany({
+			where: {
+				id: { in: opportunityIds as string[] },
+				status: PrismaOpportunityStatus.REPLIED
+			},
+			data: { status: PrismaOpportunityStatus.COLD }
+		});
+		return result.count;
 	}
 
 	async createOpportunityFromRawMessage(

@@ -1,5 +1,6 @@
 import { GmailModule } from '@/modules/gmail/gmail.module';
 import { MicrosoftModule } from '@/modules/microsoft/microsoft.module';
+import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfill.function';
@@ -38,7 +39,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		ReplyDraftGenerateFunction,
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
-		WeeklyDigestFunction
+		WeeklyDigestFunction,
+		AutoColdSchedulerFunction
 	],
 	exports: [
 		GmailBackfillFunction,
@@ -50,7 +52,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		ReplyDraftGenerateFunction,
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
-		WeeklyDigestFunction
+		WeeklyDigestFunction,
+		AutoColdSchedulerFunction
 	]
 })
 export class InngestModule {}

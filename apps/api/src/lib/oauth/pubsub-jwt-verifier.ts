@@ -1,3 +1,4 @@
+import { hoursToMs } from '@/lib/time/duration';
 import { createPublicKey, verify } from 'node:crypto';
 
 /**
@@ -25,7 +26,7 @@ import { createPublicKey, verify } from 'node:crypto';
 
 const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const ACCEPTED_ISSUERS = ['accounts.google.com', 'https://accounts.google.com'];
-const JWKS_CACHE_TTL_MS = 60 * 60 * 1000;
+const JWKS_CACHE_TTL_MS = hoursToMs(1);
 
 /** Allowable clock skew in seconds when validating `exp`/`iat`. */
 const CLOCK_SKEW_SECONDS = 60;

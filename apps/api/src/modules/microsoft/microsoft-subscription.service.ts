@@ -1,3 +1,4 @@
+import { daysToMs, hoursToMs } from '@/lib/time/duration';
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
 import { decrypt, encrypt } from '@/lib/crypto/token-encryption';
@@ -33,7 +34,7 @@ import { randomBytes } from 'node:crypto';
  */
 
 /** Re-subscribe any row whose expiry is within this window. Graph TTL is ~3 days. */
-const RENEWAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RENEWAL_WINDOW_MS = daysToMs(1);
 
 /**
  * How far out to set `expirationDateTime` on create + renew. Graph's hard ceiling for
@@ -41,7 +42,7 @@ const RENEWAL_WINDOW_MS = 24 * 60 * 60 * 1000;
  * server-side clock skew can't push us over. Renewal happens daily via the cron, so the
  * effective subscription stays alive indefinitely.
  */
-const SUBSCRIPTION_DURATION_MS = 2 * 24 * 60 * 60 * 1000 + 22 * 60 * 60 * 1000; // ~2d 22h
+const SUBSCRIPTION_DURATION_MS = daysToMs(2) + hoursToMs(22); // ~2d 22h
 
 /** Length of the generated `clientState` shared secret. 32 bytes hex = 64 chars. */
 const CLIENT_STATE_BYTES = 32;
@@ -271,7 +272,7 @@ export class MicrosoftSubscriptionService {
 		// `start-subscription` step. Older rows without a subscriptionId are assumed to be
 		// permanently disconnected (user removed Quoteom from their account, or similar)
 		// and we don't want to repeatedly re-register subscriptions for those.
-		const orphanCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+		const orphanCutoff = new Date(Date.now() - daysToMs(7));
 		const candidates = await this.prisma.emailAccount.findMany({
 			where: {
 				provider: EmailProvider.MICROSOFT,

@@ -56,7 +56,11 @@ function FollowUpsSettingsPage() {
 	const onSubmit = (values: FollowUpSettingsForm) => {
 		// `cadencePreset` is UI-only — drop it before sending the API payload.
 		update.mutate(
-			{ cadenceDays: values.cadenceDays, maxCount: values.maxCount },
+			{
+				cadenceDays: values.cadenceDays,
+				maxCount: values.maxCount,
+				coldAfterDays: values.coldAfterDays
+			},
 			{
 				onSuccess: () => {
 					setSavedFlash(true);
@@ -93,6 +97,7 @@ function FollowUpsSettingsPage() {
 					defaultValues={{
 						cadenceDays: data.cadenceDays,
 						maxCount: data.maxCount,
+						coldAfterDays: data.coldAfterDays,
 						cadencePreset: presetFor(data.cadenceDays)
 					}}
 				>
@@ -113,6 +118,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 	const { setValue } = useFormContext<FollowUpSettingsForm>();
 	const cadenceDays = useWatch<FollowUpSettingsForm, 'cadenceDays'>({ name: 'cadenceDays' }) ?? 0;
 	const maxCount = useWatch<FollowUpSettingsForm, 'maxCount'>({ name: 'maxCount' }) ?? 0;
+	const coldAfterDays = useWatch<FollowUpSettingsForm, 'coldAfterDays'>({ name: 'coldAfterDays' }) ?? 0;
 	const schedulerDisabled = maxCount === 0;
 
 	return (
@@ -190,6 +196,33 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 						{maxCount === 1 ? 'herinnering' : 'herinneringen'}
 					</Typography>
 				</Stack>
+			</Box>
+
+			<Box>
+				<Typography
+					variant='overline'
+					sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
+				>
+					Automatisch koud markeren
+				</Typography>
+				<Typography sx={{ fontSize: 13, color: 'var(--ink-3)', mb: 'var(--space-3)' }}>
+					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Quoteom de
+					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
+					— je houdt opportunities dan zelf bij.
+				</Typography>
+				<Stack direction='row' spacing='var(--space-2)' sx={{ alignItems: 'center' }}>
+					<Box sx={{ width: 120 }}>
+						<Field name='coldAfterDays' type='number' fullWidth />
+					</Box>
+					<Typography sx={{ fontSize: 13, color: 'var(--ink-3)' }}>
+						{coldAfterDays === 1 ? 'dag' : 'dagen'} na laatste verzending
+					</Typography>
+				</Stack>
+				{coldAfterDays === 0 && (
+					<Typography sx={{ fontSize: 12, color: 'var(--ink-4)', mt: 'var(--space-2)', fontStyle: 'italic' }}>
+						Automatisch koud markeren staat uit.
+					</Typography>
+				)}
 			</Box>
 
 			{schedulerDisabled && (

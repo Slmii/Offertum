@@ -125,15 +125,19 @@ enum ReplyDraftKind {
 }
 
 // Events the in-app + email notification system can surface to users.
-//   - OPPORTUNITY_CREATED : a new Opportunity was materialized from a classified-positive
-//                           RawMessage.
-//   - CUSTOMER_REPLY      : an inbound message landed on a tracked thread (status flipped
-//                           REPLIED → NEW via attachFollowupMessage).
-//   - WEEKLY_DIGEST       : aggregated Monday-morning summary (open opps, cold opps,
-//                           pending follow-ups, estimated value).
+//   - OPPORTUNITY_CREATED  : a new Opportunity was materialized from a classified-positive
+//                            RawMessage.
+//   - CUSTOMER_REPLY       : an inbound message landed on a tracked thread (status flipped
+//                            REPLIED → NEW via attachFollowupMessage).
+//   - OPPORTUNITY_AUTO_COLD: the auto-cold scheduler flipped a REPLIED opp to COLD after
+//                            the silence-check-in budget ran out + coldAfterDays elapsed.
+//                            In-app only — never email (avoids the inbox-loop of W6.2.5).
+//   - WEEKLY_DIGEST        : aggregated Monday-morning summary (open opps, cold opps,
+//                            pending follow-ups, estimated value).
 enum NotificationEventType {
   OPPORTUNITY_CREATED
   CUSTOMER_REPLY
+  OPPORTUNITY_AUTO_COLD
   WEEKLY_DIGEST
 }
 
@@ -191,6 +195,11 @@ model Organization {
   // scheduler entirely for the org.
   followUpCadenceDays Int      @default(4)
   followUpMaxCount    Int      @default(2)
+  // Per-org auto-cold threshold. The `auto-cold-scheduler` cron flips a REPLIED
+  // opportunity to COLD when the latest SENT draft is older than this many days AND
+  // the silence-check-in budget (followUpMaxCount) has been exhausted. Default 14
+  // days; 90-day ceiling. Set to 0 to disable the auto-cold cron entirely for the org.
+  coldAfterDays       Int      @default(14)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

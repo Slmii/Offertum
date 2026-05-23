@@ -32,6 +32,36 @@ export const OPPORTUNITY_URGENCY_LABELS_NL: Record<OpportunityUrgency, string> =
 };
 
 /**
+ * Per-current-status ordering of the status dropdown options. Transitions stay fully
+ * open (pattern #20) — this is purely UX guidance about the typical next move. The
+ * current status sits first (so the dropdown opens on the active value), then likely
+ * next moves, then everything else. Terminal states (won/lost) bubble to the bottom
+ * unless they're the current status.
+ *
+ * Order intent per current status:
+ *   - new      → owner usually goes new → replied (we drafted, they sent) OR cold (no
+ *                further action). Won/lost only via shortcut.
+ *   - replied  → we sent, customer silent — owner moves to won/lost when known, or
+ *                back to new on a fresh customer reply (handled by pipeline, not the UI).
+ *   - waiting  → effectively replied (we're waiting on customer); same suggestions.
+ *   - cold     → revive to replied if customer re-engages, otherwise lost.
+ *   - won/lost → terminal; surface the active state first, then offer the recovery
+ *                paths (mark as replied if the deal flipped status).
+ */
+export const OPPORTUNITY_STATUS_ORDER_BY_CURRENT: Record<OpportunityStatus, ReadonlyArray<OpportunityStatus>> = {
+	new: ['new', 'replied', 'cold', 'waiting', 'won', 'lost'],
+	replied: ['replied', 'won', 'lost', 'cold', 'new', 'waiting'],
+	waiting: ['waiting', 'replied', 'cold', 'new', 'won', 'lost'],
+	cold: ['cold', 'replied', 'lost', 'new', 'waiting', 'won'],
+	won: ['won', 'replied', 'new', 'waiting', 'cold', 'lost'],
+	lost: ['lost', 'replied', 'cold', 'new', 'waiting', 'won']
+};
+
+export function getStatusOptionsForCurrent(current: OpportunityStatus): ReadonlyArray<OpportunityStatus> {
+	return OPPORTUNITY_STATUS_ORDER_BY_CURRENT[current];
+}
+
+/**
  * Sort weight for urgency. Lower = more urgent (sorts first). Used by client-side sort
  * over a loaded page.
  */

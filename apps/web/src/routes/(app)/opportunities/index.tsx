@@ -16,6 +16,7 @@ import {
 import { DismissOpportunitySchema, type DismissOpportunityForm } from '@/lib/schemas/dismiss-opportunity.schema';
 import { toReadableDate, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
+	getStatusOptionsForCurrent,
 	OPPORTUNITY_DISMISS_REASON_LABELS_NL,
 	OPPORTUNITY_SORT_LABELS_NL,
 	OPPORTUNITY_SORT_OPTIONS,
@@ -321,7 +322,7 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							variant='standard'
 							disableUnderline
 							naked
-							options={OPPORTUNITY_STATUSES.map(s => ({
+							options={getStatusOptionsForCurrent(status).map(s => ({
 								id: s,
 								label: OPPORTUNITY_STATUS_LABELS_NL[s]
 							}))}

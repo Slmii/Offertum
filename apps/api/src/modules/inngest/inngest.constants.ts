@@ -89,7 +89,10 @@ export const InngestFunctionIds = {
 	FollowUpProcessor: 'follow-up-processor',
 	/** Weekly digest — Monday 08:00 Amsterdam cron. Enumerates orgs and sends a
 	 *  digest email to every user with WEEKLY_DIGEST EMAIL enabled. */
-	WeeklyDigest: 'notifications-weekly-digest'
+	WeeklyDigest: 'notifications-weekly-digest',
+	/** Auto-cold — daily 07:00 Amsterdam cron. Flips REPLIED opps to COLD once the
+	 *  silence-check-in budget runs out + org.coldAfterDays elapsed. */
+	AutoColdScheduler: 'auto-cold-scheduler'
 } as const;
 
 /**
@@ -161,5 +164,9 @@ export const InngestSteps = {
 	WeeklyDigest: {
 		/** Single step: enumerate orgs + their users + send digest emails. */
 		Dispatch: 'weekly-digest-dispatch'
+	},
+	AutoColdScheduler: {
+		/** Single step: query candidates + flip status + log. */
+		FlipColdCandidates: 'auto-cold-scheduler-flip'
 	}
 } as const;

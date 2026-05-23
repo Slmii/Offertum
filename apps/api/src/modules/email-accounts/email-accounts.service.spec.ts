@@ -1,3 +1,4 @@
+import { hoursToMs } from '@/lib/time/duration';
 import { EmailProvider } from '@/generated/prisma/enums';
 import { encrypt } from '@/lib/crypto/token-encryption';
 import { OAuthRefreshTokenInvalidException } from '@/lib/oauth/oauth-errors';
@@ -37,7 +38,7 @@ function makeService(provider: EmailProvider): {
 		userId: 'user-1',
 		accessToken: encrypt('cached-access-token'),
 		refreshToken: encrypt('dead-refresh-token'),
-		accessTokenExpiresAt: new Date(Date.now() - 60 * 60 * 1000),
+		accessTokenExpiresAt: new Date(Date.now() - hoursToMs(1)),
 		scope: 'Mail.Read'
 	};
 

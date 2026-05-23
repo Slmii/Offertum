@@ -1,6 +1,8 @@
 import {
 	FOLLOW_UP_CADENCE_DAYS_MAX,
 	FOLLOW_UP_CADENCE_DAYS_MIN,
+	FOLLOW_UP_COLD_AFTER_DAYS_MAX,
+	FOLLOW_UP_COLD_AFTER_DAYS_MIN,
 	FOLLOW_UP_MAX_COUNT_MAX,
 	FOLLOW_UP_MAX_COUNT_MIN
 } from '@quoteom/shared';
@@ -23,6 +25,11 @@ export const FollowUpSettingsSchema = z.object({
 		.int('Vul een heel getal in')
 		.min(FOLLOW_UP_MAX_COUNT_MIN, `Minimaal ${FOLLOW_UP_MAX_COUNT_MIN}`)
 		.max(FOLLOW_UP_MAX_COUNT_MAX, `Maximaal ${FOLLOW_UP_MAX_COUNT_MAX}`),
+	coldAfterDays: z.coerce
+		.number({ message: 'Vul een geldig aantal dagen in' })
+		.int('Vul een heel getal in')
+		.min(FOLLOW_UP_COLD_AFTER_DAYS_MIN, `Minimaal ${FOLLOW_UP_COLD_AFTER_DAYS_MIN}`)
+		.max(FOLLOW_UP_COLD_AFTER_DAYS_MAX, `Maximaal ${FOLLOW_UP_COLD_AFTER_DAYS_MAX}`),
 	cadencePreset: z.string()
 });
 

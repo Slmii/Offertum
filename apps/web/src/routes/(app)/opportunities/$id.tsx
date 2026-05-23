@@ -19,6 +19,7 @@ import {
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
+	getStatusOptionsForCurrent,
 	OPPORTUNITY_STATUS_CHIP_COLORS,
 	OPPORTUNITY_STATUS_LABELS_NL,
 	OPPORTUNITY_URGENCY_COLORS,
@@ -176,7 +177,10 @@ function OpportunityDetailPage() {
 					variant='standard'
 					disableUnderline
 					naked
-					options={OPPORTUNITY_STATUSES.map(s => ({ id: s, label: OPPORTUNITY_STATUS_LABELS_NL[s] }))}
+					options={getStatusOptionsForCurrent(status).map(s => ({
+						id: s,
+						label: OPPORTUNITY_STATUS_LABELS_NL[s]
+					}))}
 					renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
 					sx={{
 						'& .MuiSelect-select': {

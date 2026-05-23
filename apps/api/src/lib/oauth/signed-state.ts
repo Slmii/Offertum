@@ -1,3 +1,4 @@
+import { minutesToMs } from '@/lib/time/duration';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
@@ -17,7 +18,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
  *    clobber each other.
  */
 
-const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes — plenty for the consent screen
+const STATE_TTL_MS = minutesToMs(10); // 10 minutes — plenty for the consent screen
 
 interface OAuthStatePayload {
 	nonce: string;

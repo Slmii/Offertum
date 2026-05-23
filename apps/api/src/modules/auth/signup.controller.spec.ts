@@ -1,3 +1,4 @@
+import { hoursToMs } from '@/lib/time/duration';
 import { SignupController } from '@/modules/auth/signup.controller';
 import { describe, expect, it } from '@jest/globals';
 
@@ -28,6 +29,6 @@ describe('Rate limit metadata', () => {
 	it('SignupController.create is throttled at 5 per hour per IP', () => {
 		const target = SignupController.prototype.create;
 		expect(Reflect.getMetadata(THROTTLER_LIMIT_KEY, target)).toBe(5);
-		expect(Reflect.getMetadata(THROTTLER_TTL_KEY, target)).toBe(60 * 60 * 1000);
+		expect(Reflect.getMetadata(THROTTLER_TTL_KEY, target)).toBe(hoursToMs(1));
 	});
 });

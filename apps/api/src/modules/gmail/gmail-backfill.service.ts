@@ -1,3 +1,4 @@
+import { daysToMs } from '@/lib/time/duration';
 import { EmailProvider } from '@/generated/prisma/enums';
 import { EMAIL_ACCOUNT_NOT_FOUND } from '@/lib/errors';
 import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
@@ -87,7 +88,7 @@ export class GmailBackfillService {
 			organizationId: account.organizationId,
 			userId: account.userId
 		};
-		const cutoff = formatGmailDateQuery(new Date(Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000));
+		const cutoff = formatGmailDateQuery(new Date(Date.now() - daysToMs(BACKFILL_DAYS)));
 		// `in:inbox` scopes to RECEIVED mail only — what the classifier cares about.
 		// Without it, Gmail's `messages.list` defaults to all labels (Inbox, Sent, Drafts,
 		// archived…) which inflates the corpus with outbound + unrelated content and

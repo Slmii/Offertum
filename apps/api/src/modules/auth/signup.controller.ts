@@ -1,3 +1,4 @@
+import { hoursToMs } from '@/lib/time/duration';
 import { SignupDto } from '@/modules/auth/dto/signup.dto';
 import { SignupResponseDto } from '@/modules/auth/dto/signup.response.dto';
 import { SignupService } from '@/modules/auth/signup.service';
@@ -21,7 +22,7 @@ export class SignupController {
 
 	@ApiOperation({ summary: 'Create a new user + organization (self-signup)' })
 	@ApiOkResponse({ type: SignupResponseDto })
-	@Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
+	@Throttle({ default: { limit: 5, ttl: hoursToMs(1) } })
 	@HttpCode(HttpStatus.OK)
 	@Post()
 	async create(@Body() body: SignupDto): Promise<SignupResponseDto> {

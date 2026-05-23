@@ -112,7 +112,8 @@ export class MeController {
 	): Promise<FollowUpSettingsResponseDto> {
 		return this.me.updateFollowUpSettings(this.userId(request), request.organizationId!, {
 			cadenceDays: body.cadenceDays,
-			maxCount: body.maxCount
+			maxCount: body.maxCount,
+			coldAfterDays: body.coldAfterDays
 		});
 	}
 

@@ -14,6 +14,7 @@ import type { SendContextAttachment } from '@/modules/reply-drafts/reply-drafts.
 import { ReplyDraftsRepository } from '@/modules/reply-drafts/reply-drafts.repository';
 import { Inject, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { attachmentTotalTooLarge } from '@/lib/errors';
+import { msToDays } from '@/lib/time/duration';
 
 /**
  * orchestrates draft generation for a freshly-created Opportunity. Called by the
@@ -325,10 +326,7 @@ export class ReplyDraftsService {
 			raw: anchorMessage.raw
 		}).bodyText;
 
-		const daysSinceSent = Math.max(
-			1,
-			Math.round((now.getTime() - candidate.lastSentAt.getTime()) / (24 * 60 * 60 * 1000))
-		);
+		const daysSinceSent = Math.max(1, msToDays(now.getTime() - candidate.lastSentAt.getTime()));
 
 		const input: ReplyDraftInput = {
 			subject: anchorMessage.subject,

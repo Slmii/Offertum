@@ -201,45 +201,55 @@ export class MeService {
 	async getFollowUpSettings(organizationId: string): Promise<FollowUpSettings> {
 		const row = await this.prisma.organization.findUniqueOrThrow({
 			where: { id: organizationId },
-			select: { followUpCadenceDays: true, followUpMaxCount: true }
+			select: { followUpCadenceDays: true, followUpMaxCount: true, coldAfterDays: true }
 		});
-		return { cadenceDays: row.followUpCadenceDays, maxCount: row.followUpMaxCount };
+		return {
+			cadenceDays: row.followUpCadenceDays,
+			maxCount: row.followUpMaxCount,
+			coldAfterDays: row.coldAfterDays
+		};
 	}
 
 	/**
-	 * Update the active org's follow-up cadence + cap. Owner-only at the
-	 * controller layer. Same persistence pattern as `updateTonePlaybook`: write, then
-	 * audit-log. No need to reschedule existing per-opp timers — the scheduler
-	 * recomputes eligibility from `org.followUpCadenceDays` every tick, so the change
-	 * is picked up automatically on the next 09:00 run.
+	 * Update the active org's follow-up cadence + cap + cold-after-days. Owner-only at
+	 * the controller layer. Same persistence pattern as `updateTonePlaybook`: write,
+	 * then audit-log. No need to reschedule existing per-opp timers — both the
+	 * silence-check-in scheduler and the auto-cold cron recompute eligibility from
+	 * the org row on every tick, so changes apply automatically on the next run.
 	 */
 	async updateFollowUpSettings(
 		actingUserId: string,
 		organizationId: string,
-		input: { cadenceDays: number; maxCount: number }
+		input: { cadenceDays: number; maxCount: number; coldAfterDays: number }
 	): Promise<FollowUpSettings> {
 		const updated = await this.prisma.organization.update({
 			where: { id: organizationId },
 			data: {
 				followUpCadenceDays: input.cadenceDays,
-				followUpMaxCount: input.maxCount
+				followUpMaxCount: input.maxCount,
+				coldAfterDays: input.coldAfterDays
 			},
-			select: { followUpCadenceDays: true, followUpMaxCount: true }
+			select: { followUpCadenceDays: true, followUpMaxCount: true, coldAfterDays: true }
 		});
 
 		this.logService.logAction({
 			action: 'organization.follow_up_settings_updated',
-			message: `Follow-up settings updated for org ${organizationId} → cadence=${input.cadenceDays}d, cap=${input.maxCount}`,
+			message: `Follow-up settings updated for org ${organizationId} → cadence=${input.cadenceDays}d, cap=${input.maxCount}, coldAfter=${input.coldAfterDays}d`,
 			metadata: {
 				organizationId,
 				updatedBy: actingUserId,
 				cadenceDays: input.cadenceDays,
-				maxCount: input.maxCount
+				maxCount: input.maxCount,
+				coldAfterDays: input.coldAfterDays
 			},
 			context: 'MeService'
 		});
 
-		return { cadenceDays: updated.followUpCadenceDays, maxCount: updated.followUpMaxCount };
+		return {
+			cadenceDays: updated.followUpCadenceDays,
+			maxCount: updated.followUpMaxCount,
+			coldAfterDays: updated.coldAfterDays
+		};
 	}
 
 	/**

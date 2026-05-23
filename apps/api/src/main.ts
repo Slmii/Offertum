@@ -15,6 +15,7 @@ import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-wat
 import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft-backfill.function';
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
+import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
@@ -108,6 +109,7 @@ async function bootstrap() {
 	const followUpScheduler = app.get(FollowUpSchedulerFunction);
 	const followUpProcessor = app.get(FollowUpProcessorFunction);
 	const weeklyDigest = app.get(WeeklyDigestFunction);
+	const autoColdScheduler = app.get(AutoColdSchedulerFunction);
 	app.use(
 		'/api/inngest',
 		inngestServe({
@@ -123,7 +125,8 @@ async function bootstrap() {
 				replyDraftGenerate.inngestFn,
 				followUpScheduler.inngestFn,
 				followUpProcessor.inngestFn,
-				weeklyDigest.inngestFn
+				weeklyDigest.inngestFn,
+				autoColdScheduler.inngestFn
 			]
 		})
 	);

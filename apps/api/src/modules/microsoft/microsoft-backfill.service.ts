@@ -1,3 +1,4 @@
+import { daysToMs } from '@/lib/time/duration';
 import { EmailProvider } from '@/generated/prisma/enums';
 import { EMAIL_ACCOUNT_NOT_FOUND } from '@/lib/errors';
 import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
@@ -82,7 +83,7 @@ export class MicrosoftBackfillService {
 			organizationId: account.organizationId,
 			userId: account.userId
 		};
-		const cutoff = new Date(Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+		const cutoff = new Date(Date.now() - daysToMs(BACKFILL_DAYS)).toISOString();
 		// Graph's $filter expects ISO 8601 with single-quoted strings, no spaces in the
 		// comparison — `receivedDateTime ge 2026-02-12T00:00:00Z`. Already-Z-suffixed.
 		const filter = `receivedDateTime ge ${cutoff}`;

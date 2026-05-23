@@ -7,4 +7,5 @@ import type { FollowUpSettings } from '@quoteom/shared';
 export class FollowUpSettingsResponseDto implements FollowUpSettings {
 	cadenceDays!: number;
 	maxCount!: number;
+	coldAfterDays!: number;
 }

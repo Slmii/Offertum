@@ -1,3 +1,4 @@
+import { minutesToMs } from '@/lib/time/duration';
 import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { TenantMemberGuard } from '@/common/guards/tenant-member.guard';
 import type { EnvSchema } from '@/config/env.schema';
@@ -113,7 +114,7 @@ export class GmailController {
 			httpOnly: true,
 			sameSite: 'lax',
 			secure: this.config.get('NODE_ENV', { infer: true }) === 'production',
-			maxAge: 10 * 60 * 1000,
+			maxAge: minutesToMs(10),
 			path: '/api/email/gmail/callback'
 		});
 

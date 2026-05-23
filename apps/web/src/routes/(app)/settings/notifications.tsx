@@ -38,6 +38,10 @@ const EVENT_LABELS_NL: Record<NotificationEventType, { title: string; descriptio
 		title: 'Reactie van klant',
 		description: 'Een klant heeft gereageerd op een lopende offerteaanvraag.'
 	},
+	opportunity_auto_cold: {
+		title: 'Aanvraag automatisch koud gezet',
+		description: 'Een offerteaanvraag is na de stilteperiode automatisch op Koud gezet.'
+	},
 	weekly_digest: {
 		title: 'Wekelijks overzicht',
 		description: 'Maandagochtend 08:00 — samenvatting van open + koude offerteaanvragen.'

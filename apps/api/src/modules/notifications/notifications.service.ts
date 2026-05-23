@@ -25,12 +25,14 @@ import {
 const WIRE_TO_PRISMA_EVENT: Record<NotificationEventType, PrismaNotificationEventType> = {
 	opportunity_created: PrismaNotificationEventType.OPPORTUNITY_CREATED,
 	customer_reply: PrismaNotificationEventType.CUSTOMER_REPLY,
+	opportunity_auto_cold: PrismaNotificationEventType.OPPORTUNITY_AUTO_COLD,
 	weekly_digest: PrismaNotificationEventType.WEEKLY_DIGEST
 };
 
 const PRISMA_TO_WIRE_EVENT: Record<PrismaNotificationEventType, NotificationEventType> = {
 	OPPORTUNITY_CREATED: 'opportunity_created',
 	CUSTOMER_REPLY: 'customer_reply',
+	OPPORTUNITY_AUTO_COLD: 'opportunity_auto_cold',
 	WEEKLY_DIGEST: 'weekly_digest'
 };
 

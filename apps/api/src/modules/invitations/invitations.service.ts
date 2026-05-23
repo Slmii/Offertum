@@ -1,3 +1,4 @@
+import { daysToMs } from '@/lib/time/duration';
 import type { EnvSchema } from '@/config/env.schema';
 import { MembershipRole } from '@/generated/prisma/client';
 import { isOrganizationEntitled } from '@/lib/billing/entitlement-check';
@@ -104,7 +105,7 @@ export class InvitationsService {
 		await this.assertSeatBudget(input.organizationId);
 
 		const rawToken = randomBytes(INVITATION_TOKEN_BYTES).toString('hex');
-		const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
+		const expiresAt = new Date(Date.now() + daysToMs(INVITATION_TTL_DAYS));
 
 		// `Invitation.token` column stores the SHA-256 hash. The raw token ships in the
 		// magic-link URL only — never persisted, never logged.

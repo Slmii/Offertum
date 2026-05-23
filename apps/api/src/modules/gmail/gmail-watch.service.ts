@@ -1,3 +1,4 @@
+import { daysToMs } from '@/lib/time/duration';
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
 import { EmailAccountsService, type MailboxScope } from '@/modules/email-accounts/email-accounts.service';
@@ -27,7 +28,7 @@ import { ConfigService } from '@nestjs/config';
  */
 
 /** Re-watch any row whose expiry is within this window. Gmail TTL is ~7 days. */
-const RENEWAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RENEWAL_WINDOW_MS = daysToMs(1);
 
 export interface RenewalResult {
 	scanned: number;

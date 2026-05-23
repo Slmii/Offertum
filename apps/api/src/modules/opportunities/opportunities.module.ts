@@ -11,6 +11,9 @@ import { Module } from '@nestjs/common';
 	imports: [AiModule, ReplyDraftsModule, ReplyDraftAttachmentsModule, NotificationsModule],
 	controllers: [OpportunitiesController],
 	providers: [OpportunitiesRepository, OpportunitiesService],
-	exports: [OpportunitiesService]
+	// `OpportunitiesRepository` exported so InngestModule's `AutoColdSchedulerFunction`
+	// can run its candidate query + bulk status flip directly. Same pattern as
+	// `ReplyDraftsRepository` exposed for the silence-check-in scheduler.
+	exports: [OpportunitiesService, OpportunitiesRepository]
 })
 export class OpportunitiesModule {}

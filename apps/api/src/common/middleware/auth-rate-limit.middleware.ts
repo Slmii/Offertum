@@ -1,3 +1,4 @@
+import { minutesToMs } from '@/lib/time/duration';
 import type { NextFunction, Request, Response } from 'express';
 
 /**
@@ -21,7 +22,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 const PER_IP_LIMIT = 10; // requests per WINDOW
 const PER_EMAIL_LIMIT = 5; // requests per WINDOW
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const WINDOW_MS = minutesToMs(15);
 
 interface Bucket {
 	timestamps: number[];

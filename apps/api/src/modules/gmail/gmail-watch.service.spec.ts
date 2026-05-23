@@ -1,3 +1,4 @@
+import { daysToMs } from '@/lib/time/duration';
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
 import type { EmailAccountsService } from '@/modules/email-accounts/email-accounts.service';
@@ -60,7 +61,7 @@ function makeApi(opts: { startWatch?: jest.Mock } = {}): GmailApiService {
 				Promise.resolve({
 					historyId: '999',
 					// 7 days from "now"
-					expiration: String(Date.now() + 7 * 24 * 60 * 60 * 1000)
+					expiration: String(Date.now() + daysToMs(7))
 				})
 			),
 		stopWatch: jest.fn().mockReturnValue(Promise.resolve())
@@ -124,9 +125,7 @@ describe('GmailWatchService.renewExpiringWatches', () => {
 		]);
 		const startWatch = jest
 			.fn()
-			.mockReturnValue(
-				Promise.resolve({ historyId: 'h-99', expiration: String(Date.now() + 7 * 24 * 60 * 60 * 1000) })
-			);
+			.mockReturnValue(Promise.resolve({ historyId: 'h-99', expiration: String(Date.now() + daysToMs(7)) }));
 		const service = new GmailWatchService(
 			prisma as unknown as PrismaService,
 			makeAccounts(),
@@ -155,7 +154,7 @@ describe('GmailWatchService.renewExpiringWatches', () => {
 			}
 			return Promise.resolve({
 				historyId: 'h-99',
-				expiration: String(Date.now() + 7 * 24 * 60 * 60 * 1000)
+				expiration: String(Date.now() + daysToMs(7))
 			});
 		});
 

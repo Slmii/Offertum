@@ -2,6 +2,7 @@
 // when this spec eagerly encrypts a stub clientState during prisma row construction.
 process.env.TOKEN_ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY ?? 'ab'.repeat(32);
 
+import { daysToMs } from '@/lib/time/duration';
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
 import { encrypt } from '@/lib/crypto/token-encryption';
@@ -83,13 +84,13 @@ function makeApi(overrides: Partial<MicrosoftGraphApiService> = {}): MicrosoftGr
 		createSubscription: jest.fn().mockImplementation(() =>
 			Promise.resolve({
 				id: 'sub-new',
-				expirationDateTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+				expirationDateTime: new Date(Date.now() + daysToMs(3)).toISOString()
 			})
 		),
 		renewSubscription: jest.fn().mockImplementation(() =>
 			Promise.resolve({
 				id: 'sub-existing',
-				expirationDateTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+				expirationDateTime: new Date(Date.now() + daysToMs(3)).toISOString()
 			})
 		),
 		deleteSubscription: jest.fn().mockReturnValue(Promise.resolve()),

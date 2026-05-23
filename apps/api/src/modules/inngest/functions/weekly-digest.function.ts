@@ -1,5 +1,6 @@
 import { NotificationEventType as PrismaNotificationEventType } from '@/generated/prisma/enums';
 import { buildWeeklyDigestEmail } from '@/lib/mails/notifications/weekly-digest.email';
+import { hoursToMs } from '@/lib/time/duration';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
@@ -33,7 +34,7 @@ export class WeeklyDigestFunction {
 				// Idempotency window — wider than the cron interval but narrower than the
 				// next scheduled run, so an Inngest retry within minutes of a successful
 				// dispatch skips already-notified users.
-				const idempotencyWindowMs = 12 * 60 * 60 * 1000;
+				const idempotencyWindowMs = hoursToMs(12);
 
 				let dispatched = 0;
 				let skippedDuplicate = 0;

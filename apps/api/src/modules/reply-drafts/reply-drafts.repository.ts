@@ -5,6 +5,7 @@ import {
 	ReplyDraftKind as PrismaReplyDraftKind,
 	ReplyDraftStatus as PrismaReplyDraftStatus
 } from '@/generated/prisma/enums';
+import { daysToMs } from '@/lib/time/duration';
 import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
@@ -585,7 +586,7 @@ export class ReplyDraftsRepository {
 		if (priorCheckInCount >= opp.maxCount) {
 			return null;
 		}
-		const cadenceMs = opp.cadenceDays * 24 * 60 * 60 * 1000;
+		const cadenceMs = daysToMs(opp.cadenceDays);
 		if (now.getTime() - opp.lastSentAt.getTime() < cadenceMs) {
 			return null;
 		}
