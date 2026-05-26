@@ -45,9 +45,13 @@ function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Moc
 		// path as before. Tests that exercise the filter override this mock explicitly.
 		findOrganizationEmailAddresses: jest.fn().mockReturnValue(Promise.resolve(new Set<string>())),
 		markRawMessageNegative: jest.fn().mockReturnValue(Promise.resolve()),
-		createOpportunityFromRawMessage: jest
-			.fn()
-			.mockReturnValue(Promise.resolve({ created: true, opportunityId: 'opp-created-1' })),
+		createOpportunityFromRawMessage: jest.fn().mockReturnValue(
+			Promise.resolve({
+				created: true,
+				opportunityId: 'opp-created-1',
+				mailbox: { email: 'inbox@example.com', userId: 'mailbox-user-1', ownerName: 'Mailbox Owner' }
+			})
+		),
 		findByIdForOrganization: jest.fn().mockReturnValue(Promise.resolve(null)),
 		updateStatus: jest.fn(),
 		listByOrganization: jest.fn().mockReturnValue(Promise.resolve([])),
@@ -182,6 +186,7 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 		dismissedAt: null,
 		dismissReason: null,
 		dismissedById: null,
+		assignedToUserId: null,
 		createdAt: new Date('2026-05-17T10:01:00.000Z'),
 		updatedAt: new Date('2026-05-17T10:01:00.000Z'),
 		rawMessage: {

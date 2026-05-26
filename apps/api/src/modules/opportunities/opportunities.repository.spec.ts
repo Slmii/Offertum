@@ -7,6 +7,7 @@ function makePrisma(createCount: number): {
 	prisma: PrismaService;
 	opportunityCreateMany: jest.Mock;
 	rawMessageUpdate: jest.Mock;
+	emailAccountFindUnique: jest.Mock;
 } {
 	const opportunityCreateMany = jest.fn().mockReturnValue(Promise.resolve({ count: createCount }));
 	const rawMessageUpdate = jest.fn().mockReturnValue(Promise.resolve({}));
@@ -18,15 +19,31 @@ function makePrisma(createCount: number): {
 	const opportunityFindUnique = jest
 		.fn()
 		.mockReturnValue(Promise.resolve(createCount > 0 ? { id: 'opp-created-1' } : null));
+	// The mailbox lookup feeds the `received_via_mailbox` audit log + the default
+	// `assignedToUserId`. Return a deterministic shape so the createMany write path
+	// gets a non-null mailbox owner.
+	const emailAccountFindUnique = jest.fn().mockReturnValue(
+		Promise.resolve({
+			email: 'inbox@example.com',
+			userId: 'mailbox-user-1',
+			user: { name: 'Mailbox Owner', email: 'inbox@example.com' }
+		})
+	);
 	const tx = {
 		opportunity: { createMany: opportunityCreateMany, findUnique: opportunityFindUnique },
-		rawMessage: { update: rawMessageUpdate }
+		rawMessage: { update: rawMessageUpdate },
+		emailAccount: { findUnique: emailAccountFindUnique }
 	};
 	const prisma = {
 		$transaction: jest.fn().mockImplementation((fn: unknown) => (fn as (txArg: typeof tx) => Promise<unknown>)(tx))
 	};
 
-	return { prisma: prisma as unknown as PrismaService, opportunityCreateMany, rawMessageUpdate };
+	return {
+		prisma: prisma as unknown as PrismaService,
+		opportunityCreateMany,
+		rawMessageUpdate,
+		emailAccountFindUnique
+	};
 }
 
 const CREATE_INPUT = {
@@ -68,7 +85,15 @@ describe('OpportunitiesRepository.createOpportunityFromRawMessage', () => {
 
 		const created = await repository.createOpportunityFromRawMessage(CREATE_INPUT);
 
-		expect(created).toEqual({ created: true, opportunityId: expect.any(String) as unknown as string });
+		expect(created).toEqual({
+			created: true,
+			opportunityId: expect.any(String) as unknown as string,
+			mailbox: {
+				email: 'inbox@example.com',
+				userId: 'mailbox-user-1',
+				ownerName: 'Mailbox Owner'
+			}
+		});
 		expect(opportunityCreateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				skipDuplicates: true,
@@ -93,7 +118,8 @@ describe('OpportunitiesRepository.createOpportunityFromRawMessage', () => {
 
 		await expect(repository.createOpportunityFromRawMessage(CREATE_INPUT)).resolves.toEqual({
 			created: false,
-			opportunityId: null
+			opportunityId: null,
+			mailbox: null
 		});
 	});
 });
