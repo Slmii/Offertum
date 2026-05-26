@@ -180,6 +180,7 @@ model User {
   sessions                 Session[]
   emailAccounts            EmailAccount[]
   dismissedOpportunities   Opportunity[]              @relation("OpportunityDismissedBy")
+  assignedOpportunities    Opportunity[]              @relation("OpportunityAssignedTo")
   notifications            Notification[]
   notificationPreferences  NotificationPreference[]
 }
@@ -549,6 +550,11 @@ model Opportunity {
   dismissedAt          DateTime?
   dismissReason        DismissReason?
   dismissedById        String?           @db.Uuid
+  // Per-opp assignment. NULL = unassigned (any org member can pick it up). When set,
+  // the assignee is the "owner" of the workflow on this opp — get filtered "Aan mij
+  // toegewezen" view, and a future "assignee changed"-style notification surface.
+  // ON DELETE SET NULL so deleting a user doesn't cascade-delete their opps.
+  assignedToUserId     String?           @db.Uuid
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -559,6 +565,7 @@ model Opportunity {
   classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
   extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
   dismissedBy      User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+  assignedTo       User?        @relation("OpportunityAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   // 1:N drafts (formerly 1:1 via `@unique` on `ReplyDraft.opportunityId`). One opp
   // can have multiple drafts: the original + one or more follow-ups composed after a
   // customer reply or via the "Concept-vervolg opstellen" button. Read sites use
@@ -576,6 +583,10 @@ model Opportunity {
   //   CREATE INDEX "Opportunity_org_createdAt_active_idx"
   //     ON "Opportunity" ("organizationId", "createdAt" DESC) WHERE "dismissedAt" IS NULL;
   @@index([organizationId, dismissedAt])
+  // Supports the "Toegewezen aan mij" list filter — common path is small (one user's
+  // open opps), so a composite over (assignedToUserId, organizationId) keeps the lookup
+  // an index-only scan.
+  @@index([assignedToUserId, organizationId])
 }
 
 // AI-generated reply draft for an Opportunity. Idempotency on initial generation is

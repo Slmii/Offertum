@@ -24,6 +24,8 @@ type FakeRepository = Pick<
 	| 'updateStatus'
 	| 'listByOrganization'
 	| 'countByStatusForOrganization'
+	| 'findLatestEditorPerOpportunity'
+	| 'findUserDisplayLabels'
 >;
 
 const EMPTY_STATUS_COUNTS = {
@@ -50,6 +52,8 @@ function makeRepository(overrides: Partial<Record<keyof FakeRepository, jest.Moc
 		updateStatus: jest.fn(),
 		listByOrganization: jest.fn().mockReturnValue(Promise.resolve([])),
 		countByStatusForOrganization: jest.fn().mockReturnValue(Promise.resolve(EMPTY_STATUS_COUNTS)),
+		findLatestEditorPerOpportunity: jest.fn().mockReturnValue(Promise.resolve(new Map())),
+		findUserDisplayLabels: jest.fn().mockReturnValue(Promise.resolve(new Map())),
 		...overrides
 	} as unknown as FakeRepository;
 }
@@ -324,7 +328,10 @@ describe('OpportunitiesService.list pagination', () => {
 			limit: 2,
 			status: null,
 			search: null,
-			dismissed: null
+			dismissed: null,
+			owner: null,
+			assignee: null,
+			requestingUserId: null
 		});
 
 		expect(list.opportunities).toHaveLength(2);
@@ -336,7 +343,9 @@ describe('OpportunitiesService.list pagination', () => {
 			cursor: null,
 			status: null,
 			search: null,
-			dismissed: 'active'
+			dismissed: 'active',
+			owner: null,
+			assignee: null
 		});
 	});
 
@@ -352,7 +361,10 @@ describe('OpportunitiesService.list pagination', () => {
 			limit: 25,
 			status: null,
 			search: null,
-			dismissed: null
+			dismissed: null,
+			owner: null,
+			assignee: null,
+			requestingUserId: null
 		});
 
 		expect(list.opportunities).toHaveLength(1);

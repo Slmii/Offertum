@@ -31,6 +31,8 @@ export class OpportunityResponseDto implements Opportunity {
 	dismissedAt!: string | null;
 	dismissReason!: OpportunityDismissReason | null;
 	dismissedByUserId!: string | null;
+	assignedToUserId!: string | null;
 	replyDraftSentAt!: string | null;
 	hasPendingCheckIn!: boolean;
+	lastEditedBy!: { name: string | null; at: string } | null;
 }

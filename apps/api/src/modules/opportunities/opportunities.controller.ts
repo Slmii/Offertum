@@ -2,6 +2,7 @@ import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { TenantWrite } from '@/common/decorators/tenant-write.decorator';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { ATTACHMENT_MAX_FILE_BYTES } from '@/lib/storage/attachment-constraints';
+import { AssignOpportunityDto } from '@/modules/opportunities/dto/assign-opportunity.dto';
 import { DismissOpportunityDto } from '@/modules/opportunities/dto/dismiss-opportunity.dto';
 import { ListOpportunitiesQueryDto } from '@/modules/opportunities/dto/list-opportunities-query.dto';
 import {
@@ -61,7 +62,10 @@ export class OpportunitiesController {
 			limit: query.limit ?? null,
 			status: query.status ?? null,
 			search: query.search ?? null,
-			dismissed: query.dismissed ?? null
+			dismissed: query.dismissed ?? null,
+			owner: query.owner ?? null,
+			assignee: query.assignee ?? null,
+			requestingUserId: request.authSession?.user?.id ?? null
 		});
 	}
 
@@ -237,6 +241,19 @@ export class OpportunitiesController {
 	): Promise<OpportunityResponseDto> {
 		const actorUserId = requireUserId(request);
 		return this.opportunities.dismiss(request.organizationId!, id, body.reason, actorUserId, body.notes ?? null);
+	}
+
+	@ApiOperation({ summary: 'Assign or unassign the opportunity owner' })
+	@ApiOkResponse({ type: OpportunityResponseDto })
+	@TenantWrite()
+	@Patch(':id/assignee')
+	assign(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string,
+		@Body() body: AssignOpportunityDto
+	): Promise<OpportunityResponseDto> {
+		const actorUserId = requireUserId(request);
+		return this.opportunities.assignOpportunity(request.organizationId!, id, body.userId ?? null, actorUserId);
 	}
 
 	@ApiOperation({ summary: 'Un-dismiss an opportunity' })

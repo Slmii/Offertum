@@ -29,7 +29,8 @@ const OPPORTUNITY_TIMELINE_ACTIONS = [
 	'opportunity.auto_cold.flipped',
 	'opportunity.dismissed',
 	'opportunity.undismissed',
-	'opportunity.fields_updated'
+	'opportunity.fields_updated',
+	'opportunity.assigned'
 ] as const;
 
 const TIMELINE_QUERY_CAP = 200;
@@ -478,8 +479,19 @@ export class OpportunitiesRepository {
 
 	async createOpportunityFromRawMessage(
 		input: CreateOpportunityFromRawMessageInput
-	): Promise<{ created: boolean; opportunityId: string | null }> {
+	): Promise<{ created: boolean; opportunityId: string | null; assignedToUserId: string | null }> {
 		return this.prisma.$transaction(async tx => {
+			// Default assignee = the mailbox owner. The user who connected the inbox is
+			// the natural workflow owner of opps that surface from it; they can reassign
+			// from the detail view if they want to redistribute work. `EmailAccount.userId`
+			// is nullable (ON DELETE SET NULL on the User FK) — leave the opp unassigned
+			// in that edge case rather than throwing.
+			const mailbox = await tx.emailAccount.findUnique({
+				where: { id: input.rawMessage.emailAccountId },
+				select: { userId: true }
+			});
+			const assignedToUserId = mailbox?.userId ?? null;
+
 			const result = await tx.opportunity.createMany({
 				data: [
 					{
@@ -499,7 +511,8 @@ export class OpportunitiesRepository {
 						urgency: EXTRACTOR_URGENCY_TO_PRISMA[input.extraction.urgency],
 						customerDeadline: parseDateOnly(input.extraction.customerDeadline),
 						customerAppointment: parseDateOnly(input.extraction.customerAppointment),
-						deliverableHints: input.extraction.deliverableHints
+						deliverableHints: input.extraction.deliverableHints,
+						assignedToUserId
 					}
 				],
 				skipDuplicates: true
@@ -516,7 +529,7 @@ export class OpportunitiesRepository {
 			// `rawMessageId` is unique) so a downstream consumer can't see a half-state.
 			// When `created === false` we skip the lookup — caller has nothing to fire.
 			if (!created) {
-				return { created: false, opportunityId: null };
+				return { created: false, opportunityId: null, assignedToUserId: null };
 			}
 
 			const inserted = await tx.opportunity.findUnique({
@@ -524,7 +537,7 @@ export class OpportunitiesRepository {
 				select: { id: true }
 			});
 
-			return { created: true, opportunityId: inserted?.id ?? null };
+			return { created: true, opportunityId: inserted?.id ?? null, assignedToUserId };
 		});
 	}
 
@@ -537,6 +550,10 @@ export class OpportunitiesRepository {
 			search: string | null;
 			/** defaults to `active` (hides dismissed) when omitted. */
 			dismissed?: OpportunityDismissedFilter;
+			/** when set, restricts to opps where `EmailAccount.userId === userId`. */
+			owner?: { userId: string } | null;
+			/** when set, filters by assignment: a specific user or unassigned-only. */
+			assignee?: { kind: 'user'; userId: string } | { kind: 'unassigned' } | null;
 		}
 	): Promise<OpportunityRecord[]> {
 		// Keyset pagination on (createdAt DESC, id DESC) — id breaks createdAt ties so the
@@ -575,6 +592,9 @@ export class OpportunitiesRepository {
 				...(options.status ? { status: options.status } : {}),
 				...(dismissedFilter === 'active' ? { dismissedAt: null } : {}),
 				...(dismissedFilter === 'dismissed' ? { dismissedAt: { not: null } } : {}),
+				...(options.owner ? { emailAccount: { is: { userId: options.owner.userId } } } : {}),
+				...(options.assignee?.kind === 'user' ? { assignedToUserId: options.assignee.userId } : {}),
+				...(options.assignee?.kind === 'unassigned' ? { assignedToUserId: null } : {}),
 				...(conditions.length > 0 ? { AND: conditions } : {})
 			},
 			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -588,12 +608,25 @@ export class OpportunitiesRepository {
 	 * Replied (8) · ..."). Single SQL aggregation across all 6 statuses.
 	 * dismissed rows are excluded so the tab counts stay honest as a workflow
 	 * funnel. Showing the "Toon afgewezen" view in the UI does not change these
-	 * totals — that view filters the list, not the counts.
+	 * totals — that view filters the list, not the counts. `owner` + `assignee`
+	 * filters DO apply to the counts so the tab totals match the visible rows.
 	 */
-	async countByStatusForOrganization(organizationId: string): Promise<Record<PrismaOpportunityStatus, number>> {
+	async countByStatusForOrganization(
+		organizationId: string,
+		filters: {
+			owner?: { userId: string } | null;
+			assignee?: { kind: 'user'; userId: string } | { kind: 'unassigned' } | null;
+		} = {}
+	): Promise<Record<PrismaOpportunityStatus, number>> {
 		const rows = await this.prisma.opportunity.groupBy({
 			by: ['status'],
-			where: { organizationId, dismissedAt: null },
+			where: {
+				organizationId,
+				dismissedAt: null,
+				...(filters.owner ? { emailAccount: { is: { userId: filters.owner.userId } } } : {}),
+				...(filters.assignee?.kind === 'user' ? { assignedToUserId: filters.assignee.userId } : {}),
+				...(filters.assignee?.kind === 'unassigned' ? { assignedToUserId: null } : {})
+			},
 			_count: { _all: true }
 		});
 		const result = {
@@ -660,6 +693,48 @@ export class OpportunitiesRepository {
 		return rows
 			.filter((row): row is typeof row & { metadata: Record<string, unknown> } => isRecord(row.metadata))
 			.map(row => ({ id: row.id, createdAt: row.createdAt, metadata: row.metadata }));
+	}
+
+	/**
+	 * For each opportunity ID, find the most recent owner-driven audit-log entry +
+	 * its actor. Source action set matches `OPPORTUNITY_TIMELINE_ACTIONS` minus the
+	 * system-driven `auto_cold.flipped` (no actor on those). Returns a map keyed by
+	 * opportunityId with `{ actorUserId, at }`. Caller resolves user IDs to display
+	 * labels in a separate batched query.
+	 */
+	async findLatestEditorPerOpportunity(
+		organizationId: string,
+		opportunityIds: ReadonlyArray<string>
+	): Promise<Map<string, { actorUserId: string; at: Date }>> {
+		if (opportunityIds.length === 0) {
+			return new Map();
+		}
+		const rows = await this.prisma.$queryRaw<
+			Array<{ opportunityId: string; actorUserId: string | null; createdAt: Date }>
+		>(Prisma.sql`
+			SELECT DISTINCT ON (metadata->>'opportunityId')
+				metadata->>'opportunityId' AS "opportunityId",
+				metadata->>'actorUserId'   AS "actorUserId",
+				"createdAt"
+			FROM "Log"
+			WHERE "organizationId" = ${organizationId}::uuid
+			  AND metadata->>'opportunityId' = ANY(${opportunityIds as string[]})
+			  AND metadata->>'action' IN (
+			      'opportunity.status.updated',
+			      'opportunity.dismissed',
+			      'opportunity.undismissed',
+			      'opportunity.fields_updated',
+			      'opportunity.assigned'
+			  )
+			ORDER BY metadata->>'opportunityId', "createdAt" DESC
+		`);
+		const result = new Map<string, { actorUserId: string; at: Date }>();
+		for (const row of rows) {
+			if (row.actorUserId !== null) {
+				result.set(row.opportunityId, { actorUserId: row.actorUserId, at: row.createdAt });
+			}
+		}
+		return result;
 	}
 
 	/**
@@ -758,6 +833,31 @@ export class OpportunitiesRepository {
 			},
 			include: OPPORTUNITY_INCLUDE
 		});
+	}
+
+	/**
+	 * Set or clear the assignee. Caller has already validated that `userId` (when
+	 * non-null) belongs to a member of the opp's org. Idempotent: re-assigning the
+	 * same user is a Prisma no-op.
+	 */
+	async assignOpportunity(id: string, userId: string | null): Promise<OpportunityRecord> {
+		return this.prisma.opportunity.update({
+			where: { id },
+			data: { assignedToUserId: userId },
+			include: OPPORTUNITY_INCLUDE
+		});
+	}
+
+	/**
+	 * Verify a user is a member of the given org. Used by `assign` to reject cross-
+	 * tenant assignments before writing.
+	 */
+	async isUserMemberOfOrganization(userId: string, organizationId: string): Promise<boolean> {
+		const row = await this.prisma.membership.findFirst({
+			where: { userId, organizationId },
+			select: { id: true }
+		});
+		return row !== null;
 	}
 
 	/**

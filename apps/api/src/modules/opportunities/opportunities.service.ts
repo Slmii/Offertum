@@ -7,6 +7,7 @@ import {
 import { detectBulkMail } from '@/lib/email/bulk-mail-filter';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import {
+	OPPORTUNITY_ASSIGNEE_NOT_IN_ORG,
 	OPPORTUNITY_NOT_DISMISSED,
 	OPPORTUNITY_NOT_FOUND,
 	REPLY_DRAFT_ALREADY_SENT,
@@ -65,8 +66,10 @@ import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service'
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+	OpportunityAssigneeFilter,
 	OpportunityDismissReason as WireDismissReason,
 	OpportunityFieldChange,
+	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus as WireOpportunityStatus,
 	OpportunityTimelineEvent,
 	OpportunityUrgency as WireOpportunityUrgency
@@ -141,25 +144,56 @@ export class OpportunitiesService {
 			status: WireOpportunityStatus | null;
 			search: string | null;
 			dismissed: OpportunityDismissedFilter | null;
-		} = { cursor: null, limit: null, status: null, search: null, dismissed: null }
+			owner: OpportunityMailboxOwnershipFilter | null;
+			assignee: OpportunityAssigneeFilter | null;
+			/** Required when owner=mine or assignee=me; resolved from the auth context
+			 * in the controller. `null` falls back to no-op for those filters. */
+			requestingUserId: string | null;
+		} = {
+			cursor: null,
+			limit: null,
+			status: null,
+			search: null,
+			dismissed: null,
+			owner: null,
+			assignee: null,
+			requestingUserId: null
+		}
 	): Promise<OpportunityListResponseDto> {
 		const limit = clampLimit(options.limit);
 		const decodedCursor = decodeOpportunityListCursor(options.cursor);
 		const statusFilter = options.status ? OPPORTUNITY_STATUS_FROM_WIRE[options.status] : null;
 		const dismissedFilter = options.dismissed ?? 'active';
 
+		// "Mine" / "me" filters only kick in when there's an authenticated user. Anon
+		// requests (shouldn't reach this endpoint, but defensive) get no-op'd to `all`.
+		const ownerFilter =
+			options.owner === 'mine' && options.requestingUserId ? { userId: options.requestingUserId } : null;
+		const assigneeFilter =
+			options.assignee === 'me' && options.requestingUserId
+				? ({ kind: 'user', userId: options.requestingUserId } as const)
+				: options.assignee === 'unassigned'
+					? ({ kind: 'unassigned' } as const)
+					: null;
+
 		// Over-fetch by one row to detect a next page without a follow-up count query.
 		// `statusCounts` runs in parallel so the segmented filter tabs render with their
-		// (N) numbers without a second round-trip from the web.
+		// (N) numbers without a second round-trip from the web. Counts respect the same
+		// owner + assignee filters so the tab totals match the visible rows.
 		const [rows, statusCounts] = await Promise.all([
 			this.repository.listByOrganization(organizationId, {
 				take: limit + 1,
 				cursor: decodedCursor,
 				status: statusFilter,
 				search: options.search,
-				dismissed: dismissedFilter
+				dismissed: dismissedFilter,
+				owner: ownerFilter,
+				assignee: assigneeFilter
 			}),
-			this.repository.countByStatusForOrganization(organizationId)
+			this.repository.countByStatusForOrganization(organizationId, {
+				owner: ownerFilter,
+				assignee: assigneeFilter
+			})
 		]);
 
 		const hasMore = rows.length > limit;
@@ -168,8 +202,31 @@ export class OpportunitiesService {
 		const nextCursor =
 			hasMore && last ? encodeOpportunityListCursor({ createdAt: last.createdAt, id: last.id }) : null;
 
+		// Resolve the "last edited by X" badge for each row. Two batched queries
+		// (latest editor per opp + user labels) so the list endpoint stays O(1) DB
+		// round-trips regardless of page size.
+		const editorMap = await this.repository.findLatestEditorPerOpportunity(
+			organizationId,
+			page.map(r => r.id)
+		);
+		const actorIds = new Set<string>();
+		for (const e of editorMap.values()) {
+			actorIds.add(e.actorUserId);
+		}
+		const actorLabels =
+			actorIds.size > 0
+				? await this.repository.findUserDisplayLabels(Array.from(actorIds))
+				: new Map<string, string>();
+
 		return {
-			opportunities: page.map(toOpportunityResponseDto),
+			opportunities: page.map(row => {
+				const dto = toOpportunityResponseDto(row);
+				const editor = editorMap.get(row.id);
+				dto.lastEditedBy = editor
+					? { name: actorLabels.get(editor.actorUserId) ?? null, at: editor.at.toISOString() }
+					: null;
+				return dto;
+			}),
 			nextCursor,
 			statusCounts: {
 				new: statusCounts[PrismaOpportunityStatus.NEW],
@@ -420,6 +477,79 @@ export class OpportunitiesService {
 	}
 
 	/**
+	 * Assign or unassign an opportunity. `userId === null` clears the assignment back
+	 * to "anyone". Cross-org assignments are rejected (the new assignee must be a
+	 * member of the opp's org). Audit log captures both before and after assignee +
+	 * actor for the timeline panel + the "last edited by" badge.
+	 */
+	/**
+	 * Write an `opportunity.assigned` audit row for an auto-assignment that happened
+	 * inside the AI pipeline (default-assign to the mailbox owner on first creation).
+	 * `actorUserId` is the system itself — we use the assignee's own user ID as the
+	 * actor so the timeline reads "Toegewezen aan X · door X" rather than orphaning
+	 * the row with no actor. The timeline UI special-cases `previousAssigneeUserId =
+	 * null` → "Toegewezen aan X", matching the auto-assignment case.
+	 */
+	private logAutoAssignment(opportunityId: string, organizationId: string, mailboxUserId: string): void {
+		this.logService.logAction({
+			action: 'opportunity.assigned',
+			message: `Opportunity ${opportunityId} auto-assigned to mailbox owner ${mailboxUserId} on creation`,
+			metadata: {
+				organizationId,
+				opportunityId,
+				previousAssigneeUserId: null,
+				nextAssigneeUserId: mailboxUserId,
+				actorUserId: mailboxUserId,
+				autoAssigned: true
+			},
+			context: 'OpportunitiesService'
+		});
+	}
+
+	async assignOpportunity(
+		organizationId: string,
+		opportunityId: string,
+		userId: string | null,
+		actorUserId: string
+	): Promise<OpportunityResponseDto> {
+		const opportunity = await this.repository.findByIdForOrganization(organizationId, opportunityId);
+		if (!opportunity) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+
+		if (userId !== null) {
+			const isMember = await this.repository.isUserMemberOfOrganization(userId, organizationId);
+			if (!isMember) {
+				throw new NotFoundException(OPPORTUNITY_ASSIGNEE_NOT_IN_ORG);
+			}
+		}
+
+		if (opportunity.assignedToUserId === userId) {
+			// No-op short-circuit so the audit log doesn't fill up with "assigned X → X"
+			// rows from clients that fire the same payload repeatedly.
+			return toOpportunityResponseDto(opportunity);
+		}
+
+		const previousAssigneeUserId = opportunity.assignedToUserId;
+		const updated = await this.repository.assignOpportunity(opportunity.id, userId);
+
+		this.logService.logAction({
+			action: 'opportunity.assigned',
+			message: `Opportunity ${opportunity.id} assigned ${previousAssigneeUserId ?? 'unassigned'} → ${userId ?? 'unassigned'} by user ${actorUserId}`,
+			metadata: {
+				organizationId,
+				opportunityId: opportunity.id,
+				previousAssigneeUserId,
+				nextAssigneeUserId: userId,
+				actorUserId
+			},
+			context: 'OpportunitiesService'
+		});
+
+		return toOpportunityResponseDto(updated);
+	}
+
+	/**
 	 * Detail-view read. Fetches the opportunity + raw provider payload + the
 	 *  reply draft (if generated). The `replyDraft` field is `null` when the
 	 * Inngest function hasn't completed yet (cold-start race on a freshly-created
@@ -461,16 +591,22 @@ export class OpportunitiesService {
 			void this.requestReplyDraftGeneration(opportunity.id, opportunity.organizationId);
 		}
 
-		const actorIds = new Set<string>();
-		for (const row of timelineRows) {
-			const actorUserId = typeof row.metadata.actorUserId === 'string' ? row.metadata.actorUserId : null;
-			if (actorUserId !== null) {
-				actorIds.add(actorUserId);
+		// Collect every user ID the timeline references: actors + before/after
+		// assignees on `opportunity.assigned` rows. One batched user lookup covers all.
+		const referencedUserIds = new Set<string>();
+		const addIfString = (value: unknown) => {
+			if (typeof value === 'string') {
+				referencedUserIds.add(value);
 			}
+		};
+		for (const row of timelineRows) {
+			addIfString(row.metadata.actorUserId);
+			addIfString(row.metadata.previousAssigneeUserId);
+			addIfString(row.metadata.nextAssigneeUserId);
 		}
 		const actorLabels =
-			actorIds.size > 0
-				? await this.repository.findUserDisplayLabels(Array.from(actorIds))
+			referencedUserIds.size > 0
+				? await this.repository.findUserDisplayLabels(Array.from(referencedUserIds))
 				: new Map<string, string>();
 
 		const timeline = timelineRows
@@ -1019,14 +1155,15 @@ export class OpportunitiesService {
 					input,
 					candidate.internalDate.toISOString().slice(0, 10)
 				);
-				const { created, opportunityId } = await this.repository.createOpportunityFromRawMessage({
-					rawMessage: candidate,
-					classification: classification.value,
-					extraction: extraction.value,
-					aiProvider: `${extraction.provider}/${extraction.model}`,
-					classifiedAiCallId: classification.callId,
-					extractedAiCallId: extraction.callId
-				});
+				const { created, opportunityId, assignedToUserId } =
+					await this.repository.createOpportunityFromRawMessage({
+						rawMessage: candidate,
+						classification: classification.value,
+						extraction: extraction.value,
+						aiProvider: `${extraction.provider}/${extraction.model}`,
+						classifiedAiCallId: classification.callId,
+						extractedAiCallId: extraction.callId
+					});
 
 				result.classifiedPositive += 1;
 				if (created) {
@@ -1037,6 +1174,10 @@ export class OpportunitiesService {
 
 				originatingMessage = candidate;
 				originatingOpportunityId = opportunityId;
+
+				if (created && opportunityId && assignedToUserId !== null) {
+					this.logAutoAssignment(opportunityId, candidate.organizationId, assignedToUserId);
+				}
 
 				if (created && opportunityId) {
 					try {
@@ -1444,7 +1585,7 @@ export class OpportunitiesService {
 			}
 
 			const extraction = await this.extractor.extract(input, rawMessage.internalDate.toISOString().slice(0, 10));
-			const { created, opportunityId } = await this.repository.createOpportunityFromRawMessage({
+			const { created, opportunityId, assignedToUserId } = await this.repository.createOpportunityFromRawMessage({
 				rawMessage,
 				classification: classification.value,
 				extraction: extraction.value,
@@ -1455,6 +1596,10 @@ export class OpportunitiesService {
 				classifiedAiCallId: classification.callId,
 				extractedAiCallId: extraction.callId
 			});
+
+			if (created && opportunityId && assignedToUserId !== null) {
+				this.logAutoAssignment(opportunityId, rawMessage.organizationId, assignedToUserId);
+			}
 
 			result.classifiedPositive += 1;
 			if (created) {
@@ -1654,6 +1799,7 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
+		assignedToUserId: opportunity.assignedToUserId ?? null,
 		// `replyDrafts` is 1:N, ordered `createdAt DESC` by the include. Picking
 		// the *first* draft with a `sentAt` gives us the most-recent send, which is what
 		// the dismiss-dialog warning + the `dismissedAfterSend` audit flag care about.
@@ -1662,7 +1808,11 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		// "actionable" if the owner is still working the opp; on a dismissed row the
 		// pill would be noise (and a stale CHECK_IN could exist from a race where the
 		// opp was dismissed between scheduler enumeration and processor run).
-		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts)
+		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
+		// Populated by `list()` from the `findLatestEditorPerOpportunity` batched query.
+		// Single-row endpoints (status update, dismiss, detail fetch) return `null` —
+		// the list view is the only surface that needs this badge.
+		lastEditedBy: null
 	};
 }
 
@@ -1758,9 +1908,13 @@ function toOpportunityDetailResponseDto(
 		dismissedAt: opportunity.dismissedAt?.toISOString() ?? null,
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
+		assignedToUserId: opportunity.assignedToUserId ?? null,
 		// `replyDrafts` is 1:N. See the list mapper for the same `find` logic.
 		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
+		// Detail view has its own timeline panel that surfaces the per-event actor —
+		// no need to duplicate the badge here.
+		lastEditedBy: null,
 		originalEmailBody,
 		// Latest draft (`createdAt DESC` already applied in the include) — null when no
 		// draft exists yet (cold-start window between Opportunity insert and the
@@ -1961,6 +2115,22 @@ function toOpportunityTimelineEvent(
 				return null;
 			}
 			return { id: row.id, kind: 'fields_updated', occurredAt, actorUserId, actorName, changes };
+		}
+		case 'opportunity.assigned': {
+			const previousAssigneeUserId = readString(row.metadata, 'previousAssigneeUserId');
+			const nextAssigneeUserId = readString(row.metadata, 'nextAssigneeUserId');
+			return {
+				id: row.id,
+				kind: 'assigned',
+				occurredAt,
+				actorUserId,
+				actorName,
+				previousAssigneeUserId,
+				previousAssigneeName:
+					previousAssigneeUserId !== null ? (actorLabels.get(previousAssigneeUserId) ?? null) : null,
+				nextAssigneeUserId,
+				nextAssigneeName: nextAssigneeUserId !== null ? (actorLabels.get(nextAssigneeUserId) ?? null) : null
+			};
 		}
 		default:
 			return null;

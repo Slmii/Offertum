@@ -1,10 +1,13 @@
 import { api, WrapperApiError } from '@/lib/api/client';
 import { getOpportunityDetailServer, listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import type {
+	AssignOpportunityInput,
 	DismissOpportunityInput,
 	Opportunity,
+	OpportunityAssigneeFilter,
 	OpportunityDetail,
 	OpportunityDismissedFilter,
+	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus,
 	ReplyDraft,
 	ReplyDraftAttachment,
@@ -15,11 +18,23 @@ import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query
 
 export const OpportunityKeys = {
 	all: ['opportunities'] as const,
-	list: (status: OpportunityStatus | null, search: string | null, dismissed: OpportunityDismissedFilter | null) =>
+	list: (
+		status: OpportunityStatus | null,
+		search: string | null,
+		dismissed: OpportunityDismissedFilter | null,
+		owner: OpportunityMailboxOwnershipFilter | null = null,
+		assignee: OpportunityAssigneeFilter | null = null
+	) =>
 		[
 			'opportunities',
 			'list',
-			{ status, search: search?.trim() || null, dismissed: dismissed ?? 'active' }
+			{
+				status,
+				search: search?.trim() || null,
+				dismissed: dismissed ?? 'active',
+				owner: owner ?? 'all',
+				assignee: assignee ?? 'all'
+			}
 		] as const,
 	detail: (id: string) => ['opportunities', 'detail', id] as const
 };
@@ -45,11 +60,13 @@ export const opportunityDetailQueryOptions = (id: string) =>
 export const opportunitiesListQueryOptions = (
 	status: OpportunityStatus | null,
 	search: string | null = null,
-	dismissed: OpportunityDismissedFilter | null = null
+	dismissed: OpportunityDismissedFilter | null = null,
+	owner: OpportunityMailboxOwnershipFilter | null = null,
+	assignee: OpportunityAssigneeFilter | null = null
 ) =>
 	queryOptions({
-		queryKey: OpportunityKeys.list(status, search, dismissed),
-		queryFn: () => listOpportunitiesServer({ data: { status, search, dismissed, limit: 25 } }),
+		queryKey: OpportunityKeys.list(status, search, dismissed, owner, assignee),
+		queryFn: () => listOpportunitiesServer({ data: { status, search, dismissed, owner, assignee, limit: 25 } }),
 		staleTime: 15_000
 	});
 
@@ -70,6 +87,29 @@ export function useUpdateOpportunityFields(opportunityId: string) {
 	return useMutation({
 		mutationFn: (input: UpdateOpportunityFieldsInput) =>
 			api<Opportunity>(`/api/opportunities/${opportunityId}`, {
+				method: 'PATCH',
+				body: input
+			}),
+		onSuccess: updated => {
+			queryClient.setQueryData<OpportunityDetail | undefined>(OpportunityKeys.detail(opportunityId), current =>
+				current ? { ...current, ...updated } : current
+			);
+			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
+		}
+	});
+}
+
+/**
+ * `PATCH /api/opportunities/:id/assignee` — set or clear the opportunity owner.
+ * Splices the response into the detail cache + invalidates list caches so the
+ * "Aan mij toegewezen" filter + the assignee badge update immediately.
+ */
+export function useAssignOpportunity(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (input: AssignOpportunityInput) =>
+			api<Opportunity>(`/api/opportunities/${opportunityId}/assignee`, {
 				method: 'PATCH',
 				body: input
 			}),

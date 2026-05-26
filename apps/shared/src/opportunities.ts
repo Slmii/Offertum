@@ -43,6 +43,13 @@ export interface Opportunity {
 	dismissReason: OpportunityDismissReason | null;
 	dismissedByUserId: string | null;
 	/**
+	 * The org member currently responsible for this opportunity, or `null` when no
+	 * one is explicitly assigned (any member can pick it up). Surface in the detail
+	 * view (assignee picker), the list row (small badge), and as a filter dimension
+	 * ("Toegewezen aan mij").
+	 */
+	assignedToUserId: string | null;
+	/**
 	 *  follow-up — ISO timestamp the reply draft was sent at via Quoteom, or `null`
 	 * when no reply has been sent (no draft yet, or draft is still pending / edited).
 	 * Surfaces on the LIST shape so the dismiss dialog can warn "you already replied;
@@ -61,6 +68,15 @@ export interface Opportunity {
 	 * timestamp covers it).
 	 */
 	hasPendingCheckIn: boolean;
+	/**
+	 * Most recent owner-driven change on this opportunity, with the actor's display
+	 * label + when it happened. Source: the same audit-log actions that compose the
+	 * timeline panel (status / dismiss / undismiss / fields). `null` when the opp has
+	 * no owner-driven edits yet (fresh from the pipeline) or the audit row lost its
+	 * actor (deleted user). Surfaces in the list row so multi-user orgs can spot "who
+	 * touched this last" without opening it.
+	 */
+	lastEditedBy: { name: string | null; at: string } | null;
 }
 
 /**
@@ -102,6 +118,23 @@ export interface OpportunityList {
 export const OPPORTUNITY_DISMISSED_FILTERS = ['active', 'dismissed', 'all'] as const;
 export type OpportunityDismissedFilter = (typeof OPPORTUNITY_DISMISSED_FILTERS)[number];
 
+/**
+ * Mailbox-ownership filter on the list endpoint. `mine` restricts to opportunities
+ * that landed in an inbox the current user owns (sum across all their `EmailAccount`
+ * rows). `all` is the default — every opp in the org. The chip on the list UI flips
+ * between the two.
+ */
+export const OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS = ['mine', 'all'] as const;
+export type OpportunityMailboxOwnershipFilter = (typeof OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS)[number];
+
+/**
+ * Assignment filter on the list endpoint. `me` restricts to opps where
+ * `assignedToUserId === currentUserId`. `unassigned` shows only opps with no
+ * assignee. `all` is the default.
+ */
+export const OPPORTUNITY_ASSIGNEE_FILTERS = ['me', 'unassigned', 'all'] as const;
+export type OpportunityAssigneeFilter = (typeof OPPORTUNITY_ASSIGNEE_FILTERS)[number];
+
 export interface ListOpportunitiesQuery {
 	cursor?: string;
 	limit?: number;
@@ -109,6 +142,8 @@ export interface ListOpportunitiesQuery {
 	sort?: OpportunitySort;
 	search?: string;
 	dismissed?: OpportunityDismissedFilter;
+	owner?: OpportunityMailboxOwnershipFilter;
+	assignee?: OpportunityAssigneeFilter;
 }
 
 export interface UpdateOpportunityStatusInput {
@@ -177,7 +212,8 @@ export const OPPORTUNITY_TIMELINE_EVENT_KINDS = [
 	'auto_cold',
 	'dismissed',
 	'undismissed',
-	'fields_updated'
+	'fields_updated',
+	'assigned'
 ] as const;
 export type OpportunityTimelineEventKind = (typeof OPPORTUNITY_TIMELINE_EVENT_KINDS)[number];
 
@@ -232,12 +268,21 @@ export interface OpportunityFieldsUpdatedEvent extends OpportunityTimelineEventB
 	changes: OpportunityFieldChange[];
 }
 
+export interface OpportunityAssignedEvent extends OpportunityTimelineEventBase {
+	kind: 'assigned';
+	previousAssigneeUserId: string | null;
+	previousAssigneeName: string | null;
+	nextAssigneeUserId: string | null;
+	nextAssigneeName: string | null;
+}
+
 export type OpportunityTimelineEvent =
 	| OpportunityStatusChangedEvent
 	| OpportunityAutoColdEvent
 	| OpportunityDismissedEvent
 	| OpportunityUndismissedEvent
-	| OpportunityFieldsUpdatedEvent;
+	| OpportunityFieldsUpdatedEvent
+	| OpportunityAssignedEvent;
 
 /**
  * Inbound message from the customer attached to an opportunity's thread. Shown in
@@ -268,4 +313,13 @@ export interface CustomerReplyEntry {
 export interface DismissOpportunityInput {
 	reason: OpportunityDismissReason;
 	notes?: string;
+}
+
+/**
+ * Payload for `PATCH /api/opportunities/:id/assignee`. `userId === null` clears the
+ * assignment back to "anyone". Must be a member of the requesting user's org —
+ * server-side check rejects cross-org assignments.
+ */
+export interface AssignOpportunityInput {
+	userId: string | null;
 }

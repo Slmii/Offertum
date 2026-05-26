@@ -1,8 +1,12 @@
 import {
+	OPPORTUNITY_ASSIGNEE_FILTERS,
 	OPPORTUNITY_DISMISSED_FILTERS,
+	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
 	OPPORTUNITY_SORTS,
 	OPPORTUNITY_STATUSES,
+	type OpportunityAssigneeFilter,
 	type OpportunityDismissedFilter,
+	type OpportunityMailboxOwnershipFilter,
 	type OpportunitySort,
 	type OpportunityStatus
 } from '@quoteom/shared';
@@ -57,4 +61,20 @@ export class ListOpportunitiesQueryDto {
 	@IsOptional()
 	@IsIn(OPPORTUNITY_DISMISSED_FILTERS)
 	dismissed?: OpportunityDismissedFilter;
+
+	/**
+	 * Mailbox-ownership filter. `mine` → only opps where the originating mailbox is
+	 * owned by the requesting user. `all` (or omitted) → every opp in the org.
+	 */
+	@IsOptional()
+	@IsIn(OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS)
+	owner?: OpportunityMailboxOwnershipFilter;
+
+	/**
+	 * Assignment filter. `me` → only opps where `assignedToUserId === currentUserId`.
+	 * `unassigned` → only opps with no assignee. `all` (or omitted) → no filter.
+	 */
+	@IsOptional()
+	@IsIn(OPPORTUNITY_ASSIGNEE_FILTERS)
+	assignee?: OpportunityAssigneeFilter;
 }

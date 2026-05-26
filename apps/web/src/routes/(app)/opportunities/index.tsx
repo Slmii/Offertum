@@ -51,11 +51,18 @@ import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
 import type {
 	Opportunity,
+	OpportunityAssigneeFilter,
 	OpportunityDismissReason,
+	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus,
 	OpportunityStatusCounts
 } from '@quoteom/shared';
-import { OPPORTUNITY_DISMISS_REASONS, OPPORTUNITY_STATUSES } from '@quoteom/shared';
+import {
+	OPPORTUNITY_ASSIGNEE_FILTERS,
+	OPPORTUNITY_DISMISS_REASONS,
+	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
+	OPPORTUNITY_STATUSES
+} from '@quoteom/shared';
 import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -72,21 +79,35 @@ const SearchSchema = z.object({
 	// (undefined) shows the active list. Kept as a boolean toggle in the URL rather than
 	// exposing the full `active | dismissed | all` enum because the UI only offers a
 	// binary switch — the `all` mode is for admin tooling, not the owner inbox.
-	showDismissed: z.boolean().optional()
+	showDismissed: z.boolean().optional(),
+	// Mailbox-owner filter. `mine` shows only opps from inboxes the current user owns.
+	// Default (omitted) = `all`.
+	owner: z.enum(OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS).optional(),
+	// Assignment filter. `me` shows opps assigned to the current user; `unassigned`
+	// shows opps with no assignee. Default (omitted) = `all`.
+	assignee: z.enum(OPPORTUNITY_ASSIGNEE_FILTERS).optional()
 });
 
 export const Route = createFileRoute('/(app)/opportunities/')({
 	validateSearch: SearchSchema,
-	loaderDeps: ({ search: { status, search, showDismissed } }) => ({
+	loaderDeps: ({ search: { status, search, showDismissed, owner, assignee } }) => ({
 		status: status ?? null,
 		// Search is part of loaderDeps so a refresh-with-search-in-URL prefetches the
 		// correct filtered first page on the server, not the unfiltered one.
 		search: search?.trim() || null,
-		showDismissed: showDismissed ?? false
+		showDismissed: showDismissed ?? false,
+		owner: owner ?? null,
+		assignee: assignee ?? null
 	}),
 	loader: ({ context, deps }) =>
 		context.queryClient.ensureQueryData(
-			opportunitiesListQueryOptions(deps.status, deps.search, deps.showDismissed ? 'dismissed' : 'active')
+			opportunitiesListQueryOptions(
+				deps.status,
+				deps.search,
+				deps.showDismissed ? 'dismissed' : 'active',
+				deps.owner,
+				deps.assignee
+			)
 		),
 	component: OpportunitiesIndexPage,
 	errorComponent: SectionError
@@ -100,6 +121,8 @@ function OpportunitiesIndexPage() {
 	const sort: OpportunitySortOption = urlSearch.sort ?? 'newest_first';
 	const showDismissed = urlSearch.showDismissed ?? false;
 	const dismissedFilter = showDismissed ? 'dismissed' : 'active';
+	const ownerFilter = urlSearch.owner ?? null;
+	const assigneeFilter = urlSearch.assignee ?? null;
 
 	// `searchInput` is local mirror of the URL `search` param — typing updates it
 	// immediately (responsive UI), then the debounced effect below pushes the trimmed
@@ -129,11 +152,11 @@ function OpportunitiesIndexPage() {
 	}, [debouncedSearch]);
 
 	const initial = useSuspenseQuery(
-		opportunitiesListQueryOptions(activeStatus, urlSearchTerm || null, dismissedFilter)
+		opportunitiesListQueryOptions(activeStatus, urlSearchTerm || null, dismissedFilter, ownerFilter, assigneeFilter)
 	);
 	const typingSearch = debouncedSearch !== urlSearchTerm.trim() ? debouncedSearch : '';
 	const searched = useQuery({
-		...opportunitiesListQueryOptions(activeStatus, typingSearch, dismissedFilter),
+		...opportunitiesListQueryOptions(activeStatus, typingSearch, dismissedFilter, ownerFilter, assigneeFilter),
 		enabled: typingSearch.length > 0
 	});
 	const data = typingSearch.length > 0 ? (searched.data ?? initial.data) : initial.data;
@@ -210,6 +233,48 @@ function OpportunitiesIndexPage() {
 				/>
 			</Stack>
 
+			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+				<StandaloneSelect
+					name='owner'
+					label='Mailbox'
+					value={ownerFilter ?? 'all'}
+					size='small'
+					sx={{ minWidth: { xs: '100%', sm: 200 } }}
+					onChange={e => {
+						const next = e.target.value as OpportunityMailboxOwnershipFilter;
+						void navigate({
+							to: '/opportunities',
+							search: { ...urlSearch, owner: next === 'all' ? undefined : next },
+							replace: true
+						});
+					}}
+					options={[
+						{ id: 'all', label: 'Alle mailboxen' },
+						{ id: 'mine', label: 'Mijn mailbox' }
+					]}
+				/>
+				<StandaloneSelect
+					name='assignee'
+					label='Toegewezen'
+					value={assigneeFilter ?? 'all'}
+					size='small'
+					sx={{ minWidth: { xs: '100%', sm: 220 } }}
+					onChange={e => {
+						const next = e.target.value as OpportunityAssigneeFilter;
+						void navigate({
+							to: '/opportunities',
+							search: { ...urlSearch, assignee: next === 'all' ? undefined : next },
+							replace: true
+						});
+					}}
+					options={[
+						{ id: 'all', label: 'Iedereen' },
+						{ id: 'me', label: 'Aan mij toegewezen' },
+						{ id: 'unassigned', label: 'Niet toegewezen' }
+					]}
+				/>
+			</Stack>
+
 			<Stack spacing={1.5}>
 				{visibleOpportunities.length === 0 ? (
 					<EmptyState
@@ -228,6 +293,8 @@ function OpportunitiesIndexPage() {
 					initialCursor={data.nextCursor}
 					status={activeStatus}
 					dismissed={dismissedFilter}
+					owner={ownerFilter}
+					assignee={assigneeFilter}
 					initialList={data.opportunities}
 				/>
 			)}
@@ -404,6 +471,12 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							}}
 						>
 							{opportunity.subject}
+						</Typography>
+					)}
+					{opportunity.lastEditedBy && (
+						<Typography variant='caption' sx={{ display: 'block', color: 'text.disabled' }}>
+							Bijgewerkt door {opportunity.lastEditedBy.name ?? 'onbekend'} ·{' '}
+							{toReadableTimestamp(opportunity.lastEditedBy.at)}
 						</Typography>
 					)}
 				</Box>
@@ -592,11 +665,15 @@ function LoadMoreButton({
 	initialCursor,
 	status,
 	dismissed,
+	owner,
+	assignee,
 	initialList
 }: {
 	initialCursor: string;
 	status: OpportunityStatus | null;
 	dismissed: 'active' | 'dismissed';
+	owner: OpportunityMailboxOwnershipFilter | null;
+	assignee: OpportunityAssigneeFilter | null;
 	initialList: Opportunity[];
 }) {
 	const queryClient = useQueryClient();
@@ -614,13 +691,15 @@ function LoadMoreButton({
 		setError(null);
 
 		try {
-			const next = await listOpportunitiesServer({ data: { cursor, status, dismissed, limit: 25 } });
+			const next = await listOpportunitiesServer({
+				data: { cursor, status, dismissed, owner, assignee, limit: 25 }
+			});
 			const accumulated = [...initialList, ...extra, ...next.opportunities];
 			setExtra(prev => [...prev, ...next.opportunities]);
 			setCursor(next.nextCursor);
 			// Mirror the appended rows into the React Query cache so a re-mount of the
 			// route doesn't lose the user's "Load more" history.
-			queryClient.setQueryData(OpportunityKeys.list(status, null, dismissed), {
+			queryClient.setQueryData(OpportunityKeys.list(status, null, dismissed, owner, assignee), {
 				opportunities: accumulated,
 				nextCursor: next.nextCursor,
 				statusCounts: next.statusCounts

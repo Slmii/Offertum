@@ -1,12 +1,13 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
-import { SectionError } from '@/components/SectionError.component';
 import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
 import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { SectionError } from '@/components/SectionError.component';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import {
 	opportunityDetailQueryOptions,
+	useAssignOpportunity,
 	useComposeFollowupReplyDraft,
 	useDeleteReplyDraftAttachment,
 	useRegenerateReplyDraft,
@@ -16,7 +17,7 @@ import {
 	useUpdateReplyDraft,
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
-import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
+import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
 	getStatusOptionsForCurrent,
@@ -75,7 +76,10 @@ export const Route = createFileRoute('/(app)/opportunities/$id')({
 	loader: async ({ context, params }) => {
 		await Promise.all([
 			context.queryClient.ensureQueryData(opportunityDetailQueryOptions(params.id)),
-			context.queryClient.ensureQueryData(myMembershipQueryOptions)
+			context.queryClient.ensureQueryData(myMembershipQueryOptions),
+			// Memberships drive the assignee picker — same load cycle as the detail
+			// fetch so the picker renders instantly when the panel paints.
+			context.queryClient.ensureQueryData(membershipsQueryOptions)
 		]);
 	},
 	component: OpportunityDetailPage,
@@ -314,18 +318,15 @@ function OpportunityDetailPage() {
 									spacing={1}
 									sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
 								>
-									<Alert severity='success' sx={{ flex: 1 }}>
-										<strong>v{opportunity.replyDraftHistory.length}</strong> · Verzonden om{' '}
-										{toReadableDateTime(replyDraft.sentAt)}.
-									</Alert>
 									{/* "Concept-vervolg opstellen". Manual follow-up entry
 									 * point for cases where the customer responded out-of-band
 									 * (phone, in-person) but the owner still wants to send a
 									 * written confirmation. The customer-driven path is handled
 									 * automatically by the inbox-side thread reconstitution. */}
 									<Button
-										variant='outlined'
-										size='medium'
+										variant='contained'
+										fullWidth
+										size='large'
 										onClick={() => composeFollowup.mutate()}
 										disabled={composeFollowup.isPending}
 										startIcon={composeFollowup.isPending ? <CircularProgress size={14} /> : null}
@@ -694,9 +695,24 @@ function ExtractedFieldsPanel({
 		customerDeadline: string | null;
 		customerAppointment: string | null;
 		deliverableHints: string[];
+		assignedToUserId: string | null;
 	};
 }) {
 	const updateFields = useUpdateOpportunityFields(opportunityId);
+	const assign = useAssignOpportunity(opportunityId);
+	const { data: memberships } = useSuspenseQuery(membershipsQueryOptions);
+
+	// Sentinel string for the "Niemand" option — the underlying StandaloneSelect's
+	// `renderValue` treats `''` as "nothing selected" and shows the placeholder, so we
+	// can't bind null directly to the value prop. Decoded on commit + render.
+	const ASSIGNEE_NONE = 'none';
+	const commitAssignee = (next: string) => {
+		const nextUserId = next === ASSIGNEE_NONE ? null : next;
+		if (nextUserId === (opportunity.assignedToUserId ?? null)) {
+			return;
+		}
+		assign.mutate({ userId: nextUserId });
+	};
 
 	// Local mirrors for the editable fields. Re-sync from server on prop change so
 	// regenerate / mutation success picks up the canonical value. Text + dates commit
@@ -790,11 +806,31 @@ function ExtractedFieldsPanel({
 					size='small'
 					onAccept={commitAppointment}
 				/>
+				<StandaloneSelect
+					name='assignee'
+					label='Toegewezen aan'
+					value={opportunity.assignedToUserId ?? ASSIGNEE_NONE}
+					fullWidth
+					size='small'
+					disabled={assign.isPending}
+					onChange={e => commitAssignee(e.target.value as string)}
+					options={[
+						{ id: ASSIGNEE_NONE, label: 'Niemand' },
+						...memberships.map(m => ({
+							id: m.user.id,
+							label: m.user.name?.trim() || m.user.email
+						}))
+					]}
+				/>
 
-				{updateFields.isError && (
+				{(updateFields.isError || assign.isError) && (
 					<Alert severity='error'>
 						Bijwerken mislukt:{' '}
-						{updateFields.error instanceof Error ? updateFields.error.message : 'Onbekende fout'}
+						{updateFields.error instanceof Error
+							? updateFields.error.message
+							: assign.error instanceof Error
+								? assign.error.message
+								: 'Onbekende fout'}
 					</Alert>
 				)}
 				<Box>
@@ -1113,6 +1149,21 @@ function describeTimelineEvent(event: OpportunityTimelineEvent): TimelineEventCo
 						? `${fieldLabels[0]} bijgewerkt`
 						: `${event.changes.length} velden bijgewerkt: ${fieldLabels.join(', ')}`,
 				detail: event.changes.map(formatFieldChange).join('\n')
+			};
+		}
+		case 'assigned': {
+			const prev = event.previousAssigneeName ?? (event.previousAssigneeUserId ? 'onbekend' : 'niemand');
+			const next = event.nextAssigneeName ?? (event.nextAssigneeUserId ? 'onbekend' : 'niemand');
+			return {
+				chipLabel: 'Toewijzing',
+				chipColor: 'info',
+				headline:
+					event.nextAssigneeUserId === null
+						? `Toewijzing verwijderd (was ${prev})`
+						: event.previousAssigneeUserId === null
+							? `Toegewezen aan ${next}`
+							: `Toewijzing: ${prev} → ${next}`,
+				detail: null
 			};
 		}
 	}

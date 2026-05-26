@@ -1,8 +1,10 @@
 import { serverFetch } from '@/lib/api/server-fetch';
 import type {
+	OpportunityAssigneeFilter,
 	OpportunityDetail,
 	OpportunityDismissedFilter,
 	OpportunityList,
+	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus
 } from '@quoteom/shared';
 import { createServerFn } from '@tanstack/react-start';
@@ -13,6 +15,8 @@ export interface ListOpportunitiesInput {
 	status?: OpportunityStatus | null;
 	search?: string | null;
 	dismissed?: OpportunityDismissedFilter | null;
+	owner?: OpportunityMailboxOwnershipFilter | null;
+	assignee?: OpportunityAssigneeFilter | null;
 }
 
 /**
@@ -45,6 +49,14 @@ export const listOpportunitiesServer = createServerFn({ method: 'GET' })
 		// `active` is the server default, no need to spend a query-string slot on it.
 		if (data.dismissed && data.dismissed !== 'active') {
 			params.set('dismissed', data.dismissed);
+		}
+
+		// `all` is the server default for both owner + assignee filters.
+		if (data.owner && data.owner !== 'all') {
+			params.set('owner', data.owner);
+		}
+		if (data.assignee && data.assignee !== 'all') {
+			params.set('assignee', data.assignee);
 		}
 
 		const qs = params.toString();
