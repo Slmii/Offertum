@@ -213,7 +213,8 @@ export const OPPORTUNITY_TIMELINE_EVENT_KINDS = [
 	'dismissed',
 	'undismissed',
 	'fields_updated',
-	'assigned'
+	'assigned',
+	'received_via_mailbox'
 ] as const;
 export type OpportunityTimelineEventKind = (typeof OPPORTUNITY_TIMELINE_EVENT_KINDS)[number];
 
@@ -276,13 +277,27 @@ export interface OpportunityAssignedEvent extends OpportunityTimelineEventBase {
 	nextAssigneeName: string | null;
 }
 
+/**
+ * System event written at creation time identifying the mailbox the opportunity
+ * came in through. Always the first row on the timeline. Useful when the org has
+ * multiple connected mailboxes — tells the owner which inbox produced this opp
+ * without opening the original-email panel.
+ */
+export interface OpportunityReceivedViaMailboxEvent extends OpportunityTimelineEventBase {
+	kind: 'received_via_mailbox';
+	mailboxEmail: string;
+	mailboxOwnerUserId: string | null;
+	mailboxOwnerName: string | null;
+}
+
 export type OpportunityTimelineEvent =
 	| OpportunityStatusChangedEvent
 	| OpportunityAutoColdEvent
 	| OpportunityDismissedEvent
 	| OpportunityUndismissedEvent
 	| OpportunityFieldsUpdatedEvent
-	| OpportunityAssignedEvent;
+	| OpportunityAssignedEvent
+	| OpportunityReceivedViaMailboxEvent;
 
 /**
  * Inbound message from the customer attached to an opportunity's thread. Shown in

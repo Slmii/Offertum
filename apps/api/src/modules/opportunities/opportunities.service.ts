@@ -483,24 +483,27 @@ export class OpportunitiesService {
 	 * actor for the timeline panel + the "last edited by" badge.
 	 */
 	/**
-	 * Write an `opportunity.assigned` audit row for an auto-assignment that happened
-	 * inside the AI pipeline (default-assign to the mailbox owner on first creation).
-	 * `actorUserId` is the system itself — we use the assignee's own user ID as the
-	 * actor so the timeline reads "Toegewezen aan X · door X" rather than orphaning
-	 * the row with no actor. The timeline UI special-cases `previousAssigneeUserId =
-	 * null` → "Toegewezen aan X", matching the auto-assignment case.
+	 * Write an `opportunity.received_via_mailbox` audit row at creation time. The
+	 * mailbox-owner default-assignment still happens on the column (`assignedToUserId`
+	 * is set in the repo's create transaction); we don't write a separate "assigned"
+	 * row for it because the picker already shows the same info. This audit row tells
+	 * the owner WHICH inbox produced the opp when multiple are connected — informational
+	 * context, not a workflow event.
 	 */
-	private logAutoAssignment(opportunityId: string, organizationId: string, mailboxUserId: string): void {
+	private logReceivedViaMailbox(
+		opportunityId: string,
+		organizationId: string,
+		mailbox: { email: string; userId: string | null; ownerName: string | null }
+	): void {
 		this.logService.logAction({
-			action: 'opportunity.assigned',
-			message: `Opportunity ${opportunityId} auto-assigned to mailbox owner ${mailboxUserId} on creation`,
+			action: 'opportunity.received_via_mailbox',
+			message: `Opportunity ${opportunityId} received via mailbox ${mailbox.email}`,
 			metadata: {
 				organizationId,
 				opportunityId,
-				previousAssigneeUserId: null,
-				nextAssigneeUserId: mailboxUserId,
-				actorUserId: mailboxUserId,
-				autoAssigned: true
+				mailboxEmail: mailbox.email,
+				mailboxOwnerUserId: mailbox.userId,
+				mailboxOwnerName: mailbox.ownerName
 			},
 			context: 'OpportunitiesService'
 		});
@@ -1155,15 +1158,14 @@ export class OpportunitiesService {
 					input,
 					candidate.internalDate.toISOString().slice(0, 10)
 				);
-				const { created, opportunityId, assignedToUserId } =
-					await this.repository.createOpportunityFromRawMessage({
-						rawMessage: candidate,
-						classification: classification.value,
-						extraction: extraction.value,
-						aiProvider: `${extraction.provider}/${extraction.model}`,
-						classifiedAiCallId: classification.callId,
-						extractedAiCallId: extraction.callId
-					});
+				const { created, opportunityId, mailbox } = await this.repository.createOpportunityFromRawMessage({
+					rawMessage: candidate,
+					classification: classification.value,
+					extraction: extraction.value,
+					aiProvider: `${extraction.provider}/${extraction.model}`,
+					classifiedAiCallId: classification.callId,
+					extractedAiCallId: extraction.callId
+				});
 
 				result.classifiedPositive += 1;
 				if (created) {
@@ -1175,8 +1177,8 @@ export class OpportunitiesService {
 				originatingMessage = candidate;
 				originatingOpportunityId = opportunityId;
 
-				if (created && opportunityId && assignedToUserId !== null) {
-					this.logAutoAssignment(opportunityId, candidate.organizationId, assignedToUserId);
+				if (created && opportunityId && mailbox !== null) {
+					this.logReceivedViaMailbox(opportunityId, candidate.organizationId, mailbox);
 				}
 
 				if (created && opportunityId) {
@@ -1585,7 +1587,7 @@ export class OpportunitiesService {
 			}
 
 			const extraction = await this.extractor.extract(input, rawMessage.internalDate.toISOString().slice(0, 10));
-			const { created, opportunityId, assignedToUserId } = await this.repository.createOpportunityFromRawMessage({
+			const { created, opportunityId, mailbox } = await this.repository.createOpportunityFromRawMessage({
 				rawMessage,
 				classification: classification.value,
 				extraction: extraction.value,
@@ -1597,8 +1599,8 @@ export class OpportunitiesService {
 				extractedAiCallId: extraction.callId
 			});
 
-			if (created && opportunityId && assignedToUserId !== null) {
-				this.logAutoAssignment(opportunityId, rawMessage.organizationId, assignedToUserId);
+			if (created && opportunityId && mailbox !== null) {
+				this.logReceivedViaMailbox(opportunityId, rawMessage.organizationId, mailbox);
 			}
 
 			result.classifiedPositive += 1;
@@ -2130,6 +2132,22 @@ function toOpportunityTimelineEvent(
 					previousAssigneeUserId !== null ? (actorLabels.get(previousAssigneeUserId) ?? null) : null,
 				nextAssigneeUserId,
 				nextAssigneeName: nextAssigneeUserId !== null ? (actorLabels.get(nextAssigneeUserId) ?? null) : null
+			};
+		}
+		case 'opportunity.received_via_mailbox': {
+			const mailboxEmail = readString(row.metadata, 'mailboxEmail');
+			if (mailboxEmail === null) {
+				return null;
+			}
+			return {
+				id: row.id,
+				kind: 'received_via_mailbox',
+				occurredAt,
+				actorUserId: null,
+				actorName: null,
+				mailboxEmail,
+				mailboxOwnerUserId: readString(row.metadata, 'mailboxOwnerUserId'),
+				mailboxOwnerName: readString(row.metadata, 'mailboxOwnerName')
 			};
 		}
 		default:

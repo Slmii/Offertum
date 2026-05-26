@@ -1166,6 +1166,13 @@ function describeTimelineEvent(event: OpportunityTimelineEvent): TimelineEventCo
 				detail: null
 			};
 		}
+		case 'received_via_mailbox':
+			return {
+				chipLabel: 'Binnengekomen',
+				chipColor: 'default',
+				headline: `Aanvraag binnengekomen via ${event.mailboxEmail}`,
+				detail: event.mailboxOwnerName ? `Mailbox van ${event.mailboxOwnerName}` : null
+			};
 	}
 }
 

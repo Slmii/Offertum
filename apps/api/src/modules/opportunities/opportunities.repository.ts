@@ -30,7 +30,8 @@ const OPPORTUNITY_TIMELINE_ACTIONS = [
 	'opportunity.dismissed',
 	'opportunity.undismissed',
 	'opportunity.fields_updated',
-	'opportunity.assigned'
+	'opportunity.assigned',
+	'opportunity.received_via_mailbox'
 ] as const;
 
 const TIMELINE_QUERY_CAP = 200;
@@ -477,20 +478,30 @@ export class OpportunitiesRepository {
 		return rows.map(r => r.id);
 	}
 
-	async createOpportunityFromRawMessage(
-		input: CreateOpportunityFromRawMessageInput
-	): Promise<{ created: boolean; opportunityId: string | null; assignedToUserId: string | null }> {
+	async createOpportunityFromRawMessage(input: CreateOpportunityFromRawMessageInput): Promise<{
+		created: boolean;
+		opportunityId: string | null;
+		mailbox: { email: string; userId: string | null; ownerName: string | null } | null;
+	}> {
 		return this.prisma.$transaction(async tx => {
 			// Default assignee = the mailbox owner. The user who connected the inbox is
 			// the natural workflow owner of opps that surface from it; they can reassign
 			// from the detail view if they want to redistribute work. `EmailAccount.userId`
 			// is nullable (ON DELETE SET NULL on the User FK) — leave the opp unassigned
 			// in that edge case rather than throwing.
+			// Selecting `email` + `user.name` in the same query so the caller can write
+			// the "Aanvraag binnengekomen via <mailbox>" audit row without a second round-
+			// trip.
 			const mailbox = await tx.emailAccount.findUnique({
 				where: { id: input.rawMessage.emailAccountId },
-				select: { userId: true }
+				select: {
+					email: true,
+					userId: true,
+					user: { select: { name: true, email: true } }
+				}
 			});
 			const assignedToUserId = mailbox?.userId ?? null;
+			const mailboxOwnerName = mailbox?.user?.name?.trim() || mailbox?.user?.email || null;
 
 			const result = await tx.opportunity.createMany({
 				data: [
@@ -529,7 +540,7 @@ export class OpportunitiesRepository {
 			// `rawMessageId` is unique) so a downstream consumer can't see a half-state.
 			// When `created === false` we skip the lookup — caller has nothing to fire.
 			if (!created) {
-				return { created: false, opportunityId: null, assignedToUserId: null };
+				return { created: false, opportunityId: null, mailbox: null };
 			}
 
 			const inserted = await tx.opportunity.findUnique({
@@ -537,7 +548,11 @@ export class OpportunitiesRepository {
 				select: { id: true }
 			});
 
-			return { created: true, opportunityId: inserted?.id ?? null, assignedToUserId };
+			return {
+				created: true,
+				opportunityId: inserted?.id ?? null,
+				mailbox: mailbox ? { email: mailbox.email, userId: mailbox.userId, ownerName: mailboxOwnerName } : null
+			};
 		});
 	}
 
