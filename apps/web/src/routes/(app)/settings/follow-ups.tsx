@@ -196,6 +196,11 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 						{maxCount === 1 ? 'herinnering' : 'herinneringen'}
 					</Typography>
 				</Stack>
+				<Typography sx={{ fontSize: 12, color: 'var(--ink-3)', mt: 'var(--space-2)', fontStyle: 'italic' }}>
+					Bestaande aanvragen die al op <strong>Koud</strong> staan worden niet automatisch herstart als je
+					dit maximum verhoogt. Zet de status terug op <strong>Beantwoord</strong> om opnieuw herinneringen te
+					krijgen binnen je nieuwe limiet.
+				</Typography>
 			</Box>
 
 			<Box>

@@ -397,24 +397,33 @@ W4.4–W5.6 add the user-facing materialization + feedback + draft + send layers
 
 ```
 opportunities/
-├── opportunities.controller.ts              # GET list + GET :id detail + PATCH status + PATCH/DELETE
-│                                            # :id/dismiss + PATCH :id/reply-draft (autosave) + POST
+├── opportunities.controller.ts              # GET list (owner + assignee filters) + GET :id detail +
+│                                            # PATCH status + PATCH :id/assignee + PATCH/DELETE :id/dismiss +
+│                                            # PATCH :id/reply-draft (autosave) + POST
 │                                            # :id/reply-draft/{regenerate,send,followup} + attachment
 │                                            # endpoints (POST upload, GET list, GET :aid/download, DELETE)
-├── opportunities.service.ts                 # Mode-aware processBatch (backfill | live) + processThreadGroup
-│                                            # (W5.6-followup) + composeFollowupReplyDraft + dismiss/undismiss
+├── opportunities.service.ts                 # Mode-aware processBatch (backfill | live) + processThreadGroup +
+│                                            # composeFollowupReplyDraft + dismiss/undismiss + assignOpportunity +
+│                                            # logAutoAssignment helper + toOpportunityTimelineEvent mapper
 ├── opportunities.repository.ts              # Prisma persistence, rawMessageId idempotency, AICall FKs,
 │                                            # findOpportunityForThread + attachFollowupMessage +
-│                                            # attachThreadMessage + findOrganizationEmailAddresses
-├── reply-draft-editability.ts               # W5.6-followup — single helper: latest draft SENT = locked
+│                                            # attachThreadMessage + findOrganizationEmailAddresses +
+│                                            # findTimelineEvents (Log JSON-path filter, cap 200) +
+│                                            # findLatestEditorPerOpportunity (DISTINCT ON, list badge) +
+│                                            # findUserDisplayLabels (batched name+email lookup) +
+│                                            # findColdCandidates (unsent-draft guard) +
+│                                            # markOpportunitiesCold (UPDATE ... RETURNING) +
+│                                            # assignOpportunity + isUserMemberOfOrganization
+├── reply-draft-editability.ts               # Single helper: latest draft SENT = locked
 ├── opportunity-status.mapper.ts             # Prisma enum ↔ lowercase wire status (transitions fully open)
 ├── opportunity-urgency.mapper.ts            # Prisma Urgency enum ↔ lowercase wire urgency
-├── opportunity-dismiss-reason.mapper.ts     # W4.6 — Prisma DismissReason ↔ lowercase wire reason
-├── reply-draft-status.mapper.ts             # W5.3 — Prisma ReplyDraftStatus ↔ lowercase wire status
+├── opportunity-dismiss-reason.mapper.ts     # Prisma DismissReason ↔ lowercase wire reason
+├── reply-draft-status.mapper.ts             # Prisma ReplyDraftStatus ↔ lowercase wire status
 ├── opportunity-list-cursor.ts               # Opaque base64url cursor over (createdAt, id)
 └── dto/                                     # Concrete DTO classes for OpenAPI/Orval
-                                             # (DismissOpportunityDto, OpportunityDetailResponseDto,
-                                             # ReplyDraftResponseDto, UpdateReplyDraftDto, ...)
+                                             # (AssignOpportunityDto, DismissOpportunityDto,
+                                             # OpportunityDetailResponseDto, ReplyDraftResponseDto,
+                                             # UpdateReplyDraftDto, ...)
 ```
 
 W5.3–W6.1 add the AI-reply-generation + send mechanics under `apps/api/src/modules/reply-drafts/`:
@@ -514,6 +523,16 @@ The Inngest backfill + delta-sync functions chain the pipeline via `processOppor
 Where "mailbox user" = `Opportunity.emailAccount.user` (whoever connected the inbox the conversation lives in). The prior "fall back to org OWNER's playbook" rule was retired because it baked one person's voice into every team member's drafts, and was conceptually wrong on multi-user mailboxes. No one else's playbook is ever used as a fallback for someone else's draft — the explicit choice is generic over wrong-voice. The mailbox user's NAME (not their playbook) provides the sign-off fallback because they're the legal sender of the email even when they didn't write this specific reply.
 
 **21. Silence-check-in scheduler is a cron + fan-out + per-opp processor (W6.1).** Two Inngest functions: `FollowUpSchedulerFunction` (cron `TZ=Europe/Amsterdam 0 8 * * *` daily — 08:00 Amsterdam local time, DST-aware) enumerates eligible REPLIED opps via raw SQL in `repository.findCheckInCandidates` (cap=500/tick) and fans out one `opportunity/silence.followup-due` event per candidate; `FollowUpProcessorFunction` (concurrency=5) receives each event, re-validates eligibility via `reValidateCheckInCandidate` _inside_ the step.run, then calls `ReplyDraftsService.generateCheckInDraft`. Eligibility = `status = REPLIED ∧ not dismissed ∧ latest draft is SENT ∧ (now - latestSentAt) ≥ org.followUpCadenceDays ∧ priorCheckInCount < org.followUpMaxCount ∧ org entitled`. Cap is on `ReplyDraft.kind = CHECK_IN` rows only — owner-initiated drafts don't consume the cap. Setting `Organization.followUpMaxCount = 0` disables the scheduler for the org. Dedicated `buildCheckInPromptNL` prompt (short, polite, no re-quote) keeps the AI from re-pitching; `ReplyDraftGenerator.generateCheckIn` tags the AICall with `purpose: 'reply-draft-check-in'` so the admin AI-usage dashboard can split spend by intent.
+
+**22. Opportunity timeline = `Log`-backed discriminated union, no parallel persistence.** The detail view's `Tijdlijn` panel merges three sources: `replyDraftHistory`, `customerReplies` (existing), AND a new server-built `timeline: OpportunityTimelineEvent[]` discriminated union (kinds: `status_changed | auto_cold | dismissed | undismissed | fields_updated | assigned`). Source actions live in `OPPORTUNITY_TIMELINE_ACTIONS` (`apps/api/src/modules/opportunities/opportunities.repository.ts`): `opportunity.status.updated`, `opportunity.auto_cold.flipped`, `opportunity.dismissed`, `opportunity.undismissed`, `opportunity.fields_updated`, `opportunity.assigned`. `findTimelineEvents` JSON-path-filters Log by `metadata.opportunityId` + `metadata.action ∈ <set>`, cap 200 rows. `toOpportunityTimelineEvent` (service) drops malformed rows (unknown action / missing required keys / invalid enum values) so the FE only ever renders typed events. Adding a new event kind = (a) add the action to `OPPORTUNITY_TIMELINE_ACTIONS`, (b) extend the discriminated union in `apps/shared/src/opportunities.ts`, (c) add a `case` to the mapper + a `case` to `describeTimelineEvent` in the web file. No schema delta.
+
+**23. `actorUserId` is the canonical audit-log key + batched user-label resolution.** Every owner-driven audit log entry on Opportunity (`opportunity.status.updated`, `opportunity.dismissed`, `opportunity.undismissed`, `opportunity.fields_updated`, `opportunity.assigned`) carries `metadata.actorUserId: string`. Reads (`getDetail` for the timeline, `list` for the "Bijgewerkt door X" badge) collect every referenced user ID into a single set + call `repository.findUserDisplayLabels(ids[]) → Map<id, name|email>` for a batched lookup, then zip the labels into the events. `null` actor on a row means system-driven (auto-cold) — UI suppresses the "door X" suffix. **Auto-assignments** at opportunity creation are logged with `actorUserId = mailboxUserId` (the assignee is also the actor) + `autoAssigned: true` so the timeline reads "Toegewezen aan Alice · door Alice" rather than orphaning the row.
+
+**24. `assignedToUserId` defaults to the mailbox connector + two-dimensional list filtering.** `Opportunity.assignedToUserId` (UUID, nullable, `ON DELETE SET NULL`) is set in `createOpportunityFromRawMessage`'s transaction to `EmailAccount.userId` (whoever connected the inbox). Manual assignment via `PATCH /api/opportunities/:id/assignee { userId: string | null }` validates org membership before writing (`isUserMemberOfOrganization`) so cross-org assignments 404. List filtering exposes TWO orthogonal URL params: `owner=mine|all` (mailbox-connector-based) + `assignee=me|unassigned|all` (assignment-based). Both filters propagate into `countByStatusForOrganization` so the segmented-tab totals match the visible rows — never lie about funnel state. Composite index `(assignedToUserId, organizationId)` keeps the "Aan mij toegewezen" path an index-only scan.
+
+**25. MUI v6 pickers need `onAccept` + an internal-state mirror for autosave.** `MuiDatePicker` / `MuiDateTimePicker` (and their Mobile twins) require fully-controlled mode — they need the parent to reflect `onChange` back into the `value` prop for the multi-view flow (year → month → day → hour → minute) to advance. If autosave writes the server on every `onChange`, you get N rows per single owner interaction (3-5 audit-log entries for one date pick). `StandaloneDatePicker` + `StandaloneDateTimePicker` own internal local state (`internalValue`, synced from `value` via `useEffect`) so views advance instantly; expose `onAccept` to consumers for the commit signal (desktop: close picker, mobile: tap OK, both: clear via X button). Opp detail page binds `onAccept` (not `onChange`) for `customerDeadline` + `customerAppointment` — one commit per interaction, one audit-log row per real change.
+
+**26. Race-narrowing `UPDATE ... RETURNING` over bulk-mutation + per-id fan-out.** When a bulk write needs side-effects only for the rows that actually changed (notifications, audit log, etc.), `Prisma.updateMany`'s `count` return value isn't enough — it doesn't tell you which rows passed the WHERE guard. Use raw SQL `UPDATE ... RETURNING id` and iterate the resolved subset. Live example: `OpportunitiesRepository.markOpportunitiesCold` returns `string[]` of flipped IDs (not just `count`). The auto-cold scheduler then loops `candidates.filter(x => flippedSet.has(x.opportunityId))` — notifications + the `opportunity.auto_cold.flipped` log row only fire for opps that survived the `status = REPLIED` race (the gap: owner clicked WON between the candidate-fetch query and the bulk update). Same pattern fits any future "scan + bulk-flip + emit" pipeline.
 
 ### Accuracy harness workflow (`pnpm test:ai`)
 
