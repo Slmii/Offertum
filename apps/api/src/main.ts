@@ -16,6 +16,7 @@ import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
+import { PricingPlaybookCompileFunction } from '@/modules/inngest/functions/pricing-playbook-compile.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
@@ -110,6 +111,7 @@ async function bootstrap() {
 	const followUpProcessor = app.get(FollowUpProcessorFunction);
 	const weeklyDigest = app.get(WeeklyDigestFunction);
 	const autoColdScheduler = app.get(AutoColdSchedulerFunction);
+	const pricingPlaybookCompile = app.get(PricingPlaybookCompileFunction);
 	app.use(
 		'/api/inngest',
 		inngestServe({
@@ -126,7 +128,8 @@ async function bootstrap() {
 				followUpScheduler.inngestFn,
 				followUpProcessor.inngestFn,
 				weeklyDigest.inngestFn,
-				autoColdScheduler.inngestFn
+				autoColdScheduler.inngestFn,
+				pricingPlaybookCompile.inngestFn
 			]
 		})
 	);

@@ -140,6 +140,11 @@ export const OPPORTUNITY_NOT_DISMISSED = 'Opportunity is not dismissed.';
 // a member of the opp's organization. 404 (rather than 422) keeps the wire shape
 // consistent with the rest of the "this user can't be found here" responses.
 export const OPPORTUNITY_ASSIGNEE_NOT_IN_ORG = 'Assignee is not a member of this organization.';
+
+// User-facing — surfaced when a rule-CRUD endpoint references a rule that doesn't
+// belong to the requesting org's pricing playbook. 404 keeps cross-tenant attempts
+// indistinguishable from genuinely-missing rules.
+export const PRICING_PLAYBOOK_RULE_NOT_FOUND = 'Pricing rule not found.';
 // User-facing — surfaced when the editor tries to save edits to a draft that
 // hasn't been generated yet (the Inngest function hasn't run). The FE should poll +
 // retry rather than blowing up; this message is the fallback for non-web callers.

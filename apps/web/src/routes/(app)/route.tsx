@@ -1,3 +1,4 @@
+import { BillingRequiredBanner } from '@/components/BillingRequiredBanner.component';
 import { NotificationBell } from '@/components/NotificationBell.component';
 import { SilentErrorBoundary } from '@/components/SilentErrorBoundary.component';
 import { notificationsListQueryOptions } from '@/lib/queries/notifications.queries';
@@ -51,6 +52,7 @@ export const Route = createFileRoute('/(app)')({
 function RouteComponent() {
 	return (
 		<>
+			<BillingRequiredBanner />
 			<Box
 				sx={{
 					position: 'sticky',

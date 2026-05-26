@@ -65,19 +65,13 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 	if (!response.ok) {
 		const errorBody = (await response.json().catch(() => null)) as ApiError | null;
 
-		// 402 with code=billing_required is the structured "trial expired" signal from the
-		// API's TrialGateGuard. Auto-redirect to the subscribe page rather than surfacing
-		// a generic error — every caller would do the same redirect anyway. Skip if the
-		// user is already on the billing flow.
-		if (
-			response.status === 402 &&
-			errorBody?.code === BILLING_REQUIRED_CODE &&
-			typeof window !== 'undefined' &&
-			!window.location.pathname.startsWith('/billing')
-		) {
-			window.location.href = errorBody.billingPath ?? '/billing';
-		}
-
+		// 402 with code=billing_required is the structured "no entitlement" signal from
+		// the API's EntitlementGuard. We deliberately do NOT auto-redirect here — the
+		// previous behaviour yanked the user out of the page they were on (settings,
+		// detail view, mid-form, etc.), which felt like a bug. Instead the error
+		// surfaces through React Query's MutationCache `onError` into a global banner
+		// at the app-layout level (`BillingRequiredBanner`). The user keeps their
+		// context + sees an explanatory CTA to the billing page.
 		throw new WrapperApiError({
 			code: response.status,
 			message: flattenMessage(errorBody?.message, response.statusText || 'Unknown error'),

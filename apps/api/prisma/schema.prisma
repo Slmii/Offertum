@@ -149,6 +149,21 @@ enum NotificationChannel {
   EMAIL
 }
 
+// Distinct categories of pricing rule the compile pass can emit. Each type has its
+// own contract for `condition` + `effect` jsonb shape — validated at the service
+// layer with Zod (see `pricing-playbook/dto/pricing-rule-condition.types.ts`).
+// Adding a new type requires a Prisma migration AND a parallel update to the prompt
+// + validator.
+enum PricingRuleType {
+  HOURLY_RATE
+  MATERIAL_MARKUP
+  VAT
+  TRAVEL
+  URGENCY
+  DISCOUNT
+  MINIMUM_ORDER
+}
+
 model User {
   id                    String    @id @default(uuid()) @db.Uuid
   email                 String    @unique
@@ -174,15 +189,15 @@ model User {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  currentOrganization      Organization?              @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
-  memberships              Membership[]
-  accounts                 Account[]
-  sessions                 Session[]
-  emailAccounts            EmailAccount[]
-  dismissedOpportunities   Opportunity[]              @relation("OpportunityDismissedBy")
-  assignedOpportunities    Opportunity[]              @relation("OpportunityAssignedTo")
-  notifications            Notification[]
-  notificationPreferences  NotificationPreference[]
+  currentOrganization     Organization?            @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
+  memberships             Membership[]
+  accounts                Account[]
+  sessions                Session[]
+  emailAccounts           EmailAccount[]
+  dismissedOpportunities  Opportunity[]            @relation("OpportunityDismissedBy")
+  assignedOpportunities   Opportunity[]            @relation("OpportunityAssignedTo")
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
 }
 
 model Organization {
@@ -206,12 +221,13 @@ model Organization {
 
   memberships             Membership[]
   invitations             Invitation[]
-  currentMembers          User[]                     @relation("CurrentOrganization")
+  currentMembers          User[]                   @relation("CurrentOrganization")
   subscription            Subscription?
   emailAccounts           EmailAccount[]
   opportunities           Opportunity[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  pricingPlaybook         PricingPlaybook?
 }
 
 model Log {
@@ -469,28 +485,28 @@ model EmailAccount {
 // (year-2 self-improvement story). Keep the full provider JSON in `raw` rather than
 // shredding into typed columns — Gmail / Graph payloads are nested and we'd lose info.
 model RawMessage {
-  id                String    @id @default(uuid()) @db.Uuid
-  emailAccountId    String    @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
+  emailAccountId      String    @db.Uuid
   // Denormalized for tenant-scoped queries (so we don't always need to JOIN through
   // EmailAccount to enforce org isolation).
-  organizationId    String    @db.Uuid
-  providerMessageId String
-  threadId          String?
+  organizationId      String    @db.Uuid
+  providerMessageId   String
+  threadId            String?
   // ISO timestamp from provider (Gmail: `internalDate` in ms; Graph: `receivedDateTime`).
-  internalDate      DateTime
-  subject           String?
-  fromEmail         String?
-  fromName          String?
+  internalDate        DateTime
+  subject             String?
+  fromEmail           String?
+  fromName            String?
   // Full provider payload as JSON. Schema varies by provider.
-  raw               Json
-  fetchedAt         DateTime  @default(now())
+  raw                 Json
+  fetchedAt           DateTime  @default(now())
   // Classifier/extractor fields. Nullable until the pipeline runs.
-  isQuoteRequest    Boolean?
-  classifiedAt      DateTime?
+  isQuoteRequest      Boolean?
+  classifiedAt        DateTime?
   // Set when the should-reply classifier flagged this message as a conversation
   // closer ("Bedankt, tot dan!" etc.) and the pipeline deliberately skipped draft
   // generation. Surfaced on the detail view's customer-replies chip.
-  wasDetectedAsCloser Boolean  @default(false)
+  wasDetectedAsCloser Boolean   @default(false)
   // Thread reconstitution. Set when this RawMessage is attached to an existing
   // Opportunity (e.g., a customer reply on a thread we've already classified). NULL
   // for messages that haven't been linked, including all bulk-mail-filtered and
@@ -500,7 +516,7 @@ model RawMessage {
   // link — historical rows have it NULL until a future reply lands on the same
   // threadId and we attach it. No backfill on existing rows; only new follow-ups
   // populate this column. SetNull on delete so AICall retention purges don't cascade.
-  opportunityId     String?   @db.Uuid
+  opportunityId       String?   @db.Uuid
 
   emailAccount      EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
   opportunity       Opportunity? @relation("OpportunityOriginatingRawMessage")
@@ -719,4 +735,78 @@ model NotificationPreference {
 
   @@unique([userId, organizationId, eventType, channel])
   @@index([organizationId])
+}
+
+// The owner writes pricing logic as free-form prose in
+// `playbookText`; an LLM compile pass (`pricing-playbook-compile` Inngest function)
+// turns that prose into typed `PricingRule` rows the quote pipeline evaluates
+// deterministically. Free-form is the SOURCE OF TRUTH — re-compiling on changed
+// `playbookText` replaces non-manually-overridden rules; manually edited rules
+// (`PricingRule.manualOverride = true`) survive compile passes intact.
+// 1:1 with Organization — there's only one current pricing playbook per org. Draft
+// versioning was deliberately deferred (the `manualOverride` mechanism covers the
+// "the AI got it wrong, let me fix THIS rule" case without needing version history).
+// Lazy-created on first read (no migration data step required).
+model PricingPlaybook {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @unique @db.Uuid
+  // Free-form prose. The owner's pricing logic
+  // in their own words. UI is a single textarea; markdown is rendered in the
+  // preview but stored as raw text so a future schema bump can re-interpret
+  // without lossy reverse-engineering.
+  playbookText   String    @default("") @db.Text
+  // Timestamp of the last completed compile pass. NULL = never compiled (fresh
+  // org or playbookText is still empty). The UI uses this to show compile state
+  // (compiling vs. ready).
+  compiledAt     DateTime?
+  // sha256 of `playbookText` at compile time. The compile function no-ops when the
+  // hash matches (idempotency on Inngest retries + on rapid-save flurries that
+  // collapse into one debounced compile event).
+  compiledHash   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rules        PricingRule[]
+}
+
+model PricingRule {
+  id                String          @id @default(uuid()) @db.Uuid
+  pricingPlaybookId String          @db.Uuid
+  ruleType          PricingRuleType
+  // Structured matcher — the rule engine evaluates this against opp + line context.
+  // Shape varies per `ruleType` (e.g. `{ category: "plumbing" }` for HOURLY_RATE,
+  // `{ jurisdiction: "construction" }` for BTW). Validated by Zod at the service.
+  // A DB CHECK constraint (appended in the migration) enforces that the blob is a
+  // JSON object — anything more granular lives at the application layer.
+  condition         Json
+  // Structured payload the engine applies when `condition` matches. Always carries
+  // a `type` discriminator field — DB CHECK constraint rejects rows where it's NULL
+  // or missing (see migration). Example: `{ type: "rate_eur_per_hour", value: 95 }`.
+  effect            Json
+  // Higher priority wins on conflict. Manual overrides bump effective priority by
+  // a fixed amount at engine time (see `rule-engine.ts`) so an owner-edited rule
+  // beats an LLM-generated rule on the same `(ruleType, condition)` slot.
+  priority          Int             @default(0)
+  active            Boolean         @default(true)
+  // Human-readable label for the review UI. The compile pass emits this from the
+  // source prose (e.g. "Plumbing work: €95/hour"); the owner can edit it.
+  description       String          @db.Text
+  // {start, end} char offsets into `PricingPlaybook.playbookText` so the review UI
+  // can highlight the sentence that produced the rule. NULL when the rule was
+  // created manually (no source sentence to point at).
+  sourceSpan        Json?
+  // Flips to true the moment an owner edits this rule via the review UI (W11.4).
+  // Subsequent compile passes leave manually-edited rules alone — they get
+  // `active: false` if their source sentence vanished from `playbookText` but
+  // never get overwritten outright.
+  manualOverride    Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  pricingPlaybook PricingPlaybook @relation(fields: [pricingPlaybookId], references: [id], onDelete: Cascade)
+
+  // The engine's most common access pattern: load all active rules for an org's
+  // playbook, sort by priority DESC. Composite index keeps that scan fast.
+  @@index([pricingPlaybookId, active, priority(sort: Desc)])
 }

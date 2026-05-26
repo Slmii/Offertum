@@ -21,14 +21,14 @@ const orgs = [
 ] as const;
 
 const users = [
-	{ email: 'alice@quoteom.dev', name: 'Alice Owens', currentOrg: ORG_ACME },
+	{ email: 'selami1992@gmail.com', name: 'Selami C', currentOrg: ORG_ACME },
 	{ email: 'jeroen@quoteom.dev', name: 'Jeroen Bakker', currentOrg: ORG_ACME },
 	{ email: 'bart@quoteom.dev', name: 'Bart de Vries', currentOrg: ORG_BOUW },
 	{ email: 'sander@quoteom.dev', name: 'Sander van Klink', currentOrg: ORG_ACME }
 ] as const;
 
 const memberships: ReadonlyArray<{ email: string; orgId: string; role: MembershipRole }> = [
-	{ email: 'alice@quoteom.dev', orgId: ORG_ACME, role: MembershipRole.OWNER },
+	{ email: 'selami1992@gmail.com', orgId: ORG_ACME, role: MembershipRole.OWNER },
 	{ email: 'jeroen@quoteom.dev', orgId: ORG_ACME, role: MembershipRole.MEMBER },
 	{ email: 'bart@quoteom.dev', orgId: ORG_BOUW, role: MembershipRole.OWNER },
 	// Sander is a freelance bookkeeper helping both orgs — same user, two memberships.

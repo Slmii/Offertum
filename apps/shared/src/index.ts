@@ -27,6 +27,7 @@ export * from './follow-up-settings.js';
 export * from './invitations.js';
 export * from './notifications.js';
 export * from './opportunities.js';
+export * from './pricing-playbook.js';
 export * from './reply-drafts.js';
 export * from './team.js';
 export * from './tone-playbook.js';

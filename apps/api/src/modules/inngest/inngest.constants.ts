@@ -55,7 +55,15 @@ export const InngestEvents = {
 	 * per tick. Triggers `FollowUpProcessorFunction` which re-validates eligibility
 	 * (cap / cadence / latest-draft-status) before spending an OpenAI call.
 	 */
-	OpportunitySilenceFollowupDue: 'opportunity/silence.followup-due'
+	OpportunitySilenceFollowupDue: 'opportunity/silence.followup-due',
+	/**
+	 * Fired by `PricingPlaybookService.update` after a successful save. Payload:
+	 * `{ organizationId, playbookHash }` — the hash is the sha256 of the saved
+	 * playbookText so the consumer (`pricing-playbook-compile` function — W11.3)
+	 * can no-op on identical re-saves. Debounced 5s at the function level so a
+	 * flurry of rapid typed-saves collapses into one compile pass.
+	 */
+	PricingPlaybookSaved: 'pricing-playbook/saved'
 } as const;
 
 export type InngestEventName = (typeof InngestEvents)[keyof typeof InngestEvents];
@@ -92,7 +100,11 @@ export const InngestFunctionIds = {
 	WeeklyDigest: 'notifications-weekly-digest',
 	/** Auto-cold — daily 07:00 Amsterdam cron. Flips REPLIED opps to COLD once the
 	 *  silence-check-in budget runs out + org.coldAfterDays elapsed. */
-	AutoColdScheduler: 'auto-cold-scheduler'
+	AutoColdScheduler: 'auto-cold-scheduler',
+	/** Pricing-playbook compile — fires on `pricing-playbook/saved` events. Debounced
+	 *  5s so rapid typed-saves collapse into one LLM call. Runs the prose through
+	 *  the AI client, applies the compiled rules with manual-override preservation. */
+	PricingPlaybookCompile: 'pricing-playbook-compile'
 } as const;
 
 /**
@@ -168,5 +180,13 @@ export const InngestSteps = {
 	AutoColdScheduler: {
 		/** Single step: query candidates + flip status + log. */
 		FlipColdCandidates: 'auto-cold-scheduler-flip'
+	},
+	PricingPlaybookCompile: {
+		/** Load the playbook, no-op if hash matches the stored `compiledHash`. */
+		LoadAndGate: 'pricing-playbook-compile-load',
+		/** Run the LLM compile pass (no-op short-circuited for empty playbooks). */
+		RunCompile: 'pricing-playbook-compile-run',
+		/** Apply the upsert/preserve/deactivate logic + stamp `compiledHash`. */
+		PersistRules: 'pricing-playbook-compile-persist'
 	}
 } as const;

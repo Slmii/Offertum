@@ -1,6 +1,8 @@
 import { GmailModule } from '@/modules/gmail/gmail.module';
 import { MicrosoftModule } from '@/modules/microsoft/microsoft.module';
+import { PricingPlaybookModule } from '@/modules/pricing-playbook/pricing-playbook.module';
 import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
+import { PricingPlaybookCompileFunction } from '@/modules/inngest/functions/pricing-playbook-compile.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfill.function';
@@ -28,7 +30,14 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
  * the `serve()` array just gets both flavors concatenated.
  */
 @Module({
-	imports: [GmailModule, MicrosoftModule, OpportunitiesModule, ReplyDraftsModule, NotificationsModule],
+	imports: [
+		GmailModule,
+		MicrosoftModule,
+		OpportunitiesModule,
+		ReplyDraftsModule,
+		NotificationsModule,
+		PricingPlaybookModule
+	],
 	providers: [
 		GmailBackfillFunction,
 		GmailDeltaSyncFunction,
@@ -40,7 +49,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
 		WeeklyDigestFunction,
-		AutoColdSchedulerFunction
+		AutoColdSchedulerFunction,
+		PricingPlaybookCompileFunction
 	],
 	exports: [
 		GmailBackfillFunction,
@@ -53,7 +63,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
 		WeeklyDigestFunction,
-		AutoColdSchedulerFunction
+		AutoColdSchedulerFunction,
+		PricingPlaybookCompileFunction
 	]
 })
 export class InngestModule {}

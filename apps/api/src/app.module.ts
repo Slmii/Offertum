@@ -16,6 +16,7 @@ import { LogModule } from '@/modules/logger/log.module';
 import { MeModule } from '@/modules/me/me.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
+import { PricingPlaybookModule } from '@/modules/pricing-playbook/pricing-playbook.module';
 import { PrismaModule } from '@/modules/prisma/prisma.module';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
@@ -55,6 +56,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		GmailModule,
 		MicrosoftModule,
 		OpportunitiesModule,
+		PricingPlaybookModule,
 		ReplyDraftsModule,
 		InngestModule,
 		AiModule,

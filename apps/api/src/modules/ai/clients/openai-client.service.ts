@@ -173,12 +173,17 @@ export class OpenAIClient implements AIClient {
 
 			// SDK's `APIError` exposes status + message. Default retry budget (2 retries on
 			// 429/5xx with backoff) is already exhausted by the time we land here, so this
-			// is a final failure.
+			// is a final failure. `APIConnectionError` is a sub-class with `status =
+			// undefined` and a `cause` carrying the underlying network error (ECONNRESET,
+			// ENOTFOUND, EAI_AGAIN, TLS errors, etc.) — pull it into the message so the
+			// operator can debug without re-deriving the cause from logs.
 			if (error instanceof APIError) {
+				const causeMessage = extractCauseMessage(error);
+				const detail = causeMessage ? `${error.message} (cause: ${causeMessage})` : error.message;
 				const wrapped = new AIProviderError(
-					`${provider} returned ${error.status ?? 'unknown'}: ${error.message}`,
+					`${provider} returned ${error.status ?? 'unknown'}: ${detail}`,
 					error.status ?? 0,
-					error.message
+					detail
 				);
 				await this.logger.record({
 					provider,
@@ -280,4 +285,29 @@ function findRefusal(
 		}
 	}
 	return null;
+}
+
+/**
+ * Pull the underlying cause out of an SDK error so the wrapped message includes
+ * the actual TCP/DNS/TLS error code (ECONNRESET / ENOTFOUND / EAI_AGAIN / etc.)
+ * instead of the SDK's generic "Connection error." string. The cause chain can
+ * be one or two levels deep (APIConnectionError → fetch fail → AggregateError).
+ */
+function extractCauseMessage(error: unknown): string | null {
+	if (typeof error !== 'object' || error === null) return null;
+	const cause = (error as { cause?: unknown }).cause;
+	if (cause === null || cause === undefined) return null;
+	if (cause instanceof Error) {
+		// AggregateError carries the actual underlying errors in `.errors[]`.
+		if ('errors' in cause && Array.isArray((cause as { errors: unknown[] }).errors)) {
+			const inner = (cause as { errors: unknown[] }).errors[0];
+			if (inner instanceof Error && inner.message) {
+				const code = 'code' in inner && typeof inner.code === 'string' ? `${inner.code}: ` : '';
+				return `${code}${inner.message}`;
+			}
+		}
+		const code = 'code' in cause && typeof cause.code === 'string' ? `${cause.code}: ` : '';
+		return `${code}${cause.message}`;
+	}
+	return String(cause);
 }
