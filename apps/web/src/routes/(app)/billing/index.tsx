@@ -128,8 +128,9 @@ function StatusPanel({
 						</Button>
 					}
 				>
-					Cancellation scheduled for {toReadableDate(endDate, 'D MMM YYYY')}. Resume your subscription before
-					then to keep access.
+					{state === 'trialing'
+						? `Trial ends ${toReadableDate(endDate, 'D MMM YYYY')}. You won't be charged. Resume to start your paid subscription.`
+						: `Cancellation scheduled for ${toReadableDate(endDate, 'D MMM YYYY')}. Your access stays active until then. Resume to keep your subscription.`}
 				</Alert>
 			)}
 
