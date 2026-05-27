@@ -111,7 +111,7 @@ export class ReplyDraftsService {
 		//   - sign-off: requesting user's name → mailbox user's name → org name
 		// `upsertFromOpportunity` has no requesting user (the Inngest pipeline triggers
 		// it on opp-create), so playbook = null (generic) and sign-off = mailbox user.
-		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
+		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Offertum';
 
 		const bodyText = buildRawMessageAIInput({
 			provider: opportunity.rawMessage.provider,
@@ -202,7 +202,7 @@ export class ReplyDraftsService {
 		// The customer-reply branch passes `requestingUserId = null` (no human triggered
 		// this); the owner-compose branch passes the clicking user's id.
 		const voice = requestingUserId ? await this.repository.findUserForVoice(requestingUserId) : null;
-		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
+		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Offertum';
 
 		//  bug-fix — Anchor the follow-up draft to the LATEST customer message
 		// attached to the thread (a reply that came in after our last sent draft),
@@ -312,7 +312,7 @@ export class ReplyDraftsService {
 		//  voice policy: scheduler-triggered, no requesting user. Playbook
 		// stays null → generic Dutch baseline. Sign-off uses the mailbox user's name
 		// (whoever owns the inbox this conversation lives in) → org name fallback.
-		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
+		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Offertum';
 
 		// Anchor on the originating customer message. The customer has been silent, so
 		// `latestThreadMessage` is by definition either null or our own outbound (and
@@ -391,7 +391,7 @@ export class ReplyDraftsService {
 		}
 
 		const voice = await this.repository.findUserForVoice(requestingUserId);
-		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Quoteom';
+		const organizationName = (await this.repository.findOrganizationName(opportunity.organizationId)) ?? 'Offertum';
 
 		//  bug-fix (parallel to `generateFollowupDraft`) — anchor on the LATEST
 		// customer thread message when present, falling back to the originating message

@@ -1,4 +1,4 @@
-# Quoteom — Manual Test Cases
+# Offertum — Manual Test Cases
 
 Living document. **Add a new section whenever a feature is built.** Each test case is a self-contained checklist you can walk through to verify behavior end-to-end.
 
@@ -23,7 +23,7 @@ pnpm dev                            # in this terminal — leave running
 In a second terminal, keep cookies between requests:
 
 ```bash
-COOKIES=/tmp/quoteom.cookies
+COOKIES=/tmp/offertum.cookies
 ```
 
 ---
@@ -42,9 +42,9 @@ COOKIES=/tmp/quoteom.cookies
 ### AUTH-01: Magic-link sign-in for an existing user
 
 - [ ] Visit `http://localhost:3001/api/auth/signin` in browser.
-- [ ] Enter `alice@quoteom.dev`, submit.
-- [ ] **Expect** in API console: `Magic link for alice@quoteom.dev: ...` (dev mode without `RESEND_API_KEY`).
-- [ ] **Or** with `RESEND_API_KEY` set: branded email arrives in Alice's inbox, "From: Quoteom <…>".
+- [ ] Enter `alice@offertum.dev`, submit.
+- [ ] **Expect** in API console: `Magic link for alice@offertum.dev: ...` (dev mode without `RESEND_API_KEY`).
+- [ ] **Or** with `RESEND_API_KEY` set: branded email arrives in Alice's inbox, "From: Offertum <…>".
 - [ ] Click the link.
 - [ ] **Expect** browser redirected to `http://localhost:3000/` (web app, not API root).
 - [ ] `curl -b $COOKIES http://localhost:3001/api/auth/session` returns `{ user: { id, email, name, organizationId } }`.
@@ -75,7 +75,7 @@ COOKIES=/tmp/quoteom.cookies
 - [ ] On `/sign-up`, submit `Email = "burner@mailinator.com"` (or any throwaway domain — `10minutemail.com`, `tempmail.org`, etc.).
 - [ ] **Expect** HTTP 400 from `POST /api/signup` with class-validator message `Disposable email addresses are not allowed. Please use a work email.`
 - [ ] **Expect** no `User` or `Organization` row created.
-- [ ] Real corporate email (e.g. `@quoteom.com`) passes through to the happy path (AUTH-SIGNUP-01).
+- [ ] Real corporate email (e.g. `@offertum.com`) passes through to the happy path (AUTH-SIGNUP-01).
 
 ### AUTH-SIGNUP-06: Signup is rate-limited to 5 per IP per hour
 
@@ -112,7 +112,7 @@ COOKIES=/tmp/quoteom.cookies
 
 ### AUTH-04: Session pins to `currentOrganizationId`
 
-- [ ] Sign in as `sander@quoteom.dev` (member of both Acme and Bouw).
+- [ ] Sign in as `sander@offertum.dev` (member of both Acme and Bouw).
 - [ ] **Expect** `user.organizationId` in session === Acme's id (`…001`, his pinned current org).
 - [ ] (Future: a "switch org" mutation will let him flip to Bouw without re-auth.)
 
@@ -138,7 +138,7 @@ COOKIES=/tmp/quoteom.cookies
 
 ### INV-03: Accept an invitation (existing user gains second membership)
 
-- [ ] Mint invite for `bart@quoteom.dev` (Bouw owner) into Acme.
+- [ ] Mint invite for `bart@offertum.dev` (Bouw owner) into Acme.
 - [ ] Accept it via curl.
 - [ ] **Expect** Bart's `currentOrganizationId` stays at Bouw (`…002`) — existing pin is not overwritten.
 - [ ] Bart now has **two** Membership rows: original `OWNER` of Bouw + new `MEMBER` of Acme.
@@ -244,10 +244,10 @@ COOKIES=/tmp/quoteom.cookies
 
 ### TEN-01: Tenant-scoped endpoint returns only the active org's data
 
-- [ ] Sign in as `alice@quoteom.dev` (Acme).
+- [ ] Sign in as `alice@offertum.dev` (Acme).
 - [ ] `curl -b $COOKIES http://localhost:3001/api/me/memberships`
 - [ ] **Expect** response contains only memberships where `organizationId === …001` (Acme).
-- [ ] Sign out, sign in as `bart@quoteom.dev` (Bouw).
+- [ ] Sign out, sign in as `bart@offertum.dev` (Bouw).
 - [ ] Repeat the curl.
 - [ ] **Expect** response contains only memberships where `organizationId === …002` (Bouw). No overlap with Alice's response.
 
@@ -315,7 +315,7 @@ COOKIES=/tmp/quoteom.cookies
 - [ ] With `RESEND_API_KEY` set + `RESEND_EMAIL_FROM` pointing at a verified domain (or `onboarding@resend.dev`).
 - [ ] Trigger AUTH-01.
 - [ ] In the recipient inbox:
-    - [ ] From header reads `Quoteom <…>`.
+    - [ ] From header reads `Offertum <…>`.
     - [ ] Subject: `Sign in to <host>`.
     - [ ] HTML body: off-white background, slate "Sign in" button, amber link below.
     - [ ] Falling back to plain-text view shows readable plain-text copy.
@@ -324,7 +324,7 @@ COOKIES=/tmp/quoteom.cookies
 
 - [ ] Trigger INV-01 with `RESEND_API_KEY` set.
 - [ ] In the recipient inbox:
-    - [ ] Subject: `Invitation: <Organization> on Quoteom`.
+    - [ ] Subject: `Invitation: <Organization> on Offertum`.
     - [ ] HTML body: heading `Welcome to <Organization>`, "Accept invitation" CTA.
 
 ### MAIL-03: Dev fallback (no API key)
@@ -356,19 +356,19 @@ Pre-requisite: API running (`cd apps/api && pnpm dev`) AND web running (`cd apps
 ### WEB-01: Anonymous home page
 
 - [ ] Open `http://localhost:3000/` in a fresh browser / incognito.
-- [ ] **Expect** "Quoteom" heading + "You're not signed in" + an "Sign in" button.
+- [ ] **Expect** "Offertum" heading + "You're not signed in" + an "Sign in" button.
 - [ ] Click "Sign in".
 - [ ] **Expect** navigation to `/sign-in`.
 
 ### WEB-02: Sign-in form — happy path
 
-- [ ] On `/sign-in`, enter `alice@quoteom.dev`.
+- [ ] On `/sign-in`, enter `alice@offertum.dev`.
 - [ ] Click "Send magic link".
-- [ ] **Expect** browser navigates to `/verify-request?email=alice@quoteom.dev`.
+- [ ] **Expect** browser navigates to `/verify-request?email=alice@offertum.dev`.
 - [ ] **Expect** "Check your inbox" page shows Alice's email address.
 - [ ] In the API console (dev) or Alice's inbox (prod): the magic link.
 - [ ] Click the magic link.
-- [ ] **Expect** redirect back to `http://localhost:3000/` showing "Signed in as alice@quoteom.dev" + the active org ID + an "Sign out" button.
+- [ ] **Expect** redirect back to `http://localhost:3000/` showing "Signed in as alice@offertum.dev" + the active org ID + an "Sign out" button.
 
 ### WEB-03: Sign-in form — validation
 
@@ -419,7 +419,7 @@ Pre-requisite: API running (`cd apps/api && pnpm dev`) AND web running (`cd apps
 > 1. Stripe CLI logged in: `stripe login`.
 > 2. Local webhook forwarding running in a separate terminal: `stripe listen --forward-to localhost:3001/api/billing/webhook`.
 > 3. Copy the `whsec_…` printed by `stripe listen` into `apps/api/.env` as `STRIPE_WEBHOOK_SECRET` and restart the API.
-> 4. `STRIPE_SECRET_KEY` set to a **test mode** key; `STRIPE_PRICE_ID` set to a recurring EUR price (lookup_key `quoteom_monthly_eur`).
+> 4. `STRIPE_SECRET_KEY` set to a **test mode** key; `STRIPE_PRICE_ID` set to a recurring EUR price (lookup_key `offertum_monthly_eur`).
 > 5. In the Stripe Dashboard's Customer Portal settings, enable: update payment method, cancel subscription, view invoices.
 
 ### BILLING-01: Happy path — subscribe with `4242 4242 4242 4242`
@@ -718,8 +718,8 @@ Setup once: in Google Cloud Console, register an OAuth client with TWO authorize
 ### EMAIL-10: Self-heal when user revokes app at Google (cached token already expired)
 
 - [ ] Connect Gmail (EMAIL-01). Confirm a fresh `EmailAccount` row + 10 messages render.
-- [ ] In a separate browser tab visit https://myaccount.google.com/permissions → find the Quoteom app → **Remove access**.
-- [ ] In Quoteom, force the access token to look expired: `UPDATE "EmailAccount" SET "accessTokenExpiresAt" = NOW() - INTERVAL '5 minutes';`
+- [ ] In a separate browser tab visit https://myaccount.google.com/permissions → find the Offertum app → **Remove access**.
+- [ ] In Offertum, force the access token to look expired: `UPDATE "EmailAccount" SET "accessTokenExpiresAt" = NOW() - INTERVAL '5 minutes';`
 - [ ] Refresh `/settings/email`.
 - [ ] **Expect**: chip flips to **Not connected** + Connect CTA reappears. The `EmailAccount` row is gone (`SELECT count(*) FROM "EmailAccount";` returns 0). Cascade also cleared any `RawMessage` rows for that account.
 - [ ] **Expect** in API logs: one `WARN` line containing `refresh token rejected by Google — deleting row for org ...`, no `ERROR` lines.
@@ -735,8 +735,8 @@ Setup once: in Google Cloud Console, register an OAuth client with TWO authorize
 - [ ] Terminal A: `pnpm dev` (API up).
 - [ ] Terminal B: `npx inngest-cli@latest dev` → prints "Inngest dev server is up" at `http://localhost:8288`.
 - [ ] In the dev UI **Functions** tab: `hello` and `heartbeat` both visible. CLI auto-discovered them via `/api/inngest`.
-- [ ] In the dev UI: **New event** → name `test/hello` → data `{"name": "Quoteom"}` → **Send**.
-- [ ] **Expect** **Runs** tab: one run, status **Completed**, output `{"greeting": "Hello, Quoteom!"}`. API logs include `[InngestFn:hello] hello fn fired: Hello, Quoteom!`.
+- [ ] In the dev UI: **New event** → name `test/hello` → data `{"name": "Offertum"}` → **Send**.
+- [ ] **Expect** **Runs** tab: one run, status **Completed**, output `{"greeting": "Hello, Offertum!"}`. API logs include `[InngestFn:hello] hello fn fired: Hello, Offertum!`.
 - [ ] Invoke the same event from the API by calling `inngest.send(...)` from a controller (deferred — happens naturally once W3.4 triggers backfill jobs).
 
 ### INNGEST-03: Scheduled function fires on cron + can be force-invoked
@@ -831,7 +831,7 @@ The scenario: a user signs in with a work Microsoft account whose tenant admin h
     - **Manual URL**: hit `http://localhost:3001/api/email/microsoft/callback?error=access_denied&error_description=AADSTS90094%3A+The+grant+requires+admin+permission` while signed in with a valid session.
     - **Real tenant**: if you have access to an org's Entra portal, set Enterprise applications → Consent and permissions → User consent settings to **"Do not allow user consent"**, then try connecting from a member account.
 - [ ] **Expect** browser lands on `/settings/email?error=microsoft_admin_consent_required&adminConsentUrl=https%3A%2F%2Flogin.microsoftonline.com%2Fcommon%2Fadminconsent%3F…`.
-- [ ] **Expect** UI: yellow warning Alert with copy "Your IT admin needs to approve Quoteom for your organization", the admin-consent URL displayed in a monospace box, and a **Copy link** button that flips to "Copied!" for ~2.5 s after click.
+- [ ] **Expect** UI: yellow warning Alert with copy "Your IT admin needs to approve Offertum for your organization", the admin-consent URL displayed in a monospace box, and a **Copy link** button that flips to "Copied!" for ~2.5 s after click.
 - [ ] **Expect** the URL points at `https://login.microsoftonline.com/common/adminconsent` with `client_id` matching `MICROSOFT_CLIENT_ID` and `redirect_uri` matching the configured callback.
 - [ ] Negative case: `?error=access_denied&error_description=AADSTS70008%3A+expired+token` (unrelated code) should fall through to the existing generic error Alert ("The provider returned an error: access_denied"), NOT render the admin-consent CTA.
 - [ ] Negative case: `?error=access_denied` with NO `error_description` should also fall through to the generic error Alert.
@@ -868,8 +868,8 @@ The scenario EMAIL-10 misses: the user revokes our app within the access-token's
 
 The W3.5 staged execution plan (`~/.claude/plans/toasty-herding-giraffe.md`) splits W3.5 into pure-code (Phase A+B, no GCP) and tunnel-smoke (Phase C). This entry covers the Phase A+B unit + integration story.
 
-- [ ] `pnpm --filter @quoteom/api exec jest src/modules/gmail/gmail-delta-sync.service.spec.ts` — 8 tests pass (not-found, orphaned, no-cursor, single page, dedup, idempotency, history-expired recovery, empty delta).
-- [ ] `pnpm --filter @quoteom/api exec jest src/lib/oauth/pubsub-jwt-verifier.spec.ts` — 12 tests pass (happy path + 11 rejection paths including tampered signature, expired, wrong issuer, wrong audience, wrong service-account email, email_verified false, unsupported alg, unknown kid, malformed forms).
+- [ ] `pnpm --filter @offertum/api exec jest src/modules/gmail/gmail-delta-sync.service.spec.ts` — 8 tests pass (not-found, orphaned, no-cursor, single page, dedup, idempotency, history-expired recovery, empty delta).
+- [ ] `pnpm --filter @offertum/api exec jest src/lib/oauth/pubsub-jwt-verifier.spec.ts` — 12 tests pass (happy path + 11 rejection paths including tampered signature, expired, wrong issuer, wrong audience, wrong service-account email, email_verified false, unsupported alg, unknown kid, malformed forms).
 
 ### EMAIL-PUSH-02: GOOGLE_PUBSUB_TOPIC unset → watch start is a structured no-op
 
@@ -899,7 +899,7 @@ The W3.5 staged execution plan (`~/.claude/plans/toasty-herding-giraffe.md`) spl
 
 The ngrok-based smoke story. **First passed on 2026-05-14.** Setup steps (run once per dev machine):
 
-1. **Create Pub/Sub topic** `projects/<your-project>/topics/quoteom-gmail-dev` in GCP.
+1. **Create Pub/Sub topic** `projects/<your-project>/topics/offertum-gmail-dev` in GCP.
 2. **Grant `gmail-api-push@system.gserviceaccount.com`** the `roles/pubsub.publisher` role on the topic (Permissions tab on the topic). Most common 403 source if missed.
 3. **Create a service account** (IAM & Admin → Service Accounts) with the role `roles/iam.serviceAccountTokenCreator`. This is the account Pub/Sub impersonates to sign JWTs.
 4. **Register a push subscription** pointing at `https://<your-ngrok-domain>/api/email/gmail/webhook`:
@@ -912,14 +912,14 @@ The ngrok-based smoke story. **First passed on 2026-05-14.** Setup steps (run on
     - `https://<your-ngrok-domain>/api/auth/callback/google`
 6. **Env vars** in `apps/api/.env`:
     ```
-    GOOGLE_PUBSUB_TOPIC=projects/<your-project>/topics/quoteom-gmail-dev
+    GOOGLE_PUBSUB_TOPIC=projects/<your-project>/topics/offertum-gmail-dev
     GOOGLE_PUBSUB_AUDIENCE=https://<your-ngrok-domain>/api/email/gmail/webhook
     GOOGLE_PUBSUB_SERVICE_ACCOUNT=<exact email from step 3>
     WEB_ORIGIN=https://<your-ngrok-domain>      # temporary — set back to localhost after smoke
     ```
     **Also: UNSET `AUTH_URL`** if it's currently set to a localhost value (see gotcha table below). With `trustHost: true`, Auth.js will pick up the ngrok host from request headers.
 7. **Add ngrok host to `apps/web/vite.config.ts`** under `server.allowedHosts` — already done in the codebase (`.ngrok-free.dev` wildcard covers it).
-8. **Start everything:** `pnpm dev` + `pnpm --filter @quoteom/api inngest` + `ngrok http 3000 --domain=<your-reserved-domain>`.
+8. **Start everything:** `pnpm dev` + `pnpm --filter @offertum/api inngest` + `ngrok http 3000 --domain=<your-reserved-domain>`.
 
 Smoke steps:
 
@@ -1397,7 +1397,7 @@ Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` his
 
 ### OPP-FOLLOWUP-01: Customer reply auto-attaches to existing opp
 
-- [ ] From your test sender (a NOT-connected mailbox), reply to a Quoteom-sent thread.
+- [ ] From your test sender (a NOT-connected mailbox), reply to a Offertum-sent thread.
 - [ ] Within ≤5s of the provider push: `db:studio` → no new `Opportunity` row; the original opp's status flipped back to `NEW`; new `RawMessage` row with `opportunityId = <original opp>` + `isQuoteRequest = true`.
 - [ ] Inngest UI shows a `reply-draft-generate` run triggered by `opportunity/followup.received` → new `ReplyDraft` row created for the same opp.
 - [ ] Open the opp detail → editor now shows the freshly-generated follow-up draft. Prior SENT draft is in "Vorige conceptenversies (1)" history.
@@ -1423,7 +1423,7 @@ Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` his
 
 ### PIPELINE-SELFMAIL-01: Self-email filter blocks org-own outbound
 
-- [ ] Connect both Gmail and Outlook in the same org. Manually send (or use the Quoteom send path) from one to the other.
+- [ ] Connect both Gmail and Outlook in the same org. Manually send (or use the Offertum send path) from one to the other.
 - [ ] **Expect** the inbound copy on the receiving side does NOT create an opportunity. `Log` action `opportunity.pipeline.self_email_skipped` is present with the `fromEmail` matching your own connected address.
 - [ ] `db:studio` → `RawMessage.classifiedAt` is set; `isQuoteRequest = false`.
 

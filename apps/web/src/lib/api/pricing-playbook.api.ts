@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { PricingPlaybook, PricingRule } from '@quoteom/shared';
+import type { PricingPlaybook, PricingRule } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 interface PricingRulesResponse {

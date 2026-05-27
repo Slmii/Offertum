@@ -1,6 +1,6 @@
 import { getGmailStatusServer, getMicrosoftStatusServer } from '@/lib/api/email.api';
 import { api } from '@/lib/api/client';
-import type { OkResponse } from '@quoteom/shared';
+import type { OkResponse } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const EmailKeys = {

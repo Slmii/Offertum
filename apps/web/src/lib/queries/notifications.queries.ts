@@ -1,6 +1,6 @@
 import { api } from '@/lib/api/client';
 import { getNotificationPreferencesServer, listNotificationsServer } from '@/lib/api/notifications.api';
-import type { NotificationPreferencesResponse, UpdateNotificationPreferencesInput } from '@quoteom/shared';
+import type { NotificationPreferencesResponse, UpdateNotificationPreferencesInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const NotificationsKeys = {

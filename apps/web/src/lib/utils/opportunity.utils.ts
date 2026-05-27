@@ -1,4 +1,4 @@
-import type { Opportunity, OpportunityDismissReason, OpportunityStatus, OpportunityUrgency } from '@quoteom/shared';
+import type { Opportunity, OpportunityDismissReason, OpportunityStatus, OpportunityUrgency } from '@offertum/shared';
 
 /**
  * Display constants + small helpers for opportunity rows. Centralized so the upcoming

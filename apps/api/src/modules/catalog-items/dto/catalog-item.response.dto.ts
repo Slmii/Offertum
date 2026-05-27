@@ -1,4 +1,4 @@
-import type { CatalogItem, CatalogItemUnit } from '@quoteom/shared';
+import type { CatalogItem, CatalogItemUnit } from '@offertum/shared';
 
 export class CatalogItemResponseDto implements CatalogItem {
 	id!: string;

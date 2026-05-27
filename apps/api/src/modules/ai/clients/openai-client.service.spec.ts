@@ -181,7 +181,7 @@ describe('OpenAIClient.generate (Responses API)', () => {
 		const client = new OpenAIClient(
 			makeConfig({
 				OPENAI_API_KEY: 'shared',
-				AZURE_OPENAI_ENDPOINT: 'https://quoteom.openai.azure.com',
+				AZURE_OPENAI_ENDPOINT: 'https://offertum.openai.azure.com',
 				AZURE_OPENAI_API_KEY: 'azure-key',
 				AZURE_OPENAI_API_VERSION: '2025-03-01-preview'
 			}),

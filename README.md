@@ -1,4 +1,4 @@
-# Quoteom
+# Offertum
 
 AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote requests, drafts replies in the owner's tone, generates quote PDFs, and tracks deadlines and expiry dates so nothing goes cold.
 
@@ -94,7 +94,7 @@ Prerequisites: a DigitalOcean account and `doctl` CLI installed + authenticated.
 
     Note the printed `App ID` — you'll need it for updates.
 
-3. **Set secrets in the Dashboard** (Apps → quoteom → Settings → App-Level Environment Variables). These can't be in the spec because they're secret values:
+3. **Set secrets in the Dashboard** (Apps → offertum → Settings → App-Level Environment Variables). These can't be in the spec because they're secret values:
     - `AUTH_SECRET` — generate with `openssl rand -base64 32`
     - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
     - `RESEND_API_KEY`
@@ -123,7 +123,7 @@ App Platform keeps the last several builds. To roll back:
 
 **Via Dashboard** (fastest):
 
-1. Apps → quoteom → Activity tab → find the last good deployment → click → **Rollback to this deployment**.
+1. Apps → offertum → Activity tab → find the last good deployment → click → **Rollback to this deployment**.
 
 **Via CLI:**
 

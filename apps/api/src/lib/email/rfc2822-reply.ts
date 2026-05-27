@@ -11,7 +11,7 @@
  * array on its message object — see `microsoft-graph-api.service.ts`.
  *
  * Encoding choices:
- *  - UTF-8 throughout (Quoteom's customers write in Dutch, names contain accents).
+ *  - UTF-8 throughout (Offertum's customers write in Dutch, names contain accents).
  *  - `Content-Transfer-Encoding: quoted-printable` would be more "correct" for arbitrary
  *    text but adds complexity for tiny wins; sticking with `8bit` is fine within Gmail's
  *    own outbound pipeline (it re-encodes for SMTP itself if the receiving server is
@@ -97,7 +97,7 @@ export function buildRfc2822Reply(input: BuildRfc2822ReplyInput): string {
 	// arbitrary attachment bytes is statistically impossible (16 random bytes ≈ 128
 	// bits of entropy). RFC 2046 forbids the boundary string from appearing anywhere
 	// in the parts.
-	const boundary = `=_quoteom_${randomBoundary()}`;
+	const boundary = `=_offertum_${randomBoundary()}`;
 	headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
 
 	const parts: string[] = [];

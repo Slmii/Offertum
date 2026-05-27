@@ -55,7 +55,7 @@ import {
 	type OpportunityUrgency,
 	type ReplyDraft,
 	type ReplyDraftAttachment
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -1266,7 +1266,7 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 							label='Afsluiter — geen concept'
 							color='default'
 							variant='outlined'
-							title='Quoteom herkende dit bericht als een afronding. Klik "Concept-vervolg opstellen" als je toch wilt antwoorden.'
+							title='Offertum herkende dit bericht als een afronding. Klik "Concept-vervolg opstellen" als je toch wilt antwoorden.'
 						/>
 					)}
 				</Stack>

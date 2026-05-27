@@ -12,7 +12,7 @@ import IconButton from '@mui/material/IconButton';
 import Popover from '@mui/material/Popover';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { AppNotification } from '@quoteom/shared';
+import type { AppNotification } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';

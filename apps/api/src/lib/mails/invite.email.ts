@@ -8,10 +8,10 @@ interface InviteEmail {
 
 export function buildInviteEmail(input: { url: string; organizationName: string }): InviteEmail {
 	const { url, organizationName } = input;
-	const subject = `Invitation: ${organizationName} on Quoteom`;
+	const subject = `Invitation: ${organizationName} on Offertum`;
 
 	const text = dedent`
-		You've been invited to join ${organizationName} on Quoteom.
+		You've been invited to join ${organizationName} on Offertum.
 
 		Accept your invitation via this link:
 
@@ -39,7 +39,7 @@ export function buildInviteEmail(input: { url: string; organizationName: string 
 											Welcome to ${organizationName}
 										</h1>
 										<p style="margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #475569;">
-											You've been invited to join <strong>${organizationName}</strong> on Quoteom. Click the button below to accept your invitation.
+											You've been invited to join <strong>${organizationName}</strong> on Offertum. Click the button below to accept your invitation.
 										</p>
 										<table role="presentation" cellpadding="0" cellspacing="0" border="0">
 											<tr>
@@ -62,7 +62,7 @@ export function buildInviteEmail(input: { url: string; organizationName: string 
 								</tr>
 							</table>
 							<p style="margin: 24px 0 0; font-size: 12px; line-height: 1.4; color: #94a3b8;">
-								Quoteom &middot; quote management for SMBs
+								Offertum &middot; quote management for SMBs
 							</p>
 						</td>
 					</tr>

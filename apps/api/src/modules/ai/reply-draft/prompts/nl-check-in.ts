@@ -8,7 +8,7 @@ import dedent from 'dedent';
  * different intent: we already replied to this customer some time ago and they've gone
  * silent. The draft should be a short, polite nudge — not a re-quote, not a re-pitch.
  *
- * Tone rules (mirrors the brand voice in `quoteom-design-system/README.md`):
+ * Tone rules (mirrors the brand voice in `offertum-design-system/README.md`):
  *  - Direct, practical. Plain present tense. No marketing colour.
  *  - You / je. Never marketing-"we".
  *  - No emoji, no exclamation marks (the brand earns trust through absence of noise).

@@ -98,7 +98,7 @@ function makeApi(opts: { pages: ReadonlyArray<ReadonlyArray<MessageStub>>; histo
 
 	const getProfile = jest.fn().mockReturnValue(
 		Promise.resolve({
-			emailAddress: 'alice@quoteom.dev',
+			emailAddress: 'alice@offertum.dev',
 			messagesTotal: allMessages.length,
 			threadsTotal: allMessages.length,
 			historyId: opts.historyId ?? 'history-final'
@@ -116,7 +116,7 @@ const SCOPE_ROW = {
 	id: 'ea-1',
 	organizationId: 'org-1',
 	userId: 'user-1',
-	email: 'alice@quoteom.dev',
+	email: 'alice@offertum.dev',
 	provider: EmailProvider.GMAIL
 };
 

@@ -32,7 +32,7 @@ export const MICROSOFT_OAUTH_SCOPES = [
  *   - `consumers`    — personal Microsoft accounts only (outlook.com, hotmail.com)
  *   - `organizations` — work/school accounts only
  *   - `<tenant-uuid>` — a specific Entra tenant
- * For Quoteom's SMB target audience, `common` is right — Dutch SMB owners have a mix
+ * For Offertum's SMB target audience, `common` is right — Dutch SMB owners have a mix
  * of personal Outlook + work Microsoft 365 accounts.
  */
 export const MICROSOFT_OAUTH_AUTHORIZE_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize';

@@ -35,7 +35,7 @@ function makeService(
 	const repository = {
 		reValidateCheckInCandidate: jest.fn().mockReturnValue(Promise.resolve(null)),
 		findOpportunityForGeneration: jest.fn().mockReturnValue(Promise.resolve(null)),
-		findOrganizationName: jest.fn().mockReturnValue(Promise.resolve('Quoteom')),
+		findOrganizationName: jest.fn().mockReturnValue(Promise.resolve('Offertum')),
 		createFollowup: jest.fn().mockReturnValue(Promise.resolve({ draftId: 'draft-x' })),
 		...overrides.repository
 	} as unknown as FakeRepository;

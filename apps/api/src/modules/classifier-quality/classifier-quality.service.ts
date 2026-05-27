@@ -13,7 +13,7 @@ import type {
 	ClassifierQualitySummary,
 	DismissReasonCounts,
 	OpportunityDismissReason as WireDismissReason
-} from '@quoteom/shared';
+} from '@offertum/shared';
 
 const RECENT_DISMISSALS_LIMIT = 5;
 const UNKNOWN = 'unknown';

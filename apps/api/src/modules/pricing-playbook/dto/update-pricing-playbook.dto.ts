@@ -1,4 +1,4 @@
-import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH, type UpdatePricingPlaybookInput } from '@quoteom/shared';
+import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH, type UpdatePricingPlaybookInput } from '@offertum/shared';
 import { IsString, MaxLength } from 'class-validator';
 
 /**

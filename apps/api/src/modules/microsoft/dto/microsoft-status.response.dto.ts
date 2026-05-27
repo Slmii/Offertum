@@ -1,4 +1,4 @@
-import type { MailboxStatus } from '@quoteom/shared';
+import type { MailboxStatus } from '@offertum/shared';
 
 export class MicrosoftStatusResponseDto implements MailboxStatus {
 	connected!: boolean;

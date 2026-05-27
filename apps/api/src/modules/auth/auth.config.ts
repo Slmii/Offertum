@@ -24,7 +24,7 @@ const authPrisma = new PrismaClient({
 const WEB_ORIGIN = `${process.env.WEB_ORIGIN}`;
 
 // Block Auth.js from auto-creating users. Sign-in is for already-provisioned accounts only;
-// new users must arrive via an Invitation (created by Quoteom admin).
+// new users must arrive via an Invitation (created by Offertum admin).
 const baseAdapter = PrismaAdapter(authPrisma as never);
 const adapter = withEncryptedAccountTokens({
 	...baseAdapter,
@@ -120,7 +120,7 @@ export const authConfig: ExpressAuthConfig = {
 		// is verified. Without this, a Microsoft Entra work-tenant admin (who can edit the
 		// user's `email` claim) could re-point an existing email at a different user — and
 		// because `allowDangerousEmailAccountLinking: true` auto-links by email, that would
-		// hand them access to the matching Quoteom User row.
+		// hand them access to the matching Offertum User row.
 		//
 		// The check only runs for OAuth providers (account.type === 'oauth' | 'oidc');
 		// magic-link sign-ins skip it because Resend deliver-to-inbox proves possession

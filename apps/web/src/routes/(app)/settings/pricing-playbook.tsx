@@ -31,7 +31,7 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH, type PricingRule, type PricingRuleType } from '@quoteom/shared';
+import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH, type PricingRule, type PricingRuleType } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -129,7 +129,7 @@ function PricingPlaybookSettingsPage() {
 					Prijsregels
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 640 }}>
-					Beschrijf hoe je je prijzen bepaalt — in je eigen woorden, geen vaste vorm. Quoteom leest je tekst
+					Beschrijf hoe je je prijzen bepaalt — in je eigen woorden, geen vaste vorm. Offertum leest je tekst
 					en vertaalt 'm naar regels die je offertes automatisch invullen. De voorbeelden hieronder helpen je
 					op weg.
 				</Typography>
@@ -154,7 +154,7 @@ function PricingPlaybookSettingsPage() {
 						<Stack spacing={4}>
 							<Alert severity='info' variant='outlined' sx={{ alignItems: 'flex-start' }}>
 								<strong>Tip:</strong> schrijf elke prijsregel op een eigen regel of in een eigen zin.
-								Eén uitspraak per regel maakt het makkelijker voor Quoteom om je tekst correct te
+								Eén uitspraak per regel maakt het makkelijker voor Offertum om je tekst correct te
 								vertalen naar losse regels.{' '}
 								<em>Bijv. "€ 85/uur voor loodgieterswerk en € 95 voor elektra"</em> werkt — maar twee
 								aparte regels geven beter resultaat.
@@ -264,7 +264,7 @@ function CompiledRulesPanel() {
 					Regels
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary' }}>
-					Nog geen regels. Sla je tekst hierboven op — Quoteom maakt de regels in de achtergrond.
+					Nog geen regels. Sla je tekst hierboven op — Offertum maakt de regels in de achtergrond.
 				</Typography>
 			</Box>
 		);

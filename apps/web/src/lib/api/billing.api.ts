@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { BillingStatus } from '@quoteom/shared';
+import type { BillingStatus } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**

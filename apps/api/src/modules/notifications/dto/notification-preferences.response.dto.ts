@@ -3,7 +3,7 @@ import type {
 	NotificationEventType,
 	NotificationPreference,
 	NotificationPreferencesResponse
-} from '@quoteom/shared';
+} from '@offertum/shared';
 
 export class NotificationPreferenceDto implements NotificationPreference {
 	eventType!: NotificationEventType;

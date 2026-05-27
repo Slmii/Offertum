@@ -62,7 +62,7 @@ describe('MeService.removeMember', () => {
 	const memberTarget: TargetRow = {
 		id: 'm-1',
 		role: MembershipRole.MEMBER,
-		user: { id: TARGET_ID, email: 'member@quoteom.dev', currentOrganizationId: ORG }
+		user: { id: TARGET_ID, email: 'member@offertum.dev', currentOrganizationId: ORG }
 	};
 
 	it('rejects removing yourself', async () => {
@@ -119,7 +119,7 @@ describe('MeService.removeMember', () => {
 				metadata: expect.objectContaining({
 					organizationId: ORG,
 					removedUserId: TARGET_ID,
-					removedEmail: 'member@quoteom.dev',
+					removedEmail: 'member@offertum.dev',
 					removedRole: MembershipRole.MEMBER,
 					removedBy: OWNER_ID
 				})

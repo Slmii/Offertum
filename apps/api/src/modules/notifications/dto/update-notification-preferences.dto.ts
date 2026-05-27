@@ -4,7 +4,7 @@ import {
 	type NotificationChannel,
 	type NotificationEventType,
 	type UpdateNotificationPreferencesInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, ValidateNested } from 'class-validator';
 

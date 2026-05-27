@@ -270,7 +270,7 @@ export class MicrosoftSubscriptionService {
 		// Orphan-rescue window: any Microsoft EmailAccount created within the last 7 days
 		// that doesn't have a subscriptionId is presumed to have failed the post-backfill
 		// `start-subscription` step. Older rows without a subscriptionId are assumed to be
-		// permanently disconnected (user removed Quoteom from their account, or similar)
+		// permanently disconnected (user removed Offertum from their account, or similar)
 		// and we don't want to repeatedly re-register subscriptions for those.
 		const orphanCutoff = new Date(Date.now() - daysToMs(7));
 		const candidates = await this.prisma.emailAccount.findMany({

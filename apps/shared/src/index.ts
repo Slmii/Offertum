@@ -1,5 +1,5 @@
 /**
- * `@quoteom/shared` — types that cross the API ↔ web boundary.
+ * `@offertum/shared` — types that cross the API ↔ web boundary.
  *
  * All shapes here describe data ON THE WIRE (JSON). Where the API stores `Date` objects
  * server-side, the wire format is always an ISO string — so `createdAt`, `expiresAt`,

@@ -1,4 +1,4 @@
-import type { SignupInput } from '@quoteom/shared';
+import type { SignupInput } from '@offertum/shared';
 import { IsNotDisposableEmail } from '@/lib/validators/is-not-disposable-email.validator';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 

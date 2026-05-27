@@ -1,6 +1,6 @@
 import { getBillingStatusServer } from '@/lib/api/billing.api';
 import { api } from '@/lib/api/client';
-import type { BillingSyncResponse, CheckoutSessionResponse, PortalSessionResponse } from '@quoteom/shared';
+import type { BillingSyncResponse, CheckoutSessionResponse, PortalSessionResponse } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const BillingKeys = {

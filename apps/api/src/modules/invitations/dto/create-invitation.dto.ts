@@ -1,4 +1,4 @@
-import type { CreateInvitationInput } from '@quoteom/shared';
+import type { CreateInvitationInput } from '@offertum/shared';
 import { MembershipRole } from '@/generated/prisma/client';
 import { OWNER_ROLE_NOT_INVITABLE } from '@/lib/errors';
 import { IsEmail, IsEnum, IsIn, IsOptional } from 'class-validator';

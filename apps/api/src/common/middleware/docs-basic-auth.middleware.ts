@@ -49,7 +49,7 @@ export function buildDocsBasicAuthMiddleware(credentials: {
 			}
 		}
 
-		response.setHeader('WWW-Authenticate', 'Basic realm="Quoteom API docs", charset="UTF-8"');
+		response.setHeader('WWW-Authenticate', 'Basic realm="Offertum API docs", charset="UTF-8"');
 		response.status(401).type('text/plain').send('Authentication required.');
 	};
 }

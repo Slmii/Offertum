@@ -1,5 +1,5 @@
 import { api } from '@/lib/api/client';
-import type { AcceptInvitationResponse } from '@quoteom/shared';
+import type { AcceptInvitationResponse } from '@offertum/shared';
 import { useMutation } from '@tanstack/react-query';
 
 export const useAcceptInvitation = () => {

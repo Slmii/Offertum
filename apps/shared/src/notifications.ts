@@ -43,7 +43,7 @@ export const NOTIFICATION_LIST_LIMIT = 25;
 
 // Events for which the email channel is exposed at all. Per-event transactional
 // emails (`opportunity_created`, `customer_reply`) were dropped because the customer's
-// own email already lands in the user's inbox — a Quoteom-branded notification on top
+// own email already lands in the user's inbox — a Offertum-branded notification on top
 // is pure noise. Weekly digest + auto-cold stay because they carry info the inbox
 // can't derive (aggregate state for digest, system-driven status change for auto-cold).
 // The settings UI only renders email toggles for events in this set; the service

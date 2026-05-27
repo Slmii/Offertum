@@ -1,4 +1,4 @@
-import type { ReplyDraftStatus } from '@quoteom/shared';
+import type { ReplyDraftStatus } from '@offertum/shared';
 
 /**
  * Web mirror of the API helper in

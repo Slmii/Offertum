@@ -261,7 +261,7 @@ export class OpenAIClient implements AIClient {
 	 * telemetry). Use the purpose tag, sanitized. Must be ≤64 chars and match `[a-zA-Z0-9_-]+`.
 	 */
 	private schemaNameFor(purpose: string): string {
-		return purpose.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'quoteom_output';
+		return purpose.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'offertum_output';
 	}
 }
 

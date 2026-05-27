@@ -1,8 +1,8 @@
-import type { Opportunity, OpportunityDismissReason, OpportunityStatus, OpportunityUrgency } from '@quoteom/shared';
+import type { Opportunity, OpportunityDismissReason, OpportunityStatus, OpportunityUrgency } from '@offertum/shared';
 
 /**
  * Date fields are `Date` on the service side, but this DTO intentionally exposes ISO
- * strings because `@quoteom/shared` describes the wire format the web app receives.
+ * strings because `@offertum/shared` describes the wire format the web app receives.
  */
 export class OpportunityResponseDto implements Opportunity {
 	id!: string;

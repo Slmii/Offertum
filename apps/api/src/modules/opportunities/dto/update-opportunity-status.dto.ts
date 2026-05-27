@@ -1,4 +1,4 @@
-import { OPPORTUNITY_STATUSES, type UpdateOpportunityStatusInput } from '@quoteom/shared';
+import { OPPORTUNITY_STATUSES, type UpdateOpportunityStatusInput } from '@offertum/shared';
 import { IsIn } from 'class-validator';
 
 export class UpdateOpportunityStatusDto implements UpdateOpportunityStatusInput {

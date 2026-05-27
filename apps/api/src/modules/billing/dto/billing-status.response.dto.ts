@@ -1,4 +1,4 @@
-import type { BillingSeats, BillingState, BillingStatus } from '@quoteom/shared';
+import type { BillingSeats, BillingState, BillingStatus } from '@offertum/shared';
 
 export class BillingSeatsDto implements BillingSeats {
 	/** Active memberships on the org right now. */

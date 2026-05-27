@@ -1,4 +1,4 @@
-import type { AppNotification, NotificationEventType } from '@quoteom/shared';
+import type { AppNotification, NotificationEventType } from '@offertum/shared';
 
 export class NotificationResponseDto implements AppNotification {
 	id!: string;

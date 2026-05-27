@@ -146,7 +146,7 @@ async function bootstrap() {
 	app.useGlobalFilters(new AllExceptionsFilter());
 
 	const swaggerConfig = new DocumentBuilder()
-		.setTitle('Quoteom API')
+		.setTitle('Offertum API')
 		.setDescription('Quote management')
 		.setVersion('0.0.0')
 		.addBearerAuth()

@@ -1,4 +1,4 @@
-import { NOTIFICATION_CHANNELS, NOTIFICATION_EVENT_TYPES, isEmailChannelAvailable } from '@quoteom/shared';
+import { NOTIFICATION_CHANNELS, NOTIFICATION_EVENT_TYPES, isEmailChannelAvailable } from '@offertum/shared';
 import z from 'zod';
 
 // The settings form is a per-(eventType × channel) `enabled` boolean grid. Stored as

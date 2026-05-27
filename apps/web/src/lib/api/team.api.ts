@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { Invitation, Membership } from '@quoteom/shared';
+import type { Invitation, Membership } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /** GET /api/me/memberships — active members of the user's current org. */

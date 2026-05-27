@@ -1,5 +1,5 @@
 import type { AIUsageResponse, AIUsageRow, AIUsageSummary } from '@/modules/ai-usage/ai-usage.service';
-import type { AIUsageRange } from '@quoteom/shared';
+import type { AIUsageRange } from '@offertum/shared';
 
 /**
  * DTOs for `GET /api/admin/ai-usage`. Concrete classes (not interfaces) so the OpenAPI

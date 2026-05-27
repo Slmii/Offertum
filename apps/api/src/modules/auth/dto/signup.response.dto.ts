@@ -1,4 +1,4 @@
-import type { SignupResponse } from '@quoteom/shared';
+import type { SignupResponse } from '@offertum/shared';
 
 export class SignupResponseDto implements SignupResponse {
 	ok!: boolean;

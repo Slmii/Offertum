@@ -6,7 +6,7 @@ import type {
 	OpportunityList,
 	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export interface ListOpportunitiesInput {

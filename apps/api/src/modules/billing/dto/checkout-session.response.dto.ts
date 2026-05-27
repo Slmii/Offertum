@@ -1,4 +1,4 @@
-import type { BillingSyncResponse, CheckoutSessionResponse } from '@quoteom/shared';
+import type { BillingSyncResponse, CheckoutSessionResponse } from '@offertum/shared';
 
 export class CheckoutSessionResponseDto implements CheckoutSessionResponse {
 	url!: string;

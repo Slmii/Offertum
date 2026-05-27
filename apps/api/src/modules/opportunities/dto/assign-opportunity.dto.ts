@@ -1,4 +1,4 @@
-import type { AssignOpportunityInput } from '@quoteom/shared';
+import type { AssignOpportunityInput } from '@offertum/shared';
 import { IsOptional, IsUUID, ValidateIf } from 'class-validator';
 
 /**

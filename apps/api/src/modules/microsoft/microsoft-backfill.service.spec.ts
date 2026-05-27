@@ -101,7 +101,7 @@ const SCOPE_ROW = {
 	id: 'ea-1',
 	organizationId: 'org-1',
 	userId: 'user-1',
-	email: 'alice@quoteom.dev',
+	email: 'alice@offertum.dev',
 	provider: EmailProvider.MICROSOFT
 };
 

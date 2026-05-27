@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { MailboxStatus } from '@quoteom/shared';
+import type { MailboxStatus } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export const getGmailStatusServer = createServerFn({ method: 'GET' }).handler(async (): Promise<MailboxStatus> => {

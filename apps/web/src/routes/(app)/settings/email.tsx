@@ -21,7 +21,7 @@ import MuiLink from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { BillingState, MailboxStatus } from '@quoteom/shared';
+import type { BillingState, MailboxStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -87,13 +87,13 @@ function EmailSettingsPage() {
 					<BackToHomeButton />
 				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Connect your own inbox so Quoteom can read incoming quote requests and send replies on your behalf.
+					Connect your own inbox so Offertum can read incoming quote requests and send replies on your behalf.
 					Each teammate connects their own mailbox.
 				</Typography>
 
 				{showSuccessAlert && (
 					<Alert severity='success' sx={{ mb: 3 }}>
-						Mailbox connected. Quoteom is importing your last 90 days in the background.
+						Mailbox connected. Offertum is importing your last 90 days in the background.
 					</Alert>
 				)}
 
@@ -152,8 +152,8 @@ function EmailSettingsPage() {
 						useDisconnect={useDisconnectMicrosoft}
 						disconnectNote={
 							<>
-								Use <strong>Disconnect</strong> above to revoke our access — that's what stops Quoteom
-								from reading your mailbox. To also remove Quoteom from your Microsoft account's app
+								Use <strong>Disconnect</strong> above to revoke our access — that's what stops Offertum
+								from reading your mailbox. To also remove Offertum from your Microsoft account's app
 								list, visit{' '}
 								<MuiLink
 									href='https://account.microsoft.com/privacy/app-access'
@@ -169,7 +169,7 @@ function EmailSettingsPage() {
 				</Stack>
 
 				<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 5 }}>
-					Quoteom requests read + send scopes only. We never read messages outside your offerteaanvraag flow,
+					Offertum requests read + send scopes only. We never read messages outside your offerteaanvraag flow,
 					and the tokens are encrypted at rest.
 				</Typography>
 			</Paper>
@@ -286,7 +286,7 @@ function AdminConsentAlert({ adminConsentUrl }: { adminConsentUrl: string }) {
 	return (
 		<Alert severity='warning' sx={{ mb: 3 }}>
 			<Typography variant='body2' sx={{ mb: 1, fontWeight: 600 }}>
-				Your IT admin needs to approve Quoteom for your organization.
+				Your IT admin needs to approve Offertum for your organization.
 			</Typography>
 			<Typography variant='body2' sx={{ mb: 2 }}>
 				Microsoft requires a one-time admin approval before anyone in your company can connect their mailbox.

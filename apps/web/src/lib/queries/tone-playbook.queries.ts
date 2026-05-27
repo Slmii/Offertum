@@ -1,7 +1,7 @@
 import { api } from '@/lib/api/client';
 import { getTonePlaybookServer } from '@/lib/api/tone-playbook.api';
 import { TeamKeys } from '@/lib/queries/team.queries';
-import type { TonePlaybook, UpdateTonePlaybookInput } from '@quoteom/shared';
+import type { TonePlaybook, UpdateTonePlaybookInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const TonePlaybookKeys = {

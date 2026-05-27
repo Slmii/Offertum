@@ -26,7 +26,7 @@ import { createFileRoute } from '@tanstack/react-router';
 export const Route = createFileRoute('/(app)/no-organization')({
 	head: () => ({
 		meta: createPageMeta({
-			title: 'No organization · Quoteom',
+			title: 'No organization · Offertum',
 			description: 'You are not currently part of any organization',
 			path: '/no-organization'
 		})

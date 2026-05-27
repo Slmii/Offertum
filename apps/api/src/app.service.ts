@@ -5,7 +5,7 @@ import { Injectable } from '@nestjs/common';
 export class AppService {
 	getHello(): HelloResponseDto {
 		return {
-			message: 'Hello from Quoteom API',
+			message: 'Hello from Offertum API',
 			timestamp: new Date().toISOString()
 		};
 	}

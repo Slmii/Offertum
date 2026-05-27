@@ -17,7 +17,7 @@ import { LogService } from '@/modules/logger/log.service';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { BillingState } from '@quoteom/shared';
+import type { BillingState } from '@offertum/shared';
 import Stripe from 'stripe';
 
 /**
@@ -192,7 +192,7 @@ export class BillingService {
 			// Payment methods are configured in the Stripe Dashboard (Payment Method
 			// Configurations) — DO NOT pass `payment_method_types` here. Letting Stripe
 			// pick dynamically maximizes conversion + lets you enable iDEAL/SEPA/cards
-			// per region from the Dashboard without a deploy. For Quoteom: enable
+			// per region from the Dashboard without a deploy. For Offertum: enable
 			// "card", "ideal", and "sepa_debit" in the Dashboard's payment methods
 			// settings for your account. iDEAL signs a SEPA mandate during checkout;
 			// recurring charges run via SEPA Direct Debit automatically.

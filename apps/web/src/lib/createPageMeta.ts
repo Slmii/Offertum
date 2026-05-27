@@ -1,7 +1,7 @@
-const BASE_URL = 'https://quoteom.com';
-const SITE_NAME = 'Quoteom';
+const BASE_URL = 'https://offertum.com';
+const SITE_NAME = 'Offertum';
 const DEFAULT_IMAGE = `${BASE_URL}/images/logo.png`;
-const TWITTER_HANDLE = '@quoteom';
+const TWITTER_HANDLE = '@offertum';
 
 interface PageMetaOptions {
 	title: string;

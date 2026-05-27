@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { Session } from '@quoteom/shared';
+import type { Session } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export const getSessionServer = createServerFn({ method: 'GET' }).handler(async () => {

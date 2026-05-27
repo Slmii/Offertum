@@ -26,7 +26,7 @@ jobs:
               run: pnpm install --frozen-lockfile
 
             - name: Generate Prisma client
-              run: pnpm --filter @quoteom/api db:generate
+              run: pnpm --filter @offertum/api db:generate
 
             - name: Typecheck
               run: pnpm typecheck

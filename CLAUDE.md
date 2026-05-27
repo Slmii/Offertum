@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Quoteom — AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote requests, drafts replies in the owner's tone, generates quote PDFs, tracks deadlines / expiry / follow-ups.
+Offertum — AI offerte management for Dutch SMBs. Reads inbox + WhatsApp, extracts quote requests, drafts replies in the owner's tone, generates quote PDFs, tracks deadlines / expiry / follow-ups.
 
 Solo 14-week MVP build. The build plan lives at `~/.claude/plans/toasty-herding-giraffe.md` (week-by-week with status markers + decisions/deviations). The reference test catalog is `TEST_CASES.md` (one entry per behavior we need to verify before shipping).
 
@@ -42,7 +42,7 @@ pnpm db:deploy                     # prisma migrate deploy (prod)
 pnpm db:generate                   # regen Prisma client into src/generated/prisma/
 pnpm db:studio
 pnpm db:seed                       # prisma db seed (runs prisma/seed.ts via tsx)
-pnpm dev                           # rebuilds @quoteom/shared once + then runs `tsc --watch`
+pnpm dev                           # rebuilds @offertum/shared once + then runs `tsc --watch`
                                    # on shared + `nest start --watch` on api, both in parallel
 pnpm invite --email a@b.com --org <uuid> [--role MEMBER|OWNER|EXTERNAL]
 pnpm fixtures:export [--reason NOT_A_QUOTE|SPAM] [--since YYYY-MM-DD] [--org <uuid>] [--limit N]
@@ -61,7 +61,7 @@ pnpm dev                           # tsc --watch — re-emits dist/ on every sou
 pnpm typecheck                     # tsc --noEmit
 ```
 
-The shared package is a **compile target**, not a "source as artifact" package — `package.json#main` points at `./dist/index.js`. The api's `pnpm dev` script bootstraps `dist/` automatically; outside dev, run `pnpm --filter @quoteom/shared build` before anything that requires it (e.g., `pnpm typecheck` from root).
+The shared package is a **compile target**, not a "source as artifact" package — `package.json#main` points at `./dist/index.js`. The api's `pnpm dev` script bootstraps `dist/` automatically; outside dev, run `pnpm --filter @offertum/shared build` before anything that requires it (e.g., `pnpm typecheck` from root).
 
 Web-specific (in `apps/web/`):
 
@@ -286,7 +286,7 @@ Local dev needs the Inngest CLI running alongside the API:
 pnpm dev                                                 # API + web
 
 # Terminal 2
-pnpm --filter @quoteom/api inngest                       # discovers /api/inngest (pinned inngest-cli devDep)
+pnpm --filter @offertum/api inngest                       # discovers /api/inngest (pinned inngest-cli devDep)
 # Open http://localhost:8288 — every registered function shows up here.
 ```
 
@@ -294,7 +294,7 @@ The CLI dev server handles auth at the localhost boundary, so `INNGEST_EVENT_KEY
 
 Smoke checks:
 
-- **Manual event** → in the dev UI: New event → `{"name": "test/hello", "data": {"name": "Quoteom"}}` → run history shows the `hello` fn output `{ "greeting": "Hello, Quoteom!" }`.
+- **Manual event** → in the dev UI: New event → `{"name": "test/hello", "data": {"name": "Offertum"}}` → run history shows the `hello` fn output `{ "greeting": "Hello, Offertum!" }`.
 - **Scheduled cron** → `heartbeat` fires at `0 * * * *`. In the dev UI use "Invoke" to bypass the cron and trigger it manually.
 
 Adding a new function:
@@ -323,19 +323,19 @@ Sends a real `users.history.list` to Google with the stored cursor, persists new
 
 One-time setup per dev machine:
 
-1. **Pub/Sub topic** in GCP — `projects/<gcp-project>/topics/quoteom-gmail-dev`. On the topic's Permissions tab, grant `gmail-api-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role (without this, `users.watch` 403s — the #1 Phase C gotcha).
+1. **Pub/Sub topic** in GCP — `projects/<gcp-project>/topics/offertum-gmail-dev`. On the topic's Permissions tab, grant `gmail-api-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role (without this, `users.watch` 403s — the #1 Phase C gotcha).
 2. **Reserved ngrok domain** — free tier gives one. Run `ngrok http 3000 --domain=<your-domain>` pointing at the **web** port (3000), so `/api/*` proxies through to the API.
 3. **Push subscription** on the topic — Delivery type: **Push**; Endpoint URL: `https://<your-domain>/api/email/gmail/webhook`; Enable authentication: **ON**; Audience: same as the endpoint URL; pick or create a service account with `roles/iam.serviceAccountTokenCreator`.
 4. **Authorized redirect URIs** on the Google OAuth client — add `https://<your-domain>/api/email/gmail/callback` and `https://<your-domain>/api/auth/callback/google` so OAuth callbacks land on the tunnel domain during smoke testing.
 5. **`apps/api/.env`**:
     ```bash
-    GOOGLE_PUBSUB_TOPIC=projects/<gcp-project>/topics/quoteom-gmail-dev
+    GOOGLE_PUBSUB_TOPIC=projects/<gcp-project>/topics/offertum-gmail-dev
     GOOGLE_PUBSUB_AUDIENCE=https://<your-domain>/api/email/gmail/webhook
     GOOGLE_PUBSUB_SERVICE_ACCOUNT=<service-account-email-from-step-3>
     ```
     Restart `pnpm dev`.
 
-Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @quoteom/api inngest`, `ngrok ...`, `db:studio`):
+Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @offertum/api inngest`, `ngrok ...`, `db:studio`):
 
 1. Sign in via the **ngrok URL** (not `localhost:3000` — OAuth callbacks need to land on the tunnel domain).
 2. Connect Gmail at `/settings/email`. The `gmail-backfill` Inngest run shows `gmail-backfill`, `gmail-backfill-process-opportunities`, then `gmail-start-watch`. After completion: `EmailAccount.historyId` set AND `watchExpiresAt` ~7 days out.
@@ -395,7 +395,7 @@ One-time setup per dev machine:
     ```
     Restart `pnpm dev`.
 
-Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @quoteom/api inngest`, `ngrok ...`, `db:studio`):
+Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @offertum/api inngest`, `ngrok ...`, `db:studio`):
 
 1. Sign in via the **ngrok URL** (not `localhost:3000` — OAuth callbacks need to land on the tunnel domain).
 2. Connect Microsoft at `/settings/email`. The `microsoft-backfill` Inngest run shows `microsoft-backfill`, `microsoft-backfill-process-opportunities`, then `microsoft-start-subscription`. After completion: `EmailAccount.subscriptionId` set AND `watchExpiresAt` ~3 days out.
@@ -559,7 +559,7 @@ The Inngest backfill + delta-sync functions chain the pipeline via `processOppor
 
 **15. Mode-aware opportunity pipeline (`'backfill' | 'live'`).** `OpportunitiesService.processBatch(emailAccountId, excluded, { mode })` is the entry point; mode is plumbed through `processOpportunitiesInBatches` → `MailboxPipelineFunctionConfig`. Backfill functions pass `'backfill'`; delta-sync functions pass `'live'`. Backfill **suppresses `OpportunityFollowupReceived` events** (a snapshot of historical thread messages shouldn't generate N phantom drafts) AND activates **thread-as-unit classification** for multi-message thread groups in the batch (classify **oldest-first**, anchor opp to the first non-self positive — that's the customer's actual _original_ request, with subject "Badkamer" rather than "Re: Badkamer" — then attach the rest as silent history; chitchat threads produce zero opps via `opportunity.pipeline.thread_no_positive`). Live mode keeps the per-message flow with thread-reconstitution → `OpportunityFollowupReceived` → fresh draft against the latest customer reply.
 
-**16. Self-email filter.** Every batch first calls `repository.findOrganizationEmailAddresses(orgId) → Set<string>` (lower-cased). Inside `processOneRawMessage` + `processThreadGroup`, any inbound RawMessage whose `fromEmail` matches the set is short-circuited before classification (mark negative + log `opportunity.pipeline.self_email_skipped`). This catches the cross-mailbox echo case: user has both Gmail and Outlook connected, Quoteom sends a reply via Outlook → it lands as inbound on Gmail → classifier would otherwise flag the Dutch quote-prep prose as positive and create a phantom opp.
+**16. Self-email filter.** Every batch first calls `repository.findOrganizationEmailAddresses(orgId) → Set<string>` (lower-cased). Inside `processOneRawMessage` + `processThreadGroup`, any inbound RawMessage whose `fromEmail` matches the set is short-circuited before classification (mark negative + log `opportunity.pipeline.self_email_skipped`). This catches the cross-mailbox echo case: user has both Gmail and Outlook connected, Offertum sends a reply via Outlook → it lands as inbound on Gmail → classifier would otherwise flag the Dutch quote-prep prose as positive and create a phantom opp.
 
 **17. Pluggable attachment storage seam.** `apps/api/src/lib/storage/attachment-storage.interface.ts` defines `AttachmentStorage` (put/get/delete) bound by the `ATTACHMENT_STORAGE` symbol DI token in a `@Global` module. `LocalAttachmentStorage` is the default (writes under `.attachments/<draftId>/<uuid>-<filename>` with a `.contenttype` sidecar; path-safety check defends against future user-supplied keys). `useFactory` in `AttachmentStorageModule` picks the driver from `ATTACHMENT_STORAGE_DRIVER` env (`local` | `spaces`); selecting `spaces` today throws at boot — explicit "not wired yet" rather than a silent fall-through to local. Swapping to DigitalOcean Spaces is one new file + one factory branch.
 

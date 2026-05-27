@@ -1,5 +1,5 @@
 import { PricingRuleType as PrismaPricingRuleType } from '@/generated/prisma/enums';
-import type { PricingRuleType as WirePricingRuleType } from '@quoteom/shared';
+import type { PricingRuleType as WirePricingRuleType } from '@offertum/shared';
 
 /** Prisma UPPERCASE enum ↔ lowercase wire format. Same pattern as the other
  * `*-mapper.ts` files in the opportunities module. */

@@ -1,7 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
-import type { CatalogItemUnit } from '@quoteom/shared';
+import type { CatalogItemUnit } from '@offertum/shared';
 
 /** Row shape returned by the repository. `defaultPriceEur` is a string here +
  * on the wire to preserve full decimal precision through JSON. */

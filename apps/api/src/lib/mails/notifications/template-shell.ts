@@ -71,7 +71,7 @@ export function renderNotificationEmail(input: EmailShellInput): RenderedEmail {
 								</tr>
 							</table>
 							<p style="margin: 24px 0 0; font-size: 12px; line-height: 1.4; color: #8E93A6;">
-								Quoteom &middot; offerte management voor SMBs
+								Offertum &middot; offerte management voor SMBs
 							</p>
 						</td>
 					</tr>

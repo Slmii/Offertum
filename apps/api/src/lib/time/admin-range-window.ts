@@ -1,4 +1,4 @@
-import type { AIUsageRange } from '@quoteom/shared';
+import type { AIUsageRange } from '@offertum/shared';
 
 /**
  * Resolve a wall-clock `[rangeStart, rangeEnd)` window from one of the four admin-dashboard

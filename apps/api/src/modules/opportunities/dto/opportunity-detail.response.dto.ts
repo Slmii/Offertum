@@ -6,7 +6,7 @@ import type {
 	ReplyDraftKind,
 	ReplyDraftStatus,
 	ThreadMessageDirection
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import type { ReplyDraftAttachmentResponseDto } from '@/modules/reply-draft-attachments/dto/reply-draft-attachment.response.dto';
 

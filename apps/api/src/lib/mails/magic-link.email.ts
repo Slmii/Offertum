@@ -7,10 +7,10 @@ interface MagicLinkEmail {
 }
 
 export function buildMagicLinkEmail(url: string): MagicLinkEmail {
-	const subject = 'Sign in to Quoteom';
+	const subject = 'Sign in to Offertum';
 
 	const text = dedent`
-		Sign in to Quoteom by opening this link:
+		Sign in to Offertum by opening this link:
 
 		${url}
 
@@ -33,7 +33,7 @@ export function buildMagicLinkEmail(url: string): MagicLinkEmail {
 								<tr>
 									<td style="padding: 40px;">
 										<h1 style="margin: 0 0 16px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; color: #0f172a;">
-											Sign in to Quoteom
+											Sign in to Offertum
 										</h1>
 										<p style="margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #475569;">
 											Click the button below to sign in. This link expires in 24 hours.
@@ -59,7 +59,7 @@ export function buildMagicLinkEmail(url: string): MagicLinkEmail {
 								</tr>
 							</table>
 							<p style="margin: 24px 0 0; font-size: 12px; line-height: 1.4; color: #94a3b8;">
-								Quoteom &middot; quote management for SMBs
+								Offertum &middot; quote management for SMBs
 							</p>
 						</td>
 					</tr>

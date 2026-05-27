@@ -50,12 +50,12 @@ export interface Opportunity {
 	 */
 	assignedToUserId: string | null;
 	/**
-	 *  follow-up — ISO timestamp the reply draft was sent at via Quoteom, or `null`
+	 *  follow-up — ISO timestamp the reply draft was sent at via Offertum, or `null`
 	 * when no reply has been sent (no draft yet, or draft is still pending / edited).
 	 * Surfaces on the LIST shape so the dismiss dialog can warn "you already replied;
 	 * dismissing won't unsend the email" without an extra detail-view fetch. Distinct
 	 * from `Opportunity.status === 'replied'` because the user can manually move an opp
-	 * to `replied` without sending via Quoteom, and the dismiss-warning copy specifically
+	 * to `replied` without sending via Offertum, and the dismiss-warning copy specifically
 	 * mentions the SENT email — keep the two signals decoupled.
 	 */
 	replyDraftSentAt: string | null;
@@ -314,7 +314,7 @@ export type ThreadMessageDirection = 'inbound' | 'outbound';
 
 /**
  * One message attached to an opportunity's thread. Shown in the detail-view
- * timeline so the owner can see the back-and-forth without leaving Quoteom.
+ * timeline so the owner can see the back-and-forth without leaving Offertum.
  * Body is the plain-text rendering of the provider payload (HTML stripped +
  * whitespace normalized via `buildRawMessageAIInput`).
  *
@@ -330,7 +330,7 @@ export interface CustomerReplyEntry {
 	direction: ThreadMessageDirection;
 	/**
 	 * `true` when the should-reply classifier marked this message as a conversation
-	 * closer ("Bedankt, tot dan!", "Akkoord", thumbs-up acknowledgment). Quoteom
+	 * closer ("Bedankt, tot dan!", "Akkoord", thumbs-up acknowledgment). Offertum
 	 * deliberately did NOT generate a follow-up draft for it. UI surfaces this with
 	 * a small chip so the owner knows the absence-of-draft is intentional, not a bug.
 	 */

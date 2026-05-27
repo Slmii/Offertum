@@ -1,4 +1,4 @@
-import { OPPORTUNITY_DISMISS_REASONS, type DismissOpportunityInput } from '@quoteom/shared';
+import { OPPORTUNITY_DISMISS_REASONS, type DismissOpportunityInput } from '@offertum/shared';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**

@@ -20,7 +20,7 @@ import {
 	type NotificationListResponse,
 	type NotificationPreference,
 	type UpdateNotificationPreferencesInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 
 const WIRE_TO_PRISMA_EVENT: Record<NotificationEventType, PrismaNotificationEventType> = {
 	opportunity_created: PrismaNotificationEventType.OPPORTUNITY_CREATED,

@@ -28,7 +28,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { BillingState, MembershipRole } from '@quoteom/shared';
+import type { BillingState, MembershipRole } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useWatch } from 'react-hook-form';

@@ -73,7 +73,7 @@ import type {
 	OpportunityStatus as WireOpportunityStatus,
 	OpportunityTimelineEvent,
 	OpportunityUrgency as WireOpportunityUrgency
-} from '@quoteom/shared';
+} from '@offertum/shared';
 
 // Soft cap on rows scanned per Inngest `step.run` invocation. The cap is sized so that
 // even at the upper end of provider latency (≈2 s/classification + ≈3 s/extraction on a
@@ -690,7 +690,7 @@ export class OpportunitiesService {
 			// SENT case still surfaces as REPLY_DRAFT_ALREADY_SENT from the service-layer
 			// `regenerate` call (`overwrote: false`) — that one is friendlier copy. This
 			// branch only fires when the lock comes from the OPPORTUNITY-status leg (replied
-			// without sending via Quoteom, won, or lost).
+			// without sending via Offertum, won, or lost).
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
 		}
 
@@ -795,7 +795,7 @@ export class OpportunitiesService {
 		}
 
 		//  follow-up — sending a draft on a `won` / `lost` / already-`replied`-without-
-		// Quoteom opp doesn't make sense. The SENT case still surfaces via the
+		// Offertum opp doesn't make sense. The SENT case still surfaces via the
 		// `alreadySent: true` branch below with a more specific message.
 		if (!isReplyDraftEditable({ draftStatus: opportunity.replyDrafts[0]?.status ?? null })) {
 			throw new ConflictException(REPLY_DRAFT_LOCKED);
@@ -1391,23 +1391,23 @@ export class OpportunitiesService {
 		result.scanned += 1;
 
 		try {
-			// Quoteom-notification short-circuit MUST run before thread reconstitution.
+			// Offertum-notification short-circuit MUST run before thread reconstitution.
 			// A notification email matching an existing opp's threadId would otherwise
 			// attach as a "customer reply" and fire a follow-up event. Detect by header
-			// (X-Quoteom-Notification: true) OR sender-domain fallback (RESEND_EMAIL_FROM)
+			// (X-Offertum-Notification: true) OR sender-domain fallback (RESEND_EMAIL_FROM)
 			// in case a relay strips the header.
 			const bulkCheck = detectBulkMail({ provider: rawMessage.provider, raw: rawMessage.raw });
-			if (bulkCheck.reason === 'quoteom_notification' || isOwnNotificationSender(rawMessage, this.config)) {
+			if (bulkCheck.reason === 'offertum_notification' || isOwnNotificationSender(rawMessage, this.config)) {
 				await this.repository.markRawMessageNegative(rawMessage.id);
 				result.classifiedNegative += 1;
 				this.logService.logAction({
 					action: 'opportunity.pipeline.bulk_mail_skipped',
-					message: `RawMessage ${rawMessage.id} short-circuited as Quoteom notification`,
+					message: `RawMessage ${rawMessage.id} short-circuited as Offertum notification`,
 					metadata: {
 						rawMessageId: rawMessage.id,
 						emailAccountId: rawMessage.emailAccountId,
 						organizationId: rawMessage.organizationId,
-						reason: 'quoteom_notification'
+						reason: 'offertum_notification'
 					},
 					context: 'OpportunitiesService'
 				});
@@ -1796,7 +1796,7 @@ export class OpportunitiesService {
 	}
 }
 
-// Defense-in-depth alongside the X-Quoteom-Notification header: if a mail relay strips
+// Defense-in-depth alongside the X-Offertum-Notification header: if a mail relay strips
 // custom headers in transit, the from-address still matches the configured RESEND
 // sender domain. Conservative — matches the domain part only, so adding a new no-reply
 // address under the same domain is automatically covered.

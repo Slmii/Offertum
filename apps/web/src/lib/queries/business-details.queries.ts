@@ -1,6 +1,6 @@
 import { api } from '@/lib/api/client';
 import { getBusinessDetailsServer } from '@/lib/api/business-details.api';
-import type { BusinessDetails, UpdateBusinessDetailsInput } from '@quoteom/shared';
+import type { BusinessDetails, UpdateBusinessDetailsInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const BusinessDetailsKeys = {

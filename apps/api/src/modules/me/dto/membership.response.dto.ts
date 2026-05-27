@@ -1,4 +1,4 @@
-import type { MembershipOrganization, MembershipUser } from '@quoteom/shared';
+import type { MembershipOrganization, MembershipUser } from '@offertum/shared';
 import type { MembershipRole } from '@/generated/prisma/client';
 
 export class MembershipUserDto implements MembershipUser {
@@ -16,7 +16,7 @@ export class MembershipOrganizationDto implements MembershipOrganization {
 }
 
 /**
- * Doesn't `implements Membership` from `@quoteom/shared` because that interface types
+ * Doesn't `implements Membership` from `@offertum/shared` because that interface types
  * `createdAt` / `updatedAt` as `string` (wire format), while this class keeps them as
  * `Date` to match what Prisma returns directly. Runtime JSON serialization converts
  * Date → ISO string on the wire so the FE still receives the shared-interface shape.

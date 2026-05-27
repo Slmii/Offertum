@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 config({ path: resolve(__dirname, '../.env') });
 
-import type { CatalogItemUnit } from '@quoteom/shared';
+import type { CatalogItemUnit } from '@offertum/shared';
 import {
 	EmailProvider,
 	MembershipRole,
@@ -30,18 +30,18 @@ const orgs = [
 
 const users = [
 	{ email: 'selami1992@gmail.com', name: 'Selami C', currentOrg: ORG_ACME },
-	{ email: 'jeroen@quoteom.dev', name: 'Jeroen Bakker', currentOrg: ORG_ACME },
-	{ email: 'bart@quoteom.dev', name: 'Bart de Vries', currentOrg: ORG_BOUW },
-	{ email: 'sander@quoteom.dev', name: 'Sander van Klink', currentOrg: ORG_ACME }
+	{ email: 'jeroen@offertum.dev', name: 'Jeroen Bakker', currentOrg: ORG_ACME },
+	{ email: 'bart@offertum.dev', name: 'Bart de Vries', currentOrg: ORG_BOUW },
+	{ email: 'sander@offertum.dev', name: 'Sander van Klink', currentOrg: ORG_ACME }
 ] as const;
 
 const memberships: ReadonlyArray<{ email: string; orgId: string; role: MembershipRole }> = [
 	{ email: 'selami1992@gmail.com', orgId: ORG_ACME, role: MembershipRole.OWNER },
-	{ email: 'jeroen@quoteom.dev', orgId: ORG_ACME, role: MembershipRole.MEMBER },
-	{ email: 'bart@quoteom.dev', orgId: ORG_BOUW, role: MembershipRole.OWNER },
+	{ email: 'jeroen@offertum.dev', orgId: ORG_ACME, role: MembershipRole.MEMBER },
+	{ email: 'bart@offertum.dev', orgId: ORG_BOUW, role: MembershipRole.OWNER },
 	// Sander is a freelance bookkeeper helping both orgs — same user, two memberships.
-	{ email: 'sander@quoteom.dev', orgId: ORG_ACME, role: MembershipRole.EXTERNAL },
-	{ email: 'sander@quoteom.dev', orgId: ORG_BOUW, role: MembershipRole.EXTERNAL }
+	{ email: 'sander@offertum.dev', orgId: ORG_ACME, role: MembershipRole.EXTERNAL },
+	{ email: 'sander@offertum.dev', orgId: ORG_BOUW, role: MembershipRole.EXTERNAL }
 ];
 
 // Stub EmailAccount per org — required because Opportunity FK-references one.
@@ -60,7 +60,7 @@ const emailAccounts = [
 	{
 		id: SEED_EMAIL_ACCOUNT_BOUW,
 		organizationId: ORG_BOUW,
-		ownerEmail: 'bart@quoteom.dev',
+		ownerEmail: 'bart@offertum.dev',
 		mailboxEmail: 'offertes+seed@bouwbedrijfdevries.nl'
 	}
 ] as const;
@@ -495,7 +495,7 @@ async function main() {
 
 	for (const opp of opportunities) {
 		const owner = await prisma.user.findUniqueOrThrow({
-			where: { email: opp.organizationId === ORG_ACME ? 'selami1992@gmail.com' : 'bart@quoteom.dev' }
+			where: { email: opp.organizationId === ORG_ACME ? 'selami1992@gmail.com' : 'bart@offertum.dev' }
 		});
 
 		await prisma.rawMessage.upsert({

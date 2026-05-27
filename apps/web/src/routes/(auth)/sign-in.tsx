@@ -10,7 +10,7 @@ import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { OAuthProviderId } from '@quoteom/shared';
+import type { OAuthProviderId } from '@offertum/shared';
 import { createFileRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 

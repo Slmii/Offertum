@@ -20,7 +20,7 @@ export const Route = createFileRoute('/(app)/')({
 	head: () => {
 		return {
 			meta: createPageMeta({
-				title: 'Quoteom',
+				title: 'Offertum',
 				description: 'Quote management for SMBs',
 				path: '/'
 			})
@@ -54,7 +54,7 @@ function HomePage() {
 		<Container maxWidth='sm' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<Typography variant='h1' sx={{ fontSize: 32, mb: 1 }}>
-					Quoteom
+					Offertum
 				</Typography>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
 					Quote management for SMBs

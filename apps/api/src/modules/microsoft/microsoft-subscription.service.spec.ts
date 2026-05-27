@@ -47,7 +47,7 @@ function makePrisma(rows: ReadonlyArray<AccountSeed>): FakePrisma {
 					id: row.id,
 					organizationId: 'org-1',
 					userId: 'user-1',
-					email: `${row.id}@quoteom.dev`,
+					email: `${row.id}@offertum.dev`,
 					provider: EmailProvider.MICROSOFT,
 					subscriptionId: row.subscriptionId ?? null,
 					subscriptionClientState: encrypt('shared-secret-known')
@@ -60,7 +60,7 @@ function makePrisma(rows: ReadonlyArray<AccountSeed>): FakePrisma {
 						subscriptionId: r.subscriptionId ?? null,
 						organizationId: 'org-1',
 						userId: 'user-1',
-						email: `${r.id}@quoteom.dev`,
+						email: `${r.id}@offertum.dev`,
 						provider: EmailProvider.MICROSOFT
 					}))
 				)

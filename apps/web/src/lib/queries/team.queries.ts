@@ -6,7 +6,7 @@ import {
 	getMyOrganizationsServer
 } from '@/lib/api/team.api';
 import { BillingKeys } from '@/lib/queries/billing.queries';
-import type { CreateInvitationInput, Invitation, Membership } from '@quoteom/shared';
+import type { CreateInvitationInput, Invitation, Membership } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 

@@ -16,7 +16,7 @@ import {
 } from '@/modules/pricing-playbook/pricing-playbook.repository';
 import { PRICING_RULE_TYPE_TO_WIRE } from '@/modules/pricing-playbook/pricing-rule-type.mapper';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { PricingRuleJsonObject } from '@quoteom/shared';
+import type { PricingRuleJsonObject } from '@offertum/shared';
 
 @Injectable()
 export class PricingPlaybookService {

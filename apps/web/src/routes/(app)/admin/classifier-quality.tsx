@@ -26,8 +26,8 @@ import type {
 	ClassifierPrecisionRow,
 	DismissReasonCounts,
 	OpportunityDismissReason
-} from '@quoteom/shared';
-import { OPPORTUNITY_DISMISS_REASONS } from '@quoteom/shared';
+} from '@offertum/shared';
+import { OPPORTUNITY_DISMISS_REASONS } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';

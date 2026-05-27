@@ -25,16 +25,16 @@ export interface BulkMailFilterResult {
 		| 'list_unsubscribe_header'
 		| 'body_unsubscribe_phrase'
 		| 'tracking_link_density'
-		| 'quoteom_notification'
+		| 'offertum_notification'
 		| null;
 }
 
 // Header stamped on every outbound notification email. Inbound RawMessages carrying
-// it are Quoteom's own emails arriving in a user's connected mailbox — short-circuit
+// it are Offertum's own emails arriving in a user's connected mailbox — short-circuit
 // them before the classifier sees the body (which would otherwise look like a real
 // quote request and trigger an infinite create-opp → email → create-opp loop).
-export const QUOTEOM_NOTIFICATION_HEADER = 'X-Quoteom-Notification';
-export const QUOTEOM_NOTIFICATION_HEADER_VALUE = 'true';
+export const OFFERTUM_NOTIFICATION_HEADER = 'X-Offertum-Notification';
+export const OFFERTUM_NOTIFICATION_HEADER_VALUE = 'true';
 
 const TRACKING_LINK_THRESHOLD = 2;
 
@@ -76,8 +76,8 @@ const TRACKING_HOST_PATTERNS = [
 ];
 
 export function detectBulkMail(input: BulkMailFilterInput): BulkMailFilterResult {
-	if (hasQuoteomNotificationHeader(input)) {
-		return { isBulk: true, reason: 'quoteom_notification' };
+	if (hasOffertumNotificationHeader(input)) {
+		return { isBulk: true, reason: 'offertum_notification' };
 	}
 
 	if (input.provider === EmailProvider.GMAIL && hasGmailListUnsubscribeHeader(input.raw)) {
@@ -104,8 +104,8 @@ export function detectBulkMail(input: BulkMailFilterInput): BulkMailFilterResult
 	return { isBulk: false, reason: null };
 }
 
-function hasQuoteomNotificationHeader(input: BulkMailFilterInput): boolean {
-	const target = QUOTEOM_NOTIFICATION_HEADER.toLowerCase();
+function hasOffertumNotificationHeader(input: BulkMailFilterInput): boolean {
+	const target = OFFERTUM_NOTIFICATION_HEADER.toLowerCase();
 
 	if (input.provider === EmailProvider.GMAIL) {
 		const headers = asRecord(input.raw)?.payload as { headers?: unknown } | undefined;

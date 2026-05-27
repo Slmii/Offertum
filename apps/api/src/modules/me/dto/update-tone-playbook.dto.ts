@@ -1,4 +1,4 @@
-import { TONE_PLAYBOOK_MAX_LENGTH, type UpdateTonePlaybookInput } from '@quoteom/shared';
+import { TONE_PLAYBOOK_MAX_LENGTH, type UpdateTonePlaybookInput } from '@offertum/shared';
 import { IsString, MaxLength } from 'class-validator';
 
 /**

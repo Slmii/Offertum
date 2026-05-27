@@ -6,7 +6,7 @@ import {
 	FOLLOW_UP_MAX_COUNT_MAX,
 	FOLLOW_UP_MAX_COUNT_MIN,
 	type UpdateFollowUpSettingsInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { IsInt, Max, Min } from 'class-validator';
 
 /**

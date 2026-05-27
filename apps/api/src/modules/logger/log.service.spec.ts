@@ -83,7 +83,7 @@ describe('LogService', () => {
 		await logContext.run({ requestId: 'req-2', userId: 'u-2', organizationId: 'org-2' }, async () => {
 			service.logAction({
 				action: 'email.connect',
-				message: 'Gmail connected for alice@quoteom.dev',
+				message: 'Gmail connected for alice@offertum.dev',
 				metadata: { provider: 'GMAIL', emailAccountId: 'ea-1' },
 				context: 'EmailAccountsService'
 			});
@@ -94,7 +94,7 @@ describe('LogService', () => {
 		const row = created[0]!;
 		expect(row).toMatchObject({
 			level: 'INFO',
-			message: 'Gmail connected for alice@quoteom.dev',
+			message: 'Gmail connected for alice@offertum.dev',
 			context: 'EmailAccountsService',
 			requestId: 'req-2',
 			userId: 'u-2',

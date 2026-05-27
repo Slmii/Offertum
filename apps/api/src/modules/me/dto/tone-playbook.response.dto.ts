@@ -1,4 +1,4 @@
-import type { TonePlaybook } from '@quoteom/shared';
+import type { TonePlaybook } from '@offertum/shared';
 
 /**
  * Response for `GET /api/me/tone-playbook` and `PUT /api/me/tone-playbook`. Concrete

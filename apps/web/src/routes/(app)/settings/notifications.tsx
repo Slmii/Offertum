@@ -24,7 +24,7 @@ import {
 	type NotificationChannel,
 	type NotificationEventType,
 	type UpdateNotificationPreferencesInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';

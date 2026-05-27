@@ -4,7 +4,7 @@ import { AIUsageResponseDto } from '@/modules/ai-usage/dto/ai-usage.response.dto
 import { Controller, DefaultValuePipe, Get, ParseEnumPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-/** Wire-format enum kept in sync with `AIUsageRange` in `@quoteom/shared`. */
+/** Wire-format enum kept in sync with `AIUsageRange` in `@offertum/shared`. */
 enum AIUsageRangeQuery {
 	Today = 'today',
 	Last7d = '7d',

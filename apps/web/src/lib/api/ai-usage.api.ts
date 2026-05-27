@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { AIUsageRange, AIUsageResponse } from '@quoteom/shared';
+import type { AIUsageRange, AIUsageResponse } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export const getAIUsageServer = createServerFn({ method: 'GET' })

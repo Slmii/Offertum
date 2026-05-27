@@ -1,4 +1,4 @@
-import { TONE_PLAYBOOK_MAX_LENGTH } from '@quoteom/shared';
+import { TONE_PLAYBOOK_MAX_LENGTH } from '@offertum/shared';
 import z from 'zod';
 
 // Empty string is valid + meaningful — represents the "no playbook" / generic-Dutch

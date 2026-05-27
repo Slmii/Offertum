@@ -16,7 +16,7 @@ import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { TONE_PLAYBOOK_MAX_LENGTH } from '@quoteom/shared';
+import { TONE_PLAYBOOK_MAX_LENGTH } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -75,7 +75,7 @@ function WritingStylePage() {
 				<BackToHomeButton />
 			</Box>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Vertel ons in een paar zinnen hoe je schrijft — begroeting, afsluiting, toon, vaste zinnetjes. Quoteom
+				Vertel ons in een paar zinnen hoe je schrijft — begroeting, afsluiting, toon, vaste zinnetjes. Offertum
 				gebruikt dit voor concept-antwoorden op je offerteaanvragen, zodat ze klinken zoals jij. Leeg laten =
 				een neutrale, professionele standaard.
 			</Typography>

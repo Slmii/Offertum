@@ -62,7 +62,7 @@ function makePrisma(rows: ReadonlyArray<{ subscriptionId: string; emailAccountId
 				return Promise.resolve({
 					id: row.emailAccountId,
 					organizationId: 'org-1',
-					email: `${row.emailAccountId}@quoteom.dev`
+					email: `${row.emailAccountId}@offertum.dev`
 				});
 			})
 		}

@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { TonePlaybook } from '@quoteom/shared';
+import type { TonePlaybook } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**

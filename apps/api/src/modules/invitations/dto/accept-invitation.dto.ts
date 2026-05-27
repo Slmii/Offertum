@@ -1,4 +1,4 @@
-import type { AcceptInvitationInput } from '@quoteom/shared';
+import type { AcceptInvitationInput } from '@offertum/shared';
 import { IsHexadecimal, IsString, Length } from 'class-validator';
 
 /**

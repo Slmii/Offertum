@@ -36,6 +36,6 @@ export function buildWeeklyDigestEmail(input: WeeklyDigestEmailInput): RenderedE
 		bodyParagraphs: paragraphs,
 		cta: { label: 'Open dashboard', url: dashboardUrl },
 		footnote:
-			'Wil je deze e-mail niet meer ontvangen? Pas je voorkeuren aan via Instellingen → Notificaties in Quoteom.'
+			'Wil je deze e-mail niet meer ontvangen? Pas je voorkeuren aan via Instellingen → Notificaties in Offertum.'
 	});
 }

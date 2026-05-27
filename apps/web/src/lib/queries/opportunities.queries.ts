@@ -13,7 +13,7 @@ import type {
 	ReplyDraftAttachment,
 	UpdateOpportunityFieldsInput,
 	UpdateReplyDraftInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const OpportunityKeys = {

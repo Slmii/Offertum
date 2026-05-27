@@ -52,7 +52,7 @@ export const envSchema = z
 		GOOGLE_PUBSUB_TOPIC: z.string().optional(),
 		// Expected `aud` claim on the JWT Pub/Sub signs and sends with every push
 		// delivery. Set when creating the push subscription. Typically the full webhook URL
-		// (e.g. `https://app.quoteom.com/api/email/gmail/webhook`). Optional in dev — if
+		// (e.g. `https://app.offertum.com/api/email/gmail/webhook`). Optional in dev — if
 		// unset the webhook returns 503 so misconfigured-prod doesn't silently swallow pushes.
 		GOOGLE_PUBSUB_AUDIENCE: z.string().optional(),
 		// `email` claim on the JWT. Pub/Sub's service account for the GCP project,
@@ -68,7 +68,7 @@ export const envSchema = z
 		// `GOOGLE_PUBSUB_TOPIC` env in role: when unset (typical local dev without ngrok),
 		// `MicrosoftSubscriptionService` no-ops subscription start + renewal so the rest of
 		// the inbox flow still works. Full URL including scheme + path, e.g.
-		// `https://app.quoteom.com/api/email/microsoft/webhook`.
+		// `https://app.offertum.com/api/email/microsoft/webhook`.
 		MICROSOFT_GRAPH_NOTIFICATION_URL: z.string().optional(),
 
 		// Stripe billing
@@ -88,7 +88,7 @@ export const envSchema = z
 		// Direct OpenAI mode: leave AZURE_OPENAI_* unset; the client hits api.openai.com using
 		// `OPENAI_API_KEY`. Easiest signup, US-routed by default.
 		// Azure OpenAI mode (EU data residency): set `AZURE_OPENAI_ENDPOINT` to your Azure
-		// resource URL (e.g. `https://quoteom.openai.azure.com`); the client switches to Azure
+		// resource URL (e.g. `https://offertum.openai.azure.com`); the client switches to Azure
 		// routing using `AZURE_OPENAI_API_KEY` (falls back to OPENAI_API_KEY if unset).
 		// Both keys optional in dev — when missing, the AI module's `generate` throws a clear
 		// "OpenAI not configured" error rather than silently using a fake.

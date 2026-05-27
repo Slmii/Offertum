@@ -1,4 +1,4 @@
-import type { FollowUpSettings } from '@quoteom/shared';
+import type { FollowUpSettings } from '@offertum/shared';
 
 /**
  * Response for `GET /api/me/follow-up-settings` and `PATCH /api/me/follow-up-settings`.

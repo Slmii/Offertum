@@ -12,7 +12,7 @@ import {
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { CatalogItemSchema, type CatalogItemForm } from '@/lib/schemas/catalog-item.schema';
 import { toReadableEuro } from '@/lib/utils/number.utils';
-import { CATALOG_ITEM_UNIT_DEFAULT, CATALOG_ITEM_UNIT_LABELS_NL, CATALOG_ITEM_UNITS } from '@quoteom/shared';
+import { CATALOG_ITEM_UNIT_DEFAULT, CATALOG_ITEM_UNIT_LABELS_NL, CATALOG_ITEM_UNITS } from '@offertum/shared';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -26,7 +26,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { CatalogItem } from '@quoteom/shared';
+import type { CatalogItem } from '@offertum/shared';
 
 const UNIT_OPTIONS = CATALOG_ITEM_UNITS.map(unit => ({ id: unit, label: CATALOG_ITEM_UNIT_LABELS_NL[unit] }));
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -66,7 +66,7 @@ function CatalogSettingsPage() {
 						Catalogus
 					</Typography>
 					<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 560 }}>
-						Producten en diensten met standaardprijzen die Quoteom voorstelt bij het opstellen van offertes.
+						Producten en diensten met standaardprijzen die Offertum voorstelt bij het opstellen van offertes.
 						De AI matcht binnenkomende vragen tegen deze lijst — exacte matches gaan deterministisch, de
 						rest valt terug op een LLM-voorstel.
 					</Typography>

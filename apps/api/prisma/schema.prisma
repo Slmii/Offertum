@@ -1,4 +1,4 @@
-// Quoteom Prisma schema.
+// Offertum Prisma schema.
 // - new `prisma-client` generator (Prisma 7+)
 // - custom output to ../generated/prisma (gitignored)
 // - pg driver adapter wires up the actual connection in src/prisma/prisma.service.ts.
@@ -13,7 +13,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// Users are provisioned by Quoteom admin via invitation; self-signup is disabled.
+// Users are provisioned by Offertum admin via invitation; self-signup is disabled.
 // An org can have many users. Roles exist but are informational until a feature enforces them
 // (e.g. billing notifications, "can't delete the org while you're the last OWNER").
 enum MembershipRole {
@@ -392,7 +392,7 @@ model Membership {
   @@index([organizationId])
 }
 
-// Pending invitations to join an organization. Created by Quoteom admin; redeemed by
+// Pending invitations to join an organization. Created by Offertum admin; redeemed by
 // the recipient clicking a tokenized link sent via email. On redemption: creates the
 // User row (if one doesn't already exist for that email) and a Membership.
 model Invitation {

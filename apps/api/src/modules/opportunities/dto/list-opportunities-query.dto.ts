@@ -9,7 +9,7 @@ import {
 	type OpportunityMailboxOwnershipFilter,
 	type OpportunitySort,
 	type OpportunityStatus
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 

@@ -7,7 +7,7 @@ import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto'
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { BusinessDetails, FollowUpSettings, TonePlaybook, UpdateBusinessDetailsInput } from '@quoteom/shared';
+import type { BusinessDetails, FollowUpSettings, TonePlaybook, UpdateBusinessDetailsInput } from '@offertum/shared';
 
 /**
  * Reads + writes scoped to the current user. Controller stays thin — orchestrates

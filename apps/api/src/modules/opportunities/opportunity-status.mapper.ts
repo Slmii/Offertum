@@ -1,5 +1,5 @@
 import { OpportunityStatus as PrismaOpportunityStatus } from '@/generated/prisma/enums';
-import type { OpportunityStatus as WireOpportunityStatus } from '@quoteom/shared';
+import type { OpportunityStatus as WireOpportunityStatus } from '@offertum/shared';
 
 export const OPPORTUNITY_STATUS_TO_WIRE: Record<PrismaOpportunityStatus, WireOpportunityStatus> = {
 	[PrismaOpportunityStatus.NEW]: 'new',

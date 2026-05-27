@@ -1,5 +1,5 @@
 import { Urgency as PrismaUrgency } from '@/generated/prisma/enums';
-import type { OpportunityUrgency } from '@quoteom/shared';
+import type { OpportunityUrgency } from '@offertum/shared';
 
 export const OPPORTUNITY_URGENCY_TO_WIRE: Record<PrismaUrgency, OpportunityUrgency> = {
 	[PrismaUrgency.EMERGENCY]: 'emergency',

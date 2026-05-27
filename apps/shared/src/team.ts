@@ -1,7 +1,7 @@
 /**
  * Mirrors Prisma's `MembershipRole` enum. Declared as a string union here (not re-exported
  * from Prisma) because Prisma's generated client lives inside `apps/api` and shouldn't
- * leak into `@quoteom/shared` — that would pull the Prisma runtime into the web bundle.
+ * leak into `@offertum/shared` — that would pull the Prisma runtime into the web bundle.
  */
 export type MembershipRole = 'OWNER' | 'MEMBER' | 'EXTERNAL';
 

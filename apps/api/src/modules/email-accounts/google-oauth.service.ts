@@ -65,7 +65,7 @@ export class GoogleOAuthService {
 			// Without it we'd lose access the moment the first access token expires.
 			access_type: 'offline',
 			// `select_account` shows the account picker even when the browser is already
-			// signed in with a Google account — users connecting Quoteom may want to use a
+			// signed in with a Google account — users connecting Offertum may want to use a
 			// work mailbox different from their primary signed-in account. `consent` then
 			// forces the consent screen so reconnecting after a disconnect re-issues a
 			// refresh token (Google returns `refresh_token` only on first consent unless we

@@ -1,4 +1,4 @@
-import { OPPORTUNITY_DISMISS_REASONS } from '@quoteom/shared';
+import { OPPORTUNITY_DISMISS_REASONS } from '@offertum/shared';
 import z from 'zod';
 
 export const DismissOpportunitySchema = z.object({

@@ -7,7 +7,7 @@ import {
 	PAYMENT_TERMS_DAYS_MAX,
 	PAYMENT_TERMS_DAYS_MIN,
 	type UpdateBusinessDetailsInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 /**

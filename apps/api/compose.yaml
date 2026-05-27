@@ -1,21 +1,21 @@
 services:
     postgres:
         image: postgres:16-alpine
-        container_name: quoteom-postgres
+        container_name: offertum-postgres
         restart: unless-stopped
         environment:
-            POSTGRES_USER: quoteom
-            POSTGRES_PASSWORD: quoteom
-            POSTGRES_DB: quoteom
+            POSTGRES_USER: offertum
+            POSTGRES_PASSWORD: offertum
+            POSTGRES_DB: offertum
         ports:
             - '5432:5432'
         volumes:
-            - quoteom-postgres-data:/var/lib/postgresql/data
+            - offertum-postgres-data:/var/lib/postgresql/data
         healthcheck:
-            test: ['CMD-SHELL', 'pg_isready -U quoteom -d quoteom']
+            test: ['CMD-SHELL', 'pg_isready -U offertum -d offertum']
             interval: 5s
             timeout: 5s
             retries: 5
 
 volumes:
-    quoteom-postgres-data:
+    offertum-postgres-data:

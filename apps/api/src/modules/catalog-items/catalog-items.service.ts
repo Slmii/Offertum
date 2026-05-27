@@ -5,7 +5,7 @@ import {
 	CatalogItemResponseDto
 } from '@/modules/catalog-items/dto/catalog-item.response.dto';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CATALOG_ITEM_UNIT_DEFAULT, type CatalogItemUnit } from '@quoteom/shared';
+import { CATALOG_ITEM_UNIT_DEFAULT, type CatalogItemUnit } from '@offertum/shared';
 
 @Injectable()
 export class CatalogItemsService {

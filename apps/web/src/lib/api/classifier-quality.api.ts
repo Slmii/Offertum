@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { AIUsageRange, ClassifierQualityResponse } from '@quoteom/shared';
+import type { AIUsageRange, ClassifierQualityResponse } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**

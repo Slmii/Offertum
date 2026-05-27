@@ -42,7 +42,7 @@ export const BILLING_REQUIRED_CODE = 'billing_required';
  * gets billed at `PER_SEAT_OVERAGE_CENTS` per month via Stripe's graduated tier 2.
  *
  * MUST match the Stripe Price's `tiers` configuration. If you change either of these
- * constants, update the Stripe Price (Dashboard → Products → Quoteom monthly).
+ * constants, update the Stripe Price (Dashboard → Products → Offertum monthly).
  */
 export const SEATS_INCLUDED = 3;
 export const PER_SEAT_OVERAGE_CENTS = 3000;

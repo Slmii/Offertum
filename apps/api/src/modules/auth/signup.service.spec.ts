@@ -51,12 +51,12 @@ describe('SignupService', () => {
 
 	describe('happy path', () => {
 		it('creates Organization + User + OWNER Membership in one transaction', async () => {
-			const result = await service.signup('founder@quoteom.dev', 'Quoteom BV');
+			const result = await service.signup('founder@offertum.dev', 'Offertum BV');
 
 			expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-			expect(tx.organization.create).toHaveBeenCalledWith({ data: { name: 'Quoteom BV' } });
+			expect(tx.organization.create).toHaveBeenCalledWith({ data: { name: 'Offertum BV' } });
 			expect(tx.user.create).toHaveBeenCalledWith({
-				data: { email: 'founder@quoteom.dev', currentOrganizationId: 'org-1' }
+				data: { email: 'founder@offertum.dev', currentOrganizationId: 'org-1' }
 			});
 			expect(tx.membership.create).toHaveBeenCalledWith({
 				data: { userId: 'user-1', organizationId: 'org-1', role: MembershipRole.OWNER }
@@ -64,29 +64,29 @@ describe('SignupService', () => {
 			expect(result).toEqual({
 				userId: 'user-1',
 				organizationId: 'org-1',
-				email: 'founder@quoteom.dev'
+				email: 'founder@offertum.dev'
 			});
 		});
 
 		it('lowercases the email before persisting', async () => {
-			const result = await service.signup('Founder@Quoteom.Dev', 'Quoteom BV');
+			const result = await service.signup('Founder@Offertum.Dev', 'Offertum BV');
 
 			expect(prisma.user.findFirst).toHaveBeenCalledWith({
-				where: { email: { equals: 'founder@quoteom.dev', mode: 'insensitive' } },
+				where: { email: { equals: 'founder@offertum.dev', mode: 'insensitive' } },
 				select: { id: true }
 			});
 			expect(tx.user.create).toHaveBeenCalledWith({
-				data: { email: 'founder@quoteom.dev', currentOrganizationId: 'org-1' }
+				data: { email: 'founder@offertum.dev', currentOrganizationId: 'org-1' }
 			});
-			expect(result.email).toBe('founder@quoteom.dev');
+			expect(result.email).toBe('founder@offertum.dev');
 		});
 
 		it('trims whitespace from the email AND company name', async () => {
-			await service.signup('  founder@quoteom.dev  ', '  Quoteom BV  ');
+			await service.signup('  founder@offertum.dev  ', '  Offertum BV  ');
 
-			expect(tx.organization.create).toHaveBeenCalledWith({ data: { name: 'Quoteom BV' } });
+			expect(tx.organization.create).toHaveBeenCalledWith({ data: { name: 'Offertum BV' } });
 			expect(tx.user.create).toHaveBeenCalledWith({
-				data: { email: 'founder@quoteom.dev', currentOrganizationId: 'org-1' }
+				data: { email: 'founder@offertum.dev', currentOrganizationId: 'org-1' }
 			});
 		});
 	});
@@ -96,7 +96,7 @@ describe('SignupService', () => {
 			const built = makePrisma({ existingUser: { id: 'existing-1' } });
 			const dupService = new SignupService(built.prisma as unknown as PrismaService, logServiceStub);
 
-			await expect(dupService.signup('taken@quoteom.dev', 'New Co')).rejects.toBeInstanceOf(ConflictException);
+			await expect(dupService.signup('taken@offertum.dev', 'New Co')).rejects.toBeInstanceOf(ConflictException);
 			expect(built.prisma.$transaction).not.toHaveBeenCalled();
 		});
 
@@ -104,18 +104,18 @@ describe('SignupService', () => {
 			const built = makePrisma({ existingUser: { id: 'existing-1' } });
 			const dupService = new SignupService(built.prisma as unknown as PrismaService, logServiceStub);
 
-			await expect(dupService.signup('taken@quoteom.dev', 'New Co')).rejects.toThrow(ACCOUNT_ALREADY_EXISTS);
+			await expect(dupService.signup('taken@offertum.dev', 'New Co')).rejects.toThrow(ACCOUNT_ALREADY_EXISTS);
 		});
 
 		it('case-insensitively detects an existing user (uppercased input still rejected)', async () => {
 			const built = makePrisma({ existingUser: { id: 'existing-1' } });
 			const dupService = new SignupService(built.prisma as unknown as PrismaService, logServiceStub);
 
-			await expect(dupService.signup('TAKEN@quoteom.dev', 'New Co')).rejects.toBeInstanceOf(ConflictException);
+			await expect(dupService.signup('TAKEN@offertum.dev', 'New Co')).rejects.toBeInstanceOf(ConflictException);
 			// findFirst called with the lowercased form AND insensitive mode — proves we
 			// did not skip normalization AND that legacy mixed-case rows would still match.
 			expect(built.prisma.user.findFirst).toHaveBeenCalledWith({
-				where: { email: { equals: 'taken@quoteom.dev', mode: 'insensitive' } },
+				where: { email: { equals: 'taken@offertum.dev', mode: 'insensitive' } },
 				select: { id: true }
 			});
 		});
@@ -128,15 +128,15 @@ describe('SignupService', () => {
 			const recordingLog = { logAction } as unknown as ConstructorParameters<typeof SignupService>[1];
 			const recordingService = new SignupService(built.prisma as unknown as PrismaService, recordingLog);
 
-			await recordingService.signup('founder@quoteom.dev', 'Quoteom BV');
+			await recordingService.signup('founder@offertum.dev', 'Offertum BV');
 
 			expect(logAction).toHaveBeenCalledTimes(1);
 			expect(logAction).toHaveBeenCalledWith(
 				expect.objectContaining({
 					action: 'signup.org_created',
 					metadata: expect.objectContaining({
-						email: 'founder@quoteom.dev',
-						companyName: 'Quoteom BV',
+						email: 'founder@offertum.dev',
+						companyName: 'Offertum BV',
 						userId: 'user-1',
 						organizationId: 'org-1'
 					})
@@ -150,7 +150,7 @@ describe('SignupService', () => {
 			const recordingLog = { logAction } as unknown as ConstructorParameters<typeof SignupService>[1];
 			const recordingService = new SignupService(built.prisma as unknown as PrismaService, recordingLog);
 
-			await expect(recordingService.signup('taken@quoteom.dev', 'New Co')).rejects.toBeInstanceOf(
+			await expect(recordingService.signup('taken@offertum.dev', 'New Co')).rejects.toBeInstanceOf(
 				ConflictException
 			);
 			expect(logAction).toHaveBeenCalledTimes(1);
@@ -158,7 +158,7 @@ describe('SignupService', () => {
 				expect.objectContaining({
 					action: 'signup.rejected.duplicate_email',
 					level: 'warn',
-					metadata: { email: 'taken@quoteom.dev' }
+					metadata: { email: 'taken@offertum.dev' }
 				})
 			);
 		});

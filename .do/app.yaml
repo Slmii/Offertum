@@ -14,11 +14,11 @@
 #   MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET
 # Everything marked `type: SECRET` with no value below requires Dashboard setup.
 
-name: quoteom
+name: offertum
 region: ams
 
 databases:
-    - name: quoteom-db
+    - name: offertum-db
       engine: PG
       version: '16'
       # Flip `production: true` (and bump the cluster size) when going live. The dev
@@ -32,7 +32,7 @@ services:
       github:
           branch: main
           deploy_on_push: true
-      build_command: corepack enable && pnpm install --frozen-lockfile && pnpm turbo run build --filter=@quoteom/api
+      build_command: corepack enable && pnpm install --frozen-lockfile && pnpm turbo run build --filter=@offertum/api
       run_command: node apps/api/dist/main.js
       environment_slug: node-js
       http_port: 3001
@@ -51,7 +51,7 @@ services:
           # Database — auto-resolved from the managed Postgres component above.
           - key: DATABASE_URL
             scope: RUN_AND_BUILD_TIME
-            value: ${quoteom-db.DATABASE_URL}
+            value: ${offertum-db.DATABASE_URL}
 
           # Web ↔ API origin (same app, same URL — App Platform routes by path).
           - key: WEB_ORIGIN
@@ -116,7 +116,7 @@ services:
           deploy_on_push: true
       # VITE_API_URL is baked in at build time, so it has to be exported during the build.
       # The web app calls the api via the same App Platform hostname under /api/*.
-      build_command: corepack enable && VITE_API_URL=${APP_URL} pnpm install --frozen-lockfile && VITE_API_URL=${APP_URL} pnpm turbo run build --filter=@quoteom/web
+      build_command: corepack enable && VITE_API_URL=${APP_URL} pnpm install --frozen-lockfile && VITE_API_URL=${APP_URL} pnpm turbo run build --filter=@offertum/web
       run_command: node apps/web/.output/server/index.mjs
       environment_slug: node-js
       http_port: 3000
@@ -143,11 +143,11 @@ jobs:
       github:
           branch: main
           deploy_on_push: true
-      build_command: corepack enable && pnpm install --frozen-lockfile && pnpm turbo run db:generate --filter=@quoteom/api
+      build_command: corepack enable && pnpm install --frozen-lockfile && pnpm turbo run db:generate --filter=@offertum/api
       run_command: cd apps/api && npx prisma migrate deploy
       environment_slug: node-js
       instance_size_slug: basic-xxs
       envs:
           - key: DATABASE_URL
             scope: RUN_AND_BUILD_TIME
-            value: ${quoteom-db.DATABASE_URL}
+            value: ${offertum-db.DATABASE_URL}

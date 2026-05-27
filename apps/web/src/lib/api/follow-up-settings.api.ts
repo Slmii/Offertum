@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { FollowUpSettings } from '@quoteom/shared';
+import type { FollowUpSettings } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**

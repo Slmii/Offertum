@@ -1,6 +1,6 @@
 import { getSessionServer } from '@/lib/api/auth.api';
 import { api, postForm } from '@/lib/api/client';
-import type { OAuthProviderId } from '@quoteom/shared';
+import type { OAuthProviderId } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 

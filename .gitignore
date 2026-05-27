@@ -21,3 +21,6 @@ node_modules
 .ai-reports/
 .attachments/
 .fixture-candidates/
+
+# Generated files
+marketing

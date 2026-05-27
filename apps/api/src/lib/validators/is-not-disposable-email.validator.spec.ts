@@ -17,11 +17,11 @@ async function validateEmail(value: unknown): Promise<string[]> {
 
 describe('IsNotDisposableEmail', () => {
 	it('accepts a regular work email', async () => {
-		expect(await validateEmail('alice@quoteom.dev')).toEqual([]);
+		expect(await validateEmail('alice@offertum.dev')).toEqual([]);
 	});
 
 	it('accepts uppercased domains (case-insensitive)', async () => {
-		expect(await validateEmail('alice@QUOTEOM.DEV')).toEqual([]);
+		expect(await validateEmail('alice@OFFERTUM.DEV')).toEqual([]);
 	});
 
 	it('rejects mailinator.com', async () => {

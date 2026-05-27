@@ -9,7 +9,7 @@ const logger = new Logger('InngestFn:hello');
  * Smoke function — event-triggered, runs once per event.
  *
  * Send the trigger from the Inngest dev UI (http://localhost:8288 → New event):
- *   { "name": "test/hello", "data": { "name": "Quoteom" } }
+ *   { "name": "test/hello", "data": { "name": "Offertum" } }
  *
  * The `test/hello` event name is intentionally a literal — it's a developer-only smoke,
  * not a real domain event. Promote to `InngestEvents` if app code ever fires it.

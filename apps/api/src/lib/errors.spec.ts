@@ -4,7 +4,7 @@ import { describe, expect, it } from '@jest/globals';
 describe('MICROSOFT_ADMIN_CONSENT_ERROR_CODE_REGEX', () => {
 	it('matches AADSTS65001 (user/admin has not consented)', () => {
 		const description =
-			"AADSTS65001: The user or administrator has not consented to use the application with ID 'abc' named 'Quoteom'.";
+			"AADSTS65001: The user or administrator has not consented to use the application with ID 'abc' named 'Offertum'.";
 		expect(MICROSOFT_ADMIN_CONSENT_ERROR_CODE_REGEX.test(description)).toBe(true);
 	});
 

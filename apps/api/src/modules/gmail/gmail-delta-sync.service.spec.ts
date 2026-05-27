@@ -111,7 +111,7 @@ function makeApi(opts: {
 
 	const getProfile = jest.fn().mockReturnValue(
 		Promise.resolve({
-			emailAddress: 'alice@quoteom.dev',
+			emailAddress: 'alice@offertum.dev',
 			messagesTotal: 1,
 			threadsTotal: 1,
 			historyId: opts.profileHistoryId ?? 'history-recovered'
@@ -129,7 +129,7 @@ const SCOPE_ROW = {
 	id: 'ea-1',
 	organizationId: 'org-1',
 	userId: 'user-1',
-	email: 'alice@quoteom.dev',
+	email: 'alice@offertum.dev',
 	provider: EmailProvider.GMAIL,
 	historyId: 'history-start'
 };

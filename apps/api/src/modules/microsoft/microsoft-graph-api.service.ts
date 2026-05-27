@@ -69,7 +69,7 @@ export class MicrosoftDeltaTokenExpiredException extends Error {
 
 /**
  * Thrown when Graph returns 404 on a `/subscriptions/{id}` PATCH or DELETE — means the
- * subscription was already deleted upstream (user revoked Quoteom, Graph aged it out, or
+ * subscription was already deleted upstream (user revoked Offertum, Graph aged it out, or
  * it never registered). Lets the renewal flow recover by recreating instead of bubbling
  * a generic InternalServerErrorException that the duck-typed sniffer would catch with
  * false positives.

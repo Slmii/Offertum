@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { NotificationListResponse, NotificationPreferencesResponse } from '@quoteom/shared';
+import type { NotificationListResponse, NotificationPreferencesResponse } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export const listNotificationsServer = createServerFn({ method: 'GET' })

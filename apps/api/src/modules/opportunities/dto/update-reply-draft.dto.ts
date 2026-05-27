@@ -1,4 +1,4 @@
-import { REPLY_DRAFT_BODY_MAX_LENGTH, type UpdateReplyDraftInput } from '@quoteom/shared';
+import { REPLY_DRAFT_BODY_MAX_LENGTH, type UpdateReplyDraftInput } from '@offertum/shared';
 import { IsString, MaxLength } from 'class-validator';
 
 /**

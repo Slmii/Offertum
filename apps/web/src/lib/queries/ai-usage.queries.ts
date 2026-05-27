@@ -1,5 +1,5 @@
 import { getAIUsageServer } from '@/lib/api/ai-usage.api';
-import type { AIUsageRange } from '@quoteom/shared';
+import type { AIUsageRange } from '@offertum/shared';
 import { queryOptions } from '@tanstack/react-query';
 
 export const AIUsageKeys = {

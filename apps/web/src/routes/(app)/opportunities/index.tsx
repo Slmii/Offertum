@@ -56,13 +56,13 @@ import type {
 	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus,
 	OpportunityStatusCounts
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import {
 	OPPORTUNITY_ASSIGNEE_FILTERS,
 	OPPORTUNITY_DISMISS_REASONS,
 	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
 	OPPORTUNITY_STATUSES
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';

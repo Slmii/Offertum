@@ -1,4 +1,4 @@
-import type { SwitchOrganizationInput } from '@quoteom/shared';
+import type { SwitchOrganizationInput } from '@offertum/shared';
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class SwitchOrganizationDto implements SwitchOrganizationInput {

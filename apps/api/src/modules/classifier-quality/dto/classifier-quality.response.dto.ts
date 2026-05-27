@@ -7,7 +7,7 @@ import type {
 	ClassifierQualitySummary,
 	DismissReasonCounts,
 	OpportunityDismissReason
-} from '@quoteom/shared';
+} from '@offertum/shared';
 
 /**
  * Concrete DTO classes for `GET /api/admin/classifier-quality`. Required so the OpenAPI

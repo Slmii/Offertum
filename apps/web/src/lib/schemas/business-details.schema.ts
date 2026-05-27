@@ -6,7 +6,7 @@ import {
 	COMPANY_VAT_MAX_LENGTH,
 	PAYMENT_TERMS_DAYS_MAX,
 	PAYMENT_TERMS_DAYS_MIN
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import z from 'zod';
 
 export const BusinessDetailsSchema = z.object({

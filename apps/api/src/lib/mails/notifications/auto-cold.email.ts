@@ -15,7 +15,7 @@ export function buildAutoColdEmail(input: AutoColdEmailInput): RenderedEmail {
 		: `Offerteaanvraag op koud: ${requestType}`;
 
 	const paragraphs: string[] = [
-		`Quoteom heeft de offerteaanvraag voor <strong>${requestType}</strong>${customerName ? ` van <strong>${customer}</strong>` : ''} automatisch op <strong>Koud</strong> gezet — er is ${daysSinceSent} dag${daysSinceSent === 1 ? '' : 'en'} geen reactie gekomen na je laatste bericht en alle automatische herinneringen zijn verstuurd.`,
+		`Offertum heeft de offerteaanvraag voor <strong>${requestType}</strong>${customerName ? ` van <strong>${customer}</strong>` : ''} automatisch op <strong>Koud</strong> gezet — er is ${daysSinceSent} dag${daysSinceSent === 1 ? '' : 'en'} geen reactie gekomen na je laatste bericht en alle automatische herinneringen zijn verstuurd.`,
 		'Open de aanvraag als je toch nog een vervolg wilt sturen of als je de status wilt aanpassen.'
 	];
 
@@ -28,6 +28,6 @@ export function buildAutoColdEmail(input: AutoColdEmailInput): RenderedEmail {
 		bodyParagraphs: paragraphs,
 		cta: { label: 'Open aanvraag', url: opportunityUrl },
 		footnote:
-			'Wil je deze e-mail niet meer ontvangen? Pas je voorkeuren aan via Instellingen → Notificaties in Quoteom.'
+			'Wil je deze e-mail niet meer ontvangen? Pas je voorkeuren aan via Instellingen → Notificaties in Offertum.'
 	});
 }

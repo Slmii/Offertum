@@ -3,7 +3,7 @@ import {
 	CATALOG_ITEM_NAME_MAX_LENGTH,
 	CATALOG_ITEM_SKU_MAX_LENGTH,
 	CATALOG_ITEM_UNITS
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import z from 'zod';
 
 // Decimal price is captured as a string at the form layer — number inputs flatten

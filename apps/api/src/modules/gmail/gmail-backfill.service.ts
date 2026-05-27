@@ -11,7 +11,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 /**
  * How far back we fetch on initial connect.
  *
- * 90 days is a sweet spot for SMB inboxes: typical Quoteom users see ~150–600 messages
+ * 90 days is a sweet spot for SMB inboxes: typical Offertum users see ~150–600 messages
  * in their last quarter, which is enough corpus to make the post-connect dashboard feel
  * "full" and gives the classifier real material to work against. Fits comfortably
  * within Inngest's 4-hour step timeout even on busy inboxes.

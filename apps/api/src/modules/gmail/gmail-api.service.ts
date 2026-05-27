@@ -54,7 +54,7 @@ export interface GmailProfile {
 /**
  * One entry from `users.history.list`. `messagesAdded` is the only field we use today —
  * `messagesDeleted` / `labelsAdded` / `labelsRemoved` are also returned but ignored.
- * Defer if we ever need to track read-state changes (probably never for Quoteom).
+ * Defer if we ever need to track read-state changes (probably never for Offertum).
  */
 export interface GmailHistoryRecord {
 	id: string;

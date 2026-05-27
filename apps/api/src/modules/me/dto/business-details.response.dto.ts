@@ -1,4 +1,4 @@
-import type { BusinessDetails } from '@quoteom/shared';
+import type { BusinessDetails } from '@offertum/shared';
 
 /**
  * Response for `GET /api/me/business-details` + `PATCH /api/me/business-details`.

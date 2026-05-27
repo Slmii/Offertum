@@ -3,26 +3,26 @@
 #
 # Bring up:  `pnpm db:up`   (alias for docker compose up -d, run from apps/api)
 # Tear down: `pnpm db:down`
-# Connect:   `psql postgresql://quoteom:quoteom@localhost:5432/quoteom`
+# Connect:   `psql postgresql://offertum:offertum@localhost:5432/offertum`
 
 services:
     postgres:
         image: postgres:16-alpine
-        container_name: quoteom-postgres
+        container_name: offertum-postgres
         restart: unless-stopped
         environment:
-            POSTGRES_USER: quoteom
-            POSTGRES_PASSWORD: quoteom
-            POSTGRES_DB: quoteom
+            POSTGRES_USER: offertum
+            POSTGRES_PASSWORD: offertum
+            POSTGRES_DB: offertum
         ports:
             - '5432:5432'
         volumes:
-            - quoteom-pgdata:/var/lib/postgresql/data
+            - offertum-pgdata:/var/lib/postgresql/data
         healthcheck:
-            test: ['CMD-SHELL', 'pg_isready -U quoteom -d quoteom']
+            test: ['CMD-SHELL', 'pg_isready -U offertum -d offertum']
             interval: 10s
             timeout: 5s
             retries: 5
 
 volumes:
-    quoteom-pgdata:
+    offertum-pgdata:

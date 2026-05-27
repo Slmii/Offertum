@@ -10,7 +10,7 @@ import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import type { BillingStatus } from '@quoteom/shared';
+import type { BillingStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
@@ -35,7 +35,7 @@ function BillingPage() {
 					<BackToHomeButton />
 				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Manage your Quoteom subscription. €149/month after a 14-day free trial.
+					Manage your Offertum subscription. €149/month after a 14-day free trial.
 				</Typography>
 
 				<StatusPanel

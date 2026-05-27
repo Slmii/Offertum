@@ -312,7 +312,7 @@ function renderHtml(byDate, totalRuns) {
 <html lang="en">
 <head>
 	<meta charset="utf-8" />
-	<title>Quoteom — AI Accuracy Reports</title>
+	<title>Offertum — AI Accuracy Reports</title>
 	<style>
 		body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 1300px; margin: 2rem auto; padding: 0 1rem; color: #222; line-height: 1.5; }
 		h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
@@ -371,7 +371,7 @@ function renderHtml(byDate, totalRuns) {
 	</style>
 </head>
 <body>
-	<h1>Quoteom — AI Accuracy Reports</h1>
+	<h1>Offertum — AI Accuracy Reports</h1>
 	<p class="muted">${totalRuns} total run${totalRuns === 1 ? '' : 's'} across ${dates.length} day${dates.length === 1 ? '' : 's'}. Local-only; not pushed to GitHub.</p>
 	${dates.map(([date, runs], index) => dateBlock(date, runs, index === 0)).join('')}
 	<footer>Generated ${escapeHtml(generatedAt)} · scripts/build-ai-report.cjs</footer>

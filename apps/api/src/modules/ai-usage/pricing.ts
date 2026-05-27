@@ -1,5 +1,5 @@
 /**
- * Per-million-token rates for the AI models Quoteom calls. Used by `AIUsageService` to
+ * Per-million-token rates for the AI models Offertum calls. Used by `AIUsageService` to
  * compute USD cost from `AICall.promptTokens` + `completionTokens`. **Keep this in sync
  * with the providers' published prices** — OpenAI revises rates a couple of times a year
  * and Azure occasionally follows.
@@ -10,7 +10,7 @@
  *
  * Azure OpenAI: pay-as-you-go billing is typically priced identically to direct OpenAI
  * for the same model. PTU (Provisioned Throughput Units) pricing is different and not
- * usage-billed by token, so this table is irrelevant for PTU. Quoteom uses pay-as-you-go.
+ * usage-billed by token, so this table is irrelevant for PTU. Offertum uses pay-as-you-go.
  *
  * Cost formula: `(promptTokens * inputPerMillionUsd + completionTokens * outputPerMillionUsd) / 1_000_000`.
  *

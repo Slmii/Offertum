@@ -1,4 +1,4 @@
-import type { PricingRule, PricingRuleJsonObject, PricingRuleType } from '@quoteom/shared';
+import type { PricingRule, PricingRuleJsonObject, PricingRuleType } from '@offertum/shared';
 
 /**
  * Wire-format `PricingRule` row. The `ruleType` here is the lowercase wire enum;

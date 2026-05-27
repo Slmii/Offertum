@@ -32,7 +32,7 @@ function makeService(provider: EmailProvider): {
 } {
 	const row = {
 		id: 'ea-1',
-		email: 'alice@quoteom.dev',
+		email: 'alice@offertum.dev',
 		provider,
 		organizationId: 'org-1',
 		userId: 'user-1',
@@ -163,7 +163,7 @@ describe('EmailAccountsService — parallel self-heal race', () => {
 					metadata: expect.objectContaining({
 						provider,
 						emailAccountId: 'ea-1',
-						email: 'alice@quoteom.dev',
+						email: 'alice@offertum.dev',
 						trigger: 'invalid_grant'
 					})
 				})

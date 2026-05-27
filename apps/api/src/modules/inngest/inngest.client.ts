@@ -12,5 +12,5 @@ import { Inngest } from 'inngest';
  * INNGEST_EVENT_KEY + INNGEST_SIGNING_KEY from env via main.ts's `serve()` call.
  */
 export const inngest = new Inngest({
-	id: 'quoteom-api'
+	id: 'offertum-api'
 });

@@ -1,7 +1,7 @@
-import type { ReplyDraftAttachment } from '@quoteom/shared';
+import type { ReplyDraftAttachment } from '@offertum/shared';
 
 /**
- *  follow-up — response DTO mirroring `ReplyDraftAttachment` from `@quoteom/shared`.
+ *  follow-up — response DTO mirroring `ReplyDraftAttachment` from `@offertum/shared`.
  * Concrete class (not interface) per the controller-DTO convention so the OpenAPI spec
  * + Orval-generated web types carry the shape at runtime.
  */

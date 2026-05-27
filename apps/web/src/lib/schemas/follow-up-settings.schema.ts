@@ -5,7 +5,7 @@ import {
 	FOLLOW_UP_COLD_AFTER_DAYS_MIN,
 	FOLLOW_UP_MAX_COUNT_MAX,
 	FOLLOW_UP_MAX_COUNT_MIN
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import z from 'zod';
 
 // HTML `type='number'` inputs emit strings; `z.coerce.number()` converts at parse time

@@ -1,4 +1,4 @@
-import type { OpportunityList, OpportunityStatusCounts } from '@quoteom/shared';
+import type { OpportunityList, OpportunityStatusCounts } from '@offertum/shared';
 import type { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 
 export class OpportunityStatusCountsDto implements OpportunityStatusCounts {

@@ -1,4 +1,4 @@
-import type { PricingPlaybook } from '@quoteom/shared';
+import type { PricingPlaybook } from '@offertum/shared';
 
 /**
  * `GET /api/pricing-playbook` + `PUT /api/pricing-playbook` response. Carries the

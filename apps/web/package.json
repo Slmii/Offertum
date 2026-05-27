@@ -1,5 +1,5 @@
 {
-	"name": "@quoteom/web",
+	"name": "@offertum/web",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
@@ -18,7 +18,7 @@
 		"@hookform/resolvers": "^5.2.2",
 		"@mui/material": "^9.0.1",
 		"@mui/x-date-pickers": "^9.1.0",
-		"@quoteom/shared": "workspace:*",
+		"@offertum/shared": "workspace:*",
 		"@tanstack/react-query": "^5.100.9",
 		"@tanstack/react-router": "^1.169.2",
 		"@tanstack/react-router-ssr-query": "^1.166.12",

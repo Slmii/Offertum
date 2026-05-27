@@ -5,7 +5,7 @@ import {
 	CATALOG_ITEM_UNITS,
 	type CatalogItemUnit,
 	type UpdateCatalogItemInput
-} from '@quoteom/shared';
+} from '@offertum/shared';
 import {
 	IsBoolean,
 	IsIn,

@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { CatalogItemList } from '@quoteom/shared';
+import type { CatalogItemList } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 /**

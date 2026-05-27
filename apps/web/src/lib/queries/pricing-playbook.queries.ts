@@ -1,6 +1,6 @@
 import { api } from '@/lib/api/client';
 import { getPricingPlaybookServer, listPricingRulesServer } from '@/lib/api/pricing-playbook.api';
-import type { PricingPlaybook, PricingRule, UpdatePricingPlaybookInput } from '@quoteom/shared';
+import type { PricingPlaybook, PricingRule, UpdatePricingPlaybookInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const PricingPlaybookKeys = {

@@ -1,4 +1,4 @@
-import { OPPORTUNITY_URGENCIES, type OpportunityUrgency, type UpdateOpportunityFieldsInput } from '@quoteom/shared';
+import { OPPORTUNITY_URGENCIES, type OpportunityUrgency, type UpdateOpportunityFieldsInput } from '@offertum/shared';
 import { IsIn, IsISO8601, IsOptional, MaxLength, ValidateIf } from 'class-validator';
 
 /**

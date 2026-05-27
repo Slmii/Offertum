@@ -1,4 +1,4 @@
-import { PRICING_RULE_TYPES } from '@quoteom/shared';
+import { PRICING_RULE_TYPES } from '@offertum/shared';
 import { z } from 'zod';
 
 /**

@@ -77,7 +77,7 @@ function FollowUpsSettingsPage() {
 					Automatische follow-ups
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
-					Quoteom kan automatisch een korte herinnering schrijven als een klant na je antwoord stil blijft.
+					Offertum kan automatisch een korte herinnering schrijven als een klant na je antwoord stil blijft.
 					Jij beoordeelt en verstuurt — niets gaat zonder jouw klik de deur uit.
 				</Typography>
 			</Box>
@@ -120,7 +120,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					Cadans
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
-					Hoeveel dagen stilte voordat Quoteom een herinnering opstelt.
+					Hoeveel dagen stilte voordat Offertum een herinnering opstelt.
 				</Typography>
 				<Stack direction='row' spacing={2} sx={{ alignItems: 'flex-start' }}>
 					<Box sx={{ minWidth: 160 }}>
@@ -176,7 +176,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					Maximum
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
-					Het aantal herinneringen dat Quoteom maximaal per offerteaanvraag mag opstellen. Zet op{' '}
+					Het aantal herinneringen dat Offertum maximaal per offerteaanvraag mag opstellen. Zet op{' '}
 					<strong>0</strong> om de scheduler volledig uit te zetten.
 				</Typography>
 				<Stack direction='row' spacing={2} sx={{ alignItems: 'center' }}>
@@ -202,7 +202,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					Automatisch koud markeren
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
-					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Quoteom de
+					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Offertum de
 					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
 					— je houdt opportunities dan zelf bij.
 				</Typography>
@@ -226,7 +226,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 
 			{schedulerDisabled && (
 				<Alert severity='warning'>
-					De scheduler staat uit. Quoteom maakt geen automatische herinneringen tot je dit weer aanzet.
+					De scheduler staat uit. Offertum maakt geen automatische herinneringen tot je dit weer aanzet.
 				</Alert>
 			)}
 
@@ -236,7 +236,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 						<Box component='span' sx={{ color: 'text.primary', fontWeight: 500 }}>
 							Voorbeeld:
 						</Box>{' '}
-						je verstuurt vandaag een offerte. Reageert de klant niet, dan zet Quoteom over {cadenceDays}{' '}
+						je verstuurt vandaag een offerte. Reageert de klant niet, dan zet Offertum over {cadenceDays}{' '}
 						dagen een eerste herinnering klaar
 						{maxCount > 1 ? `, en na nog ${cadenceDays} dagen een tweede` : ''}
 						{maxCount > 2 ? `, tot maximaal ${maxCount} herinneringen` : ''}. De herinneringen staan in je

@@ -36,7 +36,7 @@ function makePrisma(
 					id: row.id,
 					organizationId: 'org-1',
 					userId: 'user-1',
-					email: `${row.id}@quoteom.dev`,
+					email: `${row.id}@offertum.dev`,
 					provider: EmailProvider.GMAIL
 				});
 			}),

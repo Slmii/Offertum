@@ -1,4 +1,4 @@
-import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH } from '@quoteom/shared';
+import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH } from '@offertum/shared';
 import { z } from 'zod';
 
 export const PricingPlaybookSchema = z.object({

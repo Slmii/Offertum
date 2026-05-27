@@ -1,5 +1,5 @@
 import { getClassifierQualityServer } from '@/lib/api/classifier-quality.api';
-import type { AIUsageRange } from '@quoteom/shared';
+import type { AIUsageRange } from '@offertum/shared';
 import { queryOptions } from '@tanstack/react-query';
 
 export const ClassifierQualityKeys = {

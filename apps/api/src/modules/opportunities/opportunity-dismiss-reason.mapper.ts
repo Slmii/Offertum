@@ -1,5 +1,5 @@
 import { DismissReason as PrismaDismissReason } from '@/generated/prisma/enums';
-import type { OpportunityDismissReason as WireDismissReason } from '@quoteom/shared';
+import type { OpportunityDismissReason as WireDismissReason } from '@offertum/shared';
 
 export const OPPORTUNITY_DISMISS_REASON_TO_WIRE: Record<PrismaDismissReason, WireDismissReason> = {
 	[PrismaDismissReason.NOT_A_QUOTE]: 'not_a_quote',
