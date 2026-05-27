@@ -1,11 +1,8 @@
-import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { SectionError } from '@/components/SectionError.component';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
-	EmailKeys,
-	gmailMessagesQueryOptions,
 	gmailStatusQueryOptions,
-	microsoftMessagesQueryOptions,
 	microsoftStatusQueryOptions,
 	useDisconnectGmail,
 	useDisconnectMicrosoft
@@ -21,14 +18,11 @@ import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import MuiLink from '@mui/material/Link';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { BillingState, GmailMessage, MailboxStatus, MicrosoftMessage } from '@quoteom/shared';
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import type { BillingState, MailboxStatus } from '@quoteom/shared';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
@@ -37,9 +31,7 @@ export const Route = createFileRoute('/(app)/settings/email')({
 	loader: ({ context }) =>
 		Promise.all([
 			context.queryClient.ensureQueryData(gmailStatusQueryOptions),
-			context.queryClient.ensureQueryData(gmailMessagesQueryOptions),
 			context.queryClient.ensureQueryData(microsoftStatusQueryOptions),
-			context.queryClient.ensureQueryData(microsoftMessagesQueryOptions),
 			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(myMembershipQueryOptions)
 		]),
@@ -47,44 +39,11 @@ export const Route = createFileRoute('/(app)/settings/email')({
 	errorComponent: SectionError
 });
 
-/** Unified row shape — both Gmail and Microsoft messages render the same way. */
-interface UnifiedMessage {
-	id: string;
-	subject: string | null;
-	displayFrom: string;
-	dateIso: string;
-}
-
-function fromGmail(m: GmailMessage): UnifiedMessage {
-	return {
-		id: m.id,
-		subject: m.subject,
-		displayFrom: m.from ?? 'unknown sender',
-		dateIso: m.internalDate
-	};
-}
-
-function fromMicrosoft(m: MicrosoftMessage): UnifiedMessage {
-	const display = m.fromName
-		? m.fromEmail
-			? `${m.fromName} <${m.fromEmail}>`
-			: m.fromName
-		: (m.fromEmail ?? 'unknown sender');
-	return {
-		id: m.id,
-		subject: m.subject,
-		displayFrom: display,
-		dateIso: m.receivedDateTime
-	};
-}
-
 function EmailSettingsPage() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
 	const { data: gmailStatus } = useSuspenseQuery(gmailStatusQueryOptions);
-	const { data: gmailMessages } = useSuspenseQuery(gmailMessagesQueryOptions);
 	const { data: msStatus } = useSuspenseQuery(microsoftStatusQueryOptions);
-	const { data: msMessages } = useSuspenseQuery(microsoftMessagesQueryOptions);
 	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
 
@@ -94,9 +53,8 @@ function EmailSettingsPage() {
 
 	// OAuth callback params (`connected=1`, `error=…`, `adminConsentUrl=…`) are one-shot
 	// signals tied to the just-completed handshake. Capture them into local state on mount
-	// so the success/error UI and the post-connect polling loop survive — then strip them
-	// from the URL so a refresh doesn't keep the alerts visible. `replace: true` keeps the
-	// cleaned URL out of the browser history.
+	// so the success/error UI survives — then strip them from the URL so a refresh doesn't
+	// keep the alerts visible. `replace: true` keeps the cleaned URL out of the browser history.
 	const [oauthFeedback] = useState(() => ({
 		connected: search.connected,
 		error: search.error,
@@ -135,7 +93,7 @@ function EmailSettingsPage() {
 
 				{showSuccessAlert && (
 					<Alert severity='success' sx={{ mb: 3 }}>
-						Mailbox connected. Most recent messages should appear below within a few seconds.
+						Mailbox connected. Quoteom is importing your last 90 days in the background.
 					</Alert>
 				)}
 
@@ -180,12 +138,7 @@ function EmailSettingsPage() {
 						providerLabel='Gmail'
 						connectUrl='/api/email/gmail/connect'
 						status={gmailStatus}
-						disconnected={gmailMessages.disconnected}
-						messages={gmailMessages.messages.map(fromGmail)}
-						justConnected={oauthFeedback.connected === '1'}
 						billingEntitled={billingEntitled}
-						messagesQueryKey={EmailKeys.gmailMessages}
-						statusQueryKey={EmailKeys.gmailStatus}
 						useDisconnect={useDisconnectGmail}
 					/>
 
@@ -195,12 +148,7 @@ function EmailSettingsPage() {
 						providerLabel='Microsoft (Outlook)'
 						connectUrl='/api/email/microsoft/connect'
 						status={msStatus}
-						disconnected={msMessages.disconnected}
-						messages={msMessages.messages.map(fromMicrosoft)}
-						justConnected={oauthFeedback.connected === '1'}
 						billingEntitled={billingEntitled}
-						messagesQueryKey={EmailKeys.microsoftMessages}
-						statusQueryKey={EmailKeys.microsoftStatus}
 						useDisconnect={useDisconnectMicrosoft}
 						disconnectNote={
 							<>
@@ -233,12 +181,7 @@ interface ProviderPanelProps {
 	providerLabel: string;
 	connectUrl: string;
 	status: MailboxStatus;
-	disconnected: boolean;
-	messages: UnifiedMessage[];
-	justConnected: boolean;
 	billingEntitled: boolean;
-	messagesQueryKey: readonly unknown[];
-	statusQueryKey: readonly unknown[];
 	useDisconnect: () => { mutate: () => void; isPending: boolean };
 	// Optional caption shown under the Disconnect/Reconnect buttons. Used by the Microsoft
 	// panel to nudge users at Entra's user-revoke page since Microsoft offers no
@@ -248,35 +191,19 @@ interface ProviderPanelProps {
 }
 
 /**
- * One provider section. Owns its own connect/disconnect/reconcile lifecycle. Same shape
- * for Gmail and Microsoft — the only differences are the labels, the connect URL, and
- * the query keys.
+ * One provider section. Owns its own connect/disconnect lifecycle. Same shape for
+ * Gmail and Microsoft — the only differences are the labels, the connect URL, and
+ * the disconnect mutation.
  */
 function ProviderPanel({
 	providerLabel,
 	connectUrl,
 	status,
-	disconnected,
-	messages,
-	justConnected,
 	billingEntitled,
-	messagesQueryKey,
-	statusQueryKey,
 	useDisconnect,
 	disconnectNote
 }: ProviderPanelProps) {
-	const queryClient = useQueryClient();
 	const disconnect = useDisconnect();
-
-	// Reconcile the parallel-query race: status + messages run side-by-side; if the
-	// token was revoked between them, messages says disconnected while status is stale.
-	// Trust the messages signal AND invalidate the status query so it refetches.
-	const isConnected = status.connected && !disconnected;
-	useEffect(() => {
-		if (disconnected && status.connected) {
-			void queryClient.invalidateQueries({ queryKey: statusQueryKey });
-		}
-	}, [disconnected, status.connected, queryClient, statusQueryKey]);
 
 	const handleConnect = () => {
 		window.location.href = connectUrl;
@@ -288,20 +215,20 @@ function ProviderPanel({
 				<Typography variant='overline' color='text.secondary'>
 					{providerLabel}
 				</Typography>
-				{isConnected ? (
+				{status.connected ? (
 					<Chip size='small' color='success' label='Connected' />
 				) : (
 					<Chip size='small' color='default' label='Not connected' />
 				)}
 			</Box>
 
-			{isConnected ? (
+			{status.connected ? (
 				<>
 					<Typography variant='body1' sx={{ mb: 0.5 }}>
 						Connected as <strong>{status.email}</strong>
 					</Typography>
 					{status.connectedAt && (
-						<Typography variant='body2' color='text.secondary'>
+						<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
 							Linked on {toReadableDate(status.connectedAt, 'D MMM YYYY')}
 						</Typography>
 					)}
@@ -320,26 +247,6 @@ function ProviderPanel({
 							{disconnectNote}
 						</Typography>
 					)}
-
-					<Divider sx={{ my: 3 }} />
-					<Typography variant='h2' sx={{ fontSize: 16, mb: 2 }}>
-						Recent messages
-					</Typography>
-					{messages.length === 0 ? (
-						<BackfillPlaceholder justConnected={justConnected} messagesQueryKey={messagesQueryKey} />
-					) : (
-						<>
-							<List dense disablePadding>
-								{messages.map(m => (
-									<MessageRow key={m.id} message={m} />
-								))}
-							</List>
-							<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
-								Showing your {messages.length} most recent messages. Full inbox import runs in the
-								background.
-							</Typography>
-						</>
-					)}
 				</>
 			) : (
 				<>
@@ -352,60 +259,6 @@ function ProviderPanel({
 				</>
 			)}
 		</Box>
-	);
-}
-
-function BackfillPlaceholder({
-	justConnected,
-	messagesQueryKey
-}: {
-	justConnected: boolean;
-	messagesQueryKey: readonly unknown[];
-}) {
-	const queryClient = useQueryClient();
-	useEffect(() => {
-		if (!justConnected) {
-			return;
-		}
-		const id = setInterval(() => {
-			void queryClient.invalidateQueries({ queryKey: messagesQueryKey });
-		}, 5_000);
-		return () => clearInterval(id);
-	}, [justConnected, queryClient, messagesQueryKey]);
-
-	if (justConnected) {
-		return (
-			<Typography variant='body2' color='text.secondary'>
-				Importing your last 90 days... this usually takes under a minute.
-			</Typography>
-		);
-	}
-
-	return (
-		<Typography variant='body2' color='text.secondary'>
-			No messages yet. New mail will appear here automatically.
-		</Typography>
-	);
-}
-
-function MessageRow({ message }: { message: UnifiedMessage }) {
-	return (
-		<ListItem disableGutters divider sx={{ py: 1 }}>
-			<ListItemText
-				primary={message.subject ?? '(no subject)'}
-				secondary={
-					<>
-						<Typography component='span' variant='body2' color='text.secondary'>
-							{message.displayFrom}
-						</Typography>
-						{' · '}
-						<Typography component='span' variant='caption' color='text.secondary'>
-							{toReadableDate(message.dateIso, 'D MMM YYYY HH:mm')}
-						</Typography>
-					</>
-				}
-			/>
-		</ListItem>
 	);
 }
 

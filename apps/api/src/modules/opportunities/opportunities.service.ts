@@ -493,7 +493,8 @@ export class OpportunitiesService {
 	private logReceivedViaMailbox(
 		opportunityId: string,
 		organizationId: string,
-		mailbox: { email: string; userId: string | null; ownerName: string | null }
+		mailbox: { email: string; userId: string | null; ownerName: string | null },
+		originating: { rawMessageId: string; internalDate: Date }
 	): void {
 		this.logService.logAction({
 			action: 'opportunity.received_via_mailbox',
@@ -503,7 +504,12 @@ export class OpportunitiesService {
 				opportunityId,
 				mailboxEmail: mailbox.email,
 				mailboxOwnerUserId: mailbox.userId,
-				mailboxOwnerName: mailbox.ownerName
+				mailboxOwnerName: mailbox.ownerName,
+				// Originating-message arrival time. The timeline mapper prefers this over
+				// `Log.createdAt` so the "Binnengekomen" event shows when the customer
+				// actually emailed, not when the backfill/sync wrote the row.
+				originatingRawMessageId: originating.rawMessageId,
+				originatingInternalDate: originating.internalDate.toISOString()
 			},
 			context: 'OpportunitiesService'
 		});
@@ -570,9 +576,10 @@ export class OpportunitiesService {
 	 * event per missed-draft detail-view open — negligible.
 	 */
 	async getDetail(organizationId: string, opportunityId: string): Promise<OpportunityDetailResponseDto> {
-		const [opportunity, timelineRows] = await Promise.all([
+		const [opportunity, timelineRows, orgEmailAddresses] = await Promise.all([
 			this.repository.findDetailByIdForOrganization(organizationId, opportunityId),
-			this.repository.findTimelineEvents(organizationId, opportunityId)
+			this.repository.findTimelineEvents(organizationId, opportunityId),
+			this.repository.findOrganizationEmailAddresses(organizationId)
 		]);
 		if (!opportunity) {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
@@ -616,7 +623,20 @@ export class OpportunitiesService {
 			.map(row => toOpportunityTimelineEvent(row, actorLabels))
 			.filter((event): event is OpportunityTimelineEvent => event !== null);
 
-		return toOpportunityDetailResponseDto(opportunity, originalEmailBody, timeline);
+		// "Aanvraag binnengekomen" should display when the customer FIRST reached out
+		// on this thread — not the anchor message's date. The picker anchors on the
+		// newest positive (so the draft replies to the most recent inbound), but the
+		// arrival timestamp the owner wants to see is the oldest customer message in
+		// the conversation. Compute that here over the originating message + every
+		// inbound thread message, then patch the timeline event in place.
+		const earliestCustomerArrival = computeEarliestCustomerArrival(opportunity, orgEmailAddresses);
+		const adjustedTimeline = timeline.map(event =>
+			event.kind === 'received_via_mailbox'
+				? { ...event, occurredAt: earliestCustomerArrival.toISOString() }
+				: event
+		);
+
+		return toOpportunityDetailResponseDto(opportunity, originalEmailBody, adjustedTimeline, orgEmailAddresses);
 	}
 
 	/**
@@ -1080,11 +1100,20 @@ export class OpportunitiesService {
 		}
 
 		// Branch 2 — backfill, no existing opp. Thread-as-unit classification.
-		// Walk newest-first; first non-self, non-bulk positive becomes the originating
-		// message. Self-emails inside the thread are NOT eligible to originate (they're
-		// our own outbound) but they ARE attached as history later — they're part of
-		// the conversation. Bulk-mails are noise and stay excluded from history.
-		const sortedNewestFirst = [...group].sort((a, b) => b.internalDate.getTime() - a.internalDate.getTime());
+		// Walk oldest-first; the first non-self, non-bulk positive becomes the originating
+		// message — that's the customer's *original* request (the one with subject "Badkamer"
+		// rather than "Re: Badkamer", and the one whose body usually carries the full ask).
+		// Anchoring there means:
+		//   - `Opportunity.rawMessage` (rendered as "Originele e-mail") is the actual original
+		//   - The extractor input is the richest version of the request, not a follow-up
+		//   - "Aanvraag binnengekomen" matches the originating message by construction
+		// Self-emails inside the thread are NOT eligible to originate (they're our own
+		// outbound) but they ARE attached as history later — they're part of the
+		// conversation. Bulk-mails are noise and stay excluded from history.
+		// The draft generator uses thread reconstitution to target the latest customer
+		// reply regardless of which message is anchored, so changing the anchor doesn't
+		// change what the draft replies to.
+		const sortedOldestFirst = [...group].sort((a, b) => a.internalDate.getTime() - b.internalDate.getTime());
 
 		let originatingMessage: RawMessageForOpportunityProcessing | null = null;
 		let originatingOpportunityId: string | null = null;
@@ -1092,7 +1121,7 @@ export class OpportunitiesService {
 		// already marked negative and shouldn't appear in the thread history.
 		const bulkSkippedMessages: RawMessageForOpportunityProcessing[] = [];
 
-		for (const candidate of sortedNewestFirst) {
+		for (const candidate of sortedOldestFirst) {
 			result.scanned += 1;
 
 			try {
@@ -1177,8 +1206,31 @@ export class OpportunitiesService {
 				originatingMessage = candidate;
 				originatingOpportunityId = opportunityId;
 
+				// Defensive audit log so we can verify the picker's choice without re-running
+				// backfill blind. Captures the message's identity + sender so anomalies
+				// (e.g., an outbound message slipping past the self-email filter because of
+				// an alias mismatch) become greppable: `action = opportunity.thread.anchor_chosen`.
+				this.logService.logAction({
+					action: 'opportunity.thread.anchor_chosen',
+					message: `Thread ${threadId} anchored on RawMessage ${candidate.id} (from ${candidate.fromEmail ?? '<unknown>'} at ${candidate.internalDate.toISOString()})`,
+					metadata: {
+						threadId,
+						rawMessageId: candidate.id,
+						fromEmail: candidate.fromEmail,
+						fromName: candidate.fromName,
+						internalDate: candidate.internalDate.toISOString(),
+						opportunityId,
+						organizationId: candidate.organizationId,
+						threadSize: group.length
+					},
+					context: 'OpportunitiesService'
+				});
+
 				if (created && opportunityId && mailbox !== null) {
-					this.logReceivedViaMailbox(opportunityId, candidate.organizationId, mailbox);
+					this.logReceivedViaMailbox(opportunityId, candidate.organizationId, mailbox, {
+						rawMessageId: candidate.id,
+						internalDate: candidate.internalDate
+					});
 				}
 
 				if (created && opportunityId) {
@@ -1600,7 +1652,10 @@ export class OpportunitiesService {
 			});
 
 			if (created && opportunityId && mailbox !== null) {
-				this.logReceivedViaMailbox(opportunityId, rawMessage.organizationId, mailbox);
+				this.logReceivedViaMailbox(opportunityId, rawMessage.organizationId, mailbox, {
+					rawMessageId: rawMessage.id,
+					internalDate: rawMessage.internalDate
+				});
 			}
 
 			result.classifiedPositive += 1;
@@ -1876,10 +1931,49 @@ function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][n
 	};
 }
 
+/**
+ * Earliest customer-side message in the thread = when the conversation actually
+ * started, from the owner's mental-model perspective. The picker anchors on the
+ * NEWEST positive (draft-target semantics) so `opportunity.rawMessage` may not
+ * be the chronologically-first inbound — earlier customer follow-ups (or earlier
+ * messages in a batch processed via `processOneRawMessage` instead of
+ * `processThreadGroup`) attached via `attachFollowupMessage` can predate it.
+ *
+ * Walks the originating RawMessage + every inbound thread message; ignores own-
+ * mailbox outbound (those have `fromEmail` ∈ `orgEmailAddresses`). Falls back to
+ * the originating message's date when no message has a `fromEmail` we can compare.
+ */
+function computeEarliestCustomerArrival(
+	opportunity: OpportunityDetailRecord,
+	orgEmailAddresses: ReadonlySet<string>
+): Date {
+	const isInbound = (fromEmail: string | null): boolean =>
+		fromEmail === null || !orgEmailAddresses.has(fromEmail.toLowerCase());
+
+	const candidates: Date[] = [];
+	if (isInbound(opportunity.rawMessage.fromEmail)) {
+		candidates.push(opportunity.rawMessage.internalDate);
+	}
+	for (const m of opportunity.threadMessages) {
+		if (isInbound(m.fromEmail)) {
+			candidates.push(m.internalDate);
+		}
+	}
+
+	// `opportunity.rawMessage` is always present and the picker excludes self-emails,
+	// so `candidates` is at least 1 in practice. Defensive fallback for the impossible
+	// path so we never crash on an edge-case detail load.
+	if (candidates.length === 0) {
+		return opportunity.rawMessage.internalDate;
+	}
+	return candidates.reduce((earliest, current) => (current < earliest ? current : earliest));
+}
+
 function toOpportunityDetailResponseDto(
 	opportunity: OpportunityDetailRecord,
 	originalEmailBody: string,
-	timeline: OpportunityTimelineEvent[]
+	timeline: OpportunityTimelineEvent[],
+	orgEmailAddresses: ReadonlySet<string>
 ): OpportunityDetailResponseDto {
 	return {
 		// Re-uses the same field projection as the list response — keeps the shapes in
@@ -1949,6 +2043,12 @@ function toOpportunityDetailResponseDto(
 				fromEmail: m.fromEmail,
 				raw: m.raw
 			}).bodyText,
+			// Same `From`-address comparison the self-email-filter uses upstream. A
+			// thread message whose sender matches one of the org's connected mailboxes
+			// is OUR own outbound reply pulled in by the provider's "sent items" backfill
+			// — render it as such instead of mis-labeling it "Klant".
+			direction:
+				m.fromEmail !== null && orgEmailAddresses.has(m.fromEmail.toLowerCase()) ? 'outbound' : 'inbound',
 			wasDetectedAsCloser: m.wasDetectedAsCloser
 		})),
 		timeline
@@ -2139,10 +2239,15 @@ function toOpportunityTimelineEvent(
 			if (mailboxEmail === null) {
 				return null;
 			}
+			// Prefer the originating RawMessage's internalDate over Log.createdAt — the
+			// latter is import time (today for any backfilled opp), the former is when
+			// the customer actually emailed. Older Log rows written before this metadata
+			// field was added fall back to Log.createdAt.
+			const originatingInternalDate = readString(row.metadata, 'originatingInternalDate');
 			return {
 				id: row.id,
 				kind: 'received_via_mailbox',
-				occurredAt,
+				occurredAt: originatingInternalDate ?? occurredAt,
 				actorUserId: null,
 				actorName: null,
 				mailboxEmail,

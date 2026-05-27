@@ -4,7 +4,8 @@ import type {
 	OpportunityTimelineEvent,
 	ReplyDraft,
 	ReplyDraftKind,
-	ReplyDraftStatus
+	ReplyDraftStatus,
+	ThreadMessageDirection
 } from '@quoteom/shared';
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import type { ReplyDraftAttachmentResponseDto } from '@/modules/reply-draft-attachments/dto/reply-draft-attachment.response.dto';
@@ -15,6 +16,7 @@ export class CustomerReplyEntryResponseDto implements CustomerReplyEntry {
 	fromEmail!: string | null;
 	receivedAt!: string;
 	body!: string;
+	direction!: ThreadMessageDirection;
 	wasDetectedAsCloser!: boolean;
 }
 

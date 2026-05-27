@@ -300,10 +300,26 @@ export type OpportunityTimelineEvent =
 	| OpportunityReceivedViaMailboxEvent;
 
 /**
- * Inbound message from the customer attached to an opportunity's thread. Shown in
- * the detail-view timeline so the owner can see the back-and-forth without leaving
- * Quoteom. Body is the plain-text rendering of the provider payload (HTML stripped
- * + whitespace normalized via `buildRawMessageAIInput`).
+ * Direction of a thread message relative to the connected mailbox.
+ *  - `inbound`  : someone wrote TO the mailbox (the customer side).
+ *  - `outbound` : the connected mailbox sent this message (our own reply pulled
+ *                 in via Gmail sent items / Graph sent items during backfill).
+ *
+ * Computed at projection time by comparing `RawMessage.fromEmail` to the org's
+ * set of connected mailbox addresses (`findOrganizationEmailAddresses`). Drives
+ * the FE chip / label / accordion tint so the owner can read the conversation
+ * direction at a glance.
+ */
+export type ThreadMessageDirection = 'inbound' | 'outbound';
+
+/**
+ * One message attached to an opportunity's thread. Shown in the detail-view
+ * timeline so the owner can see the back-and-forth without leaving Quoteom.
+ * Body is the plain-text rendering of the provider payload (HTML stripped +
+ * whitespace normalized via `buildRawMessageAIInput`).
+ *
+ * Includes BOTH inbound customer replies and outbound own-mailbox messages
+ * (backfill pulls in sent items too) — `direction` discriminates.
  */
 export interface CustomerReplyEntry {
 	id: string;
@@ -311,6 +327,7 @@ export interface CustomerReplyEntry {
 	fromEmail: string | null;
 	receivedAt: string;
 	body: string;
+	direction: ThreadMessageDirection;
 	/**
 	 * `true` when the should-reply classifier marked this message as a conversation
 	 * closer ("Bedankt, tot dan!", "Akkoord", thumbs-up acknowledgment). Quoteom

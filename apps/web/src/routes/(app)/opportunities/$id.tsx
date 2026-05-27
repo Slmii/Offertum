@@ -1237,22 +1237,28 @@ function TimelineEventEntry({ event }: { event: OpportunityTimelineEvent }) {
 }
 
 function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
-	const senderLabel = reply.fromName ?? reply.fromEmail ?? 'Klant';
+	const isOutbound = reply.direction === 'outbound';
+	const senderLabel = reply.fromName ?? reply.fromEmail ?? (isOutbound ? 'Jij' : 'Klant');
+	const chipLabel = isOutbound ? 'Jij' : 'Klant';
+	const chipColor = isOutbound ? 'default' : 'info';
+	const verb = isOutbound ? 'verzond' : 'antwoordde';
+	const accentColor = isOutbound ? 'grey.500' : 'info.light';
+	const backgroundColor = isOutbound ? 'grey.50' : '#F5F1E8';
 
 	return (
-		<Accordion variant='outlined' disableGutters sx={{ backgroundColor: '#F5F1E8' }}>
+		<Accordion variant='outlined' disableGutters sx={{ bgcolor: backgroundColor }}>
 			<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
 				<Stack
 					direction='row'
 					spacing={1}
 					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 				>
-					<Chip size='small' label='Klant' color='info' variant='filled' />
+					<Chip size='small' label={chipLabel} color={chipColor} variant='filled' />
 					<Typography variant='caption' sx={{ fontWeight: 500 }}>
 						{senderLabel}
 					</Typography>
 					<Typography variant='caption' color='text.secondary'>
-						· antwoordde {toReadableDateTime(reply.receivedAt)}
+						· {verb} {toReadableDateTime(reply.receivedAt)}
 					</Typography>
 					{reply.wasDetectedAsCloser && (
 						<Chip
@@ -1275,7 +1281,7 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 						m: 0,
 						color: 'text.primary',
 						borderLeft: '3px solid',
-						borderColor: 'info.light',
+						borderColor: accentColor,
 						pl: 2
 					}}
 				>
