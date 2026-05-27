@@ -31,6 +31,7 @@ const TRACKED_EVENTS: ReadonlyArray<string> = [
 	'customer.subscription.created',
 	'customer.subscription.updated',
 	'customer.subscription.deleted',
+	'customer.subscription.trialing',
 	'customer.subscription.paused',
 	'customer.subscription.resumed',
 	'customer.subscription.pending_update_applied',
@@ -106,10 +107,17 @@ export class BillingService {
 			where: { id: organizationId }
 		});
 
-		const customer = await this.stripe.customers.create({
-			name: org.name,
-			metadata: { organizationId }
-		});
+		// Idempotency key scoped to the org: a retry of this exact create (network
+		// flake between us and Stripe) returns the same customer instead of leaving
+		// us with two. Per-org is the right scope because there's exactly one
+		// "create the customer for org X" operation we ever want.
+		const customer = await this.stripe.customers.create(
+			{
+				name: org.name,
+				metadata: { organizationId }
+			},
+			{ idempotencyKey: `customer-create:${organizationId}` }
+		);
 
 		// Upsert because the Subscription row may already exist with a stale customerId.
 		// Reset all the synced fields too — they belong to the dead customer.
@@ -185,30 +193,42 @@ export class BillingService {
 		// invitation will call `syncSeatCount` to bump the quantity mid-cycle (prorated).
 		const seatCount = await this.countActiveSeats(organizationId);
 
-		const session = await this.stripe.checkout.sessions.create({
-			customer: customerId,
-			mode: 'subscription',
-			line_items: [{ price: priceId, quantity: seatCount }],
-			// Payment methods are configured in the Stripe Dashboard (Payment Method
-			// Configurations) — DO NOT pass `payment_method_types` here. Letting Stripe
-			// pick dynamically maximizes conversion + lets you enable iDEAL/SEPA/cards
-			// per region from the Dashboard without a deploy. For Offertum: enable
-			// "card", "ideal", and "sepa_debit" in the Dashboard's payment methods
-			// settings for your account. iDEAL signs a SEPA mandate during checkout;
-			// recurring charges run via SEPA Direct Debit automatically.
-			currency: 'eur',
-			allow_promotion_codes: true,
-			success_url: `${webOrigin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-			cancel_url: `${webOrigin}/billing/cancel`,
-			subscription_data: {
-				metadata: { organizationId },
-				// Every new subscription starts with 14 days free. Stripe charges
-				// the saved payment method at the end of the trial automatically. The
-				// `Subscription.status` flips from "trialing" → "active" at that moment;
-				// our sync function picks that up via `customer.subscription.updated`.
-				trial_period_days: 14
-			}
-		});
+		// Per-org idempotency salted with the second-precision timestamp so honest
+		// retries within a few seconds get the same session URL, but the user can
+		// re-attempt checkout minutes later (after cancelling) without colliding.
+		// Without a salt, the same key would forever return the original session.
+		const idempotencySalt = Math.floor(Date.now() / 1000);
+		const session = await this.stripe.checkout.sessions.create(
+			{
+				customer: customerId,
+				mode: 'subscription',
+				// Trustworthy reference back to our org — visible in the Stripe Dashboard
+				// + Sessions API, distinct from `subscription_data.metadata` which is
+				// scoped to the Subscription that results from the Session.
+				client_reference_id: organizationId,
+				line_items: [{ price: priceId, quantity: seatCount }],
+				// Payment methods are configured in the Stripe Dashboard (Payment Method
+				// Configurations) — DO NOT pass `payment_method_types` here. Letting Stripe
+				// pick dynamically maximizes conversion + lets you enable iDEAL/SEPA/cards
+				// per region from the Dashboard without a deploy. For Offertum: enable
+				// "card", "ideal", and "sepa_debit" in the Dashboard's payment methods
+				// settings for your account. iDEAL signs a SEPA mandate during checkout;
+				// recurring charges run via SEPA Direct Debit automatically.
+				currency: 'eur',
+				allow_promotion_codes: true,
+				success_url: `${webOrigin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+				cancel_url: `${webOrigin}/billing/cancel`,
+				subscription_data: {
+					metadata: { organizationId },
+					// Every new subscription starts with 14 days free. Stripe charges
+					// the saved payment method at the end of the trial automatically. The
+					// `Subscription.status` flips from "trialing" → "active" at that moment;
+					// our sync function picks that up via `customer.subscription.updated`.
+					trial_period_days: 14
+				}
+			},
+			{ idempotencyKey: `checkout-create:${organizationId}:${idempotencySalt}` }
+		);
 
 		if (!session.url) {
 			throw new InternalServerErrorException(STRIPE_CHECKOUT_URL_MISSING);
@@ -242,10 +262,16 @@ export class BillingService {
 		}
 
 		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
-		const session = await this.stripe.billingPortal.sessions.create({
-			customer: sub.stripeCustomerId,
-			return_url: `${webOrigin}/billing`
-		});
+		// Same salt pattern as Checkout — within a second a retry returns the same
+		// portal URL; minutes later the user gets a fresh session.
+		const idempotencySalt = Math.floor(Date.now() / 1000);
+		const session = await this.stripe.billingPortal.sessions.create(
+			{
+				customer: sub.stripeCustomerId,
+				return_url: `${webOrigin}/billing`
+			},
+			{ idempotencyKey: `portal-create:${organizationId}:${idempotencySalt}` }
+		);
 
 		return { url: session.url };
 	}
@@ -256,6 +282,10 @@ export class BillingService {
 	 * endpoint AND every webhook. Never trust webhook payloads directly.
 	 */
 	async syncFromStripe(customerId: string): Promise<{ status: string | null }> {
+		// Stripe returns subscriptions in reverse chronological order by default
+		// (newest `created` first) — documented behavior, no `order_by` param exists
+		// on this endpoint. So `data[0]` is reliably the most recent subscription
+		// even if the customer has prior canceled ones.
 		const subscriptions = await this.stripe.subscriptions.list({
 			customer: customerId,
 			limit: 1,
@@ -430,10 +460,17 @@ export class BillingService {
 				return;
 			}
 
-			await this.stripe.subscriptions.update(sub.stripeSubscriptionId, {
-				items: [{ id: item.id, quantity: desiredQuantity }],
-				proration_behavior: 'create_prorations'
-			});
+			// Idempotency key bound to the (subscription, target quantity) tuple. A
+			// retry of the same intended transition is a no-op; a real subsequent
+			// transition (different desiredQuantity) gets a different key.
+			await this.stripe.subscriptions.update(
+				sub.stripeSubscriptionId,
+				{
+					items: [{ id: item.id, quantity: desiredQuantity }],
+					proration_behavior: 'create_prorations'
+				},
+				{ idempotencyKey: `seat-sync:${sub.stripeSubscriptionId}:${desiredQuantity}` }
+			);
 
 			this.logService.logAction({
 				action: 'billing.seats.synced',
@@ -478,6 +515,39 @@ export class BillingService {
 			return;
 		}
 
+		// Dedup. Stripe retries the same `event.id` with exponential backoff when our
+		// endpoint doesn't 2xx in time, AND occasionally redelivers events after the
+		// fact (replay from the Dashboard, dual-region delivery). Insert-first means
+		// the unique constraint on `eventId` decides who gets to process — losers
+		// throw on the insert (P2002 unique violation) and return early. Idempotent
+		// `syncFromStripe` would still produce the right end state on a duplicate
+		// run, but skipping avoids redundant Stripe API calls + log spam.
+		try {
+			await this.prisma.stripeWebhookEvent.create({
+				data: { eventId: event.id, type: event.type }
+			});
+		} catch (error) {
+			if (isUniqueConstraintError(error)) {
+				this.logService.logAction({
+					action: 'billing.webhook.duplicate_delivery',
+					message: `Webhook event ${event.id} already processed — skipping`,
+					metadata: { eventId: event.id, eventType: event.type },
+					context: 'BillingService'
+				});
+				return;
+			}
+			// Any other persistence failure is unexpected — log + still process
+			// the event so a transient DB hiccup doesn't drop a real Stripe signal.
+			this.logService.logAction({
+				action: 'billing.webhook.dedup_persist_failed',
+				message: `Failed to persist webhook dedup row for ${event.id} — processing anyway`,
+				metadata: { eventId: event.id, eventType: event.type },
+				level: 'warn',
+				stack: error instanceof Error ? error.stack : undefined,
+				context: 'BillingService'
+			});
+		}
+
 		const object = event.data.object as { customer?: string | null };
 		const customerId = object.customer;
 
@@ -494,6 +564,13 @@ export class BillingService {
 
 		await this.syncFromStripe(customerId);
 	}
+}
+
+/** Prisma's P2002 unique-constraint violation, surfaced via the error code. */
+function isUniqueConstraintError(error: unknown): boolean {
+	return (
+		typeof error === 'object' && error !== null && 'code' in error && (error as { code: unknown }).code === 'P2002'
+	);
 }
 
 interface PaymentMethodLike {

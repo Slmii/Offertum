@@ -436,6 +436,26 @@ model Subscription {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
+// Dedup ledger for Stripe webhook deliveries. Stripe retries the same `event.id`
+// with exponential backoff when our endpoint doesn't 2xx within ~10s. Without a
+// ledger, every retry would re-run `syncFromStripe` (idempotent on the local
+// write side, but burns Stripe API calls + log spam + amplifies any concurrent-
+// processing window). The handler inserts the row before processing — Postgres'
+// unique constraint on `eventId` rejects duplicate deliveries; we catch the
+// violation and respond 200 without processing.
+model StripeWebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  // `event.id` from Stripe (`evt_...`). The unique constraint is the dedup
+  // primitive — every webhook delivery races to insert this row.
+  eventId     String   @unique
+  // Event type for forensics / log filtering (`customer.subscription.updated`,
+  // `invoice.paid`, etc.). Not part of the dedup key.
+  type        String
+  processedAt DateTime @default(now())
+
+  @@index([type, processedAt(sort: Desc)])
+}
+
 model EmailAccount {
   id                      String        @id @default(uuid()) @db.Uuid
   organizationId          String        @db.Uuid
