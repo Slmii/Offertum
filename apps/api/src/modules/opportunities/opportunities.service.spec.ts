@@ -169,6 +169,7 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 		organizationId: 'org-1',
 		emailAccountId: 'email-account-1',
 		rawMessageId: 'raw-1',
+		latestCustomerRawMessageId: 'raw-1',
 		status,
 		aiProvider: 'openai/gpt-4o',
 		classifiedAiCallId: 'classifier-call-id',

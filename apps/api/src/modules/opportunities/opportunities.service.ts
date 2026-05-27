@@ -1334,10 +1334,16 @@ export class OpportunitiesService {
 			// Classifier may have already marked some negative within the loop above;
 			// re-attach them anyway so the thread history is complete from the UI's
 			// perspective. `attachThreadMessage` flips them positive + sets classifiedAt.
+			// Self-emails (own-mailbox outbound) attach for thread completeness but
+			// must NOT advance `latestCustomerRawMessageId` — the send path uses that
+			// pointer's `Message-ID` for `In-Reply-To`, and threading on our own outbound
+			// would make recipients see broken parent chains.
+			const isSelfEmail = m.fromEmail !== null && orgEmailAddresses.has(m.fromEmail.toLowerCase());
 			try {
 				await this.repository.attachThreadMessage({
 					rawMessageId: m.id,
-					opportunityId: originatingOpportunityId
+					opportunityId: originatingOpportunityId,
+					customerInternalDate: isSelfEmail ? null : m.internalDate
 				});
 				result.classifiedPositive += 1;
 			} catch (error) {
@@ -1512,7 +1518,12 @@ export class OpportunitiesService {
 						// Real customer reply (not own-org echo, not closer) → flip to NEW.
 						// Closer or own-org → keep current status (REPLIED stays REPLIED).
 						resetToNew: !isOrgOwnSender && !closerSkip,
-						wasDetectedAsCloser: closerSkip
+						wasDetectedAsCloser: closerSkip,
+						// Own-org outbound never advances the latest-customer pointer (it'd
+						// pollute the send path's threading-header source). Customer-side
+						// messages — including closers — bump it forward so a future draft
+						// references the most recent customer Message-ID.
+						customerInternalDate: isOrgOwnSender ? null : rawMessage.internalDate
 					});
 					result.classifiedPositive += 1;
 

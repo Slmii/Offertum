@@ -201,21 +201,21 @@ model User {
 }
 
 model Organization {
-  id                      String   @id @default(uuid()) @db.Uuid
-  name                    String
+  id                        String   @id @default(uuid()) @db.Uuid
+  name                      String
   // Per-org follow-up cadence + cap. The scheduler scans REPLIED opps
   // daily; a follow-up draft is generated when `(now − latestSentAt) ≥
   // followUpCadenceDays`, capped at `followUpMaxCount` automatic follow-ups per opp.
   // Defaults: every 4 days, max 2 follow-ups before
   // we stop nudging. The owner can set `followUpMaxCount = 0` to disable the
   // scheduler entirely for the org.
-  followUpCadenceDays     Int      @default(4)
-  followUpMaxCount        Int      @default(2)
+  followUpCadenceDays       Int      @default(4)
+  followUpMaxCount          Int      @default(2)
   // Per-org auto-cold threshold. The `auto-cold-scheduler` cron flips a REPLIED
   // opportunity to COLD when the latest SENT draft is older than this many days AND
   // the silence-check-in budget (followUpMaxCount) has been exhausted. Default 14
   // days; 90-day ceiling. Set to 0 to disable the auto-cold cron entirely for the org.
-  coldAfterDays           Int      @default(14)
+  coldAfterDays             Int      @default(14)
   // ────────────────────────────────────────────────────────────────────────
   // Business details (W9.3) — appear on every quote PDF (W9.4) + invoice.
   // Distinct from `name` above: `name` is the internal label the owner picked
@@ -225,27 +225,27 @@ model Organization {
   // All optional — the quote PDF degrades gracefully when fields are missing
   // (warns the owner up-front; never blocks send).
   // ────────────────────────────────────────────────────────────────────────
-  companyName             String?
+  companyName               String?
   // Country-specific company-registration number (NL: KvK, UK: Companies House,
   // DE: Handelsregister HRB, FR: SIREN, BE: KBO/BCE, etc.). Stored as free text
   // so the UI can vary the label per market without a schema change.
   companyRegistrationNumber String?
   // EU VAT identifier (NL/BE: BTW-nummer, DE: USt-IdNr, FR: TVA, etc.). The EU
   // VAT prefix already encodes the country; one column covers every member state.
-  companyVatNumber        String?
-  companyAddress          String?  @db.Text
+  companyVatNumber          String?
+  companyAddress            String?  @db.Text
   // Default footer line printed on quote PDFs. Free-text, supports a couple of
   // lines (account number, terms reference, etc.).
-  companyFooter           String?  @db.Text
+  companyFooter             String?  @db.Text
   // Default payment-terms days printed on the quote ("Te voldoen binnen X
   // dagen na ontvangst van de factuur").
-  defaultPaymentTermsDays Int      @default(30)
+  defaultPaymentTermsDays   Int      @default(30)
   // Storage key for the company logo via `AttachmentStorage` (the same seam
   // ReplyDraftAttachment uses). NULL = no logo set; the PDF falls back to a
   // text-only header. Upload endpoint lands as a W9.3 follow-up.
-  logoStorageKey          String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  logoStorageKey            String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   memberships             Membership[]
   invitations             Invitation[]
@@ -547,9 +547,13 @@ model RawMessage {
   // populate this column. SetNull on delete so AICall retention purges don't cascade.
   opportunityId       String?   @db.Uuid
 
-  emailAccount      EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-  opportunity       Opportunity? @relation("OpportunityOriginatingRawMessage")
-  threadOpportunity Opportunity? @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
+  emailAccount         EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  opportunity          Opportunity? @relation("OpportunityOriginatingRawMessage")
+  threadOpportunity    Opportunity? @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
+  // Inverse for `Opportunity.latestCustomerRawMessage`. Same RawMessage can be the
+  // originating AND the latest-customer (single-message threads) or only the
+  // latest-customer (followup message later in the thread).
+  latestForOpportunity Opportunity? @relation("OpportunityLatestCustomerRawMessage")
 
   // Idempotency on backfill + delta sync: re-fetching the same message ID is a no-op.
   @@unique([emailAccountId, providerMessageId])
@@ -560,62 +564,83 @@ model RawMessage {
 // The user-facing quote request entity. RawMessage remains the immutable source
 // payload; Opportunity is the indexed, editable workflow record.
 model Opportunity {
-  id                   String            @id @default(uuid()) @db.Uuid
-  organizationId       String            @db.Uuid
-  emailAccountId       String            @db.Uuid
-  rawMessageId         String            @unique @db.Uuid
-  status               OpportunityStatus @default(NEW)
+  id                         String            @id @default(uuid()) @db.Uuid
+  organizationId             String            @db.Uuid
+  emailAccountId             String            @db.Uuid
+  // Originating customer message — the OLDEST non-self positive in the thread, set
+  // by `processThreadGroup`'s oldest-first picker. Drives the "Originele e-mail" UI
+  // panel + the extractor's input. `@unique` since each RawMessage can only originate
+  // one Opportunity (idempotency on backfill re-runs).
+  rawMessageId               String            @unique @db.Uuid
+  // Latest inbound (customer-side) message attached to this opp's thread. Distinct
+  // from `rawMessageId` so we can keep two independent semantics on one row:
+  //   - originating = drives "Originele e-mail" display + AI extractor (oldest)
+  //   - latest customer = drives RFC 2822 threading headers (`In-Reply-To` /
+  //     `References`) on outbound sends + the AI draft-generator's prompt input.
+  // Set to `rawMessageId` at opp creation (the originating IS the only customer
+  // message at that point). Bumped forward by `attachFollowupMessage` /
+  // `attachThreadMessage` whenever a NEWER customer-side message lands on the
+  // thread. Own-mailbox outbound messages (`isOrgOwnSender = true`) do NOT update
+  // this pointer — they're our replies, not the customer's. `onDelete: SetNull`
+  // so deleting the RawMessage (rare; usually retention purge) doesn't cascade-
+  // delete the opp.
+  // `@unique` because each RawMessage belongs to at most one opportunity's thread
+  // (via `RawMessage.opportunityId`) and can therefore be the latest-customer of
+  // at most one opp — Prisma requires unique on the defining side of a 1:1.
+  latestCustomerRawMessageId String?           @unique @db.Uuid
+  status                     OpportunityStatus @default(NEW)
   // `provider/model` of the call that produced this opportunity's structured fields
   // (the extractor call). E.g. `openai/gpt-4o`, `azure-openai/gpt-4o-mini`. Kept as
   // String because providers add SKUs faster than we'd want to migrate the schema.
-  aiProvider           String
+  aiProvider                 String
   // FK to the AICall row that ran the classifier for this RawMessage. Nullable because
   // the AICall log persist is best-effort — a DB hiccup on the AICall write shouldn't
   // block the Opportunity from being created. SetNull on delete so an AICall retention
   // policy that purges old rows doesn't cascade-delete real product data.
-  classifiedAiCallId   String?           @db.Uuid
+  classifiedAiCallId         String?           @db.Uuid
   // FK to the AICall row that ran the extractor for this RawMessage. Same nullability +
   // SetNull semantics as `classifiedAiCallId`.
-  extractedAiCallId    String?           @db.Uuid
-  classifierConfidence Float?
-  classifierReason     String?           @db.Text
-  customerName         String?
-  customerEmail        String?
-  address              String?           @db.Text
-  requestType          String
-  urgency              Urgency
-  customerDeadline     DateTime?
-  customerAppointment  DateTime?
-  deliverableHints     Json
+  extractedAiCallId          String?           @db.Uuid
+  classifierConfidence       Float?
+  classifierReason           String?           @db.Text
+  customerName               String?
+  customerEmail              String?
+  address                    String?           @db.Text
+  requestType                String
+  urgency                    Urgency
+  customerDeadline           DateTime?
+  customerAppointment        DateTime?
+  deliverableHints           Json
   // Soft-disable (NOT hard-delete) when the owner marks this opportunity as
   // not a real lead. Preserving the row keeps `classifiedAiCallId` reachable for the
   // year-2 self-improvement story (audit trail) and lets the admin precision
   // tile compute `1 − dismissed(NOT_A_QUOTE) / total`.
   // Invariant enforced in DB via raw SQL CHECK: (dismissedAt IS NULL) = (dismissReason IS NULL).
-  dismissedAt          DateTime?
-  dismissReason        DismissReason?
-  dismissedById        String?           @db.Uuid
+  dismissedAt                DateTime?
+  dismissReason              DismissReason?
+  dismissedById              String?           @db.Uuid
   // Per-opp assignment. NULL = unassigned (any org member can pick it up). When set,
   // the assignee is the "owner" of the workflow on this opp — get filtered "Aan mij
   // toegewezen" view, and a future "assignee changed"-style notification surface.
   // ON DELETE SET NULL so deleting a user doesn't cascade-delete their opps.
-  assignedToUserId     String?           @db.Uuid
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  assignedToUserId           String?           @db.Uuid
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
 
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  emailAccount     EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-  rawMessage       RawMessage   @relation("OpportunityOriginatingRawMessage", fields: [rawMessageId], references: [id], onDelete: Cascade)
-  threadMessages   RawMessage[] @relation("OpportunityThreadMessages")
-  classifiedAiCall AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
-  extractedAiCall  AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
-  dismissedBy      User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
-  assignedTo       User?        @relation("OpportunityAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  emailAccount             EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  rawMessage               RawMessage   @relation("OpportunityOriginatingRawMessage", fields: [rawMessageId], references: [id], onDelete: Cascade)
+  latestCustomerRawMessage RawMessage?  @relation("OpportunityLatestCustomerRawMessage", fields: [latestCustomerRawMessageId], references: [id], onDelete: SetNull)
+  threadMessages           RawMessage[] @relation("OpportunityThreadMessages")
+  classifiedAiCall         AICall?      @relation("OpportunityClassifiedAICall", fields: [classifiedAiCallId], references: [id], onDelete: SetNull)
+  extractedAiCall          AICall?      @relation("OpportunityExtractedAICall", fields: [extractedAiCallId], references: [id], onDelete: SetNull)
+  dismissedBy              User?        @relation("OpportunityDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+  assignedTo               User?        @relation("OpportunityAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   // 1:N drafts (formerly 1:1 via `@unique` on `ReplyDraft.opportunityId`). One opp
   // can have multiple drafts: the original + one or more follow-ups composed after a
   // customer reply or via the "Concept-vervolg opstellen" button. Read sites use
   // `orderBy: createdAt desc, take: 1` to surface the *current* draft.
-  replyDrafts      ReplyDraft[]
+  replyDrafts              ReplyDraft[]
 
   @@index([organizationId, status, createdAt(sort: Desc)])
   @@index([organizationId, customerDeadline])

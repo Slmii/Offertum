@@ -319,14 +319,35 @@ export class OpportunitiesRepository {
 	 * for messages whose `classifiedAt IS NULL` and which belong to the same thread as
 	 * the originating message).
 	 */
-	async attachThreadMessage(input: { rawMessageId: string; opportunityId: string }): Promise<void> {
+	async attachThreadMessage(input: {
+		rawMessageId: string;
+		opportunityId: string;
+		/**
+		 * Internal date of the attaching RawMessage. When set, the opp's
+		 * `latestCustomerRawMessageId` advances to this message if it's strictly newer
+		 * than the current pointer. `null` to skip the update — used by callers that
+		 * already know this attach is a self-email (own-mailbox outbound) and shouldn't
+		 * count as customer activity.
+		 */
+		customerInternalDate: Date | null;
+	}): Promise<void> {
 		const now = new Date();
-		await this.prisma.rawMessage.update({
-			where: { id: input.rawMessageId },
-			data: {
-				opportunityId: input.opportunityId,
-				isQuoteRequest: true,
-				classifiedAt: now
+		await this.prisma.$transaction(async tx => {
+			await tx.rawMessage.update({
+				where: { id: input.rawMessageId },
+				data: {
+					opportunityId: input.opportunityId,
+					isQuoteRequest: true,
+					classifiedAt: now
+				}
+			});
+			if (input.customerInternalDate !== null) {
+				await this.advanceLatestCustomerPointer(
+					tx,
+					input.opportunityId,
+					input.rawMessageId,
+					input.customerInternalDate
+				);
 			}
 		});
 	}
@@ -347,10 +368,19 @@ export class OpportunitiesRepository {
 		opportunityId: string;
 		resetToNew: boolean;
 		wasDetectedAsCloser?: boolean;
+		/**
+		 * Internal date of the attaching RawMessage. Same semantics as
+		 * `attachThreadMessage.customerInternalDate`: when set, the opp's
+		 * `latestCustomerRawMessageId` advances to this message if it's strictly newer
+		 * than the current pointer. Callers pass `null` for own-mailbox outbound
+		 * (which by definition isn't a customer message and shouldn't shift the
+		 * threading-header source).
+		 */
+		customerInternalDate: Date | null;
 	}): Promise<void> {
 		const now = new Date();
-		const writes: Prisma.PrismaPromise<unknown>[] = [
-			this.prisma.rawMessage.update({
+		await this.prisma.$transaction(async tx => {
+			await tx.rawMessage.update({
 				where: { id: input.rawMessageId },
 				data: {
 					opportunityId: input.opportunityId,
@@ -358,20 +388,54 @@ export class OpportunitiesRepository {
 					classifiedAt: now,
 					wasDetectedAsCloser: input.wasDetectedAsCloser ?? false
 				}
-			})
-		];
-		// Only flip status when a customer reply lands. Own-org sent copies (Gmail/Graph
-		// returning our outbound message via delta-sync) must NOT clobber the
-		// markSent → REPLIED transition the ReplyDraftsService just wrote.
-		if (input.resetToNew) {
-			writes.push(
-				this.prisma.opportunity.update({
+			});
+			// Only flip status when a customer reply lands. Own-org sent copies (Gmail/Graph
+			// returning our outbound message via delta-sync) must NOT clobber the
+			// markSent → REPLIED transition the ReplyDraftsService just wrote.
+			if (input.resetToNew) {
+				await tx.opportunity.update({
 					where: { id: input.opportunityId },
 					data: { status: PrismaOpportunityStatus.NEW }
-				})
-			);
-		}
-		await this.prisma.$transaction(writes);
+				});
+			}
+			if (input.customerInternalDate !== null) {
+				await this.advanceLatestCustomerPointer(
+					tx,
+					input.opportunityId,
+					input.rawMessageId,
+					input.customerInternalDate
+				);
+			}
+		});
+	}
+
+	/**
+	 * Move `Opportunity.latestCustomerRawMessageId` forward to `rawMessageId` iff
+	 * the candidate's `internalDate` is strictly newer than what we have on file.
+	 * Conditional UPDATE (one round-trip; the conditional lives in SQL) — avoids a
+	 * read-then-write race when two follow-ups arrive concurrently for the same opp.
+	 * Older / same-time candidates are no-ops so out-of-order delta-sync deliveries
+	 * never regress the pointer to an earlier message.
+	 */
+	private async advanceLatestCustomerPointer(
+		tx: Prisma.TransactionClient,
+		opportunityId: string,
+		candidateRawMessageId: string,
+		candidateInternalDate: Date
+	): Promise<void> {
+		await tx.$executeRaw`
+			UPDATE "Opportunity" o
+			SET "latestCustomerRawMessageId" = ${candidateRawMessageId}::uuid
+			WHERE o.id = ${opportunityId}::uuid
+			  AND (
+			    o."latestCustomerRawMessageId" IS NULL
+			    OR (
+			      SELECT rm."internalDate"
+			      FROM "RawMessage" rm
+			      WHERE rm.id = o."latestCustomerRawMessageId"
+			    ) < ${candidateInternalDate}
+			  )
+		`;
 	}
 
 	async markRawMessageNegative(rawMessageId: string): Promise<void> {
@@ -509,6 +573,10 @@ export class OpportunitiesRepository {
 						organizationId: input.rawMessage.organizationId,
 						emailAccountId: input.rawMessage.emailAccountId,
 						rawMessageId: input.rawMessage.id,
+						// At creation, the originating IS the only customer message → it's
+						// also the latest. Subsequent followup attaches bump this forward
+						// when newer customer messages land on the thread.
+						latestCustomerRawMessageId: input.rawMessage.id,
 						status: PrismaOpportunityStatus.NEW,
 						aiProvider: input.aiProvider,
 						classifiedAiCallId: input.classifiedAiCallId,

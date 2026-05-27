@@ -225,6 +225,8 @@ export class ReplyDraftsRepository {
 			select: {
 				id: true,
 				organizationId: true,
+				rawMessageId: true,
+				latestCustomerRawMessageId: true,
 				customerName: true,
 				address: true,
 				requestType: true,
@@ -249,13 +251,13 @@ export class ReplyDraftsRepository {
 						emailAccount: { select: { provider: true } }
 					}
 				},
-				//  bug-fix — include the LATEST attached thread message (a customer
-				// reply that came in after the originating email). The follow-up draft
-				// generator uses this as its `bodyText` so the AI responds to the
-				// customer's most recent words. `take: 1` keeps the payload tiny.
-				threadMessages: {
-					orderBy: { internalDate: 'desc' },
-					take: 1,
+				// Direct pointer to the newest customer-side thread message (maintained
+				// by attach paths). Drives the follow-up draft generator's `bodyText` so
+				// the AI responds to the customer's most recent words. When equal to
+				// `rawMessageId` (no follow-up yet), we collapse it to `null` below so
+				// the generator falls back to `rawMessage` and we don't render the same
+				// content under two aliases in the prompt.
+				latestCustomerRawMessage: {
 					select: {
 						subject: true,
 						fromName: true,
@@ -274,7 +276,10 @@ export class ReplyDraftsRepository {
 		// Flatten emailAccount.provider up into rawMessage so the service-layer shape stays
 		// neatly nested without an extra level. This matches how OpportunitiesRepository
 		// surfaces provider on `RawMessageForOpportunityProcessing`.
-		const latest = opportunity.threadMessages[0];
+		const hasDistinctFollowup =
+			opportunity.latestCustomerRawMessage !== null &&
+			opportunity.latestCustomerRawMessageId !== opportunity.rawMessageId;
+		const latest = hasDistinctFollowup ? opportunity.latestCustomerRawMessage : null;
 		return {
 			id: opportunity.id,
 			organizationId: opportunity.organizationId,
@@ -686,12 +691,14 @@ export class ReplyDraftsRepository {
 								threadId: true
 							}
 						},
-						// Latest inbound thread message — newest follow-up the customer (or
-						// own mailbox) sent after the originating. Only `raw` is needed; the
-						// send path extracts Message-ID + References headers from it.
-						threadMessages: {
-							orderBy: { internalDate: 'desc' },
-							take: 1,
+						// Direct pointer to the newest customer-side message on the thread,
+						// maintained by `attachThreadMessage` / `attachFollowupMessage`. The
+						// send path uses its `raw` to source RFC 2822 threading headers.
+						// `null` for fresh opps with no follow-up yet → caller falls back
+						// to `rawMessage`. Faster than the old `threadMessages: take: 1`
+						// subquery (no per-row sort), and the maintained pointer guarantees
+						// it stays customer-side (the subquery would pick up own-org outbound).
+						latestCustomerRawMessage: {
 							select: { raw: true }
 						}
 					}
@@ -736,8 +743,8 @@ export class ReplyDraftsRepository {
 				raw: draft.opportunity.rawMessage.raw,
 				threadId: draft.opportunity.rawMessage.threadId
 			},
-			latestThreadMessage: draft.opportunity.threadMessages[0]
-				? { raw: draft.opportunity.threadMessages[0].raw }
+			latestThreadMessage: draft.opportunity.latestCustomerRawMessage
+				? { raw: draft.opportunity.latestCustomerRawMessage.raw }
 				: null,
 			attachments: draft.attachments.map(a => ({
 				id: a.id,
