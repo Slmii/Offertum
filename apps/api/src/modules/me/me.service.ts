@@ -262,7 +262,7 @@ export class MeService {
 		const row = await this.prisma.organization.findUniqueOrThrow({
 			where: { id: organizationId },
 			select: {
-				companyName: true,
+				name: true,
 				companyRegistrationNumber: true,
 				companyVatNumber: true,
 				companyAddress: true,
@@ -273,7 +273,7 @@ export class MeService {
 		});
 
 		return {
-			companyName: row.companyName,
+			name: row.name,
 			companyRegistrationNumber: row.companyRegistrationNumber,
 			companyVatNumber: row.companyVatNumber,
 			companyAddress: row.companyAddress,
@@ -295,8 +295,13 @@ export class MeService {
 	): Promise<BusinessDetails> {
 		const normalized: Record<string, string | number | null> = {};
 
-		if (input.companyName !== undefined) {
-			normalized.companyName = normalizeBusinessText(input.companyName);
+		// `name` is non-nullable (Organization.name DB column). The DTO's MinLength(1)
+		// + trim here keep the column from being filled with whitespace-only garbage.
+		if (input.name !== undefined) {
+			const trimmed = input.name.trim();
+			if (trimmed.length > 0) {
+				normalized.name = trimmed;
+			}
 		}
 		if (input.companyRegistrationNumber !== undefined) {
 			normalized.companyRegistrationNumber = normalizeBusinessText(input.companyRegistrationNumber);
@@ -318,7 +323,7 @@ export class MeService {
 			where: { id: organizationId },
 			data: normalized,
 			select: {
-				companyName: true,
+				name: true,
 				companyRegistrationNumber: true,
 				companyVatNumber: true,
 				companyAddress: true,
@@ -339,8 +344,16 @@ export class MeService {
 			context: 'MeService'
 		});
 
+		// Push the new name to Stripe when the owner edits it here. Idempotent at
+		// the BillingService layer — only fires the Stripe API call if the value
+		// actually differs from what Stripe has. Skipped for orgs that haven't
+		// reached Checkout yet (no Stripe customer to update).
+		if (input.name !== undefined) {
+			await this.billing.syncCustomerNameForOrg(organizationId);
+		}
+
 		return {
-			companyName: updated.companyName,
+			name: updated.name,
 			companyRegistrationNumber: updated.companyRegistrationNumber,
 			companyVatNumber: updated.companyVatNumber,
 			companyAddress: updated.companyAddress,

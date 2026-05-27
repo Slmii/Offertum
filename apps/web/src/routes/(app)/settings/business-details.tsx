@@ -35,7 +35,7 @@ function BusinessDetailsSettingsPage() {
 	const onSubmit = (values: BusinessDetailsForm) => {
 		update.mutate(
 			{
-				companyName: values.companyName.length === 0 ? null : values.companyName,
+				name: values.name,
 				companyRegistrationNumber:
 					values.companyRegistrationNumber.length === 0 ? null : values.companyRegistrationNumber,
 				companyVatNumber: values.companyVatNumber.length === 0 ? null : values.companyVatNumber,
@@ -69,7 +69,7 @@ function BusinessDetailsSettingsPage() {
 					action={onSubmit}
 					schema={BusinessDetailsSchema}
 					defaultValues={{
-						companyName: data.companyName ?? '',
+						name: data.name,
 						companyRegistrationNumber: data.companyRegistrationNumber ?? '',
 						companyVatNumber: data.companyVatNumber ?? '',
 						companyAddress: data.companyAddress ?? '',
@@ -78,7 +78,7 @@ function BusinessDetailsSettingsPage() {
 					}}
 				>
 					<Stack spacing={4}>
-						<Field name='companyName' label='Bedrijfsnaam' fullWidth />
+						<Field name='name' label='Bedrijfsnaam' fullWidth />
 						<Stack direction='row' spacing={2}>
 							<Field name='companyRegistrationNumber' label='KvK-nummer' fullWidth />
 							<Field name='companyVatNumber' label='BTW-nummer' fullWidth />

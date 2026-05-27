@@ -294,9 +294,13 @@ function findRefusal(
  * be one or two levels deep (APIConnectionError → fetch fail → AggregateError).
  */
 function extractCauseMessage(error: unknown): string | null {
-	if (typeof error !== 'object' || error === null) return null;
+	if (typeof error !== 'object' || error === null) {
+		return null;
+	}
 	const cause = (error as { cause?: unknown }).cause;
-	if (cause === null || cause === undefined) return null;
+	if (cause === null || cause === undefined) {
+		return null;
+	}
 	if (cause instanceof Error) {
 		// AggregateError carries the actual underlying errors in `.errors[]`.
 		if ('errors' in cause && Array.isArray((cause as { errors: unknown[] }).errors)) {

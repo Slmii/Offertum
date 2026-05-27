@@ -1,12 +1,11 @@
 /**
  * Per-org business-details surface used on quote PDFs (W9.4 onward) + future
- * invoice integrations. Distinct from `Organization.name` which is the
- * internal label; `companyName` is the customer-facing legal name printed on
- * documents.
- *
- * All fields are nullable — the quote PDF renders a warning at draft time when
- * required fields are missing but never blocks sending. The owner sets these
- * once on `/settings/business-details`.
+ * invoice integrations. `name` here is the same `Organization.name` set at
+ * signup — the business-details page is just the second editing surface for it,
+ * alongside the country-agnostic registration / VAT / address / footer fields
+ * that appear on customer documents. (A previous design split this into a
+ * separate `companyName` column; the split was retired 2026-05-28 because the
+ * internal label and the legal entity name always matched in practice.)
  *
  * `companyRegistrationNumber` is the country-agnostic field for chamber-of-
  * commerce / trade-register identifiers (NL: KvK, UK: Companies House, DE: HRB,
@@ -14,7 +13,10 @@
  * identifier is a distinct legal concept from the registration number.
  */
 export interface BusinessDetails {
-	companyName: string | null;
+	/** The org's customer-facing legal name. Required at the schema level
+	 * (set at signup, never NULL) but exposed as a string here for symmetry
+	 * with the rest of the editable surface. */
+	name: string;
 	companyRegistrationNumber: string | null;
 	companyVatNumber: string | null;
 	companyAddress: string | null;
@@ -26,7 +28,7 @@ export interface BusinessDetails {
 }
 
 export interface UpdateBusinessDetailsInput {
-	companyName?: string | null;
+	name?: string;
 	companyRegistrationNumber?: string | null;
 	companyVatNumber?: string | null;
 	companyAddress?: string | null;

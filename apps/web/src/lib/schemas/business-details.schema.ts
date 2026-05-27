@@ -10,7 +10,11 @@ import {
 import z from 'zod';
 
 export const BusinessDetailsSchema = z.object({
-	companyName: z.string().trim().max(COMPANY_NAME_MAX_LENGTH, `Maximaal ${COMPANY_NAME_MAX_LENGTH} tekens`),
+	name: z
+		.string()
+		.trim()
+		.min(1, 'Vul je bedrijfsnaam in')
+		.max(COMPANY_NAME_MAX_LENGTH, `Maximaal ${COMPANY_NAME_MAX_LENGTH} tekens`),
 	companyRegistrationNumber: z
 		.string()
 		.trim()

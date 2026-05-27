@@ -218,14 +218,15 @@ model Organization {
   coldAfterDays             Int      @default(14)
   // ────────────────────────────────────────────────────────────────────────
   // Business details (W9.3) — appear on every quote PDF (W9.4) + invoice.
-  // Distinct from `name` above: `name` is the internal label the owner picked
-  // at signup; `companyName` is the legal/customer-facing name printed on
-  // documents. They often match but not always (DBA, holding/operating-company
-  // splits).
-  // All optional — the quote PDF degrades gracefully when fields are missing
-  // (warns the owner up-front; never blocks send).
+  // `name` above is the single source of truth for the customer-facing legal
+  // name — edited at signup, re-edited on `/settings/business-details`.
+  // (A previous design split this into a separate `companyName` column on the
+  // hypothesis that the internal label and the legal entity name would diverge
+  // for holding/operating splits; in practice they always matched and dropped
+  // 2026-05-28.)
+  // All other fields here are optional — the quote PDF degrades gracefully
+  // when fields are missing (warns the owner up-front; never blocks send).
   // ────────────────────────────────────────────────────────────────────────
-  companyName               String?
   // Country-specific company-registration number (NL: KvK, UK: Companies House,
   // DE: Handelsregister HRB, FR: SIREN, BE: KBO/BCE, etc.). Stored as free text
   // so the UI can vary the label per market without a schema change.
@@ -428,6 +429,13 @@ model Subscription {
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean   @default(false)
+  // When set, Stripe has a `pending_update` on the subscription — a change (price
+  // swap, quantity change made via the Portal that requires payment confirmation,
+  // etc.) is staged and will be applied when the customer completes payment OR
+  // expire on this timestamp. Surfaced in the `/billing/status` response so the
+  // UI can render a "plan change scheduled / expires <date>" banner. NULL when
+  // no pending update exists (the common case).
+  pendingUpdateExpiresAt DateTime?
   paymentMethodBrand   String?
   paymentMethodLast4   String?
   createdAt            DateTime  @default(now())

@@ -189,7 +189,7 @@ Apply via composite decorators:
 
 ### Per-seat billing model
 
-Stripe Price is graduated tiered: tier 1 = first `SEATS_INCLUDED` (3) seats at flat €149, tier 2 = €30/seat overage. `BillingService.syncSeatCount(orgId)` reconciles Stripe's billed `quantity` with `Membership.count` after every invitation accept, with `proration_behavior: 'create_prorations'`. Skipped during `local_trial` and after `canceled`. Trial orgs are capped at `SEATS_INCLUDED` seats (invitation creation rejects with `402 trial_seat_limit`).
+Stripe Price is graduated tiered: tier 1 = first `SEATS_INCLUDED` (3) seats at flat 50, tier 2 = 10/seat overage. `BillingService.syncSeatCount(orgId)` reconciles Stripe's billed `quantity` with `Membership.count` after every invitation accept, with `proration_behavior: 'create_prorations'`. Skipped during `local_trial` and after `canceled`. Trial orgs are capped at `SEATS_INCLUDED` seats (invitation creation rejects with `402 trial_seat_limit`).
 
 ### Logging routes through the DB
 

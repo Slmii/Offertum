@@ -23,6 +23,11 @@ export class BillingStatusResponseDto implements BillingStatus {
 
 	cancelAtPeriodEnd!: boolean;
 
+	/** ISO timestamp; non-null when Stripe has a `pending_update` staged on the
+	 * subscription that's waiting for payment confirmation. See shared
+	 * `BillingStatus.pendingUpdateExpiresAt` for the full description. */
+	pendingUpdateExpiresAt!: string | null;
+
 	paymentMethodBrand!: string | null;
 	paymentMethodLast4!: string | null;
 

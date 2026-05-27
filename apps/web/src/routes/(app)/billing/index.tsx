@@ -1,5 +1,5 @@
-import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { SectionError } from '@/components/SectionError.component';
 import { billingStatusQueryOptions, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
 import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
@@ -35,7 +35,7 @@ function BillingPage() {
 					<BackToHomeButton />
 				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Manage your Offertum subscription. €149/month after a 14-day free trial.
+					Manage your Offertum subscription. €50/month after a 14-day free trial.
 				</Typography>
 
 				<StatusPanel

@@ -36,6 +36,15 @@ export interface BillingStatus {
 	 */
 	currentPeriodEnd: string | null;
 	cancelAtPeriodEnd: boolean;
+	/**
+	 * When non-null, Stripe has a `pending_update` staged on the subscription — a
+	 * change (e.g. plan upgrade through the Portal that requires 3DS confirmation)
+	 * is waiting for payment, and this is the ISO timestamp when it expires if the
+	 * customer doesn't complete payment. UI can render a "Plan change pending —
+	 * expires <date>" banner so the owner knows action is needed. `null` for the
+	 * common case where no pending update exists.
+	 */
+	pendingUpdateExpiresAt: string | null;
 	paymentMethodBrand: string | null;
 	paymentMethodLast4: string | null;
 	seats: BillingSeats;

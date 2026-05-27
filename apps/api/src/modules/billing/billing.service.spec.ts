@@ -199,6 +199,7 @@ describe('BillingService.syncFromStripe', () => {
 				currentPeriodStart: null,
 				currentPeriodEnd: null,
 				cancelAtPeriodEnd: false,
+				pendingUpdateExpiresAt: null,
 				paymentMethodBrand: null,
 				paymentMethodLast4: null
 			}
@@ -248,6 +249,7 @@ describe('BillingService.syncFromStripe', () => {
 				currentPeriodStart: new Date(periodStart * 1000),
 				currentPeriodEnd: new Date(periodEnd * 1000),
 				cancelAtPeriodEnd: false,
+				pendingUpdateExpiresAt: null,
 				paymentMethodBrand: null,
 				paymentMethodLast4: null
 			}

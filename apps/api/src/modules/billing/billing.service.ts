@@ -18,6 +18,7 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { BillingState } from '@offertum/shared';
+import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 
 /**
@@ -103,20 +104,27 @@ export class BillingService {
 			}
 		}
 
-		const org = await this.prisma.organization.findUniqueOrThrow({
-			where: { id: organizationId }
-		});
+		const customerName = await this.resolveCustomerName(organizationId);
 
-		// Idempotency key scoped to the org: a retry of this exact create (network
-		// flake between us and Stripe) returns the same customer instead of leaving
-		// us with two. Per-org is the right scope because there's exactly one
-		// "create the customer for org X" operation we ever want.
+		// Idempotency key construction. Stripe caches the response under this key
+		// for ~24h — a true retry (network flake mid-request) returns the same
+		// customer instead of creating two. BUT: the cached response contains the
+		// resulting customer ID, so the key must change when the *intent* changes.
+		//   - First-ever create for this org → `customer-create:${orgId}`.
+		//   - Regeneration after the previous customer was deleted out from under
+		//     us (Stripe Dashboard wipe, account swap, etc.) → include the dead
+		//     customer's ID as salt so we escape the cached response. Without
+		//     this, Stripe would serve us back the deleted customer's ID and
+		//     downstream Checkout immediately 404s with "No such customer: …".
+		const idempotencyKey = existing
+			? `customer-create:${organizationId}:after-${existing.stripeCustomerId}`
+			: `customer-create:${organizationId}`;
 		const customer = await this.stripe.customers.create(
 			{
-				name: org.name,
+				name: customerName,
 				metadata: { organizationId }
 			},
-			{ idempotencyKey: `customer-create:${organizationId}` }
+			{ idempotencyKey }
 		);
 
 		// Upsert because the Subscription row may already exist with a stale customerId.
@@ -135,6 +143,7 @@ export class BillingService {
 				currentPeriodStart: null,
 				currentPeriodEnd: null,
 				cancelAtPeriodEnd: false,
+				pendingUpdateExpiresAt: null,
 				paymentMethodBrand: null,
 				paymentMethodLast4: null
 			}
@@ -216,6 +225,31 @@ export class BillingService {
 				// recurring charges run via SEPA Direct Debit automatically.
 				currency: 'eur',
 				allow_promotion_codes: true,
+				// EU B2B tax compliance: Stripe Tax computes the right VAT per
+				// customer location, applies B2B reverse-charge when a valid VAT ID is
+				// collected (intra-EU), and writes the breakdown onto every invoice.
+				// Requires Stripe Tax to be enabled in the Dashboard + tax registrations
+				// to be added for the jurisdictions you sell into (NL at minimum).
+				// See https://docs.stripe.com/tax/checkout.
+				automatic_tax: { enabled: true },
+				// Collect the customer's VAT number. When present and valid, Stripe
+				// applies the reverse-charge mechanism so the buyer (not us) accounts
+				// for VAT in their country.
+				tax_id_collection: { enabled: true },
+				// Required for `automatic_tax` to work: Stripe needs the customer's
+				// billing address to determine the tax jurisdiction. `'required'`
+				// forces collection in Checkout; `'auto'` would skip the form if the
+				// customer already has an address on file. We use `required` because
+				// at first Checkout the customer is freshly created with no address.
+				billing_address_collection: 'required',
+				// Save the address + name + VAT ID Checkout collected back onto the
+				// Stripe Customer object so future invoices reuse them automatically
+				// without a second Checkout. Without this, `automatic_tax` works for
+				// the first invoice but loses the address on renewal.
+				customer_update: {
+					address: 'auto',
+					name: 'auto'
+				},
 				success_url: `${webOrigin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
 				cancel_url: `${webOrigin}/billing/cancel`,
 				subscription_data: {
@@ -318,6 +352,7 @@ export class BillingService {
 					currentPeriodStart: null,
 					currentPeriodEnd: null,
 					cancelAtPeriodEnd: false,
+					pendingUpdateExpiresAt: null,
 					paymentMethodBrand: null,
 					paymentMethodLast4: null
 				}
@@ -337,6 +372,13 @@ export class BillingService {
 		const pm = sub.default_payment_method;
 		const paymentMethod = pm && typeof pm !== 'string' ? pm : null;
 
+		// Stripe creates `pending_update` when a sub change requires payment confirmation
+		// (e.g. customer hit "Change plan" in the Portal but their card needs 3DS). Stored
+		// as a timestamp so the UI can render "Plan change expires on <date>". Object
+		// shape on Stripe: `{ expires_at: <unix>, ...staged change details we don't store }`.
+		const pendingUpdate = sub.pending_update;
+		const pendingUpdateExpiresAt = pendingUpdate?.expires_at ? new Date(pendingUpdate.expires_at * 1000) : null;
+
 		// `updateMany` for the same race-safety reason as the no-subscription branch above.
 		await this.prisma.subscription.updateMany({
 			where: { stripeCustomerId: customerId },
@@ -347,6 +389,7 @@ export class BillingService {
 				currentPeriodStart: item?.current_period_start ? new Date(item.current_period_start * 1000) : null,
 				currentPeriodEnd: item?.current_period_end ? new Date(item.current_period_end * 1000) : null,
 				cancelAtPeriodEnd: sub.cancel_at_period_end,
+				pendingUpdateExpiresAt,
 				paymentMethodBrand: paymentMethod?.type ?? null,
 				paymentMethodLast4: extractLast4(paymentMethod)
 			}
@@ -369,6 +412,36 @@ export class BillingService {
 			},
 			context: 'BillingService'
 		});
+
+		// Trial-end seat reconciliation. `SEAT_SYNC_STATUSES` excludes `trialing` so
+		// invites/removes during trial only touch the local `Membership.count`. When
+		// the trial converts to `active` (or skips ahead to `past_due`), the Stripe
+		// quantity is still the seat count at trial-start time. Push the final count
+		// now so the first real invoice charges the right number of seats. Skipped
+		// when no organizationId is known (race during customer regeneration) — the
+		// next membership change will resync.
+		if (organizationId && previousStatus === 'trialing' && (sub.status === 'active' || sub.status === 'past_due')) {
+			await this.syncSeatCount(organizationId);
+		}
+
+		// Drift-check: keep Stripe's customer.name in step with Organization.name so
+		// invoices always carry the current legal/customer-facing label. The org
+		// row was already fetched above (organizationId lookup); fetch the name in
+		// a single round-trip and update Stripe only when it differs. Best-effort —
+		// a Stripe API hiccup here shouldn't fail the sync.
+		if (organizationId) {
+			await this.reconcileCustomerName(organizationId, customerId).catch(error => {
+				this.logService.logAction({
+					action: 'billing.customer.name_sync_failed',
+					message: `Customer name sync failed for org ${organizationId}: ${error instanceof Error ? error.message : 'unknown'}`,
+					metadata: { organizationId, customerId },
+					level: 'warn',
+					stack: error instanceof Error ? error.stack : undefined,
+					context: 'BillingService'
+				});
+			});
+		}
+
 		return { status: sub.status };
 	}
 
@@ -395,6 +468,7 @@ export class BillingService {
 				state: sub.status as BillingState,
 				currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
 				cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+				pendingUpdateExpiresAt: sub.pendingUpdateExpiresAt?.toISOString() ?? null,
 				paymentMethodBrand: sub.paymentMethodBrand,
 				paymentMethodLast4: sub.paymentMethodLast4,
 				seats
@@ -409,6 +483,7 @@ export class BillingService {
 			state: 'none',
 			currentPeriodEnd: null,
 			cancelAtPeriodEnd: false,
+			pendingUpdateExpiresAt: null,
 			paymentMethodBrand: null,
 			paymentMethodLast4: null,
 			seats
@@ -503,6 +578,93 @@ export class BillingService {
 	}
 
 	/**
+	 * Resolve the name we want on the Stripe Customer for this org. Single
+	 * source of truth for every code path that writes `customer.name` to Stripe
+	 * (initial create, drift reconciliation, explicit-update entrypoint). Today
+	 * it's just `org.name` — kept as a one-liner helper so a future split (e.g.
+	 * separate legal-entity name from a public trade name) only changes this
+	 * function, not every callsite.
+	 */
+	private async resolveCustomerName(organizationId: string): Promise<string> {
+		const org = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { name: true }
+		});
+		return org.name;
+	}
+
+	/**
+	 * Reconcile the Stripe customer's `name` with the current `Organization.name`.
+	 * Idempotent: if they already match, no Stripe call. Used during
+	 * `syncFromStripe` so any drift (org renamed via business-details, data
+	 * backfill) gets corrected on the next webhook tick. Callers that already
+	 * KNOW the name changed (e.g. business-details update) should call
+	 * `syncCustomerNameForOrg` — same flow but starts from an organizationId.
+	 */
+	private async reconcileCustomerName(organizationId: string, customerId: string): Promise<void> {
+		const [desiredName, customer] = await Promise.all([
+			this.resolveCustomerName(organizationId),
+			this.stripe.customers.retrieve(customerId)
+		]);
+		if (customer.deleted) {
+			return;
+		}
+		if (customer.name === desiredName) {
+			return;
+		}
+		await this.updateCustomerName(organizationId, customerId, desiredName);
+	}
+
+	/**
+	 * Public entrypoint for code paths that just changed `Organization.name` —
+	 * primarily `MeService.updateBusinessDetails`. No-ops cleanly when the org
+	 * has no Stripe customer yet (hasn't reached Checkout), or when the name
+	 * already matches what Stripe has. Best-effort — a Stripe API hiccup is
+	 * logged but never throws back to the caller; their write already succeeded.
+	 */
+	async syncCustomerNameForOrg(organizationId: string): Promise<void> {
+		const sub = await this.prisma.subscription.findUnique({
+			where: { organizationId },
+			select: { stripeCustomerId: true }
+		});
+		if (!sub) {
+			return;
+		}
+		try {
+			await this.reconcileCustomerName(organizationId, sub.stripeCustomerId);
+		} catch (error) {
+			this.logService.logAction({
+				action: 'billing.customer.name_sync_failed',
+				message: `Customer name sync failed for org ${organizationId}: ${error instanceof Error ? error.message : 'unknown'}`,
+				metadata: { organizationId, customerId: sub.stripeCustomerId },
+				level: 'warn',
+				stack: error instanceof Error ? error.stack : undefined,
+				context: 'BillingService'
+			});
+		}
+	}
+
+	/**
+	 * Push a new customer name to Stripe directly. Lower-level than
+	 * `syncCustomerNameForOrg` — caller must know the Stripe customer ID and
+	 * the target name. Idempotency key includes a hash of the name so concurrent
+	 * rename → rename-back doesn't collapse to one update.
+	 */
+	async updateCustomerName(organizationId: string, customerId: string, name: string): Promise<void> {
+		await this.stripe.customers.update(
+			customerId,
+			{ name },
+			{ idempotencyKey: `customer-name-update:${customerId}:${hashShort(name)}` }
+		);
+		this.logService.logAction({
+			action: 'billing.customer.name_synced',
+			message: `Stripe customer ${customerId} name updated to "${name}" for org ${organizationId}`,
+			metadata: { organizationId, customerId, name },
+			context: 'BillingService'
+		});
+	}
+
+	/**
 	 * Webhook event router. Skips non-tracked events; for tracked ones, extracts the
 	 * customer id from the event payload and triggers a full re-sync. Errors are caught
 	 * by the caller and logged — the webhook endpoint always 200s to prevent Stripe
@@ -586,6 +748,17 @@ interface PaymentMethodLike {
  */
 function isResourceMissingError(error: unknown): boolean {
 	return error instanceof Error && 'code' in error && (error as { code?: unknown }).code === 'resource_missing';
+}
+
+/**
+ * Short, deterministic hash of arbitrary string content, intended only for
+ * salting idempotency keys (not security). 8 hex chars of SHA-256 is more
+ * than enough collision-resistance for the (customerId, targetValue) pairs
+ * we generate keys for — Stripe's keys also support up to 255 chars, but
+ * keeping them short keeps logs tidy.
+ */
+function hashShort(value: string): string {
+	return createHash('sha256').update(value).digest('hex').slice(0, 8);
 }
 
 function extractLast4(pm: PaymentMethodLike | null): string | null {

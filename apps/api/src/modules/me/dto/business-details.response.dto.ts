@@ -6,7 +6,7 @@ import type { BusinessDetails } from '@offertum/shared';
  * endpoint (deferred to the logo-upload follow-up).
  */
 export class BusinessDetailsResponseDto implements BusinessDetails {
-	companyName!: string | null;
+	name!: string;
 	companyRegistrationNumber!: string | null;
 	companyVatNumber!: string | null;
 	companyAddress!: string | null;

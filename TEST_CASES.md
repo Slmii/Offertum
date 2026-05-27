@@ -533,22 +533,22 @@ Pre-requisite: API running (`cd apps/api && pnpm dev`) AND web running (`cd apps
 - [ ] Send 2 invitations and accept both → org now has 3 active memberships.
 - [ ] **Expect** `stripe listen` shows `customer.subscription.updated` events on each accept (quantity bumps).
 - [ ] **Expect** in Stripe Dashboard: subscription `quantity` = 3.
-- [ ] **Expect** Stripe upcoming invoice: 1 × tier-1 line item = €149.00 (no overage line). Verify via `stripe invoices upcoming --subscription <sub_id>`.
+- [ ] **Expect** Stripe upcoming invoice: 1 × tier-1 line item = €50.00 (no overage line). Verify via `stripe invoices upcoming --subscription <sub_id>`.
 - [ ] **Expect** `/billing` UI shows "Seats: 3 used · 3 included in base price" with no overage line.
 
 ### BILLING-17: Per-seat — invite past included tier
 
 - [ ] Continuing from BILLING-16 (org at 3 seats). Send + accept a 4th invitation.
 - [ ] **Expect** `stripe listen` shows another `customer.subscription.updated`; Stripe sub `quantity = 4`.
-- [ ] **Expect** Stripe upcoming invoice shows two line items: tier-1 flat €149.00, tier-2 1 × €30.00 = €30.00, plus a proration credit/charge for the partial period.
-- [ ] **Expect** `/billing` UI shows "Seats: 4 used · 3 included" + "1 extra seat × €30/mo = €30/mo overage".
-- [ ] Add a 5th member → overage line becomes "2 extra seats × €30/mo = €60/mo overage".
+- [ ] **Expect** Stripe upcoming invoice shows two line items: tier-1 flat €50.00, tier-2 1 × €10.00 = €10.00, plus a proration credit/charge for the partial period.
+- [ ] **Expect** `/billing` UI shows "Seats: 4 used · 3 included" + "1 extra seat × €10/mo = €10/mo overage".
+- [ ] Add a 5th member → overage line becomes "2 extra seats × €10/mo = €60/mo overage".
 
 ### BILLING-18: Per-seat — seat sync during trialing
 
 - [ ] During the 14-day Stripe trial (BILLING-01), invite a 4th member.
 - [ ] **Expect** `stripe listen` shows `customer.subscription.updated` with `quantity: 4`, **no** invoice yet (still trialing).
-- [ ] **Expect** advancing past the trial end via test clock: the first real invoice charges €149 base + €30 overage = €179 (plus tax if applicable).
+- [ ] **Expect** advancing past the trial end via test clock: the first real invoice charges €50 base + €10 overage = €179 (plus tax if applicable).
 
 ### BILLING-19: Per-seat — pre-Checkout invitations are blocked outright
 
@@ -605,8 +605,8 @@ Pre-requisite: API running (`cd apps/api && pnpm dev`) AND web running (`cd apps
 ### BILLING-24: Seat cap lifts at `active`
 
 - [ ] Continuing from BILLING-22 (org at 3 seats, `trialing`), use a Stripe test clock to advance past trial end → status webhook flips to `active`.
-- [ ] Send a 4th invitation → **expect** HTTP 200; invitation row created; on accept, `syncSeatCount` bumps Stripe quantity to 4 and the next invoice carries a €30 proration line.
-- [ ] **Expect** `/billing` UI now shows "1 extra seat × €30/mo = €30/mo overage" instead of the trial seat-cap copy.
+- [ ] Send a 4th invitation → **expect** HTTP 200; invitation row created; on accept, `syncSeatCount` bumps Stripe quantity to 4 and the next invoice carries a €10 proration line.
+- [ ] **Expect** `/billing` UI now shows "1 extra seat × €10/mo = €10/mo overage" instead of the trial seat-cap copy.
 
 ### BILLING-25: Trial seat cap — expired pending invites don't count
 

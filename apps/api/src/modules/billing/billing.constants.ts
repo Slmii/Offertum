@@ -38,14 +38,14 @@ export const READ_METHODS: ReadonlyArray<string> = ['GET', 'HEAD', 'OPTIONS'];
 export const BILLING_REQUIRED_CODE = 'billing_required';
 
 /**
- * Seats included in the €149 base price. Any additional active membership beyond this
+ * Seats included in the €50 base price. Any additional active membership beyond this
  * gets billed at `PER_SEAT_OVERAGE_CENTS` per month via Stripe's graduated tier 2.
  *
  * MUST match the Stripe Price's `tiers` configuration. If you change either of these
  * constants, update the Stripe Price (Dashboard → Products → Offertum monthly).
  */
 export const SEATS_INCLUDED = 3;
-export const PER_SEAT_OVERAGE_CENTS = 3000;
+export const PER_SEAT_OVERAGE_CENTS = 1000;
 
 /**
  * States in which we cap orgs at `SEATS_INCLUDED` seats. Prevents a trial user from
@@ -79,5 +79,12 @@ export const TRIAL_SEAT_LIMIT_CODE = 'trial_seat_limit';
  * would swallow that error but spend a round-trip + emit a noisy ERROR action log on
  * every invitation accept while paused. Skipping cleanly here avoids the noise; the
  * next non-paused state transition (resume → active) will sync seats then.
+ *
+ * `trialing` is deliberately EXCLUDED: while Stripe accepts the update during trial
+ * and is documented not to charge mid-trial, behavior depending on the SDK's "don't
+ * proration during trial" branch is fragile across API version bumps. Trial orgs that
+ * add/remove seats update local `Membership.count` only; `syncSeatCount` runs on
+ * the trialing → active transition (see `BillingService.syncFromStripe`) to push
+ * the final count to Stripe in one shot.
  */
-export const SEAT_SYNC_STATUSES: ReadonlyArray<string> = ['trialing', 'active', 'past_due', 'incomplete'];
+export const SEAT_SYNC_STATUSES: ReadonlyArray<string> = ['active', 'past_due', 'incomplete'];
