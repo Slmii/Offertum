@@ -28,7 +28,7 @@ export interface PricingRuleRow {
 	priority: number;
 	active: boolean;
 	description: string;
-	sourceSpan: { start: number; end: number } | null;
+	conditionNarrative: string | null;
 	manualOverride: boolean;
 	createdAt: Date;
 	updatedAt: Date;
@@ -42,7 +42,7 @@ export interface CompileRuleInput {
 	effect: Record<string, unknown>;
 	priority: number;
 	description: string;
-	sourceSpan: { start: number; end: number } | null;
+	conditionNarrative: string | null;
 }
 
 @Injectable()
@@ -132,7 +132,9 @@ export class PricingPlaybookRepository {
 				_count: { select: { rules: { where: { active: true } } } }
 			}
 		});
-		if (!row) {return null;}
+		if (!row) {
+			return null;
+		}
 		return {
 			id: row.id,
 			playbookText: row.playbookText,
@@ -193,22 +195,26 @@ export class PricingPlaybookRepository {
 					id: true,
 					ruleType: true,
 					condition: true,
+					conditionNarrative: true,
 					manualOverride: true
 				}
 			});
 
 			const existingByHash = new Map<string, { id: string; manualOverride: boolean }>();
 			for (const row of existing) {
-				existingByHash.set(ruleIdentityHash(row.ruleType, row.condition as Record<string, unknown>), {
-					id: row.id,
-					manualOverride: row.manualOverride
-				});
+				existingByHash.set(
+					ruleIdentityHash(row.ruleType, row.condition as Record<string, unknown>, row.conditionNarrative),
+					{
+						id: row.id,
+						manualOverride: row.manualOverride
+					}
+				);
 			}
 
 			const seenHashes = new Set<string>();
 
 			for (const incoming of rules) {
-				const hash = ruleIdentityHash(incoming.ruleType, incoming.condition);
+				const hash = ruleIdentityHash(incoming.ruleType, incoming.condition, incoming.conditionNarrative);
 				seenHashes.add(hash);
 				const match = existingByHash.get(hash);
 				if (match && match.manualOverride) {
@@ -224,7 +230,7 @@ export class PricingPlaybookRepository {
 							effect: incoming.effect as Prisma.InputJsonValue,
 							priority: incoming.priority,
 							description: incoming.description,
-							sourceSpan: incoming.sourceSpan ?? undefined,
+							conditionNarrative: incoming.conditionNarrative,
 							active: true
 						}
 					});
@@ -237,7 +243,7 @@ export class PricingPlaybookRepository {
 							effect: incoming.effect as Prisma.InputJsonValue,
 							priority: incoming.priority,
 							description: incoming.description,
-							sourceSpan: incoming.sourceSpan ?? undefined
+							conditionNarrative: incoming.conditionNarrative
 						}
 					});
 				}
@@ -247,7 +253,9 @@ export class PricingPlaybookRepository {
 			const orphanedIds: string[] = [];
 			const deactivateIds: string[] = [];
 			for (const [hash, row] of existingByHash.entries()) {
-				if (seenHashes.has(hash)) {continue;}
+				if (seenHashes.has(hash)) {
+					continue;
+				}
 				if (row.manualOverride) {
 					deactivateIds.push(row.id);
 				} else {
@@ -276,7 +284,7 @@ export class PricingPlaybookRepository {
 	/**
 	 * Update an existing rule. Flips `manualOverride: true` permanently so the
 	 * next compile pass leaves this row alone. Only fields the UI exposes are
-	 * patchable — `pricingPlaybookId`, `ruleType`, `sourceSpan` stay frozen.
+	 * patchable — `pricingPlaybookId` + `ruleType` stay frozen.
 	 */
 	async updateRule(
 		ruleId: string,
@@ -286,6 +294,7 @@ export class PricingPlaybookRepository {
 			priority?: number;
 			active?: boolean;
 			description?: string;
+			conditionNarrative?: string | null;
 		}
 	): Promise<PricingRuleRow> {
 		// Prisma's JSON types are stricter than `Record<string, unknown>` (they
@@ -298,7 +307,8 @@ export class PricingPlaybookRepository {
 			...(patch.effect !== undefined ? { effect: patch.effect as Prisma.InputJsonValue } : {}),
 			...(patch.priority !== undefined ? { priority: patch.priority } : {}),
 			...(patch.active !== undefined ? { active: patch.active } : {}),
-			...(patch.description !== undefined ? { description: patch.description } : {})
+			...(patch.description !== undefined ? { description: patch.description } : {}),
+			...(patch.conditionNarrative !== undefined ? { conditionNarrative: patch.conditionNarrative } : {})
 		};
 		const row = await this.prisma.pricingRule.update({ where: { id: ruleId }, data });
 		return toPricingRuleRow(row);
@@ -314,13 +324,21 @@ export class PricingPlaybookRepository {
  * `{b:2, a:1}` produce the same hash — the LLM emits unordered objects and we
  * don't want hash drift to create duplicates.
  */
-function ruleIdentityHash(ruleType: PrismaPricingRuleType, condition: Record<string, unknown>): string {
+function ruleIdentityHash(
+	ruleType: PrismaPricingRuleType,
+	condition: Record<string, unknown>,
+	conditionNarrative: string | null
+): string {
 	const sortedKeys = Object.keys(condition).sort();
 	const sortedCondition: Record<string, unknown> = {};
 	for (const key of sortedKeys) {
 		sortedCondition[key] = condition[key];
 	}
-	return `${ruleType}|${JSON.stringify(sortedCondition)}`;
+	// Two narrative-gated rules with the same structured condition but different
+	// narratives (e.g. "discount for orders >€5k" vs. "discount for long-time
+	// customers" — both `{ ruleType: discount, condition: {} }`) are distinct
+	// logical slots; including the narrative in the hash keeps them separate.
+	return `${ruleType}|${JSON.stringify(sortedCondition)}|${conditionNarrative ?? ''}`;
 }
 
 function toPricingRuleRow(row: {
@@ -332,7 +350,7 @@ function toPricingRuleRow(row: {
 	priority: number;
 	active: boolean;
 	description: string;
-	sourceSpan: unknown;
+	conditionNarrative: string | null;
 	manualOverride: boolean;
 	createdAt: Date;
 	updatedAt: Date;
@@ -346,15 +364,9 @@ function toPricingRuleRow(row: {
 		priority: row.priority,
 		active: row.active,
 		description: row.description,
-		sourceSpan: isValidSpan(row.sourceSpan) ? row.sourceSpan : null,
+		conditionNarrative: row.conditionNarrative,
 		manualOverride: row.manualOverride,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt
 	};
-}
-
-function isValidSpan(value: unknown): value is { start: number; end: number } {
-	if (typeof value !== 'object' || value === null) {return false;}
-	const candidate = value as { start?: unknown; end?: unknown };
-	return typeof candidate.start === 'number' && typeof candidate.end === 'number';
 }

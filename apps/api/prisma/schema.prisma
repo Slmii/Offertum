@@ -791,11 +791,15 @@ model PricingRule {
   active            Boolean         @default(true)
   // Human-readable label for the review UI. The compile pass emits this from the
   // source prose (e.g. "Plumbing work: €95/hour"); the owner can edit it.
-  description       String          @db.Text
-  // {start, end} char offsets into `PricingPlaybook.playbookText` so the review UI
-  // can highlight the sentence that produced the rule. NULL when the rule was
-  // created manually (no source sentence to point at).
-  sourceSpan        Json?
+  description        String          @db.Text
+  // Free-text qualifier that captures conditions the structured `condition` enum
+  // (category / urgency / jurisdiction / lineKind) can't express — e.g.
+  // "renovaties van woningen ouder dan 2 jaar", "opdrachten boven €5.000",
+  // "klanten ik al 5 jaar ken". When present, the quote pipeline asks the AI at
+  // quote time whether the narrative applies to the opportunity context, and
+  // only commits the rule's effect when the AI confirms. NULL = the structured
+  // `condition` is the complete match; no AI verification needed.
+  conditionNarrative String?         @db.Text
   // Flips to true the moment an owner edits this rule via the review UI (W11.4).
   // Subsequent compile passes leave manually-edited rules alone — they get
   // `active: false` if their source sentence vanished from `playbookText` but

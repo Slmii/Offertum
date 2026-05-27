@@ -44,7 +44,14 @@ export const PricingRuleCompileSchema = z.object({
 	effect: EffectSchema,
 	priority: z.number().int().min(0).max(1000),
 	description: z.string().min(1).max(500),
-	sourceSpan: z.object({ start: z.number().int().min(0), end: z.number().int().min(0) }).nullable()
+	/**
+	 * Free-text qualifier for conditions the structured `condition` enum can't
+	 * express (renovation age, order threshold, customer tenure, etc.). The
+	 * compile prompt instructs the LLM to populate this when the prose contains
+	 * such qualifiers; the quote pipeline uses AI verification at quote time.
+	 * Returns `null` when the structured `condition` is sufficient.
+	 */
+	conditionNarrative: z.string().nullable()
 });
 
 export const PricingPlaybookCompileSchema = z.object({

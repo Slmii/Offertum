@@ -1,6 +1,7 @@
-import { SectionError } from '@/components/SectionError.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
+import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
+import { SectionError } from '@/components/SectionError.component';
 import {
 	pricingPlaybookQueryOptions,
 	pricingRulesQueryOptions,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/queries/pricing-playbook.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { PricingPlaybookSchema, type PricingPlaybookForm } from '@/lib/schemas/pricing-playbook.schema';
+import { PricingRuleEditSchema, type PricingRuleEditForm } from '@/lib/schemas/pricing-rule-edit.schema';
 import { toReadableTimestamp } from '@/lib/utils/date.utils';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
@@ -19,6 +21,10 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -154,6 +160,13 @@ function PricingPlaybookSettingsPage() {
 						defaultValues={{ playbookText: data.playbookText }}
 					>
 						<Stack spacing='var(--space-4)'>
+							<Alert severity='info' variant='outlined' sx={{ alignItems: 'flex-start' }}>
+								<strong>Tip:</strong> schrijf elke prijsregel op een eigen regel of in een eigen zin.
+								Eén uitspraak per regel maakt het makkelijker voor Quoteom om je tekst correct te
+								vertalen naar losse regels.{' '}
+								<em>Bijv. "€ 85/uur voor loodgieterswerk en € 95 voor elektra"</em> werkt — maar twee
+								aparte regels geven beter resultaat.
+							</Alert>
 							<Field
 								name='playbookText'
 								type='text'
@@ -162,7 +175,13 @@ function PricingPlaybookSettingsPage() {
 								maxRows={30}
 								fullWidth
 								maxLength={PRICING_PLAYBOOK_TEXT_MAX_LENGTH}
-								placeholder='Mijn standaard uurtarief is € 75. BTW is 21%…'
+								placeholder={[
+									'Bijvoorbeeld:',
+									'Mijn standaard uurtarief is € 75 per uur.',
+									'Voor loodgieterswerk reken ik € 95 per uur.',
+									'BTW is 21%.',
+									'Voor spoedklussen reken ik 25% extra.'
+								].join('\n')}
 							/>
 
 							{update.error && (
@@ -186,7 +205,7 @@ function PricingPlaybookSettingsPage() {
 				</Stack>
 			</Paper>
 
-			<CompiledRulesPanel playbookText={data.playbookText} />
+			<CompiledRulesPanel />
 
 			<Box sx={{ mt: 'var(--space-6)' }}>
 				<Typography
@@ -240,11 +259,12 @@ const RULE_TYPE_LABELS_NL: Record<PricingRuleType, string> = {
 
 /**
  * Card list under the editor. Renders compiled + manually-added rules with
- * inline toggle (active), delete, and (compact) edit affordance. Each rule
- * highlights the source sentence from `playbookText` via `sourceSpan` when
- * available.
+ * inline toggle (active), delete, and edit affordance. Rules carrying a
+ * `conditionNarrative` show an "AI-controleert" badge + the narrative text —
+ * the AI verifies at quote time whether the narrative applies to the incoming
+ * opportunity before committing the rule's effect.
  */
-function CompiledRulesPanel({ playbookText }: { playbookText: string }) {
+function CompiledRulesPanel() {
 	const { data: rulesResponse } = useSuspenseQuery(pricingRulesQueryOptions);
 	const rules = rulesResponse.rules;
 
@@ -274,21 +294,17 @@ function CompiledRulesPanel({ playbookText }: { playbookText: string }) {
 			</Typography>
 			<Stack spacing={1}>
 				{rules.map(rule => (
-					<RuleCard key={rule.id} rule={rule} playbookText={playbookText} />
+					<RuleCard key={rule.id} rule={rule} />
 				))}
 			</Stack>
 		</Box>
 	);
 }
 
-function RuleCard({ rule, playbookText }: { rule: PricingRule; playbookText: string }) {
+function RuleCard({ rule }: { rule: PricingRule }) {
 	const update = useUpdatePricingRule();
 	const remove = useDeletePricingRule();
-
-	const sourceSentence =
-		rule.sourceSpan && rule.sourceSpan.end <= playbookText.length
-			? playbookText.slice(rule.sourceSpan.start, rule.sourceSpan.end).trim()
-			: null;
+	const [editOpen, setEditOpen] = useState(false);
 
 	const effectSummary = summarizeEffect(rule.effect);
 	const conditionSummary = summarizeCondition(rule.condition);
@@ -322,26 +338,35 @@ function RuleCard({ rule, playbookText }: { rule: PricingRule; playbookText: str
 						{effectSummary}
 						{conditionSummary && ` · ${conditionSummary}`}
 					</Typography>
-					{sourceSentence && (
-						<Tooltip title='Stuk tekst uit je beschrijving dat deze regel produceerde' arrow>
-							<Typography
-								variant='caption'
-								color='text.disabled'
-								sx={{
-									display: 'block',
-									mt: 1,
-									fontStyle: 'italic',
-									borderLeft: '2px solid',
-									borderColor: 'divider',
-									pl: 1
-								}}
+					{rule.conditionNarrative && (
+						<Tooltip
+							title='Bij elke offerte controleert de AI of deze conditie van toepassing is op de aanvraag. Alleen dan past de regel toe.'
+							arrow
+						>
+							<Stack
+								direction='row'
+								spacing={0.5}
+								sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap', rowGap: 0.5 }}
 							>
-								"{sourceSentence}"
-							</Typography>
+								<Chip size='small' label='AI-controleert' color='warning' variant='outlined' />
+								<Typography variant='caption' color='text.secondary' sx={{ fontStyle: 'italic' }}>
+									"{rule.conditionNarrative}"
+								</Typography>
+							</Stack>
 						</Tooltip>
 					)}
 				</Box>
 				<Stack direction='row' spacing={0.5} sx={{ flexShrink: 0, alignItems: 'center' }}>
+					<Tooltip title='Bewerken'>
+						<IconButton
+							size='small'
+							onClick={() => setEditOpen(true)}
+							sx={{ fontSize: '1rem' }}
+							aria-label='Bewerken'
+						>
+							✎
+						</IconButton>
+					</Tooltip>
 					<Tooltip title={rule.active ? 'Regel uitschakelen' : 'Regel inschakelen'}>
 						<Switch
 							size='small'
@@ -360,14 +385,132 @@ function RuleCard({ rule, playbookText }: { rule: PricingRule; playbookText: str
 							}}
 							disabled={remove.isPending}
 							sx={{ fontSize: '1.1rem' }}
+							aria-label='Verwijderen'
 						>
 							✕
 						</IconButton>
 					</Tooltip>
 				</Stack>
 			</Stack>
+			<RuleEditDialog rule={rule} open={editOpen} onClose={() => setEditOpen(false)} />
 		</Paper>
 	);
+}
+
+function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: boolean; onClose: () => void }) {
+	const update = useUpdatePricingRule();
+
+	// Read the current effect value (the most owner-tweaked field) from the
+	// existing blob so the form pre-fills it. Falls back to 0 if the LLM emitted
+	// a non-numeric value somehow (shouldn't happen — the Zod schema rejects it
+	// at compile time).
+	const currentValue = typeof rule.effect.value === 'number' ? rule.effect.value : 0;
+
+	const onSubmit = (values: PricingRuleEditForm) => {
+		const trimmedNarrative = values.conditionNarrative.trim();
+		update.mutate(
+			{
+				id: rule.id,
+				description: values.description,
+				priority: values.priority,
+				active: values.active,
+				// Preserve the rest of the effect blob (type + freeUnderKm + anything
+				// else) and only swap in the new numeric value.
+				effect: { ...rule.effect, value: values.value },
+				conditionNarrative: trimmedNarrative.length > 0 ? trimmedNarrative : null
+			},
+			{
+				onSuccess: () => onClose()
+			}
+		);
+	};
+
+	const effectUnit = effectUnitFor(rule.effect);
+
+	return (
+		<Dialog open={open} onClose={onClose} fullWidth maxWidth='sm'>
+			<DialogTitle>Regel bewerken</DialogTitle>
+			<Form<PricingRuleEditForm>
+				action={onSubmit}
+				schema={PricingRuleEditSchema}
+				defaultValues={{
+					description: rule.description,
+					value: currentValue,
+					priority: rule.priority,
+					active: rule.active,
+					conditionNarrative: rule.conditionNarrative ?? ''
+				}}
+			>
+				<DialogContent>
+					<Stack spacing='var(--space-3)' sx={{ pt: 1 }}>
+						<Field name='description' label='Omschrijving' fullWidth />
+						<Field
+							name='value'
+							type='number'
+							label={effectUnit ? `Waarde (${effectUnit})` : 'Waarde'}
+							fullWidth
+						/>
+						<Field
+							name='priority'
+							type='number'
+							label='Prioriteit (0-1000)'
+							helperText='Hogere prioriteit wint van regels met dezelfde voorwaarde. Standaard is 100.'
+							fullWidth
+						/>
+						<Field
+							name='conditionNarrative'
+							label='AI-conditie (optioneel)'
+							helperText='Vrije tekst waaraan de AI elke offerte toetst voordat de regel wordt toegepast — bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
+							fullWidth
+							multiline
+							minRows={2}
+							maxRows={4}
+							maxLength={500}
+						/>
+						<FormSwitch name='active' label='Actief' />
+						{update.error && (
+							<Alert severity='error'>
+								{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
+							</Alert>
+						)}
+					</Stack>
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={onClose}>Annuleren</Button>
+					<Button type='submit' variant='contained' disabled={update.isPending}>
+						{update.isPending ? 'Opslaan…' : 'Opslaan'}
+					</Button>
+				</DialogActions>
+			</Form>
+		</Dialog>
+	);
+}
+
+/** Human-readable unit hint for the effect's `value` field, used as the input
+ * label suffix in the edit modal. Best-effort — returns null for shapes we
+ * haven't classified yet. */
+function effectUnitFor(effect: Record<string, unknown>): string | null {
+	if (typeof effect.type !== 'string') {
+		return null;
+	}
+
+	switch (effect.type) {
+		case 'rate_eur_per_hour':
+			return '€ per uur';
+		case 'markup_percent':
+		case 'surcharge_percent':
+		case 'discount_percent':
+		case 'vat_rate':
+			return '%';
+		case 'flat_fee_eur':
+		case 'discount_eur':
+		case 'minimum_eur':
+			return '€';
+		case 'per_km_eur':
+			return '€ per km';
+		default:
+			return null;
+	}
 }
 
 function summarizeEffect(effect: Record<string, unknown>): string {
@@ -398,9 +541,17 @@ function summarizeEffect(effect: Record<string, unknown>): string {
 
 function summarizeCondition(condition: Record<string, unknown>): string | null {
 	const parts: string[] = [];
-	if (typeof condition.category === 'string') {parts.push(`categorie: ${condition.category}`);}
-	if (typeof condition.urgency === 'string') {parts.push(`urgentie: ${condition.urgency}`);}
-	if (typeof condition.jurisdiction === 'string') {parts.push(`gebied: ${condition.jurisdiction}`);}
-	if (typeof condition.lineKind === 'string') {parts.push(`type: ${condition.lineKind}`);}
+	if (typeof condition.category === 'string') {
+		parts.push(`categorie: ${condition.category}`);
+	}
+	if (typeof condition.urgency === 'string') {
+		parts.push(`urgentie: ${condition.urgency}`);
+	}
+	if (typeof condition.jurisdiction === 'string') {
+		parts.push(`gebied: ${condition.jurisdiction}`);
+	}
+	if (typeof condition.lineKind === 'string') {
+		parts.push(`type: ${condition.lineKind}`);
+	}
 	return parts.length > 0 ? parts.join(' · ') : null;
 }

@@ -9,14 +9,14 @@ import {
 	PricingRuleResponseDto,
 	PricingRulesListResponseDto
 } from '@/modules/pricing-playbook/dto/pricing-rule.response.dto';
-import type { PricingRuleJsonObject } from '@quoteom/shared';
-import { PRICING_RULE_TYPE_TO_WIRE } from '@/modules/pricing-playbook/pricing-rule-type.mapper';
 import {
 	PricingPlaybookRepository,
 	type PricingPlaybookRow,
 	type PricingRuleRow
 } from '@/modules/pricing-playbook/pricing-playbook.repository';
+import { PRICING_RULE_TYPE_TO_WIRE } from '@/modules/pricing-playbook/pricing-rule-type.mapper';
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { PricingRuleJsonObject } from '@quoteom/shared';
 
 @Injectable()
 export class PricingPlaybookService {
@@ -80,6 +80,7 @@ export class PricingPlaybookService {
 			priority?: number;
 			active?: boolean;
 			description?: string;
+			conditionNarrative?: string | null;
 		}
 	): Promise<PricingRuleResponseDto> {
 		const playbook = await this.repository.getOrCreate(organizationId);
@@ -114,7 +115,7 @@ function toRuleResponseDto(row: PricingRuleRow): PricingRuleResponseDto {
 		priority: row.priority,
 		active: row.active,
 		description: row.description,
-		sourceSpan: row.sourceSpan,
+		conditionNarrative: row.conditionNarrative,
 		manualOverride: row.manualOverride,
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString()

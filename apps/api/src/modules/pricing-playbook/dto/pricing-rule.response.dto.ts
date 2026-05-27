@@ -12,7 +12,7 @@ export class PricingRuleResponseDto implements PricingRule {
 	priority!: number;
 	active!: boolean;
 	description!: string;
-	sourceSpan!: { start: number; end: number } | null;
+	conditionNarrative!: string | null;
 	manualOverride!: boolean;
 	createdAt!: string;
 	updatedAt!: string;

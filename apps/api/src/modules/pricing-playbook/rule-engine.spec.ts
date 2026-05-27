@@ -79,7 +79,56 @@ describe('evaluateRules', () => {
 		expect(result[0]?.effect).toEqual({ type: 'rate_eur_per_hour', value: 95 });
 	});
 
-	it('breaks priority ties by older createdAt', () => {
+	it('breaks priority ties by condition specificity (more keys win over catch-all)', () => {
+		// Real-world case: LLM emits a category-specific hourly_rate at the same
+		// priority as the global default. Engine should prefer the more-specific
+		// rule even at equal priority — otherwise the catch-all wins and the
+		// category rate is silently ignored.
+		const rules = [
+			makeRule({
+				id: 'catch_all',
+				ruleType: 'hourly_rate',
+				priority: 100,
+				condition: { lineKind: 'labor' },
+				effect: { type: 'rate_eur_per_hour', value: 80 }
+			}),
+			makeRule({
+				id: 'category_specific',
+				ruleType: 'hourly_rate',
+				priority: 100,
+				condition: { category: 'plumbing', lineKind: 'labor' },
+				effect: { type: 'rate_eur_per_hour', value: 95 }
+			})
+		];
+		const result = evaluateRules(rules, BASE_CONTEXT);
+		expect(result[0]?.ruleId).toBe('category_specific');
+		expect(result[0]?.effect).toEqual({ type: 'rate_eur_per_hour', value: 95 });
+	});
+
+	it('higher priority still wins over more-specific condition', () => {
+		// Explicit owner-set priority should beat specificity — specificity is
+		// only a tiebreaker.
+		const rules = [
+			makeRule({
+				id: 'specific_low_priority',
+				ruleType: 'hourly_rate',
+				priority: 100,
+				condition: { category: 'plumbing', lineKind: 'labor' },
+				effect: { type: 'rate_eur_per_hour', value: 95 }
+			}),
+			makeRule({
+				id: 'catch_all_high_priority',
+				ruleType: 'hourly_rate',
+				priority: 500,
+				condition: { lineKind: 'labor' },
+				effect: { type: 'rate_eur_per_hour', value: 80 }
+			})
+		];
+		const result = evaluateRules(rules, BASE_CONTEXT);
+		expect(result[0]?.ruleId).toBe('catch_all_high_priority');
+	});
+
+	it('breaks priority + specificity ties by older createdAt', () => {
 		const older = new Date('2026-01-01T00:00:00.000Z');
 		const newer = new Date('2026-02-01T00:00:00.000Z');
 		const rules = [

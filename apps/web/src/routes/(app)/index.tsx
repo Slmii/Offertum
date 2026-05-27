@@ -1,5 +1,5 @@
-import { SectionError } from '@/components/SectionError.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { SectionError } from '@/components/SectionError.component';
 import { createPageMeta } from '@/lib/createPageMeta';
 import { useSignOut } from '@/lib/queries/auth.queries';
 import {
@@ -88,6 +88,11 @@ function HomePage() {
 						{isOwner && (
 							<Button variant='contained' onClick={() => navigate({ to: '/billing' })}>
 								Billing
+							</Button>
+						)}
+						{isOwner && (
+							<Button variant='contained' onClick={() => navigate({ to: '/settings/pricing-playbook' })}>
+								Pricing Playbook
 							</Button>
 						)}
 						{me.role !== 'EXTERNAL' && (

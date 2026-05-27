@@ -13,6 +13,25 @@ import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
 /**
+ * Typed return shapes for each step.run callback below. Inngest's `step.run` is
+ * declared as `<TFn extends (...args: any[]) => unknown>` and routes the return
+ * through middleware-transform mapped types — TS gives up inferring through the
+ * generic chain (step.run → requestContext.run → async →await) and the result
+ * collapses to `any`. Annotating the callback's return type explicitly
+ * short-circuits the inference and `step.run` returns a properly-typed value.
+ */
+type GateResult =
+	| { skip: true }
+	| { skip: false; pricingPlaybookId: string; playbookText: string; currentHash: string };
+
+interface PersistResult {
+	pricingPlaybookId: string;
+	rulesPersisted: number;
+	compiledHash: string;
+	aiCallId: string | null;
+}
+
+/**
  * Pricing-playbook compile pass. Listens on `pricing-playbook/saved` events
  * (fired by `PricingPlaybookService.update`), runs the prose through the LLM,
  * and applies the typed-rule set with manual-override preservation.
@@ -67,41 +86,43 @@ export class PricingPlaybookCompileFunction {
 
 				const correlation = { requestId: runId, organizationId };
 
-				const gate = await step.run(InngestSteps.PricingPlaybookCompile.LoadAndGate, () =>
-					requestContext.run(correlation, async () => {
-						const playbook = await repository.findByOrganizationId(organizationId);
-						if (!playbook) {
-							logService.logAction({
-								action: 'pricing_playbook.compile.no_playbook',
-								message: `No PricingPlaybook for org ${organizationId} — skipping compile`,
-								metadata: { organizationId },
-								level: 'warn',
-								context: 'InngestFn:pricing-playbook-compile'
-							});
-							return { skip: true as const };
-						}
+				const gate = await step.run(
+					InngestSteps.PricingPlaybookCompile.LoadAndGate,
+					(): Promise<GateResult> =>
+						requestContext.run(correlation, async () => {
+							const playbook = await repository.findByOrganizationId(organizationId);
+							if (!playbook) {
+								logService.logAction({
+									action: 'pricing_playbook.compile.no_playbook',
+									message: `No PricingPlaybook for org ${organizationId} — skipping compile`,
+									metadata: { organizationId },
+									level: 'warn',
+									context: 'InngestFn:pricing-playbook-compile'
+								});
+								return { skip: true as const };
+							}
 
-						// Idempotency gate: the playbook prose hasn't changed since the
-						// last successful compile. Bail out — same input → same output.
-						const currentHash = compileService.hashPlaybookText(playbook.playbookText);
-						if (playbook.compiledHash === currentHash) {
-							logService.logAction({
-								action: 'pricing_playbook.compile.no_op',
-								message: `Playbook for org ${organizationId} unchanged since last compile`,
-								metadata: { organizationId, currentHash, eventHash: playbookHash },
-								level: 'log',
-								context: 'InngestFn:pricing-playbook-compile'
-							});
-							return { skip: true as const };
-						}
+							// Idempotency gate: the playbook prose hasn't changed since the
+							// last successful compile. Bail out — same input → same output.
+							const currentHash = compileService.hashPlaybookText(playbook.playbookText);
+							if (playbook.compiledHash === currentHash) {
+								logService.logAction({
+									action: 'pricing_playbook.compile.no_op',
+									message: `Playbook for org ${organizationId} unchanged since last compile`,
+									metadata: { organizationId, currentHash, eventHash: playbookHash },
+									level: 'log',
+									context: 'InngestFn:pricing-playbook-compile'
+								});
+								return { skip: true as const };
+							}
 
-						return {
-							skip: false as const,
-							pricingPlaybookId: playbook.id,
-							playbookText: playbook.playbookText,
-							currentHash
-						};
-					})
+							return {
+								skip: false as const,
+								pricingPlaybookId: playbook.id,
+								playbookText: playbook.playbookText,
+								currentHash
+							};
+						})
 				);
 
 				if (gate.skip) {
@@ -112,48 +133,50 @@ export class PricingPlaybookCompileFunction {
 					requestContext.run(correlation, () => compileService.compile(gate.playbookText))
 				);
 
-				const persisted = await step.run(InngestSteps.PricingPlaybookCompile.PersistRules, () =>
-					requestContext.run(correlation, async () => {
-						// OpenAI's strict structured-output mode forces every condition/effect
-						// key to be declared (nullable) in the schema. Strip the `null` keys
-						// before storage so the DB blobs read cleanly + the rule engine's
-						// "missing key = matches anything" semantic stays intact.
-						const rules: CompileRuleInput[] = compiled.value.rules.map(rule => ({
-							ruleType: PRICING_RULE_TYPE_FROM_WIRE[rule.ruleType],
-							condition: pruneNulls(rule.condition),
-							effect: pruneNulls(rule.effect),
-							priority: rule.priority,
-							description: rule.description,
-							sourceSpan: rule.sourceSpan
-						}));
+				const persisted = await step.run(
+					InngestSteps.PricingPlaybookCompile.PersistRules,
+					(): Promise<PersistResult> =>
+						requestContext.run(correlation, async () => {
+							// OpenAI's strict structured-output mode forces every condition/effect
+							// key to be declared (nullable) in the schema. Strip the `null` keys
+							// before storage so the DB blobs read cleanly + the rule engine's
+							// "missing key = matches anything" semantic stays intact.
+							const rules: CompileRuleInput[] = compiled.value.rules.map(rule => ({
+								ruleType: PRICING_RULE_TYPE_FROM_WIRE[rule.ruleType],
+								condition: pruneNulls(rule.condition),
+								effect: pruneNulls(rule.effect),
+								priority: rule.priority,
+								description: rule.description,
+								conditionNarrative: rule.conditionNarrative
+							}));
 
-						await repository.applyCompileOutput(gate.pricingPlaybookId, rules);
-						await repository.markCompiled(gate.pricingPlaybookId, gate.currentHash, new Date());
+							await repository.applyCompileOutput(gate.pricingPlaybookId, rules);
+							await repository.markCompiled(gate.pricingPlaybookId, gate.currentHash, new Date());
 
-						logService.logAction({
-							action: 'pricing_playbook.compile.completed',
-							message: `Pricing playbook for org ${organizationId} compiled into ${rules.length} rule(s) via ${compiled.provider}/${compiled.model}`,
-							metadata: {
-								organizationId,
+							logService.logAction({
+								action: 'pricing_playbook.compile.completed',
+								message: `Pricing playbook for org ${organizationId} compiled into ${rules.length} rule(s) via ${compiled.provider}/${compiled.model}`,
+								metadata: {
+									organizationId,
+									pricingPlaybookId: gate.pricingPlaybookId,
+									rulesEmitted: rules.length,
+									provider: compiled.provider,
+									model: compiled.model,
+									aiCallId: compiled.callId
+								},
+								context: 'InngestFn:pricing-playbook-compile'
+							});
+
+							// Return a small summary so the Inngest dev UI surfaces what landed
+							// instead of `null`. Side-effect-shaped step that produces a result
+							// is the better hygiene anyway — easier to inspect on retries.
+							return {
 								pricingPlaybookId: gate.pricingPlaybookId,
-								rulesEmitted: rules.length,
-								provider: compiled.provider,
-								model: compiled.model,
+								rulesPersisted: rules.length,
+								compiledHash: gate.currentHash,
 								aiCallId: compiled.callId
-							},
-							context: 'InngestFn:pricing-playbook-compile'
-						});
-
-						// Return a small summary so the Inngest dev UI surfaces what landed
-						// instead of `null`. Side-effect-shaped step that produces a result
-						// is the better hygiene anyway — easier to inspect on retries.
-						return {
-							pricingPlaybookId: gate.pricingPlaybookId,
-							rulesPersisted: rules.length,
-							compiledHash: gate.currentHash,
-							aiCallId: compiled.callId
-						};
-					})
+							};
+						})
 				);
 
 				return {

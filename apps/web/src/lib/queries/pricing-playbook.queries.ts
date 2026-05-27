@@ -60,6 +60,7 @@ interface UpdateRulePatch {
 	priority?: number;
 	active?: boolean;
 	description?: string;
+	conditionNarrative?: string | null;
 }
 
 /**

@@ -49,9 +49,14 @@ export interface PricingRule {
 	priority: number;
 	active: boolean;
 	description: string;
-	/** Char offsets `{ start, end }` into the playbook prose that produced this
-	 * rule. `null` when the rule was authored manually (no source sentence). */
-	sourceSpan: { start: number; end: number } | null;
+	/**
+	 * Free-text qualifier that captures conditions the structured `condition`
+	 * enum can't express (e.g. "renovaties van woningen ouder dan 2 jaar",
+	 * "opdrachten boven €5.000"). `null` when the structured `condition` is the
+	 * complete match. When non-null, the quote pipeline asks the AI at quote
+	 * time whether the narrative applies before committing the rule's effect.
+	 */
+	conditionNarrative: string | null;
 	/** `true` once the owner has edited this rule in the review UI. Subsequent
 	 * compile passes leave manually-overridden rules alone. */
 	manualOverride: boolean;

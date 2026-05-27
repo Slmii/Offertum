@@ -84,16 +84,43 @@ function effectivePriority(rule: EvaluableRule): number {
 }
 
 /**
+ * "Specificity" of a rule's structured condition — number of constraining keys.
+ * `{}` is 0 (matches anything). `{ category: "plumbing" }` is 1. `{ category:
+ * "plumbing", lineKind: "labor" }` is 2. Used as a tiebreaker BEFORE
+ * `createdAt` so more-specific rules win over less-specific ones when both
+ * match a quote context at equal priority — the CSS-cascade pattern.
+ *
+ * Why this matters: the LLM compile pass tends to emit category-specific
+ * hourly_rate rules at the same priority as the catch-all default ("€80/uur"
+ * default + "€95/uur voor loodgieterswerk" — both priority 100). Without
+ * specificity tiebreaking, the older catch-all wins and the specific rate is
+ * silently ignored. Specificity flips the order without requiring the LLM to
+ * encode the right priority manually.
+ */
+function conditionSpecificity(rule: EvaluableRule): number {
+	return Object.keys(rule.condition).filter(key => {
+		const value = rule.condition[key];
+		return value !== null && value !== undefined;
+	}).length;
+}
+
+/**
  * Conflict resolution for two rules of the same `ruleType` that both match the
- * context: higher effective priority wins; ties broken by older `createdAt`
- * (stable across re-evaluations). Returns the winner.
+ * context. Decision order:
+ *   1. Higher effective priority wins (owner-set priority + manual-override bump)
+ *   2. More-specific condition wins (more matched structured keys)
+ *   3. Older `createdAt` wins (stable across re-evaluations)
  */
 function chooseWinner(a: EvaluableRule, b: EvaluableRule): EvaluableRule {
 	const priorityDelta = effectivePriority(b) - effectivePriority(a);
 	if (priorityDelta !== 0) {
 		return priorityDelta > 0 ? b : a;
 	}
-	// Older row wins on ties — stable across re-evaluations.
+	const specificityDelta = conditionSpecificity(b) - conditionSpecificity(a);
+	if (specificityDelta !== 0) {
+		return specificityDelta > 0 ? b : a;
+	}
+	// Older row wins on full ties — stable across re-evaluations.
 	return a.createdAt <= b.createdAt ? a : b;
 }
 
