@@ -51,7 +51,9 @@ export const billingNoticeStore = {
 		emit();
 	},
 	clear(): void {
-		if (currentNotice === null) {return;}
+		if (currentNotice === null) {
+			return;
+		}
 		currentNotice = null;
 		emit();
 	}

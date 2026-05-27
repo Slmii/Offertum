@@ -2,10 +2,12 @@ import { AuthGuard } from '@/common/guards/auth.guard';
 import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { OwnerGuard } from '@/common/guards/owner.guard';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
+import { BusinessDetailsResponseDto } from '@/modules/me/dto/business-details.response.dto';
 import { FollowUpSettingsResponseDto } from '@/modules/me/dto/follow-up-settings.response.dto';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { SwitchOrganizationDto } from '@/modules/me/dto/switch-organization.dto';
 import { TonePlaybookResponseDto } from '@/modules/me/dto/tone-playbook.response.dto';
+import { UpdateBusinessDetailsDto } from '@/modules/me/dto/update-business-details.dto';
 import { UpdateFollowUpSettingsDto } from '@/modules/me/dto/update-follow-up-settings.dto';
 import { UpdateTonePlaybookDto } from '@/modules/me/dto/update-tone-playbook.dto';
 import { MeService } from '@/modules/me/me.service';
@@ -115,6 +117,25 @@ export class MeController {
 			maxCount: body.maxCount,
 			coldAfterDays: body.coldAfterDays
 		});
+	}
+
+	@ApiOperation({ summary: 'Read the active organization’s customer-facing business details' })
+	@ApiOkResponse({ type: BusinessDetailsResponseDto })
+	@UseGuards(OrganizationGuard)
+	@Get('business-details')
+	getBusinessDetails(@Req() request: Request): Promise<BusinessDetailsResponseDto> {
+		return this.me.getBusinessDetails(request.organizationId!);
+	}
+
+	@ApiOperation({ summary: 'Update the active organization’s customer-facing business details (owner-only)' })
+	@ApiOkResponse({ type: BusinessDetailsResponseDto })
+	@UseGuards(OwnerGuard)
+	@Patch('business-details')
+	updateBusinessDetails(
+		@Req() request: Request,
+		@Body() body: UpdateBusinessDetailsDto
+	): Promise<BusinessDetailsResponseDto> {
+		return this.me.updateBusinessDetails(this.userId(request), request.organizationId!, body);
 	}
 
 	/**

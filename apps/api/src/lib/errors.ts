@@ -145,6 +145,9 @@ export const OPPORTUNITY_ASSIGNEE_NOT_IN_ORG = 'Assignee is not a member of this
 // belong to the requesting org's pricing playbook. 404 keeps cross-tenant attempts
 // indistinguishable from genuinely-missing rules.
 export const PRICING_PLAYBOOK_RULE_NOT_FOUND = 'Pricing rule not found.';
+// User-facing — surfaced when a catalog-item CRUD endpoint references an id that
+// doesn't belong to the requesting org. 404 to keep cross-tenant probing opaque.
+export const CATALOG_ITEM_NOT_FOUND = 'Catalog item not found.';
 // User-facing — surfaced when the editor tries to save edits to a draft that
 // hasn't been generated yet (the Inngest function hasn't run). The FE should poll +
 // retry rather than blowing up; this message is the fallback for non-web callers.

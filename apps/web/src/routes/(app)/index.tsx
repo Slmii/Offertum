@@ -95,6 +95,16 @@ function HomePage() {
 								Pricing Playbook
 							</Button>
 						)}
+						{isOwner && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/settings/catalog' })}>
+								Catalogus
+							</Button>
+						)}
+						{isOwner && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/settings/business-details' })}>
+								Bedrijfsgegevens
+							</Button>
+						)}
 						{me.role !== 'EXTERNAL' && (
 							<Button variant='contained' onClick={() => navigate({ to: '/settings/email' })}>
 								Email

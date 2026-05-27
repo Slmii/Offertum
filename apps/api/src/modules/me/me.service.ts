@@ -7,7 +7,7 @@ import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto'
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { FollowUpSettings, TonePlaybook } from '@quoteom/shared';
+import type { BusinessDetails, FollowUpSettings, TonePlaybook, UpdateBusinessDetailsInput } from '@quoteom/shared';
 
 /**
  * Reads + writes scoped to the current user. Controller stays thin — orchestrates
@@ -253,6 +253,104 @@ export class MeService {
 	}
 
 	/**
+	 * Read the active org's customer-facing business details (legal name, KvK, VAT,
+	 * address, footer, default payment terms). `hasLogo` is derived from
+	 * `logoStorageKey != null` so the FE can render the "no logo" placeholder
+	 * without a second round-trip.
+	 */
+	async getBusinessDetails(organizationId: string): Promise<BusinessDetails> {
+		const row = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: {
+				companyName: true,
+				companyRegistrationNumber: true,
+				companyVatNumber: true,
+				companyAddress: true,
+				companyFooter: true,
+				defaultPaymentTermsDays: true,
+				logoStorageKey: true
+			}
+		});
+
+		return {
+			companyName: row.companyName,
+			companyRegistrationNumber: row.companyRegistrationNumber,
+			companyVatNumber: row.companyVatNumber,
+			companyAddress: row.companyAddress,
+			companyFooter: row.companyFooter,
+			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
+			hasLogo: row.logoStorageKey !== null
+		};
+	}
+
+	/**
+	 * Update the active org's business details. Owner-only at the controller layer.
+	 * Empty / whitespace-only strings collapse to `null` so the DB never stores `""`
+	 * (mirrors the catalog-items pattern). `undefined` fields are left untouched.
+	 */
+	async updateBusinessDetails(
+		actingUserId: string,
+		organizationId: string,
+		input: UpdateBusinessDetailsInput
+	): Promise<BusinessDetails> {
+		const normalized: Record<string, string | number | null> = {};
+
+		if (input.companyName !== undefined) {
+			normalized.companyName = normalizeBusinessText(input.companyName);
+		}
+		if (input.companyRegistrationNumber !== undefined) {
+			normalized.companyRegistrationNumber = normalizeBusinessText(input.companyRegistrationNumber);
+		}
+		if (input.companyVatNumber !== undefined) {
+			normalized.companyVatNumber = normalizeBusinessText(input.companyVatNumber);
+		}
+		if (input.companyAddress !== undefined) {
+			normalized.companyAddress = normalizeBusinessText(input.companyAddress);
+		}
+		if (input.companyFooter !== undefined) {
+			normalized.companyFooter = normalizeBusinessText(input.companyFooter);
+		}
+		if (input.defaultPaymentTermsDays !== undefined) {
+			normalized.defaultPaymentTermsDays = input.defaultPaymentTermsDays;
+		}
+
+		const updated = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: normalized,
+			select: {
+				companyName: true,
+				companyRegistrationNumber: true,
+				companyVatNumber: true,
+				companyAddress: true,
+				companyFooter: true,
+				defaultPaymentTermsDays: true,
+				logoStorageKey: true
+			}
+		});
+
+		this.logService.logAction({
+			action: 'organization.business_details_updated',
+			message: `Business details updated for org ${organizationId}`,
+			metadata: {
+				organizationId,
+				updatedBy: actingUserId,
+				updatedKeys: Object.keys(normalized)
+			},
+			context: 'MeService'
+		});
+
+		return {
+			companyName: updated.companyName,
+			companyRegistrationNumber: updated.companyRegistrationNumber,
+			companyVatNumber: updated.companyVatNumber,
+			companyAddress: updated.companyAddress,
+			companyFooter: updated.companyFooter,
+			defaultPaymentTermsDays: updated.defaultPaymentTermsDays,
+			hasLogo: updated.logoStorageKey !== null
+		};
+	}
+
+	/**
 	 * Pin `User.currentOrganizationId` to the target. Validates the user actually has
 	 * a membership there — otherwise anyone could pin themselves to any org by UUID.
 	 * Returns the membership in the new org so the caller can update its UI.
@@ -350,4 +448,13 @@ export class MeService {
 			context: 'MeService'
 		});
 	}
+}
+
+/** Trim + collapse empty strings to `null` so the DB never stores `""`. */
+function normalizeBusinessText(value: string | null): string | null {
+	if (value === null) {
+		return null;
+	}
+	const trimmed = value.trim();
+	return trimmed.length === 0 ? null : trimmed;
 }

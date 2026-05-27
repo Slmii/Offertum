@@ -1208,7 +1208,7 @@ function TimelineEventEntry({ event }: { event: OpportunityTimelineEvent }) {
 	const copy = describeTimelineEvent(event);
 
 	return (
-		<Paper variant='outlined' sx={{ px: 2, py: 1.25, backgroundColor: 'var(--surface-2, #fafafa)' }}>
+		<Paper variant='outlined' sx={{ px: 2, py: 1.25, bgcolor: 'background.default' }}>
 			<Stack
 				direction='row'
 				spacing={1}

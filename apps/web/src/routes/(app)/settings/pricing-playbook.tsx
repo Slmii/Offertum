@@ -39,14 +39,14 @@ import { useState } from 'react';
 /**
  * Pricing playbook editor — free-form prose the LLM compile pass turns into typed
  * pricing rules (W11.3). Owner-only at the route level mirroring the same gate
- * `/settings/follow-ups` uses; members get bounced to `/settings/email` so they
+ * `/settings/follow-ups` uses; members get bounced to `/` so they
  * don't see a page that won't accept their writes.
  */
 export const Route = createFileRoute('/(app)/settings/pricing-playbook')({
 	beforeLoad: async ({ context }) => {
 		const me = await context.queryClient.ensureQueryData(myMembershipQueryOptions);
 		if (me.role !== 'OWNER') {
-			throw redirect({ to: '/settings/email' });
+			throw redirect({ to: '/' });
 		}
 	},
 	loader: async ({ context }) => {
@@ -124,27 +124,19 @@ function PricingPlaybookSettingsPage() {
 
 	return (
 		<Container maxWidth='md' sx={{ py: 6 }}>
-			<Box sx={{ mb: 'var(--space-6)' }}>
-				<Typography variant='h1' sx={{ fontSize: '2.25rem', mb: 'var(--space-2)' }}>
+			<Box sx={{ mb: 6 }}>
+				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
 					Prijsregels
 				</Typography>
-				<Typography sx={{ color: 'var(--ink-3)', fontSize: 14, maxWidth: 640 }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 640 }}>
 					Beschrijf hoe je je prijzen bepaalt — in je eigen woorden, geen vaste vorm. Quoteom leest je tekst
 					en vertaalt 'm naar regels die je offertes automatisch invullen. De voorbeelden hieronder helpen je
 					op weg.
 				</Typography>
 			</Box>
 
-			<Paper
-				variant='outlined'
-				sx={{
-					padding: 'var(--space-6)',
-					borderRadius: 'var(--radius-md)',
-					boxShadow: 'var(--shadow-1)',
-					background: 'var(--surface)'
-				}}
-			>
-				<Stack spacing='var(--space-5)'>
+			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, boxShadow: 1 }}>
+				<Stack spacing={5}>
 					<Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
 						<Chip size='small' label={compileStatus.label} color={compileStatus.color} variant='outlined' />
 						{data.compiledAt && (
@@ -159,7 +151,7 @@ function PricingPlaybookSettingsPage() {
 						schema={PricingPlaybookSchema}
 						defaultValues={{ playbookText: data.playbookText }}
 					>
-						<Stack spacing='var(--space-4)'>
+						<Stack spacing={4}>
 							<Alert severity='info' variant='outlined' sx={{ alignItems: 'flex-start' }}>
 								<strong>Tip:</strong> schrijf elke prijsregel op een eigen regel of in een eigen zin.
 								Eén uitspraak per regel maakt het makkelijker voor Quoteom om je tekst correct te
@@ -207,14 +199,11 @@ function PricingPlaybookSettingsPage() {
 
 			<CompiledRulesPanel />
 
-			<Box sx={{ mt: 'var(--space-6)' }}>
-				<Typography
-					variant='overline'
-					sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
-				>
+			<Box sx={{ mt: 6 }}>
+				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 					Voorbeelden
 				</Typography>
-				<Typography sx={{ color: 'var(--ink-3)', fontSize: 13, mb: 'var(--space-3)' }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Klik open om te zien hoe andere ondernemers hun prijsregels in eigen woorden hebben opgeschreven.
 				</Typography>
 				<Stack spacing={1}>
@@ -270,14 +259,11 @@ function CompiledRulesPanel() {
 
 	if (rules.length === 0) {
 		return (
-			<Box sx={{ mt: 'var(--space-6)' }}>
-				<Typography
-					variant='overline'
-					sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
-				>
+			<Box sx={{ mt: 6 }}>
+				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 					Regels
 				</Typography>
-				<Typography sx={{ color: 'var(--ink-3)', fontSize: 13 }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary' }}>
 					Nog geen regels. Sla je tekst hierboven op — Quoteom maakt de regels in de achtergrond.
 				</Typography>
 			</Box>
@@ -285,11 +271,8 @@ function CompiledRulesPanel() {
 	}
 
 	return (
-		<Box sx={{ mt: 'var(--space-6)' }}>
-			<Typography
-				variant='overline'
-				sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
-			>
+		<Box sx={{ mt: 6 }}>
+			<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 				Regels ({rules.filter(r => r.active).length} actief, {rules.length} totaal)
 			</Typography>
 			<Stack spacing={1}>
@@ -310,7 +293,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 	const conditionSummary = summarizeCondition(rule.condition);
 
 	return (
-		<Paper variant='outlined' sx={{ p: 'var(--space-3)', opacity: rule.active ? 1 : 0.55 }}>
+		<Paper variant='outlined' sx={{ p: 3, opacity: rule.active ? 1 : 0.55 }}>
 			<Stack direction='row' spacing={1} sx={{ alignItems: 'flex-start' }}>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
 					<Stack direction='row' spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
@@ -442,7 +425,7 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 				}}
 			>
 				<DialogContent>
-					<Stack spacing='var(--space-3)' sx={{ pt: 1 }}>
+					<Stack spacing={3} sx={{ pt: 1 }}>
 						<Field name='description' label='Omschrijving' fullWidth />
 						<Field
 							name='value'

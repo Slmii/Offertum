@@ -1,7 +1,7 @@
-import { SectionError } from '@/components/SectionError.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
+import { SectionError } from '@/components/SectionError.component';
 import { followUpSettingsQueryOptions, useUpdateFollowUpSettings } from '@/lib/queries/follow-up-settings.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { FollowUpSettingsSchema, type FollowUpSettingsForm } from '@/lib/schemas/follow-up-settings.schema';
@@ -19,7 +19,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 /**
  * Per-org follow-up cadence + cap. Owner-only at the route level (mirrors the
- * API guard); members get bounced back to `/settings/email` so they don't see a page
+ * API guard); members get bounced back to `/` so they don't see a page
  * that won't accept their writes.
  * Form composition: every input — `cadenceDays`, `maxCount`, and the preset dropdown —
  * goes through `react-hook-form` via the in-house `<Field>` / `<Select>` components.
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/(app)/settings/follow-ups')({
 	beforeLoad: async ({ context }) => {
 		const me = await context.queryClient.ensureQueryData(myMembershipQueryOptions);
 		if (me.role !== 'OWNER') {
-			throw redirect({ to: '/settings/email' });
+			throw redirect({ to: '/' });
 		}
 	},
 	loader: ({ context }) => context.queryClient.ensureQueryData(followUpSettingsQueryOptions),
@@ -72,25 +72,17 @@ function FollowUpsSettingsPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 6 }}>
-			<Box sx={{ mb: 'var(--space-6)' }}>
-				<Typography variant='h1' sx={{ fontSize: '2.25rem', mb: 'var(--space-2)' }}>
+			<Box sx={{ mb: 6 }}>
+				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
 					Automatische follow-ups
 				</Typography>
-				<Typography sx={{ color: 'var(--ink-3)', fontSize: 14, maxWidth: 480 }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
 					Quoteom kan automatisch een korte herinnering schrijven als een klant na je antwoord stil blijft.
 					Jij beoordeelt en verstuurt — niets gaat zonder jouw klik de deur uit.
 				</Typography>
 			</Box>
 
-			<Paper
-				variant='outlined'
-				sx={{
-					padding: 'var(--space-6)',
-					borderRadius: 'var(--radius-md)',
-					boxShadow: 'var(--shadow-1)',
-					background: 'var(--surface)'
-				}}
-			>
+			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, boxShadow: 1 }}>
 				<Form<FollowUpSettingsForm>
 					action={onSubmit}
 					schema={FollowUpSettingsSchema}
@@ -122,18 +114,15 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 	const schedulerDisabled = maxCount === 0;
 
 	return (
-		<Stack spacing='var(--space-5)'>
+		<Stack spacing={5}>
 			<Box>
-				<Typography
-					variant='overline'
-					sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
-				>
+				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 					Cadans
 				</Typography>
-				<Typography sx={{ fontSize: 13, color: 'var(--ink-3)', mb: 'var(--space-3)' }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Hoeveel dagen stilte voordat Quoteom een herinnering opstelt.
 				</Typography>
-				<Stack direction='row' spacing='var(--space-2)' sx={{ alignItems: 'flex-start' }}>
+				<Stack direction='row' spacing={2} sx={{ alignItems: 'flex-start' }}>
 					<Box sx={{ minWidth: 160 }}>
 						<Select
 							name='cadencePreset'
@@ -168,35 +157,40 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 							}}
 						/>
 					</Box>
-					<Typography sx={{ fontSize: 13, color: 'var(--ink-3)', alignSelf: 'center' }}>dagen</Typography>
+					<Typography variant='body2' sx={{ color: 'text.secondary', alignSelf: 'center' }}>
+						dagen
+					</Typography>
 				</Stack>
 				{schedulerDisabled && (
-					<Typography sx={{ fontSize: 12, color: 'var(--ink-4)', mt: 'var(--space-2)', fontStyle: 'italic' }}>
+					<Typography
+						variant='caption'
+						sx={{ color: 'text.disabled', mt: 2, fontStyle: 'italic', display: 'block' }}
+					>
 						Geen effect zolang de scheduler uitstaat (maximum = 0).
 					</Typography>
 				)}
 			</Box>
 
 			<Box>
-				<Typography
-					variant='overline'
-					sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
-				>
+				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 					Maximum
 				</Typography>
-				<Typography sx={{ fontSize: 13, color: 'var(--ink-3)', mb: 'var(--space-3)' }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Het aantal herinneringen dat Quoteom maximaal per offerteaanvraag mag opstellen. Zet op{' '}
 					<strong>0</strong> om de scheduler volledig uit te zetten.
 				</Typography>
-				<Stack direction='row' spacing='var(--space-2)' sx={{ alignItems: 'center' }}>
+				<Stack direction='row' spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>
 						<Field name='maxCount' type='number' fullWidth />
 					</Box>
-					<Typography sx={{ fontSize: 13, color: 'var(--ink-3)' }}>
+					<Typography variant='body2' sx={{ color: 'text.secondary' }}>
 						{maxCount === 1 ? 'herinnering' : 'herinneringen'}
 					</Typography>
 				</Stack>
-				<Typography sx={{ fontSize: 12, color: 'var(--ink-3)', mt: 'var(--space-2)', fontStyle: 'italic' }}>
+				<Typography
+					variant='caption'
+					sx={{ color: 'text.secondary', mt: 2, fontStyle: 'italic', display: 'block' }}
+				>
 					Bestaande aanvragen die al op <strong>Koud</strong> staan worden niet automatisch herstart als je
 					dit maximum verhoogt. Zet de status terug op <strong>Beantwoord</strong> om opnieuw herinneringen te
 					krijgen binnen je nieuwe limiet.
@@ -204,27 +198,27 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 			</Box>
 
 			<Box>
-				<Typography
-					variant='overline'
-					sx={{ color: 'var(--ink-3)', fontSize: 11, display: 'block', mb: 'var(--space-2)' }}
-				>
+				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 					Automatisch koud markeren
 				</Typography>
-				<Typography sx={{ fontSize: 13, color: 'var(--ink-3)', mb: 'var(--space-3)' }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Quoteom de
 					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
 					— je houdt opportunities dan zelf bij.
 				</Typography>
-				<Stack direction='row' spacing='var(--space-2)' sx={{ alignItems: 'center' }}>
+				<Stack direction='row' spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>
 						<Field name='coldAfterDays' type='number' fullWidth />
 					</Box>
-					<Typography sx={{ fontSize: 13, color: 'var(--ink-3)' }}>
+					<Typography variant='body2' sx={{ color: 'text.secondary' }}>
 						{coldAfterDays === 1 ? 'dag' : 'dagen'} na laatste verzending
 					</Typography>
 				</Stack>
 				{coldAfterDays === 0 && (
-					<Typography sx={{ fontSize: 12, color: 'var(--ink-4)', mt: 'var(--space-2)', fontStyle: 'italic' }}>
+					<Typography
+						variant='caption'
+						sx={{ color: 'text.disabled', mt: 2, fontStyle: 'italic', display: 'block' }}
+					>
 						Automatisch koud markeren staat uit.
 					</Typography>
 				)}
@@ -237,15 +231,8 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 			)}
 
 			{!schedulerDisabled && (
-				<Box
-					sx={{
-						padding: 'var(--space-4)',
-						background: 'var(--paper-2)',
-						borderRadius: 'var(--radius-sm)',
-						border: '1px solid var(--line)'
-					}}
-				>
-					<Typography sx={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+				<Box sx={{ p: 4, bgcolor: 'background.default', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+					<Typography variant='caption' sx={{ color: 'text.secondary', lineHeight: 1.5, display: 'block' }}>
 						<Box component='span' sx={{ color: 'text.primary', fontWeight: 500 }}>
 							Voorbeeld:
 						</Box>{' '}
@@ -261,7 +248,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 			{error && <Alert severity='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Alert>}
 			{savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
 
-			<Stack direction='row' spacing='var(--space-2)' sx={{ justifyContent: 'flex-end' }}>
+			<Stack direction='row' spacing={2} sx={{ justifyContent: 'flex-end' }}>
 				<Button type='submit' variant='contained' disabled={isSaving}>
 					{isSaving ? 'Opslaan…' : 'Opslaan'}
 				</Button>

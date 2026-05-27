@@ -102,23 +102,17 @@ function NotificationsSettingsPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 6 }}>
-			<Box sx={{ mb: 'var(--space-6)' }}>
-				<Typography variant='h1' sx={{ fontSize: '2.25rem', mb: 'var(--space-2)' }}>
+			<Box sx={{ mb: 6 }}>
+				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
 					Notificaties
 				</Typography>
-				<Typography sx={{ color: 'var(--ink-3)', fontSize: 14, maxWidth: 480 }}>
+				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
 					Bepaal per gebeurtenis hoe je op de hoogte gehouden wilt worden. Notificaties zijn alleen
 					informatief — niets wordt automatisch verstuurd of geaccepteerd.
 				</Typography>
 			</Box>
 
-			<Paper
-				variant='outlined'
-				sx={{
-					p: 'var(--space-6)',
-					borderRadius: 'var(--radius-md)'
-				}}
-			>
+			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2 }}>
 				<Form<NotificationPreferencesForm>
 					action={onSubmit}
 					schema={NotificationPreferencesSchema}

@@ -1389,7 +1389,7 @@ Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` his
 ### DISMISS-AFTER-SEND-01: Warning copy in the dismiss dialog
 
 - [ ] On a SENT opp, open the kebab menu → "Markeer als geen offerteaanvraag…".
-- [ ] **Expect** an additional warning-severity Alert at the top of the modal: *"Je hebt al een antwoord verstuurd — afwijzen markeert deze offerteaanvraag alleen intern als geen offerte. Het verzonden e-mailbericht blijft staan."*
+- [ ] **Expect** an additional warning-severity Alert at the top of the modal: _"Je hebt al een antwoord verstuurd — afwijzen markeert deze offerteaanvraag alleen intern als geen offerte. Het verzonden e-mailbericht blijft staan."_
 - [ ] Confirm the dismiss. `Log` action `opportunity.dismissed` includes `dismissedAfterSend: true` in metadata.
 - [ ] Compare against a NEW opp dismiss — same modal but no warning Alert; `dismissedAfterSend: false`.
 

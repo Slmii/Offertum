@@ -13,8 +13,12 @@ import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query
  * error, it just observes.
  */
 function handleApiError(error: unknown): void {
-	if (!(error instanceof WrapperApiError)) {return;}
-	if (error.apiCode !== BILLING_REQUIRED_CODE) {return;}
+	if (!(error instanceof WrapperApiError)) {
+		return;
+	}
+	if (error.apiCode !== BILLING_REQUIRED_CODE) {
+		return;
+	}
 	billingNoticeStore.show({
 		message:
 			error.message ||

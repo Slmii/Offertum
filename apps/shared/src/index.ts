@@ -26,6 +26,8 @@ export * from './email.js';
 export * from './follow-up-settings.js';
 export * from './invitations.js';
 export * from './notifications.js';
+export * from './business-details.js';
+export * from './catalog-items.js';
 export * from './opportunities.js';
 export * from './pricing-playbook.js';
 export * from './reply-drafts.js';

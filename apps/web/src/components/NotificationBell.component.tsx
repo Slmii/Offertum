@@ -31,7 +31,7 @@ export function NotificationBell() {
 
 	return (
 		<>
-			<IconButton aria-label='Notificaties' onClick={onOpen} size='small' sx={{ color: 'var(--ink-2)' }}>
+			<IconButton aria-label='Notificaties' onClick={onOpen} size='small' sx={{ color: 'text.primary' }}>
 				<Badge badgeContent={unreadCount} color='primary' overlap='circular'>
 					<BellGlyph />
 				</Badge>
