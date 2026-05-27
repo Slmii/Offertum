@@ -17,10 +17,6 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { MicrosoftOAuthService } from '@/modules/email-accounts/microsoft-oauth.service';
 import { LogService } from '@/modules/logger/log.service';
 import { MicrosoftDisconnectResponseDto } from '@/modules/microsoft/dto/microsoft-disconnect.response.dto';
-import {
-	MicrosoftMessageDto,
-	MicrosoftMessagesResponseDto
-} from '@/modules/microsoft/dto/microsoft-messages.response.dto';
 import { MicrosoftStatusResponseDto } from '@/modules/microsoft/dto/microsoft-status.response.dto';
 import { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
 import { MicrosoftSubscriptionService } from '@/modules/microsoft/microsoft-subscription.service';
@@ -40,8 +36,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-
-const RECENT_MESSAGE_LIMIT = 10;
 
 /** Minimal cookie parser — Express 5 doesn't include `cookie-parser` by default. */
 function readCookie(request: Request, name: string): string | null {
@@ -261,31 +255,6 @@ export class MicrosoftController {
 			email: account?.email ?? null,
 			connectedAt: account?.createdAt.toISOString() ?? null
 		};
-	}
-
-	@ApiOperation({
-		summary: `Smoke endpoint: the ${RECENT_MESSAGE_LIMIT} most recent inbox messages from THIS user’s connected mailbox.`
-	})
-	@ApiOkResponse({ type: MicrosoftMessagesResponseDto })
-	@UseGuards(TenantMemberGuard)
-	@Get('messages')
-	async messages(@Req() request: Request): Promise<MicrosoftMessagesResponseDto> {
-		const scope = scopeFromRequest(request);
-
-		const messages = await this.accounts.withFreshAccessToken(scope, async accessToken => {
-			const stubs = await this.api.listRecentInboxMessages(accessToken, RECENT_MESSAGE_LIMIT);
-			return stubs.map<MicrosoftMessageDto>(m => ({
-				id: m.id,
-				conversationId: m.conversationId,
-				receivedDateTime: m.receivedDateTime,
-				bodyPreview: m.bodyPreview,
-				subject: m.subject,
-				fromEmail: m.from?.address ?? null,
-				fromName: m.from?.name ?? null
-			}));
-		});
-
-		return { messages };
 	}
 
 	@ApiOperation({ summary: 'Disconnect THIS user’s Microsoft mailbox.' })

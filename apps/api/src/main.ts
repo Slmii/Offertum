@@ -5,22 +5,23 @@ import '@/load-env';
 import { AppModule } from '@/app.module';
 import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter';
 import { authRateLimitMiddleware } from '@/common/middleware/auth-rate-limit.middleware';
+import { buildDocsBasicAuthMiddleware } from '@/common/middleware/docs-basic-auth.middleware';
 import { requestContextMiddleware } from '@/common/middleware/request-context.middleware';
 import type { EnvSchema } from '@/config/env.schema';
 import { authConfig } from '@/modules/auth/auth.config';
 import { inngestFunctions } from '@/modules/inngest/functions';
+import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
+import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
+import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfill.function';
 import { GmailDeltaSyncFunction } from '@/modules/inngest/functions/gmail-delta-sync.function';
 import { GmailWatchRenewalFunction } from '@/modules/inngest/functions/gmail-watch-renewal.function';
 import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft-backfill.function';
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
-import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
 import { PricingPlaybookCompileFunction } from '@/modules/inngest/functions/pricing-playbook-compile.function';
-import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
-import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
-import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
+import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { LogService } from '@/modules/logger/log.service';
 import { ExpressAuth } from '@auth/express';
@@ -146,12 +147,29 @@ async function bootstrap() {
 
 	const swaggerConfig = new DocumentBuilder()
 		.setTitle('Quoteom API')
-		.setDescription('Offerte management for Dutch SMBs')
+		.setDescription('Quote management')
 		.setVersion('0.0.0')
 		.addBearerAuth()
 		.build();
 
 	const document = SwaggerModule.createDocument(app, swaggerConfig);
+
+	// Basic-auth gate on the docs UI + raw OpenAPI JSON. Both env vars set →
+	// middleware enforces auth. Either unset → middleware skipped + warn log so dev
+	// stays frictionless. The env schema requires both when `NODE_ENV=production`,
+	// so an unset-in-prod state can never reach this branch.
+	const docsAuth = buildDocsBasicAuthMiddleware({
+		username: config.get('DOCS_USERNAME', { infer: true }),
+		password: config.get('DOCS_PASSWORD', { infer: true })
+	});
+	if (docsAuth) {
+		app.use(['/docs', '/docs/openapi.json'], docsAuth);
+	} else {
+		new Logger('Bootstrap').warn(
+			'Swagger docs at /docs are UNAUTHENTICATED — set DOCS_USERNAME + DOCS_PASSWORD to enable basic auth.'
+		);
+	}
+
 	SwaggerModule.setup('docs', app, document, {
 		jsonDocumentUrl: 'docs/openapi.json'
 	});

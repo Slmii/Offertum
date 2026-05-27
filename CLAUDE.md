@@ -250,6 +250,10 @@ Auth.js's `createUser` is overridden to throw — only **invitations** create Us
 
 A user has `currentOrganizationId` for the active session. `OrganizationGuard` reads that and attaches `request.organizationId`. Future "switch org" UI will let users pivot between memberships.
 
+### Swagger docs are basic-auth-gated
+
+`GET /docs` (Swagger UI) and `GET /docs/openapi.json` (raw spec) are protected by a small inline basic-auth middleware (`apps/api/src/common/middleware/docs-basic-auth.middleware.ts`). The middleware is wired ahead of `SwaggerModule.setup` in `main.ts` and reads `DOCS_USERNAME` + `DOCS_PASSWORD` from env. **Optional in dev** — when either is unset, the middleware is skipped and a `Bootstrap` warn log fires. **Required in production** — the env schema's `superRefine` rejects boot when `NODE_ENV=production` and either credential is missing, so the full API surface is never accidentally shipped unauthenticated. Comparison uses `timingSafeEqual` on equal-length buffers so wrong passwords take the same time as right ones.
+
 ## Conventions to follow
 
 - TypeScript everywhere. Named exports for components/utilities; avoid default exports.

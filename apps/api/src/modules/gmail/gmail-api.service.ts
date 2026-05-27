@@ -14,13 +14,6 @@ export interface GmailMessageStub {
 	threadId: string;
 }
 
-export interface GmailMessageMetadata extends GmailMessageStub {
-	internalDate: string;
-	snippet: string;
-	subject: string | null;
-	from: string | null;
-}
-
 /**
  * Gmail v1 `users.messages.get` payload — full JSON shape with headers + (optional)
  * MIME body parts. We persist this as-is in `RawMessage.raw` so the extractor can
@@ -119,24 +112,6 @@ export class GmailApiService {
 	}
 
 	/**
-	 * List the N most recent INBOX message IDs. Used by the `/settings/email` recent-list
-	 * UI. Scoped to INBOX via `labelIds=INBOX` so Sent / Drafts / Spam never appear in the
-	 * preview — matches the backfill (`q=in:inbox`), watch (`labelIds: ['INBOX']`), and
-	 * history walk (`labelId=INBOX`) so all four ingestion + display paths see the same
-	 * slice of the mailbox.
-	 *
-	 * Renamed from `listRecentMessages` (the smoke leftover with no filter) — the
-	 * old name was misleading and produced UI lists that didn't match `RawMessage` rows.
-	 */
-	async listRecentInboxMessages(accessToken: string, maxResults: number): Promise<GmailMessageStub[]> {
-		const params = new URLSearchParams();
-		params.set('maxResults', String(maxResults));
-		params.set('labelIds', 'INBOX');
-		const url = `${GMAIL_API_BASE}/users/me/messages?${params.toString()}`;
-		return (await this.fetchMessagesList(accessToken, url)).messages;
-	}
-
-	/**
 	 * Paginated list with optional Gmail search query (`q`) and `pageToken`. Used by the
 	 *  backfill — repeatedly call with the previous response's `nextPageToken` until
 	 * it comes back `null`.
@@ -158,34 +133,6 @@ export class GmailApiService {
 		}
 		const url = `${GMAIL_API_BASE}/users/me/messages?${params.toString()}`;
 		return this.fetchMessagesList(accessToken, url);
-	}
-
-	/**
-	 * Fetch metadata for one message. `format=metadata` keeps the response small —
-	 * we only need a few headers (subject, from) and the snippet for the smoke UI.
-	 */
-	async getMessageMetadata(accessToken: string, id: string): Promise<GmailMessageMetadata> {
-		const url = `${GMAIL_API_BASE}/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`;
-		const data = await this.fetchOne<{
-			id: string;
-			threadId: string;
-			internalDate: string;
-			snippet: string;
-			payload?: { headers?: GmailMessageHeader[] };
-		}>(accessToken, url, 'messages.get(metadata)');
-
-		const headers = data.payload?.headers ?? [];
-		const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value ?? null;
-		const from = headers.find(h => h.name.toLowerCase() === 'from')?.value ?? null;
-
-		return {
-			id: data.id,
-			threadId: data.threadId,
-			internalDate: data.internalDate,
-			snippet: data.snippet,
-			subject,
-			from
-		};
 	}
 
 	/**

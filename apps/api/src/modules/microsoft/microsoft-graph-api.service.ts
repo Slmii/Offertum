@@ -9,13 +9,6 @@ export interface MicrosoftMessageStub {
 	conversationId: string;
 }
 
-export interface MicrosoftMessageMetadata extends MicrosoftMessageStub {
-	receivedDateTime: string;
-	subject: string | null;
-	from: { name: string | null; address: string } | null;
-	bodyPreview: string;
-}
-
 /**
  * Microsoft Graph v1 `messages` payload — superset of the metadata fields plus full
  * MIME body. Persisted as-is into `RawMessage.raw` so the extractor can walk the
@@ -162,23 +155,6 @@ export class MicrosoftGraphApiService {
 			level: 'error',
 			context: 'MicrosoftGraphApiService'
 		});
-	}
-
-	/**
-	 * List the N most recent inbox messages ( smoke). Uses `$top` + `$select` to
-	 * pull only the fields we need for the smoke list.
-	 */
-	async listRecentInboxMessages(accessToken: string, top: number): Promise<MicrosoftMessageMetadata[]> {
-		const url = `${MICROSOFT_GRAPH_BASE}/me/mailFolders/Inbox/messages?$top=${top}&$select=id,conversationId,subject,from,receivedDateTime,bodyPreview&$orderby=receivedDateTime desc`;
-		const page = await this.fetchListUrl(accessToken, url);
-		return page.messages.map(m => ({
-			id: m.id,
-			conversationId: m.conversationId,
-			receivedDateTime: m.receivedDateTime,
-			subject: m.subject ?? null,
-			from: extractFrom(m),
-			bodyPreview: m.bodyPreview
-		}));
 	}
 
 	/**
@@ -503,12 +479,4 @@ export class MicrosoftGraphApiService {
 
 		return (await response.json()) as T;
 	}
-}
-
-function extractFrom(m: MicrosoftFullMessage): MicrosoftMessageMetadata['from'] {
-	const addr = m.from?.emailAddress;
-	if (!addr?.address) {
-		return null;
-	}
-	return { name: addr.name ?? null, address: addr.address };
 }

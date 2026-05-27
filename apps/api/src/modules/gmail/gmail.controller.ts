@@ -10,7 +10,6 @@ import { issueOAuthState, verifyOAuthState } from '@/lib/oauth/signed-state';
 import { EmailAccountsService, type MailboxScope } from '@/modules/email-accounts/email-accounts.service';
 import { GoogleOAuthService } from '@/modules/email-accounts/google-oauth.service';
 import { GmailDisconnectResponseDto } from '@/modules/gmail/dto/disconnect.response.dto';
-import { GmailMessageDto, GmailMessagesResponseDto } from '@/modules/gmail/dto/gmail-messages.response.dto';
 import { GmailStatusResponseDto } from '@/modules/gmail/dto/gmail-status.response.dto';
 import { GmailApiService } from '@/modules/gmail/gmail-api.service';
 import { GmailWatchService } from '@/modules/gmail/gmail-watch.service';
@@ -32,8 +31,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-
-const RECENT_MESSAGE_LIMIT = 10;
 
 /** Minimal cookie parser — Express 5 doesn't include `cookie-parser` by default. */
 function readCookie(request: Request, name: string): string | null {
@@ -228,40 +225,6 @@ export class GmailController {
 			email: account?.email ?? null,
 			connectedAt: account?.createdAt.toISOString() ?? null
 		};
-	}
-
-	@ApiOperation({
-		summary: `Smoke endpoint: the ${RECENT_MESSAGE_LIMIT} most recent message IDs from THIS user’s connected mailbox.`
-	})
-	@ApiOkResponse({ type: GmailMessagesResponseDto })
-	@UseGuards(TenantMemberGuard)
-	@Get('messages')
-	async messages(@Req() request: Request): Promise<GmailMessagesResponseDto> {
-		const scope = scopeFromRequest(request);
-
-		// `withFreshAccessToken` retries once on Gmail 401 — covers the case where the
-		// user revoked our app at myaccount.google.com while the cached access token still
-		// looked fresh on our side. If the retry's forced refresh hits `invalid_grant`,
-		// the EmailAccount row is deleted and a 404 propagates (web layer → empty list).
-		const messages = await this.accounts.withFreshAccessToken(scope, async accessToken => {
-			const stubs = await this.api.listRecentInboxMessages(accessToken, RECENT_MESSAGE_LIMIT);
-
-			// Fetch metadata for each in parallel. Gmail's per-user QPS limits are generous
-			// (~250 quota units / user / sec; messages.get costs 5). Ten parallel calls is fine.
-			const metadata = await Promise.all(stubs.map(stub => this.api.getMessageMetadata(accessToken, stub.id)));
-
-			return metadata.map<GmailMessageDto>(m => ({
-				id: m.id,
-				threadId: m.threadId,
-				// `internalDate` is unix ms as string from Gmail; render as ISO for the UI.
-				internalDate: new Date(Number(m.internalDate)).toISOString(),
-				snippet: m.snippet,
-				subject: m.subject,
-				from: m.from
-			}));
-		});
-
-		return { messages };
 	}
 
 	@ApiOperation({ summary: 'Revoke THIS user’s Gmail token at Google + clear the local row.' })
