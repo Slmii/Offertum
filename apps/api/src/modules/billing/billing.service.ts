@@ -65,7 +65,7 @@ export class BillingService {
 		// guide at https://docs.stripe.com/upgrades — never let the SDK silently roll
 		// forward into a breaking change.
 		this.stripe = new Stripe(secretKey, {
-			apiVersion: '2026-04-22.dahlia'
+			apiVersion: '2026-05-27.dahlia'
 		});
 	}
 

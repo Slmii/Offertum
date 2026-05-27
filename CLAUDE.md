@@ -14,7 +14,7 @@ Solo 14-week MVP build. The build plan lives at `~/.claude/plans/toasty-herding-
 - **Web**: TanStack Start (React 19, Vite 7) + MUI v9 + TanStack Query v5. SSR-first.
 - **API**: NestJS 11 (Express + CommonJS, plain `tsc`) + Prisma 7 (`prisma-client` generator + `@prisma/adapter-pg`) + Postgres 16 (Docker locally).
 - **Auth**: Auth.js v5 mounted as Express middleware at `/api/auth/*` (magic link via Resend + Google + Microsoft Entra). JWT sessions.
-- **Billing**: Stripe (API version `2026-04-22.dahlia` pinned) with graduated tiered pricing.
+- **Billing**: Stripe (API version `2026-05-27.dahlia` pinned) with graduated tiered pricing.
 - **AI**: OpenAI Responses API (`openai` SDK v6) — direct OpenAI or Azure OpenAI EU via env-var switch. Structured outputs via `zodTextFormat`. `store: false` on every call for GDPR data-minimization. Provider-swap seam (`AI_CLIENT` token in `AiModule`) ready for the W5.1 Mistral/Anthropic spike.
 - **Background jobs**: Inngest v4 mounted at `/api/inngest` (delta-sync workers, push handlers, scheduled crons).
 - **Deploy target**: DigitalOcean App Platform EU (not wired yet; W1.5 carryover).
@@ -181,7 +181,7 @@ Apply via composite decorators:
 
 `BillingService.syncFromStripe(customerId)` is the **only** path that writes to the local `Subscription` table. Every tracked webhook event triggers a full re-sync (never partial updates from event payloads). Pattern is Theo's "How I Stay Sane Implementing Stripe":
 
-- Pinned API version `2026-04-22.dahlia`.
+- Pinned API version `2026-05-27.dahlia`.
 - `current_period_*` lives on `subscription.items.data[0]`, not the subscription root (Stripe moved it in 2024).
 - `getOrCreateCustomer` is self-healing — verifies the local `stripeCustomerId` still exists at Stripe, recreates on `resource_missing`.
 - Webhook handler 200s immediately and processes via `setImmediate` so Stripe's retry timer never fires for in-flight handlers.
