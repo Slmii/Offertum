@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 config({ path: resolve(__dirname, '../.env') });
 
+import type { CatalogItemUnit } from '@quoteom/shared';
 import {
 	EmailProvider,
 	MembershipRole,
@@ -302,6 +303,137 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 	}
 ];
 
+interface SeedCatalogItem {
+	id: string;
+	organizationId: string;
+	name: string;
+	description: string | null;
+	defaultPriceEur: string;
+	defaultVatRate: number;
+	sku: string | null;
+	unit: CatalogItemUnit;
+	active: boolean;
+}
+
+// ~5 catalog items per org so `/settings/catalog` has content on a fresh DB.
+// Fixed UUIDs make `pnpm db:seed` idempotent — re-running upserts in place
+// instead of stacking duplicates. Acme = installer (uur-based services);
+// Bouwbedrijf = builder (mostly project + day-based work).
+const catalogItems: ReadonlyArray<SeedCatalogItem> = [
+	// Acme Installaties (installer)
+	{
+		id: '44444444-0001-0000-0000-000000000001',
+		organizationId: ORG_ACME,
+		name: 'Installatie-uurtarief',
+		description: 'Standaard uurtarief voor monteur op locatie.',
+		defaultPriceEur: '75.00',
+		defaultVatRate: 21,
+		sku: 'INST-HR',
+		unit: 'hour',
+		active: true
+	},
+	{
+		id: '44444444-0001-0000-0000-000000000002',
+		organizationId: ORG_ACME,
+		name: 'CV-ketel onderhoudsbeurt',
+		description: 'Jaarlijkse onderhoudsbeurt inclusief afdichtingscontrole.',
+		defaultPriceEur: '129.00',
+		defaultVatRate: 21,
+		sku: 'CV-MAINT',
+		unit: 'flat_fee',
+		active: true
+	},
+	{
+		id: '44444444-0001-0000-0000-000000000003',
+		organizationId: ORG_ACME,
+		name: 'Voorrijkosten regio Utrecht',
+		description: 'Vast bedrag binnen 25 km van de werkplaats.',
+		defaultPriceEur: '35.00',
+		defaultVatRate: 21,
+		sku: 'TRAVEL-UTR',
+		unit: 'flat_fee',
+		active: true
+	},
+	{
+		id: '44444444-0001-0000-0000-000000000004',
+		organizationId: ORG_ACME,
+		name: 'Krachtstroomgroep aansluiten',
+		description: '400V groep, inclusief automaat — exclusief kabelwerk.',
+		defaultPriceEur: '185.00',
+		defaultVatRate: 21,
+		sku: 'ELEK-400V',
+		unit: 'piece',
+		active: true
+	},
+	{
+		id: '44444444-0001-0000-0000-000000000005',
+		organizationId: ORG_ACME,
+		name: 'Installatiekabel 3×2,5 mm²',
+		description: 'YMvK gris per strekkende meter, inclusief verleggen.',
+		defaultPriceEur: '4.95',
+		defaultVatRate: 21,
+		sku: 'CABLE-YMVK-2.5',
+		unit: 'meter',
+		active: true
+	},
+	// Bouwbedrijf de Vries (builder)
+	{
+		id: '44444444-0002-0000-0000-000000000001',
+		organizationId: ORG_BOUW,
+		name: 'Bouwvakker dagtarief',
+		description: 'Volledige dag (8 uur) inclusief klein gereedschap.',
+		defaultPriceEur: '425.00',
+		defaultVatRate: 21,
+		sku: 'BV-DAY',
+		unit: 'day',
+		active: true
+	},
+	{
+		id: '44444444-0002-0000-0000-000000000002',
+		organizationId: ORG_BOUW,
+		name: 'Badkamer strippen',
+		description: 'Compleet verwijderen incl. tegels, sanitair en afvoer van puin.',
+		defaultPriceEur: '1450.00',
+		defaultVatRate: 21,
+		sku: 'BAD-STRIP',
+		unit: 'flat_fee',
+		active: true
+	},
+	{
+		id: '44444444-0002-0000-0000-000000000003',
+		organizationId: ORG_BOUW,
+		name: 'Tegelwerk wand',
+		description: 'Inclusief lijm + voegen, exclusief tegels.',
+		defaultPriceEur: '55.00',
+		defaultVatRate: 21,
+		sku: 'TILE-WALL',
+		unit: 'square_meter',
+		active: true
+	},
+	{
+		id: '44444444-0002-0000-0000-000000000004',
+		organizationId: ORG_BOUW,
+		name: 'Dakkapel basismodel 2 m',
+		description: 'Standaard dakkapel 2 m breed, inclusief plaatsing.',
+		defaultPriceEur: '6850.00',
+		defaultVatRate: 9,
+		sku: 'DK-2M',
+		unit: 'piece',
+		active: true
+	},
+	{
+		id: '44444444-0002-0000-0000-000000000005',
+		organizationId: ORG_BOUW,
+		name: 'Container 6 m³ — puin',
+		description: 'Plaatsing + afvoer puincontainer op locatie.',
+		defaultPriceEur: '275.00',
+		defaultVatRate: 21,
+		sku: 'CONT-6M3',
+		unit: 'piece',
+		active: false
+	}
+];
+
 function daysAgo(days: number): Date {
 	return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
@@ -435,6 +567,32 @@ async function main() {
 		});
 	}
 
+	for (const item of catalogItems) {
+		await prisma.catalogItem.upsert({
+			where: { id: item.id },
+			update: {
+				name: item.name,
+				description: item.description,
+				defaultPriceEur: item.defaultPriceEur as unknown as Prisma.Decimal,
+				defaultVatRate: item.defaultVatRate,
+				sku: item.sku,
+				unit: item.unit,
+				active: item.active
+			},
+			create: {
+				id: item.id,
+				organizationId: item.organizationId,
+				name: item.name,
+				description: item.description,
+				defaultPriceEur: item.defaultPriceEur as unknown as Prisma.Decimal,
+				defaultVatRate: item.defaultVatRate,
+				sku: item.sku,
+				unit: item.unit,
+				active: item.active
+			}
+		});
+	}
+
 	console.log('\nOrganizations:');
 	for (const org of orgs) {
 		const count = memberships.filter(m => m.orgId === org.id).length;
@@ -455,6 +613,13 @@ async function main() {
 		console.log(`  ${org.name} — ${count} opportunit${count === 1 ? 'y' : 'ies'}`);
 	}
 	console.log(`  Total: ${opportunities.length}`);
+
+	console.log('\nCatalog items:');
+	for (const org of orgs) {
+		const count = catalogItems.filter(c => c.organizationId === org.id).length;
+		console.log(`  ${org.name} — ${count} item${count === 1 ? '' : 's'}`);
+	}
+	console.log(`  Total: ${catalogItems.length}`);
 }
 
 main()

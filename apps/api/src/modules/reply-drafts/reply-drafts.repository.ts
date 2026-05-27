@@ -161,6 +161,8 @@ export interface SendContext {
 	opportunity: SendContextOpportunity;
 	emailAccount: SendContextEmailAccount;
 	rawMessage: SendContextRawMessage;
+	/** Latest inbound thread message — `null` if no follow-up has arrived. */
+	latestThreadMessage: SendContextLatestThreadMessage | null;
 	attachments: SendContextAttachment[];
 }
 
@@ -184,6 +186,19 @@ export interface SendContextRawMessage {
 	fromName: string | null;
 	raw: unknown;
 	threadId: string | null;
+}
+
+/**
+ * Latest inbound message on the opp's thread, used by the send path to source
+ * the threading headers (`Message-ID` → `In-Reply-To`, accumulated `References`).
+ * RFC 2822 threading is anchored on the LATEST message in the conversation, not
+ * the originating one — using `rawMessage` here (the originating) would make every
+ * follow-up reply land at the top of the thread in the recipient's mail client
+ * instead of nested under the message it actually answers. `null` when no
+ * follow-up has arrived yet (then the originating's headers are correct).
+ */
+export interface SendContextLatestThreadMessage {
+	raw: unknown;
 }
 
 /**
@@ -670,6 +685,14 @@ export class ReplyDraftsRepository {
 								raw: true,
 								threadId: true
 							}
+						},
+						// Latest inbound thread message — newest follow-up the customer (or
+						// own mailbox) sent after the originating. Only `raw` is needed; the
+						// send path extracts Message-ID + References headers from it.
+						threadMessages: {
+							orderBy: { internalDate: 'desc' },
+							take: 1,
+							select: { raw: true }
 						}
 					}
 				},
@@ -713,6 +736,9 @@ export class ReplyDraftsRepository {
 				raw: draft.opportunity.rawMessage.raw,
 				threadId: draft.opportunity.rawMessage.threadId
 			},
+			latestThreadMessage: draft.opportunity.threadMessages[0]
+				? { raw: draft.opportunity.threadMessages[0].raw }
+				: null,
 			attachments: draft.attachments.map(a => ({
 				id: a.id,
 				filename: a.filename,

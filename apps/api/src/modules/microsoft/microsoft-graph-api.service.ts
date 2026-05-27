@@ -147,14 +147,23 @@ export interface GraphSendMailAttachment {
 export class MicrosoftGraphApiService {
 	constructor(private readonly logService: LogService) {}
 
-	private logApiError(operation: string, status: number, body: string): void {
+	/**
+	 * Log + throw a 500 for a non-2xx Graph response in one shot. Parses Graph's
+	 * `{ error: { code, message } }` envelope when present so the thrown exception
+	 * carries the real reason (e.g. "The notificationUrl must use HTTPS...") instead
+	 * of just "subscriptions.create failed". The raw body still lands in the Log
+	 * row's metadata for forensics on responses we couldn't parse.
+	 */
+	private throwGraphError(operation: string, status: number, body: string): never {
+		const parsed = parseGraphErrorMessage(body);
 		this.logService.logAction({
 			action: 'microsoft.graph.api.error',
-			message: `Microsoft Graph ${operation} failed: HTTP ${status}`,
-			metadata: { operation, status, body: body.slice(0, 500) },
+			message: `Microsoft Graph ${operation} failed: HTTP ${status}${parsed ? ` — ${parsed.message}` : ''}`,
+			metadata: { operation, status, body: body.slice(0, 500), graphErrorCode: parsed?.code ?? null },
 			level: 'error',
 			context: 'MicrosoftGraphApiService'
 		});
+		throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED(operation, parsed?.message));
 	}
 
 	/**
@@ -216,8 +225,8 @@ export class MicrosoftGraphApiService {
 		}
 		if (!response.ok) {
 			const text = await response.text();
-			this.logApiError('messages.delta', response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('messages.delta'));
+
+			this.throwGraphError('messages.delta', response.status, text);
 		}
 
 		const data = (await response.json()) as {
@@ -275,8 +284,8 @@ export class MicrosoftGraphApiService {
 		}
 		if (!response.ok) {
 			const text = await response.text();
-			this.logApiError('subscriptions.create', response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('subscriptions.create'));
+
+			this.throwGraphError('subscriptions.create', response.status, text);
 		}
 
 		return (await response.json()) as MicrosoftSubscription;
@@ -312,8 +321,8 @@ export class MicrosoftGraphApiService {
 		}
 		if (!response.ok) {
 			const text = await response.text();
-			this.logApiError('subscriptions.renew', response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('subscriptions.renew'));
+
+			this.throwGraphError('subscriptions.renew', response.status, text);
 		}
 
 		return (await response.json()) as MicrosoftSubscription;
@@ -395,8 +404,8 @@ export class MicrosoftGraphApiService {
 		}
 		if (!response.ok && response.status !== 202) {
 			const text = await response.text();
-			this.logApiError('sendMail', response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('sendMail'));
+
+			this.throwGraphError('sendMail', response.status, text);
 		}
 	}
 
@@ -416,8 +425,8 @@ export class MicrosoftGraphApiService {
 		}
 		if (!response.ok && response.status !== 204) {
 			const text = await response.text();
-			this.logApiError('subscriptions.delete', response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('subscriptions.delete'));
+
+			this.throwGraphError('subscriptions.delete', response.status, text);
 		}
 	}
 
@@ -447,8 +456,8 @@ export class MicrosoftGraphApiService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logApiError('messages.list', response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED('messages.list'));
+
+			this.throwGraphError('messages.list', response.status, text);
 		}
 
 		const data = (await response.json()) as {
@@ -473,10 +482,33 @@ export class MicrosoftGraphApiService {
 
 		if (!response.ok) {
 			const text = await response.text();
-			this.logApiError(opName, response.status, text);
-			throw new InternalServerErrorException(MICROSOFT_GRAPH_API_CALL_FAILED(opName));
+
+			this.throwGraphError(opName, response.status, text);
 		}
 
 		return (await response.json()) as T;
+	}
+}
+
+/**
+ * Parse Graph's standard error envelope (`{ error: { code, message } }`) so we can
+ * surface the human-readable reason in thrown exceptions + log rows. Returns `null`
+ * when the body isn't JSON or doesn't carry an error.message — falls back to the
+ * raw body via the existing log metadata path.
+ */
+function parseGraphErrorMessage(body: string): { code?: string; message: string } | null {
+	if (!body) {
+		return null;
+	}
+	try {
+		const parsed = JSON.parse(body) as { error?: { code?: string; message?: string } };
+		const message = parsed?.error?.message;
+		if (typeof message !== 'string' || message.length === 0) {
+			return null;
+		}
+		const code = typeof parsed.error?.code === 'string' ? parsed.error.code : undefined;
+		return { code, message };
+	} catch {
+		return null;
 	}
 }

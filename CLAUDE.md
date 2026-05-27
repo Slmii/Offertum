@@ -367,6 +367,58 @@ Common Phase C gotchas (in order of frequency):
 
 See `TEST_CASES.md` → EMAIL-PUSH-01..06 for the full test catalog.
 
+## Microsoft Graph push notifications dev workflow
+
+Same shape as the Gmail Pub/Sub flow above but simpler — Graph's subscription model is one POST to `/subscriptions` with a `notificationUrl`, no separate topic/subscription split. Graph does a synchronous validation handshake (POST `<notificationUrl>?validationToken=<random>`, expects the token echoed back as `text/plain` within ~5 s) so the URL must be publicly reachable + HTTPS. **Skip this section entirely for local-only dev** — `MicrosoftSubscriptionService` no-ops cleanly when `MICROSOFT_GRAPH_NOTIFICATION_URL` is unset, so the connect / backfill / disconnect flow works without any of this.
+
+Two ways to exercise the push pipeline locally:
+
+### Easy: simulate the delta-sync (no ngrok, validates the pipeline only)
+
+Bypasses the webhook + JWT-style validation. Connect Microsoft through the UI, copy the `EmailAccount.id` from `db:studio`, then in the Inngest dev UI (http://localhost:8288) fire:
+
+```json
+{ "name": "microsoft/delta.changed", "data": { "emailAccountId": "<paste>" } }
+```
+
+Triggers `microsoft-delta-sync` against the stored `deltaLink`, persists new `RawMessage` rows, advances the cursor. Good enough to verify the delta-sync code; doesn't exercise the validation handshake or subscription registration.
+
+### Full: end-to-end via ngrok + Graph subscriptions
+
+One-time setup per dev machine:
+
+1. **Reserved ngrok domain** — free tier gives one. Run `ngrok http 3000 --domain=<your-domain>` pointing at the **web** port (3000), so `/api/*` proxies through to the API.
+2. **Authorized redirect URIs** on the Microsoft app registration — add `https://<your-domain>/api/email/microsoft/callback` so the OAuth callback lands on the tunnel domain during smoke testing.
+3. **`apps/api/.env`**:
+    ```bash
+    MICROSOFT_GRAPH_NOTIFICATION_URL=https://<your-domain>/api/email/microsoft/webhook
+    ```
+    Restart `pnpm dev`.
+
+Smoke flow (4 terminals: `pnpm dev`, `pnpm --filter @quoteom/api inngest`, `ngrok ...`, `db:studio`):
+
+1. Sign in via the **ngrok URL** (not `localhost:3000` — OAuth callbacks need to land on the tunnel domain).
+2. Connect Microsoft at `/settings/email`. The `microsoft-backfill` Inngest run shows `microsoft-backfill`, `microsoft-backfill-process-opportunities`, then `microsoft-start-subscription`. After completion: `EmailAccount.subscriptionId` set AND `watchExpiresAt` ~3 days out.
+3. Send yourself a test email from another account.
+4. Within 5–10 seconds:
+    - **ngrok inspector** (http://localhost:4040): POST to `/api/email/microsoft/webhook` with a `clientState`-bearing body, response 202.
+    - **Inngest UI**: `microsoft-delta-sync` fires, run reports `messagesInserted: 1`.
+    - **`RawMessage`** in `db:studio`: the new row.
+
+Renewal cron is verifiable without waiting 3 days: in `db:studio` backdate `watchExpiresAt` to yesterday → in the Inngest UI click **Invoke** on `microsoft-subscription-renewal` → output reports `{ scanned: 1, renewed: 1, ... }` and `watchExpiresAt` jumps back to ~3 days out.
+
+Common gotchas (in order of frequency):
+
+| Symptom                                                                             | Fix                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Microsoft Graph subscriptions.create failed: HTTP 400` after a successful backfill | ngrok tunnel is down, or `MICROSOFT_GRAPH_NOTIFICATION_URL` is `http://` (Graph requires HTTPS), or the URL isn't publicly reachable. Restart ngrok with `--domain=<reserved>` and confirm `curl https://<domain>` from a different network. |
+| Subscription registers but validation handshake fails                               | The webhook controller must short-circuit on the `validationToken` query param BEFORE doing JSON parsing or rate-limit checks. See `microsoft-webhook.controller.ts` — the early-return at the top of the handler is load-bearing.           |
+| OAuth callback redirects to `localhost:3000`                                        | Same as the Gmail flow above — `WEB_ORIGIN` in `apps/api/.env` is still set to `http://localhost:3000`. Override to the ngrok URL for the smoke, restore after.                                                                              |
+| Webhook 401                                                                         | `clientState` mismatch — the stored `subscriptionClientState` on EmailAccount doesn't match what's being echoed back. Disconnect + reconnect to regenerate.                                                                                  |
+| `Microsoft Graph API ... failed: <specific message>` in console                     | Item 1 of the W9.x cleanup wired Graph's `error.message` into the thrown exception. Trust it — the cause is verbatim from Graph.                                                                                                             |
+
+**Env hygiene after smoke:** unset `MICROSOFT_GRAPH_NOTIFICATION_URL` if you want to test reconnect flows without push (Graph rejects the subscription if it can't validate the URL, and the post-backfill subscription start will log an error every time). Backfill itself is unaffected — push delivery is a separate concern from sync.
+
 ## AI pipeline + draft + send (W4.1 → W5.6)
 
 OpenAI Responses API behind a provider-agnostic `AIClient` seam. Every call is wrapped so provider lock-in is a one-line DI binding change in `AiModule`, not a service rewrite (W5.1 locked OpenAI for MVP per `PROVIDER_NOTES.md` — no Mistral/Anthropic spike). The pipeline materializes `RawMessage` rows into `Opportunity` rows (W4.4), surfaces them through a URL-persisted list page (W4.5), closes the classifier feedback loop via owner dismissals (W4.6 / W4.6.5), generates AI replies (W5.3) editable in a detail view (W5.4), sends them threaded via Gmail/Graph with optional attachments (W5.5), and handles inbound customer replies + manual follow-up composition (W5.6).

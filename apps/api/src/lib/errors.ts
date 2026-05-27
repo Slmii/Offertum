@@ -122,8 +122,13 @@ export const EmailConnectErrorCode = {
 export type EmailConnectErrorCode = (typeof EmailConnectErrorCode)[keyof typeof EmailConnectErrorCode];
 export const EMAIL_ACCOUNT_NOT_FOUND = 'No connected mail account for this organization.';
 // Dev-facing — surfaced as generic 500 when a Gmail or Graph API endpoint returns non-2xx.
-export const GMAIL_API_CALL_FAILED = (operation: string) => `Gmail API ${operation} failed`;
-export const MICROSOFT_GRAPH_API_CALL_FAILED = (operation: string) => `Microsoft Graph API ${operation} failed`;
+// Optional `cause` is the provider's own `error.message` field when we can parse it (Graph
+// returns `{ error: { code, message } }`); surfacing it in the thrown exception makes the
+// reason show up in stack traces instead of being buried in the Log table.
+export const GMAIL_API_CALL_FAILED = (operation: string, cause?: string) =>
+	cause ? `Gmail API ${operation} failed: ${cause}` : `Gmail API ${operation} failed`;
+export const MICROSOFT_GRAPH_API_CALL_FAILED = (operation: string, cause?: string) =>
+	cause ? `Microsoft Graph API ${operation} failed: ${cause}` : `Microsoft Graph API ${operation} failed`;
 // Dev-facing — both Gmail + Microsoft. Should never reach a user; signals a refresh-token
 // disappeared between issue + reuse, which we don't expect outside a Prisma bug.
 export const NO_REFRESH_TOKEN_AVAILABLE = 'No refresh token in token exchange response and no existing one on file';

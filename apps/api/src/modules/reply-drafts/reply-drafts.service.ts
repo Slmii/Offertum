@@ -507,9 +507,16 @@ export class ReplyDraftsService {
 			return { sent: false, alreadySent: false, reason: 'no_inbox_owner' };
 		}
 
+		// Threading headers come from the LATEST inbound thread message when present,
+		// not from the originating. RFC 2822 threading clients (Gmail / Outlook /
+		// Apple Mail) anchor on the `Message-ID` of the parent message — using the
+		// originating's Message-ID after a customer follow-up would make our reply
+		// land at the top of the thread instead of nested under the actual ask.
+		// `null` when no follow-up exists yet (fresh opp) → fall back to originating.
+		const headerSourceRaw = context.latestThreadMessage?.raw ?? context.rawMessage.raw;
 		const replyHeaders = extractReplyHeaders({
 			provider: context.emailAccount.provider,
-			raw: context.rawMessage.raw
+			raw: headerSourceRaw
 		});
 		const subject = composeReplySubject(context.rawMessage.subject);
 		const recipient = context.rawMessage.fromEmail;
