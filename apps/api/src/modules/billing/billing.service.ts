@@ -645,6 +645,40 @@ export class BillingService {
 	}
 
 	/**
+	 * Cancel the live Stripe subscription before an organization is deleted. The
+	 * local Subscription row is cascade-deleted with the org, so this is the last
+	 * chance to avoid orphan billing in Stripe.
+	 */
+	async cancelSubscriptionForOrgDelete(organizationId: string): Promise<void> {
+		const sub = await this.prisma.subscription.findUnique({
+			where: { organizationId },
+			select: { stripeSubscriptionId: true, status: true }
+		});
+		if (!sub?.stripeSubscriptionId || sub.status === 'canceled' || sub.status === 'incomplete_expired') {
+			return;
+		}
+
+		try {
+			await this.stripe.subscriptions.cancel(
+				sub.stripeSubscriptionId,
+				{},
+				{ idempotencyKey: `org-delete-sub-cancel:${sub.stripeSubscriptionId}` }
+			);
+		} catch (error) {
+			if (!isResourceMissingError(error)) {
+				throw error;
+			}
+		}
+
+		this.logService.logAction({
+			action: 'billing.subscription.cancelled_for_org_delete',
+			message: `Cancelled Stripe subscription ${sub.stripeSubscriptionId} before deleting org ${organizationId}`,
+			metadata: { organizationId, subscriptionId: sub.stripeSubscriptionId },
+			context: 'BillingService'
+		});
+	}
+
+	/**
 	 * Push a new customer name to Stripe directly. Lower-level than
 	 * `syncCustomerNameForOrg` — caller must know the Stripe customer ID and
 	 * the target name. Idempotency key includes a hash of the name so concurrent

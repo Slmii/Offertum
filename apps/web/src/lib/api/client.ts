@@ -87,6 +87,34 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 	return (await response.json()) as T;
 }
 
+export async function apiForm<T>(
+	path: string,
+	formData: FormData,
+	options: Omit<RequestInit, 'body'> = {}
+): Promise<T> {
+	const response = await fetch(path, {
+		credentials: 'include',
+		body: formData,
+		...options
+	});
+
+	if (!response.ok) {
+		const errorBody = (await response.json().catch(() => null)) as ApiError | null;
+		throw new WrapperApiError({
+			code: response.status,
+			message: flattenMessage(errorBody?.message, response.statusText || 'Unknown error'),
+			apiCode: errorBody?.code,
+			billingPath: errorBody?.billingPath
+		});
+	}
+
+	if (response.status === 204) {
+		return undefined as T;
+	}
+
+	return (await response.json()) as T;
+}
+
 /**
  * Auth.js's signin/signout endpoints expect application/x-www-form-urlencoded with a CSRF
  * token, and respond with 302 redirects. Browser fetch with `redirect: 'manual'` returns

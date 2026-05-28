@@ -16,6 +16,8 @@ export const ORGANIZATION_NOT_FOUND = 'Organization not found';
 export const NO_ACTIVE_ORGANIZATION =
 	'No active organization. You must be a member of an organization to access this route.';
 export const MEMBERSHIP_NOT_FOUND = 'Membership not found in the active organization';
+export const ORGANIZATION_DELETE_CONFIRMATION_MISMATCH =
+	'Organization deletion confirmation does not match the organization name.';
 // User-facing — surfaced when an OWNER attempts to remove their own membership. Ownership
 // transfer (if we ever build it) is a separate flow; deleting the owner would orphan the org.
 export const CANNOT_REMOVE_SELF =
@@ -183,6 +185,7 @@ export const REPLY_DRAFT_CANNOT_SEND = 'Cannot send reply: the inbox is no longe
 // ────────────────────────────────────────────────────────────────────────────
 export const ATTACHMENT_FILE_MISSING = 'No file uploaded. Pick a file and try again.';
 export const ATTACHMENT_NOT_FOUND = 'Attachment not found';
+export const BUSINESS_ASSET_NOT_FOUND = 'Business asset not found';
 export const attachmentMimeNotAllowed = (mime: string) =>
 	`File type '${mime}' is not allowed. Accepted: PDF, Office docs, images, plain text, CSV, ZIP.`;
 export const attachmentFileTooLarge = (sizeBytes: number, maxBytes: number) =>

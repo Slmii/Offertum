@@ -20,11 +20,15 @@ export interface BusinessDetails {
 	companyRegistrationNumber: string | null;
 	companyVatNumber: string | null;
 	companyAddress: string | null;
+	companyPhone: string | null;
+	companyWebsite: string | null;
 	companyFooter: string | null;
 	defaultPaymentTermsDays: number;
 	/** When set, `GET /api/me/business-details/logo` streams the binary. NULL
 	 * means no logo uploaded — the quote PDF falls back to a text-only header. */
 	hasLogo: boolean;
+	/** When set, the quote PDF can use this as branded letterhead. */
+	hasLetterhead: boolean;
 }
 
 export interface UpdateBusinessDetailsInput {
@@ -32,6 +36,8 @@ export interface UpdateBusinessDetailsInput {
 	companyRegistrationNumber?: string | null;
 	companyVatNumber?: string | null;
 	companyAddress?: string | null;
+	companyPhone?: string | null;
+	companyWebsite?: string | null;
 	companyFooter?: string | null;
 	defaultPaymentTermsDays?: number;
 }
@@ -40,6 +46,8 @@ export const COMPANY_NAME_MAX_LENGTH = 200;
 export const COMPANY_REGISTRATION_NUMBER_MAX_LENGTH = 32;
 export const COMPANY_VAT_MAX_LENGTH = 32;
 export const COMPANY_ADDRESS_MAX_LENGTH = 1_000;
+export const COMPANY_PHONE_MAX_LENGTH = 64;
+export const COMPANY_WEBSITE_MAX_LENGTH = 200;
 export const COMPANY_FOOTER_MAX_LENGTH = 2_000;
 export const PAYMENT_TERMS_DAYS_MIN = 0;
 export const PAYMENT_TERMS_DAYS_MAX = 365;

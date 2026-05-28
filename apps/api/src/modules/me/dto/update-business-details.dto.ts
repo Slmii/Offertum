@@ -2,8 +2,10 @@ import {
 	COMPANY_ADDRESS_MAX_LENGTH,
 	COMPANY_FOOTER_MAX_LENGTH,
 	COMPANY_NAME_MAX_LENGTH,
+	COMPANY_PHONE_MAX_LENGTH,
 	COMPANY_REGISTRATION_NUMBER_MAX_LENGTH,
 	COMPANY_VAT_MAX_LENGTH,
+	COMPANY_WEBSITE_MAX_LENGTH,
 	PAYMENT_TERMS_DAYS_MAX,
 	PAYMENT_TERMS_DAYS_MIN,
 	type UpdateBusinessDetailsInput
@@ -46,6 +48,18 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@IsString()
 	@MaxLength(COMPANY_ADDRESS_MAX_LENGTH)
 	companyAddress?: string | null;
+
+	@ValidateIf((_, value) => value !== null)
+	@IsOptional()
+	@IsString()
+	@MaxLength(COMPANY_PHONE_MAX_LENGTH)
+	companyPhone?: string | null;
+
+	@ValidateIf((_, value) => value !== null)
+	@IsOptional()
+	@IsString()
+	@MaxLength(COMPANY_WEBSITE_MAX_LENGTH)
+	companyWebsite?: string | null;
 
 	@ValidateIf((_, value) => value !== null)
 	@IsOptional()

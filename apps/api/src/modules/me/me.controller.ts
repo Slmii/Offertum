@@ -1,6 +1,8 @@
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { OwnerGuard } from '@/common/guards/owner.guard';
+import { BUSINESS_ASSET_MAX_FILE_BYTES, type BusinessAssetFile } from '@/modules/me/business-assets';
+import { DeleteOrganizationDto } from '@/modules/me/dto/delete-organization.dto';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { BusinessDetailsResponseDto } from '@/modules/me/dto/business-details.response.dto';
 import { FollowUpSettingsResponseDto } from '@/modules/me/dto/follow-up-settings.response.dto';
@@ -16,6 +18,7 @@ import {
 	Controller,
 	Delete,
 	Get,
+	Header,
 	HttpCode,
 	HttpStatus,
 	Param,
@@ -24,11 +27,15 @@ import {
 	Post,
 	Put,
 	Req,
+	Res,
 	UnauthorizedException,
-	UseGuards
+	UploadedFile,
+	UseGuards,
+	UseInterceptors
 } from '@nestjs/common';
-import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
 
 /**
  * `MeController` mixes two access modes:
@@ -136,6 +143,84 @@ export class MeController {
 		@Body() body: UpdateBusinessDetailsDto
 	): Promise<BusinessDetailsResponseDto> {
 		return this.me.updateBusinessDetails(this.userId(request), request.organizationId!, body);
+	}
+
+	@ApiOperation({ summary: 'Upload the active organization’s logo for quote PDFs (owner-only)' })
+	@ApiConsumes('multipart/form-data')
+	@ApiBody({
+		schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } }, required: ['file'] }
+	})
+	@ApiOkResponse({ type: BusinessDetailsResponseDto })
+	@UseGuards(OwnerGuard)
+	@UseInterceptors(FileInterceptor('file', { limits: { fileSize: BUSINESS_ASSET_MAX_FILE_BYTES } }))
+	@Post('business-details/logo')
+	uploadBusinessLogo(
+		@Req() request: Request,
+		@UploadedFile() file: BusinessAssetFile | undefined
+	): Promise<BusinessDetailsResponseDto> {
+		return this.me.uploadBusinessAsset(this.userId(request), request.organizationId!, 'logo', file);
+	}
+
+	@ApiOperation({ summary: 'Download the active organization’s logo' })
+	@UseGuards(OrganizationGuard)
+	@Get('business-details/logo')
+	async getBusinessLogo(@Req() request: Request, @Res() response: Response): Promise<void> {
+		const asset = await this.me.getBusinessAsset(request.organizationId!, 'logo');
+		response.setHeader('Content-Type', asset.contentType);
+		response.setHeader('Content-Length', String(asset.data.byteLength));
+		response.end(asset.data);
+	}
+
+	@ApiOperation({ summary: 'Remove the active organization’s logo (owner-only)' })
+	@ApiOkResponse({ type: BusinessDetailsResponseDto })
+	@UseGuards(OwnerGuard)
+	@Delete('business-details/logo')
+	deleteBusinessLogo(@Req() request: Request): Promise<BusinessDetailsResponseDto> {
+		return this.me.deleteBusinessAsset(this.userId(request), request.organizationId!, 'logo');
+	}
+
+	@ApiOperation({ summary: 'Upload the active organization’s letterhead for quote PDFs (owner-only)' })
+	@ApiConsumes('multipart/form-data')
+	@ApiBody({
+		schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } }, required: ['file'] }
+	})
+	@ApiOkResponse({ type: BusinessDetailsResponseDto })
+	@UseGuards(OwnerGuard)
+	@UseInterceptors(FileInterceptor('file', { limits: { fileSize: BUSINESS_ASSET_MAX_FILE_BYTES } }))
+	@Post('business-details/letterhead')
+	uploadBusinessLetterhead(
+		@Req() request: Request,
+		@UploadedFile() file: BusinessAssetFile | undefined
+	): Promise<BusinessDetailsResponseDto> {
+		return this.me.uploadBusinessAsset(this.userId(request), request.organizationId!, 'letterhead', file);
+	}
+
+	@ApiOperation({ summary: 'Download the active organization’s letterhead' })
+	@UseGuards(OrganizationGuard)
+	@Get('business-details/letterhead')
+	async getBusinessLetterhead(@Req() request: Request, @Res() response: Response): Promise<void> {
+		const asset = await this.me.getBusinessAsset(request.organizationId!, 'letterhead');
+		response.setHeader('Content-Type', asset.contentType);
+		response.setHeader('Content-Length', String(asset.data.byteLength));
+		response.end(asset.data);
+	}
+
+	@ApiOperation({ summary: 'Remove the active organization’s letterhead (owner-only)' })
+	@ApiOkResponse({ type: BusinessDetailsResponseDto })
+	@UseGuards(OwnerGuard)
+	@Delete('business-details/letterhead')
+	deleteBusinessLetterhead(@Req() request: Request): Promise<BusinessDetailsResponseDto> {
+		return this.me.deleteBusinessAsset(this.userId(request), request.organizationId!, 'letterhead');
+	}
+
+	@ApiOperation({ summary: 'Delete the active organization and remove all members from it (owner-only)' })
+	@ApiNoContentResponse()
+	@UseGuards(OwnerGuard)
+	@HttpCode(HttpStatus.NO_CONTENT)
+	@Header('Cache-Control', 'no-store')
+	@Delete('organization')
+	async deleteOrganization(@Req() request: Request, @Body() body: DeleteOrganizationDto): Promise<void> {
+		await this.me.deleteOrganization(this.userId(request), request.organizationId!, body.confirm);
 	}
 
 	/**

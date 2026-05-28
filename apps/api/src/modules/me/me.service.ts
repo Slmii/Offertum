@@ -1,11 +1,35 @@
 import type { EnvSchema } from '@/config/env.schema';
 import { MembershipRole } from '@/generated/prisma/client';
-import { CANNOT_REMOVE_OWNER, CANNOT_REMOVE_SELF, MEMBERSHIP_NOT_FOUND } from '@/lib/errors';
+import { ATTACHMENT_STORAGE, type AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
+import {
+	ATTACHMENT_FILE_MISSING,
+	BUSINESS_ASSET_NOT_FOUND,
+	CANNOT_REMOVE_OWNER,
+	CANNOT_REMOVE_SELF,
+	MEMBERSHIP_NOT_FOUND,
+	ORGANIZATION_DELETE_CONFIRMATION_MISMATCH,
+	attachmentFileTooLarge,
+	attachmentMimeNotAllowed
+} from '@/lib/errors';
+import {
+	BUSINESS_ASSET_ALLOWED_MIME_TYPES,
+	BUSINESS_ASSET_MAX_FILE_BYTES,
+	type BusinessAssetFile,
+	type BusinessAssetKind
+} from '@/modules/me/business-assets';
 import { BillingService } from '@/modules/billing/billing.service';
 import { LogService } from '@/modules/logger/log.service';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
 import { PrismaService } from '@/modules/prisma/prisma.service';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+	BadRequestException,
+	ConflictException,
+	Inject,
+	Injectable,
+	NotFoundException,
+	PayloadTooLargeException,
+	UnsupportedMediaTypeException
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { BusinessDetails, FollowUpSettings, TonePlaybook, UpdateBusinessDetailsInput } from '@offertum/shared';
 
@@ -20,7 +44,8 @@ export class MeService {
 		private readonly prisma: PrismaService,
 		private readonly billing: BillingService,
 		private readonly logService: LogService,
-		private readonly config: ConfigService<EnvSchema, true>
+		private readonly config: ConfigService<EnvSchema, true>,
+		@Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage
 	) {}
 
 	private static readonly MEMBERSHIP_INCLUDE = {
@@ -266,9 +291,12 @@ export class MeService {
 				companyRegistrationNumber: true,
 				companyVatNumber: true,
 				companyAddress: true,
+				companyPhone: true,
+				companyWebsite: true,
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
-				logoStorageKey: true
+				logoStorageKey: true,
+				letterheadStorageKey: true
 			}
 		});
 
@@ -277,9 +305,12 @@ export class MeService {
 			companyRegistrationNumber: row.companyRegistrationNumber,
 			companyVatNumber: row.companyVatNumber,
 			companyAddress: row.companyAddress,
+			companyPhone: row.companyPhone,
+			companyWebsite: row.companyWebsite,
 			companyFooter: row.companyFooter,
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
-			hasLogo: row.logoStorageKey !== null
+			hasLogo: row.logoStorageKey !== null,
+			hasLetterhead: row.letterheadStorageKey !== null
 		};
 	}
 
@@ -312,6 +343,12 @@ export class MeService {
 		if (input.companyAddress !== undefined) {
 			normalized.companyAddress = normalizeBusinessText(input.companyAddress);
 		}
+		if (input.companyPhone !== undefined) {
+			normalized.companyPhone = normalizeBusinessText(input.companyPhone);
+		}
+		if (input.companyWebsite !== undefined) {
+			normalized.companyWebsite = normalizeBusinessText(input.companyWebsite);
+		}
 		if (input.companyFooter !== undefined) {
 			normalized.companyFooter = normalizeBusinessText(input.companyFooter);
 		}
@@ -327,9 +364,12 @@ export class MeService {
 				companyRegistrationNumber: true,
 				companyVatNumber: true,
 				companyAddress: true,
+				companyPhone: true,
+				companyWebsite: true,
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
-				logoStorageKey: true
+				logoStorageKey: true,
+				letterheadStorageKey: true
 			}
 		});
 
@@ -357,10 +397,119 @@ export class MeService {
 			companyRegistrationNumber: updated.companyRegistrationNumber,
 			companyVatNumber: updated.companyVatNumber,
 			companyAddress: updated.companyAddress,
+			companyPhone: updated.companyPhone,
+			companyWebsite: updated.companyWebsite,
 			companyFooter: updated.companyFooter,
 			defaultPaymentTermsDays: updated.defaultPaymentTermsDays,
-			hasLogo: updated.logoStorageKey !== null
+			hasLogo: updated.logoStorageKey !== null,
+			hasLetterhead: updated.letterheadStorageKey !== null
 		};
+	}
+
+	async uploadBusinessAsset(
+		actingUserId: string,
+		organizationId: string,
+		kind: BusinessAssetKind,
+		file: BusinessAssetFile | undefined
+	): Promise<BusinessDetails> {
+		if (!file) {
+			throw new BadRequestException(ATTACHMENT_FILE_MISSING);
+		}
+		if (file.size > BUSINESS_ASSET_MAX_FILE_BYTES) {
+			throw new PayloadTooLargeException(attachmentFileTooLarge(file.size, BUSINESS_ASSET_MAX_FILE_BYTES));
+		}
+		if (!BUSINESS_ASSET_ALLOWED_MIME_TYPES.has(file.mimetype)) {
+			throw new UnsupportedMediaTypeException(attachmentMimeNotAllowed(file.mimetype));
+		}
+
+		const storageKey = `organizations/${organizationId}/business-assets/${kind}`;
+		const previous = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: this.businessDetailsSelect()
+		});
+		await this.storage.put({ storageKey, data: file.buffer, contentType: file.mimetype });
+
+		const updated = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: kind === 'logo' ? { logoStorageKey: storageKey } : { letterheadStorageKey: storageKey },
+			select: this.businessDetailsSelect()
+		});
+
+		const previousKey = kind === 'logo' ? previous.logoStorageKey : previous.letterheadStorageKey;
+		if (previousKey && previousKey !== storageKey) {
+			await this.storage.delete(previousKey).catch(error => {
+				this.logService.logAction({
+					action: 'organization.business_asset.previous_delete_failed',
+					message: `Previous ${kind} asset cleanup failed for org ${organizationId}: ${error instanceof Error ? error.message : 'unknown'}`,
+					metadata: { organizationId, kind, storageKey: previousKey },
+					level: 'warn',
+					stack: error instanceof Error ? error.stack : undefined,
+					context: 'MeService'
+				});
+			});
+		}
+
+		this.logService.logAction({
+			action: `organization.${kind}_uploaded`,
+			message: `${kind} uploaded for org ${organizationId}`,
+			metadata: {
+				organizationId,
+				updatedBy: actingUserId,
+				kind,
+				contentType: file.mimetype,
+				sizeBytes: file.size
+			},
+			context: 'MeService'
+		});
+
+		return this.toBusinessDetails(updated);
+	}
+
+	async deleteBusinessAsset(
+		actingUserId: string,
+		organizationId: string,
+		kind: BusinessAssetKind
+	): Promise<BusinessDetails> {
+		const row = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: this.businessDetailsSelect()
+		});
+		const storageKey = kind === 'logo' ? row.logoStorageKey : row.letterheadStorageKey;
+
+		if (!storageKey) {
+			throw new NotFoundException(BUSINESS_ASSET_NOT_FOUND);
+		}
+
+		const updated = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: kind === 'logo' ? { logoStorageKey: null } : { letterheadStorageKey: null },
+			select: this.businessDetailsSelect()
+		});
+		await this.storage.delete(storageKey);
+
+		this.logService.logAction({
+			action: `organization.${kind}_deleted`,
+			message: `${kind} deleted for org ${organizationId}`,
+			metadata: { organizationId, deletedBy: actingUserId, kind },
+			context: 'MeService'
+		});
+
+		return this.toBusinessDetails(updated);
+	}
+
+	async getBusinessAsset(
+		organizationId: string,
+		kind: BusinessAssetKind
+	): Promise<{ data: Buffer; contentType: string }> {
+		const row = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { logoStorageKey: true, letterheadStorageKey: true }
+		});
+		const storageKey = kind === 'logo' ? row.logoStorageKey : row.letterheadStorageKey;
+		if (!storageKey) {
+			throw new NotFoundException(BUSINESS_ASSET_NOT_FOUND);
+		}
+		return this.storage.get(storageKey);
 	}
 
 	/**
@@ -377,6 +526,77 @@ export class MeService {
 		});
 
 		return membership;
+	}
+
+	async deleteOrganization(actingUserId: string, organizationId: string, confirm: string): Promise<void> {
+		const org = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { name: true, logoStorageKey: true, letterheadStorageKey: true }
+		});
+
+		if (confirm !== org.name) {
+			throw new BadRequestException(ORGANIZATION_DELETE_CONFIRMATION_MISMATCH);
+		}
+
+		await this.billing.cancelSubscriptionForOrgDelete(organizationId);
+
+		await this.prisma.$transaction(async tx => {
+			const current = await tx.organization.findUniqueOrThrow({
+				where: { id: organizationId },
+				select: {
+					name: true,
+					memberships: {
+						select: {
+							userId: true,
+							user: { select: { currentOrganizationId: true } }
+						}
+					}
+				}
+			});
+
+			for (const membership of current.memberships) {
+				if (membership.user.currentOrganizationId !== organizationId) {
+					continue;
+				}
+
+				const fallback = await tx.membership.findFirst({
+					where: { userId: membership.userId, organizationId: { not: organizationId } },
+					orderBy: { createdAt: 'asc' },
+					select: { organizationId: true }
+				});
+
+				await tx.user.update({
+					where: { id: membership.userId },
+					data: { currentOrganizationId: fallback?.organizationId ?? null }
+				});
+			}
+
+			await tx.organization.delete({ where: { id: organizationId } });
+		});
+
+		await Promise.all(
+			[org.logoStorageKey, org.letterheadStorageKey]
+				.filter((key): key is string => typeof key === 'string')
+				.map(key =>
+					this.storage.delete(key).catch(error => {
+						this.logService.logAction({
+							action: 'organization.business_asset.delete_after_org_delete_failed',
+							message: `Business asset cleanup failed after org delete: ${error instanceof Error ? error.message : 'unknown'}`,
+							metadata: { organizationId, storageKey: key },
+							level: 'warn',
+							stack: error instanceof Error ? error.stack : undefined,
+							context: 'MeService'
+						});
+					})
+				)
+		);
+
+		this.logService.logAction({
+			action: 'organization.deleted',
+			message: `Organization ${organizationId} deleted`,
+			metadata: { organizationId, deletedBy: actingUserId, name: org.name },
+			context: 'MeService'
+		});
 	}
 
 	/**
@@ -460,6 +680,47 @@ export class MeService {
 			},
 			context: 'MeService'
 		});
+	}
+
+	private businessDetailsSelect() {
+		return {
+			name: true,
+			companyRegistrationNumber: true,
+			companyVatNumber: true,
+			companyAddress: true,
+			companyPhone: true,
+			companyWebsite: true,
+			companyFooter: true,
+			defaultPaymentTermsDays: true,
+			logoStorageKey: true,
+			letterheadStorageKey: true
+		} as const;
+	}
+
+	private toBusinessDetails(row: {
+		name: string;
+		companyRegistrationNumber: string | null;
+		companyVatNumber: string | null;
+		companyAddress: string | null;
+		companyPhone: string | null;
+		companyWebsite: string | null;
+		companyFooter: string | null;
+		defaultPaymentTermsDays: number;
+		logoStorageKey: string | null;
+		letterheadStorageKey: string | null;
+	}): BusinessDetails {
+		return {
+			name: row.name,
+			companyRegistrationNumber: row.companyRegistrationNumber,
+			companyVatNumber: row.companyVatNumber,
+			companyAddress: row.companyAddress,
+			companyPhone: row.companyPhone,
+			companyWebsite: row.companyWebsite,
+			companyFooter: row.companyFooter,
+			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
+			hasLogo: row.logoStorageKey !== null,
+			hasLetterhead: row.letterheadStorageKey !== null
+		};
 	}
 }
 

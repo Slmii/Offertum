@@ -235,6 +235,8 @@ model Organization {
   // VAT prefix already encodes the country; one column covers every member state.
   companyVatNumber          String?
   companyAddress            String?  @db.Text
+  companyPhone              String?
+  companyWebsite            String?
   // Default footer line printed on quote PDFs. Free-text, supports a couple of
   // lines (account number, terms reference, etc.).
   companyFooter             String?  @db.Text
@@ -243,8 +245,11 @@ model Organization {
   defaultPaymentTermsDays   Int      @default(30)
   // Storage key for the company logo via `AttachmentStorage` (the same seam
   // ReplyDraftAttachment uses). NULL = no logo set; the PDF falls back to a
-  // text-only header. Upload endpoint lands as a W9.3 follow-up.
+  // text-only header.
   logoStorageKey            String?
+  // Optional image used as a quote-PDF letterhead/background. Same storage seam
+  // as the logo; NULL means the neutral template background is used.
+  letterheadStorageKey      String?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
@@ -420,15 +425,15 @@ model Invitation {
 // | "canceled" | "incomplete" | "incomplete_expired" | "unpaid" | "paused" — kept as
 // String (not enum) so Stripe-side additions don't require a Prisma migration.
 model Subscription {
-  id                   String    @id @default(uuid()) @db.Uuid
-  organizationId       String    @unique @db.Uuid
-  stripeCustomerId     String    @unique
-  stripeSubscriptionId String?   @unique
-  status               String?
-  priceId              String?
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean   @default(false)
+  id                     String    @id @default(uuid()) @db.Uuid
+  organizationId         String    @unique @db.Uuid
+  stripeCustomerId       String    @unique
+  stripeSubscriptionId   String?   @unique
+  status                 String?
+  priceId                String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
   // When set, Stripe has a `pending_update` on the subscription — a change (price
   // swap, quantity change made via the Portal that requires payment confirmation,
   // etc.) is staged and will be applied when the customer completes payment OR
@@ -436,10 +441,10 @@ model Subscription {
   // UI can render a "plan change scheduled / expires <date>" banner. NULL when
   // no pending update exists (the common case).
   pendingUpdateExpiresAt DateTime?
-  paymentMethodBrand   String?
-  paymentMethodLast4   String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  paymentMethodBrand     String?
+  paymentMethodLast4     String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
