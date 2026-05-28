@@ -286,6 +286,54 @@ describe('resolveQuoteLines', () => {
 		expect(lines.find(line => line.description === 'Minimumordertoeslag')).toBeUndefined();
 	});
 
+	it('measures the minimum against the full order (surcharge + travel count)', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 1, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '100.00', vatRate: 21 }
+				]),
+				urgency: 'emergency',
+				rules: [
+					makeRule({
+						ruleType: 'URGENCY',
+						condition: { urgency: 'emergency' },
+						effect: { type: 'surcharge_percent', value: 35 }
+					}),
+					makeRule({ ruleType: 'TRAVEL', effect: { type: 'flat_fee_eur', value: 45 } }),
+					makeRule({ ruleType: 'MINIMUM_ORDER', effect: { type: 'minimum_eur', value: 175 } })
+				]
+			})
+		);
+
+		// Base €100 + spoedtoeslag €35 + voorrijkosten €45 = €180 ≥ €175 → no top-up.
+		expect(lines.find(line => line.description === 'Minimumordertoeslag')).toBeUndefined();
+	});
+
+	it('tops up against the full order when still below the minimum', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 1, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '50.00', vatRate: 21 }
+				]),
+				urgency: 'emergency',
+				rules: [
+					makeRule({
+						ruleType: 'URGENCY',
+						condition: { urgency: 'emergency' },
+						effect: { type: 'surcharge_percent', value: 35 }
+					}),
+					makeRule({ ruleType: 'TRAVEL', effect: { type: 'flat_fee_eur', value: 45 } }),
+					makeRule({ ruleType: 'MINIMUM_ORDER', effect: { type: 'minimum_eur', value: 175 } })
+				]
+			})
+		);
+
+		// Base €50 + spoedtoeslag €17.50 + voorrijkosten €45 = €112.50 → top-up €62.50.
+		expect(lines.find(line => line.description === 'Minimumordertoeslag')).toMatchObject({ unitPriceEur: '62.50' });
+	});
+
 	it('lets a VAT rule override a line VAT rate', () => {
 		const lines = resolveQuoteLines(
 			input({

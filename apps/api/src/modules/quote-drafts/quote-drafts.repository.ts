@@ -13,6 +13,7 @@ export interface CreateQuoteLineRepoInput {
 	quantity: number | string;
 	unitPriceEur: string | null;
 	vatRate: number;
+	vatReverseCharged: boolean;
 	source: PrismaQuoteLineSource;
 	catalogItemId: string | null;
 	appliedRuleId: string | null;
@@ -25,6 +26,25 @@ export interface CreateQuoteDraftRepoInput {
 	generationContext: Prisma.InputJsonValue;
 	aiCallId: string | null;
 	lineItems: CreateQuoteLineRepoInput[];
+}
+
+export interface AddQuoteLineRepoInput {
+	description: string;
+	unit: string;
+	quantity: string;
+	unitPriceEur: string | null;
+	vatRate: number;
+	vatReverseCharged: boolean;
+}
+
+export interface UpdateQuoteLineRepoInput {
+	description?: string;
+	unit?: string;
+	quantity?: string;
+	unitPriceEur?: string | null;
+	vatRate?: number;
+	vatReverseCharged?: boolean;
+	position?: number;
 }
 
 @Injectable()
@@ -47,6 +67,7 @@ export class QuoteDraftsRepository {
 						quantity: line.quantity,
 						unitPriceEur: line.unitPriceEur,
 						vatRate: line.vatRate,
+						vatReverseCharged: line.vatReverseCharged,
 						source: line.source,
 						catalogItemId: line.catalogItemId,
 						appliedRuleId: line.appliedRuleId,
@@ -65,5 +86,58 @@ export class QuoteDraftsRepository {
 			orderBy: { createdAt: 'desc' },
 			include: { lineItems: { orderBy: { position: 'asc' } } }
 		});
+	}
+
+	/** Load one draft (with lines) scoped to the org. Null if missing / other tenant. */
+	async findForOrganization(organizationId: string, quoteDraftId: string): Promise<QuoteDraftWithLines | null> {
+		return this.prisma.quoteDraft.findFirst({
+			where: { id: quoteDraftId, organizationId },
+			include: { lineItems: { orderBy: { position: 'asc' } } }
+		});
+	}
+
+	/** Append an owner-authored line at the next position. Marked edited-by-user. */
+	async addLine(quoteDraftId: string, input: AddQuoteLineRepoInput): Promise<void> {
+		const max = await this.prisma.quoteLineItem.aggregate({
+			where: { quoteDraftId },
+			_max: { position: true }
+		});
+		await this.prisma.quoteLineItem.create({
+			data: {
+				quoteDraftId,
+				position: (max._max.position ?? -1) + 1,
+				description: input.description,
+				unit: input.unit,
+				quantity: input.quantity,
+				unitPriceEur: input.unitPriceEur,
+				vatRate: input.vatRate,
+				vatReverseCharged: input.vatReverseCharged,
+				// Owner-authored lines are 'inferred' (not catalog/rule sourced) + count as
+				// edited for the year-2 AI-retention metric.
+				source: 'INFERRED',
+				wasEditedByUser: true
+			}
+		});
+	}
+
+	/** Patch a line and flip `wasEditedByUser`. Only supplied fields change. */
+	async updateLine(lineItemId: string, patch: UpdateQuoteLineRepoInput): Promise<void> {
+		await this.prisma.quoteLineItem.update({
+			where: { id: lineItemId },
+			data: {
+				...(patch.description !== undefined ? { description: patch.description } : {}),
+				...(patch.unit !== undefined ? { unit: patch.unit } : {}),
+				...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
+				...(patch.unitPriceEur !== undefined ? { unitPriceEur: patch.unitPriceEur } : {}),
+				...(patch.vatRate !== undefined ? { vatRate: patch.vatRate } : {}),
+				...(patch.vatReverseCharged !== undefined ? { vatReverseCharged: patch.vatReverseCharged } : {}),
+				...(patch.position !== undefined ? { position: patch.position } : {}),
+				wasEditedByUser: true
+			}
+		});
+	}
+
+	async deleteLine(lineItemId: string): Promise<void> {
+		await this.prisma.quoteLineItem.delete({ where: { id: lineItemId } });
 	}
 }

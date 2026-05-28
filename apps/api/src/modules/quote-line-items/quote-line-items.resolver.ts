@@ -117,18 +117,25 @@ function buildOppWideRuleLines(
 	netSubtotalCents: number
 ): ProposedQuoteLine[] {
 	const out: ProposedQuoteLine[] = [];
+	// Running total of the FULL order. Surcharge + travel − discount all count toward
+	// the minimum-order check so it measures the whole bill, not just the base work
+	// (otherwise a job already well above the minimum still gets a pointless top-up).
+	let orderCents = netSubtotalCents;
 
 	const urgencyRule = findRule(rules, urgency, null, 'URGENCY', 'surcharge_percent');
 	if (urgencyRule) {
 		const surchargeCents = Math.round((netSubtotalCents * urgencyRule.value) / 100);
 		if (surchargeCents !== 0) {
 			out.push(ruleLine('Spoedtoeslag', surchargeCents, urgencyRule));
+			orderCents += surchargeCents;
 		}
 	}
 
 	const travelRule = findRule(rules, urgency, null, 'TRAVEL', 'flat_fee_eur');
 	if (travelRule) {
-		out.push(ruleLine('Voorrijkosten', toCents(String(travelRule.value)), travelRule));
+		const travelCents = toCents(String(travelRule.value));
+		out.push(ruleLine('Voorrijkosten', travelCents, travelRule));
+		orderCents += travelCents;
 	}
 
 	const discountRule =
@@ -140,15 +147,17 @@ function buildOppWideRuleLines(
 				? Math.round((netSubtotalCents * discountRule.value) / 100)
 				: toCents(String(discountRule.value));
 		if (discountCents !== 0) {
-			out.push(ruleLine('Korting', -Math.abs(discountCents), discountRule));
+			const applied = Math.abs(discountCents);
+			out.push(ruleLine('Korting', -applied, discountRule));
+			orderCents -= applied;
 		}
 	}
 
 	const minimumRule = findRule(rules, urgency, null, 'MINIMUM_ORDER', 'minimum_eur');
 	if (minimumRule) {
 		const minimumCents = toCents(String(minimumRule.value));
-		if (netSubtotalCents > 0 && netSubtotalCents < minimumCents) {
-			out.push(ruleLine('Minimumordertoeslag', minimumCents - netSubtotalCents, minimumRule));
+		if (orderCents > 0 && orderCents < minimumCents) {
+			out.push(ruleLine('Minimumordertoeslag', minimumCents - orderCents, minimumRule));
 		}
 	}
 

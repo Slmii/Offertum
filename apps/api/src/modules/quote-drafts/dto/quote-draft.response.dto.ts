@@ -14,6 +14,7 @@ export class QuoteLineItemResponseDto implements QuoteLineItem {
 	quantity!: string;
 	unitPriceEur!: string | null;
 	vatRate!: number;
+	vatReverseCharged!: boolean;
 	source!: QuoteLineSource;
 	wasEditedByUser!: boolean;
 	catalogItemId!: string | null;

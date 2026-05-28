@@ -29,6 +29,7 @@ function toQuoteLineItemWire(line: QuoteDraftWithLines['lineItems'][number]): Qu
 		quantity: line.quantity.toString(),
 		unitPriceEur: line.unitPriceEur ? line.unitPriceEur.toString() : null,
 		vatRate: line.vatRate,
+		vatReverseCharged: line.vatReverseCharged,
 		source: QUOTE_LINE_SOURCE_TO_WIRE[line.source],
 		wasEditedByUser: line.wasEditedByUser,
 		catalogItemId: line.catalogItemId,

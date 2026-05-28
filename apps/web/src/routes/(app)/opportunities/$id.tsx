@@ -3,6 +3,7 @@ import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.co
 import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { QuotePanel } from '@/components/QuotePanel.component';
 import { SectionError } from '@/components/SectionError.component';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import {
@@ -17,6 +18,7 @@ import {
 	useUpdateReplyDraft,
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
+import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
 import { toReadableBytes } from '@/lib/utils/number.utils';
@@ -80,7 +82,9 @@ export const Route = createFileRoute('/(app)/opportunities/$id')({
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
 			// Memberships drive the assignee picker — same load cycle as the detail
 			// fetch so the picker renders instantly when the panel paints.
-			context.queryClient.ensureQueryData(membershipsQueryOptions)
+			context.queryClient.ensureQueryData(membershipsQueryOptions),
+			// Persisted quote drafts for the W10.3 quote panel.
+			context.queryClient.ensureQueryData(quoteDraftsQueryOptions(params.id))
 		]);
 	},
 	component: OpportunityDetailPage,
@@ -389,6 +393,7 @@ function OpportunityDetailPage() {
 							</Typography>
 						</Paper>
 					)}
+					<QuotePanel opportunityId={id} />
 					{(opportunity.replyDraftHistory.length > 0 ||
 						opportunity.customerReplies.length > 0 ||
 						opportunity.timeline.length > 0) && (

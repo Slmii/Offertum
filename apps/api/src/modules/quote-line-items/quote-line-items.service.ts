@@ -1,13 +1,13 @@
-import { OPPORTUNITY_NOT_FOUND } from '@/lib/errors';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
+import { OPPORTUNITY_NOT_FOUND } from '@/lib/errors';
 import { LineItemProposerService } from '@/modules/ai/line-item-proposer/line-item-proposer.service';
 import type { LineItemProposerCatalogEntry } from '@/modules/ai/line-item-proposer/line-item-proposer.types';
 import { CatalogItemsRepository } from '@/modules/catalog-items/catalog-items.repository';
-import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
+import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
 import { PricingPlaybookRepository } from '@/modules/pricing-playbook/pricing-playbook.repository';
-import { type ResolverCatalogEntry, resolveQuoteLines } from '@/modules/quote-line-items/quote-line-items.resolver';
 import type { EvaluableRule } from '@/modules/pricing-playbook/rule-engine';
+import { type ResolverCatalogEntry, resolveQuoteLines } from '@/modules/quote-line-items/quote-line-items.resolver';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CATALOG_ITEM_UNIT_LABELS_NL, type OpportunityUrgency, type ProposedQuoteLine } from '@offertum/shared';
 
@@ -91,13 +91,13 @@ export class QuoteLineItemsService {
 			};
 		});
 
-		const bodyText = buildRawMessageAIInput({
+		const { bodyText } = buildRawMessageAIInput({
 			provider: opportunity.rawMessage.emailAccount.provider,
 			subject: opportunity.rawMessage.subject,
 			fromName: opportunity.rawMessage.fromName,
 			fromEmail: opportunity.rawMessage.fromEmail,
 			raw: opportunity.rawMessage.raw
-		}).bodyText;
+		});
 
 		const deliverableHints = toStringArray(opportunity.deliverableHints);
 		const urgency = OPPORTUNITY_URGENCY_TO_WIRE[opportunity.urgency];

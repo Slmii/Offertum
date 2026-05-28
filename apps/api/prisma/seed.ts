@@ -5,12 +5,14 @@ import { resolve } from 'node:path';
 config({ path: resolve(__dirname, '../.env') });
 
 import type { CatalogItemUnit } from '@offertum/shared';
+import { createHash } from 'node:crypto';
 import {
 	EmailProvider,
 	LogLevel,
 	MembershipRole,
 	OpportunityStatus,
 	type Prisma,
+	PricingRuleType,
 	PrismaClient,
 	Urgency
 } from '../src/generated/prisma/client';
@@ -563,6 +565,68 @@ const catalogItems: ReadonlyArray<SeedCatalogItem> = [
 	}
 ];
 
+// Ready-compiled pricing playbook for Acme so the W10 quote pipeline produces a
+// rich, multi-bracket quote on a fresh DB without running the LLM compile pass.
+// Mirrors the five rules an owner would get by compiling the prose below.
+const ACME_PRICING_PLAYBOOK_ID = '66666666-0000-0000-0000-000000000001';
+const ACME_PLAYBOOK_TEXT = [
+	'Spoedaanvragen (urgentie: emergency) krijgen een spoedtoeslag van 35% over het totaal.',
+	'',
+	'Ons uurtarief voor een monteur op locatie is € 85 per uur.',
+	'',
+	'We rekenen € 45 voorrijkosten per offerte.',
+	'',
+	'We hanteren een minimumorderbedrag van € 175 exclusief btw.',
+	'',
+	'Voor arbeid geldt het verlaagde btw-tarief van 9%.'
+].join('\n');
+
+interface SeedPricingRule {
+	id: string;
+	ruleType: PricingRuleType;
+	condition: Prisma.InputJsonValue;
+	effect: Prisma.InputJsonValue;
+	description: string;
+}
+
+const acmePricingRules: ReadonlyArray<SeedPricingRule> = [
+	{
+		id: '66666666-0001-0000-0000-000000000001',
+		ruleType: PricingRuleType.URGENCY,
+		condition: { urgency: 'emergency' },
+		effect: { type: 'surcharge_percent', value: 35 },
+		description: 'Spoedtoeslag: 35% bij urgentie'
+	},
+	{
+		id: '66666666-0001-0000-0000-000000000002',
+		ruleType: PricingRuleType.HOURLY_RATE,
+		condition: { lineKind: 'labor' },
+		effect: { type: 'rate_eur_per_hour', value: 85 },
+		description: 'Uurtarief monteur: €85/uur'
+	},
+	{
+		id: '66666666-0001-0000-0000-000000000003',
+		ruleType: PricingRuleType.TRAVEL,
+		condition: {},
+		effect: { type: 'flat_fee_eur', value: 45 },
+		description: 'Voorrijkosten: €45 per offerte'
+	},
+	{
+		id: '66666666-0001-0000-0000-000000000004',
+		ruleType: PricingRuleType.MINIMUM_ORDER,
+		condition: {},
+		effect: { type: 'minimum_eur', value: 175 },
+		description: 'Minimumorderbedrag: €175 exclusief btw'
+	},
+	{
+		id: '66666666-0001-0000-0000-000000000005',
+		ruleType: PricingRuleType.VAT,
+		condition: { lineKind: 'labor' },
+		effect: { type: 'vat_rate', value: 9 },
+		description: 'Verlaagd btw-tarief arbeid: 9%'
+	}
+];
+
 function daysAgo(days: number): Date {
 	return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
@@ -750,6 +814,39 @@ async function main() {
 				sku: item.sku,
 				unit: item.unit,
 				active: item.active
+			}
+		});
+	}
+
+	// Acme pricing playbook + pre-compiled rules (W10 quote pipeline test data).
+	const acmePlaybookHash = createHash('sha256').update(ACME_PLAYBOOK_TEXT).digest('hex');
+	const acmePlaybook = await prisma.pricingPlaybook.upsert({
+		where: { organizationId: ORG_ACME },
+		update: { playbookText: ACME_PLAYBOOK_TEXT, compiledAt: new Date(), compiledHash: acmePlaybookHash },
+		create: {
+			id: ACME_PRICING_PLAYBOOK_ID,
+			organizationId: ORG_ACME,
+			playbookText: ACME_PLAYBOOK_TEXT,
+			compiledAt: new Date(),
+			compiledHash: acmePlaybookHash
+		}
+	});
+	// Replace existing rules so the seed is the single source of truth (avoids
+	// stacking duplicates next to LLM-compiled rules a dev may already have).
+	await prisma.pricingRule.deleteMany({ where: { pricingPlaybookId: acmePlaybook.id } });
+	for (const rule of acmePricingRules) {
+		await prisma.pricingRule.create({
+			data: {
+				id: rule.id,
+				pricingPlaybookId: acmePlaybook.id,
+				ruleType: rule.ruleType,
+				condition: rule.condition,
+				effect: rule.effect,
+				priority: 100,
+				active: true,
+				description: rule.description,
+				conditionNarrative: null,
+				manualOverride: false
 			}
 		});
 	}
