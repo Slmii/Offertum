@@ -167,33 +167,36 @@ function QuoteDraftEditor({ draft, opportunityId }: { draft: QuoteDraft; opportu
 
 function QuoteTotals({ totals }: { totals: ReturnType<typeof computeQuoteTotals> }) {
 	return (
-		<Stack useFlexGap spacing={0.5} sx={{ ml: 'auto', maxWidth: 320 }}>
-			{totals.brackets.map(bracket => (
-				<Stack
-					key={bracket.key}
-					direction='row'
-					useFlexGap
-					spacing={2}
-					sx={{ justifyContent: 'space-between' }}
-				>
-					<Typography variant='body2' color='text.secondary'>
-						{bracketLabel(bracket)} (netto)
-					</Typography>
-					<Typography variant='body2'>{toReadableEuro(bracket.netCents / 100)}</Typography>
-				</Stack>
-			))}
+		<Stack useFlexGap spacing={0.5} sx={{ ml: 'auto', maxWidth: 360 }}>
 			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
 				<Typography variant='body2' color='text.secondary'>
 					Subtotaal (excl. btw)
 				</Typography>
 				<Typography variant='body2'>{toReadableEuro(totals.netCents / 100)}</Typography>
 			</Stack>
-			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
-				<Typography variant='body2' color='text.secondary'>
-					BTW
-				</Typography>
-				<Typography variant='body2'>{toReadableEuro(totals.vatCents / 100)}</Typography>
-			</Stack>
+
+			{totals.brackets.map(bracket => (
+				<Stack key={bracket.key} useFlexGap spacing={0}>
+					<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
+						<Typography variant='body2' color='text.secondary'>
+							{bracketVatLabel(bracket)}{' '}
+							<Typography component='span' variant='caption' color='text.secondary'>
+								over {toReadableEuro(bracket.netCents / 100)}
+							</Typography>
+						</Typography>
+						<Typography variant='body2'>{toReadableEuro(bracket.vatCents / 100)}</Typography>
+					</Stack>
+					{/* Reverse charge isn't a discount — the net still counts; only the VAT
+					    (€0 here) shifts to the customer. Spell that out so €0 doesn't read as a
+					    mistake. */}
+					{bracket.reverseCharged && (
+						<Typography variant='caption' color='text.secondary'>
+							verlegd naar afnemer
+						</Typography>
+					)}
+				</Stack>
+			))}
+
 			<Divider sx={{ my: 0.5 }} />
 			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
 				<Typography variant='subtitle2'>Totaal</Typography>
@@ -249,6 +252,9 @@ function QuoteLineRow({
 					sx={{ mt: 0.5, alignItems: 'center', flexWrap: 'wrap' }}
 				>
 					<Chip size='small' variant='outlined' label={SOURCE_LABELS_NL[line.source]} />
+					{line.vatReverseCharged && (
+						<Chip size='small' variant='outlined' color='info' label='BTW verlegd' />
+					)}
 					{line.note && (
 						<Typography variant='caption' color='text.secondary'>
 							{line.note}
@@ -326,6 +332,6 @@ function QuoteLineRow({
 	);
 }
 
-function bracketLabel(bracket: QuoteVatBracketTotal): string {
-	return bracket.reverseCharged ? 'BTW verlegd' : `${bracket.vatRate}% BTW`;
+function bracketVatLabel(bracket: QuoteVatBracketTotal): string {
+	return bracket.reverseCharged ? 'BTW verlegd' : `BTW ${bracket.vatRate}%`;
 }
