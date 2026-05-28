@@ -87,6 +87,37 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 	return (await response.json()) as T;
 }
 
+/**
+ * Like `api`, but for endpoints that stream a binary body (e.g. a rendered PDF).
+ * JSON-encodes the request body, returns the response as a `Blob`. Error bodies are
+ * still parsed as JSON so 402/4xx surface the same structured `WrapperApiError`.
+ */
+export async function apiBlob(path: string, options: ApiOptions = {}): Promise<Blob> {
+	const { body, headers, ...rest } = options;
+
+	const response = await fetch(path, {
+		credentials: 'include',
+		headers: {
+			...(body !== undefined && { 'Content-Type': 'application/json' }),
+			...headers
+		},
+		body: body !== undefined ? JSON.stringify(body) : undefined,
+		...rest
+	});
+
+	if (!response.ok) {
+		const errorBody = (await response.json().catch(() => null)) as ApiError | null;
+		throw new WrapperApiError({
+			code: response.status,
+			message: flattenMessage(errorBody?.message, response.statusText || 'Unknown error'),
+			apiCode: errorBody?.code,
+			billingPath: errorBody?.billingPath
+		});
+	}
+
+	return response.blob();
+}
+
 export async function apiForm<T>(
 	path: string,
 	formData: FormData,

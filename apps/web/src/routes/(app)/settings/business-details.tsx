@@ -1,3 +1,4 @@
+import { apiBlob } from '@/lib/api/client';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { SectionError } from '@/components/SectionError.component';
@@ -46,10 +47,61 @@ function BusinessDetailsSettingsPage() {
 	const [savedFlash, setSavedFlash] = useState(false);
 	const [deleteConfirm, setDeleteConfirm] = useState('');
 	const [assetPreviewVersion, setAssetPreviewVersion] = useState(0);
+	const [pdfPreviewPending, setPdfPreviewPending] = useState(false);
+	const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
 	const isOwner = membership.role === 'OWNER';
 
 	const refreshAssetPreview = () => {
 		setAssetPreviewVersion(version => version + 1);
+	};
+
+	// Render a sample quote PDF (fixed demo line items) so the owner can see how
+	// their logo, letterhead, company details, and footer land on an offerte —
+	// before the real quote pipeline (W10) exists. Opens the PDF in a new tab.
+	const handlePdfPreview = async () => {
+		setPdfPreviewError(null);
+		setPdfPreviewPending(true);
+		try {
+			const blob = await apiBlob('/api/quote-pdfs/preview', {
+				method: 'POST',
+				body: {
+					customerName: 'Voorbeeldklant BV',
+					customerEmail: 'klant@voorbeeld.nl',
+					customerAddress: 'Voorbeeldstraat 1\n1000 AA Amsterdam',
+					lineItems: [
+						{
+							description: 'Voorbeeld: arbeid op locatie',
+							unit: 'hour',
+							unitPriceEur: '75.00',
+							quantity: 8,
+							vatRate: 21
+						},
+						{
+							description: 'Voorbeeld: materiaal',
+							unit: 'piece',
+							unitPriceEur: '120.00',
+							quantity: 3,
+							vatRate: 21
+						},
+						{
+							description: 'Voorbeeld: voorrijkosten',
+							unit: 'flat_fee',
+							unitPriceEur: '35.00',
+							quantity: 1,
+							vatRate: 9
+						}
+					]
+				}
+			});
+			const url = URL.createObjectURL(blob);
+			window.open(url, '_blank', 'noopener,noreferrer');
+			// Revoke after a tick so the new tab has time to load the blob.
+			window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		} catch (error) {
+			setPdfPreviewError(error instanceof Error ? error.message : 'Voorbeeld-PDF maken mislukt.');
+		} finally {
+			setPdfPreviewPending(false);
+		}
 	};
 
 	const onSubmit = (values: BusinessDetailsForm) => {
@@ -196,6 +248,22 @@ function BusinessDetailsSettingsPage() {
 						(uploadLogo.error || uploadLetterhead.error || deleteLogo.error || deleteLetterhead.error) && (
 							<Alert severity='error'>Bestand bijwerken mislukt.</Alert>
 						)}
+
+					<Divider />
+
+					<Box>
+						<Typography variant='body2' sx={{ color: 'text.secondary', mb: 2 }}>
+							Bekijk hoe je gegevens op een offerte-PDF verschijnen (met voorbeeldregels).
+						</Typography>
+						<Button variant='outlined' onClick={handlePdfPreview} disabled={pdfPreviewPending}>
+							{pdfPreviewPending ? 'Bezig…' : 'Bekijk voorbeeld-offerte'}
+						</Button>
+						{pdfPreviewError && (
+							<Alert severity='error' sx={{ mt: 2 }}>
+								{pdfPreviewError}
+							</Alert>
+						)}
+					</Box>
 				</Stack>
 			</Paper>
 

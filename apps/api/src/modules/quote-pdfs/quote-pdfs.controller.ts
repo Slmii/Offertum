@@ -1,7 +1,7 @@
 import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { PreviewQuotePdfDto } from '@/modules/quote-pdfs/dto/preview-quote-pdf.dto';
 import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
-import { Body, Controller, Header, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Post, Req, Res } from '@nestjs/common';
 import { ApiBody, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
@@ -23,15 +23,15 @@ export class QuotePdfsController {
 	})
 	@MemberWrite()
 	@Post('preview')
-	@Header('Content-Type', 'application/pdf')
-	@Header('Content-Disposition', 'inline; filename="offerte-preview.pdf"')
-	async preview(
-		@Req() request: Request,
-		@Body() body: PreviewQuotePdfDto,
-		@Res({ passthrough: true }) response: Response
-	): Promise<Buffer> {
+	async preview(@Req() request: Request, @Body() body: PreviewQuotePdfDto, @Res() response: Response): Promise<void> {
 		const pdf = await this.quotePdfs.preview(request.organizationId!, body);
-		response.setHeader('Content-Length', pdf.byteLength.toString());
-		return pdf;
+		// NON-passthrough `@Res` + `response.end(buffer)` — same pattern as the
+		// logo/letterhead binary endpoints. Returning a Buffer through Nest's normal
+		// pipeline (passthrough:true) would JSON-serialize it to
+		// `{"type":"Buffer","data":[…]}`, which browsers can't render as a PDF.
+		response.setHeader('Content-Type', 'application/pdf');
+		response.setHeader('Content-Disposition', 'inline; filename="offerte-preview.pdf"');
+		response.setHeader('Content-Length', String(pdf.byteLength));
+		response.end(pdf);
 	}
 }
