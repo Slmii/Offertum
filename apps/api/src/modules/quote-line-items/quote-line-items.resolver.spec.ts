@@ -380,4 +380,59 @@ describe('resolveQuoteLines', () => {
 		// Surcharge is 10% of €100 (catalog line only), not affected by the unpriced line.
 		expect(lines.find(line => line.description === 'Spoedtoeslag')).toMatchObject({ unitPriceEur: '10.00' });
 	});
+
+	it('dedupes a catalog ref the model repeated (first wins, no doubled subtotal)', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({
+					catalogLines: [
+						{ ref: 'C1', quantity: 2, reason: 'x' },
+						{ ref: 'C1', quantity: 5, reason: 'dup' }
+					]
+				}),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '100.00', vatRate: 21 }
+				])
+			})
+		);
+
+		const catalogLines = lines.filter(line => line.source === 'catalog_match');
+		expect(catalogLines).toHaveLength(1);
+		expect(catalogLines[0]?.quantity).toBe(2);
+	});
+
+	it('rounds an over-precise AI quantity to 2 decimals', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({
+					inferredLines: [
+						{ description: 'Demontage', unit: 'hour', quantity: 3.333, lineKind: 'labor', reason: 'x' }
+					]
+				}),
+				rules: [makeRule({ ruleType: 'HOURLY_RATE', effect: { type: 'rate_eur_per_hour', value: 90 } })]
+			})
+		);
+
+		expect(lines[0]?.quantity).toBe(3.33);
+	});
+
+	it('clamps an out-of-range VAT rule rate to a valid percentage', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 1, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '50.00', vatRate: 21 }
+				]),
+				rules: [
+					makeRule({
+						ruleType: 'VAT',
+						condition: { lineKind: 'labor' },
+						effect: { type: 'vat_rate', value: 250 }
+					})
+				]
+			})
+		);
+
+		expect(lines[0]?.vatRate).toBe(100);
+	});
 });

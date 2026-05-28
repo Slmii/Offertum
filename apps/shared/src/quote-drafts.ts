@@ -52,8 +52,9 @@ export interface QuoteDraft {
 export interface QuoteDraftListResponse {
 	drafts: QuoteDraft[];
 	/** Most recent moment the org's pricing changed (playbook recompiled or a rule
-	 * edited). Compare against a draft's `createdAt` to know whether its pricing is
-	 * stale. `null` when the org has no playbook yet. */
+	 * edited). Compare against a draft's `updatedAt` (which bumps when its lines are
+	 * (re)generated) to know whether its pricing is stale. `null` when the org has no
+	 * playbook yet. */
 	pricingUpdatedAt: string | null;
 }
 

@@ -48,22 +48,36 @@ export interface ResolveQuoteLinesInput {
 const DEFAULT_VAT_RATE = 21;
 /** Units we treat as labor for hourly-rate pricing + the labor/material split. */
 const LABOR_UNITS: ReadonlySet<CatalogItemUnit> = new Set<CatalogItemUnit>(['hour', 'day']);
+/** Persisted quantity is `Decimal(12, 2)`; cap so AI output can't overflow the write. */
+const MAX_QUANTITY = 9_999_999_999.99;
+
+/** Round to 2 decimals + clamp to the column range, so the engine's net (price ×
+ * quantity) matches the value the web/PDF recompute from the persisted decimal. */
+function normalizeQuantity(quantity: number): number {
+	if (!Number.isFinite(quantity) || quantity <= 0) {
+		return 0;
+	}
+	return Math.min(Math.round(quantity * 100) / 100, MAX_QUANTITY);
+}
 
 export function resolveQuoteLines(input: ResolveQuoteLinesInput): ProposedQuoteLine[] {
 	const lines: ProposedQuoteLine[] = [];
 
 	// 1. Catalog matches → priced from the catalog row. Unknown refs (model
-	//    hallucinated a ref not in the catalog) are dropped.
+	//    hallucinated a ref not in the catalog) are dropped; a ref repeated by the
+	//    model is deduped (first wins) so it can't double the subtotal.
+	const seenRefs = new Set<string>();
 	for (const catalogLine of input.proposal.catalogLines) {
 		const item = input.catalogByRef.get(catalogLine.ref);
-		if (!item) {
+		if (!item || seenRefs.has(catalogLine.ref)) {
 			continue;
 		}
+		seenRefs.add(catalogLine.ref);
 		const lineKind = LABOR_UNITS.has(item.unit) ? 'labor' : 'material';
 		lines.push({
 			description: item.name,
 			unit: item.unit,
-			quantity: catalogLine.quantity,
+			quantity: normalizeQuantity(catalogLine.quantity),
 			unitPriceEur: item.unitPriceEur,
 			vatRate: resolveVatRate(input.rules, input.urgency, lineKind, item.vatRate),
 			source: 'catalog_match',
@@ -85,7 +99,7 @@ export function resolveQuoteLines(input: ResolveQuoteLinesInput): ProposedQuoteL
 		lines.push({
 			description: inferred.description,
 			unit: inferred.unit,
-			quantity: inferred.quantity,
+			quantity: normalizeQuantity(inferred.quantity),
 			unitPriceEur: hourlyRule ? formatCents(toCents(String(hourlyRule.value))) : null,
 			vatRate: resolveVatRate(input.rules, input.urgency, lineKind, DEFAULT_VAT_RATE),
 			source: hourlyRule ? 'rule_applied' : 'inferred',
@@ -226,7 +240,10 @@ function resolveVatRate(
 	fallback: number
 ): number {
 	const vatRule = findRule(rules, urgency, lineKind, 'VAT', 'vat_rate');
-	return vatRule ? vatRule.value : fallback;
+	const rate = vatRule ? vatRule.value : fallback;
+	// The rule value is owner-configured; clamp to a sane integer percentage so a
+	// miscompiled rule (e.g. 250 or -5) can't persist an out-of-range VAT rate.
+	return Math.min(Math.max(Math.round(rate), 0), 100);
 }
 
 function toCents(value: string): number {

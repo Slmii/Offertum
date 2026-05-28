@@ -42,7 +42,8 @@ import {
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-const MONEY_PATTERN = /^\d{1,8}(\.\d{1,2})?$/;
+// Leading `-` allowed for discount ("Korting") lines; quantity stays non-negative.
+const MONEY_PATTERN = /^-?\d{1,8}(\.\d{1,2})?$/;
 const QUANTITY_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
 
 const SOURCE_LABELS_NL: Record<QuoteLineItem['source'], string> = {
@@ -427,38 +428,49 @@ function sameLine(current: QuoteLineItem, proposed: ProposedQuoteLine): boolean 
 }
 
 function diffQuoteLines(current: QuoteLineItem[], proposed: ProposedQuoteLine[]): QuoteLineDiffEntry[] {
-	const currentByKey = new Map<string, QuoteLineItem>();
-	for (const line of current) {
-		currentByKey.set(lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description), line);
-	}
-	const proposedByKey = new Map<string, ProposedQuoteLine>();
-	for (const line of proposed) {
-		proposedByKey.set(lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description), line);
-	}
-
+	// One-to-one greedy match so duplicate descriptions don't collapse: each proposed
+	// line consumes at most one current line with the same key. Entry keys are unique
+	// (current.id, else new-index) so React keys + the selection map never collide.
+	const remainingCurrent = [...current];
 	const entries: QuoteLineDiffEntry[] = [];
+	let newIndex = 0;
+
 	for (const line of proposed) {
 		const key = lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description);
-		const match = currentByKey.get(key) ?? null;
-		entries.push({
-			key,
-			status: match ? (sameLine(match, line) ? 'unchanged' : 'changed') : 'new',
-			isRule: line.source === 'rule_applied',
-			current: match,
-			proposed: line
-		});
-	}
-	for (const line of current) {
-		const key = lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description);
-		if (!proposedByKey.has(key)) {
+		const matchIndex = remainingCurrent.findIndex(
+			candidate =>
+				lineKey(candidate.source, candidate.catalogItemId, candidate.appliedRuleId, candidate.description) ===
+				key
+		);
+		const match = matchIndex >= 0 ? remainingCurrent[matchIndex] : null;
+		if (match) {
+			remainingCurrent.splice(matchIndex, 1);
 			entries.push({
-				key,
-				status: 'removed',
+				key: `cur:${match.id}`,
+				status: sameLine(match, line) ? 'unchanged' : 'changed',
 				isRule: line.source === 'rule_applied',
-				current: line,
-				proposed: null
+				current: match,
+				proposed: line
+			});
+		} else {
+			entries.push({
+				key: `new:${newIndex++}`,
+				status: 'new',
+				isRule: line.source === 'rule_applied',
+				current: null,
+				proposed: line
 			});
 		}
+	}
+
+	for (const line of remainingCurrent) {
+		entries.push({
+			key: `cur:${line.id}`,
+			status: 'removed',
+			isRule: line.source === 'rule_applied',
+			current: line,
+			proposed: null
+		});
 	}
 	return entries;
 }
@@ -664,6 +676,9 @@ function QuoteLineRow({
 	const update = useUpdateQuoteLineItem(opportunityId);
 	const remove = useDeleteQuoteLineItem(opportunityId);
 
+	// Local buffers committed on blur. A regenerate-apply replaces lines (new ids → this
+	// row remounts with fresh values); single-line saves echo back identical values, so
+	// no in-place re-sync is needed.
 	const [description, setDescription] = useState(line.description);
 	const [quantity, setQuantity] = useState(line.quantity);
 	const [unitPrice, setUnitPrice] = useState(line.unitPriceEur ?? '');
@@ -768,6 +783,7 @@ function QuoteLineRow({
 					size='small'
 					variant='text'
 					color='error'
+					aria-label='Regel verwijderen'
 					disabled={remove.isPending}
 					onClick={() => remove.mutate({ quoteDraftId, lineItemId: line.id })}
 				>
