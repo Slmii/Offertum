@@ -31,7 +31,13 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { PRICING_PLAYBOOK_TEXT_MAX_LENGTH, type PricingRule, type PricingRuleType } from '@offertum/shared';
+import {
+	isPricingEffectType,
+	PRICING_PLAYBOOK_TEXT_MAX_LENGTH,
+	type PricingRule,
+	type PricingRuleJsonObject,
+	type PricingRuleType
+} from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -478,11 +484,13 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 /** Human-readable unit hint for the effect's `value` field, used as the input
  * label suffix in the edit modal. Best-effort, returns null for shapes we
  * haven't classified yet. */
-function effectUnitFor(effect: Record<string, unknown>): string | null {
-	if (typeof effect.type !== 'string') {
+function effectUnitFor(effect: PricingRuleJsonObject): string | null {
+	if (!isPricingEffectType(effect.type)) {
 		return null;
 	}
 
+	// Exhaustive over PricingEffectType — adding a new effect token makes this a
+	// compile error until the UI hint is updated.
 	switch (effect.type) {
 		case 'rate_eur_per_hour':
 			return '€ per uur';
@@ -497,18 +505,18 @@ function effectUnitFor(effect: Record<string, unknown>): string | null {
 			return '€';
 		case 'per_km_eur':
 			return '€ per km';
-		default:
-			return null;
 	}
 }
 
-function summarizeEffect(effect: Record<string, unknown>): string {
-	const type = typeof effect.type === 'string' ? effect.type : 'unknown';
+function summarizeEffect(effect: PricingRuleJsonObject): string {
+	if (!isPricingEffectType(effect.type)) {
+		return typeof effect.type === 'string' ? effect.type : 'onbekend';
+	}
 	const value = effect.value;
 	if (typeof value !== 'number') {
-		return type;
+		return effect.type;
 	}
-	switch (type) {
+	switch (effect.type) {
 		case 'rate_eur_per_hour':
 			return `€${value}/uur`;
 		case 'markup_percent':
@@ -523,8 +531,6 @@ function summarizeEffect(effect: Record<string, unknown>): string {
 			return `€${value}`;
 		case 'per_km_eur':
 			return `€${value}/km`;
-		default:
-			return `${type}: ${value}`;
 	}
 }
 

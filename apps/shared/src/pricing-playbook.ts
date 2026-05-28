@@ -19,6 +19,32 @@ export const PRICING_RULE_TYPES = [
 export type PricingRuleType = (typeof PRICING_RULE_TYPES)[number];
 
 /**
+ * Effect discriminators a compiled `PricingRule.effect` can carry — the `effect.type`
+ * field. The compile prompt instructs exactly these tokens and the quote pipeline
+ * routes on them. Unlike rule types, effect tokens are stored verbatim in the `effect`
+ * JSON (no case conversion), so this one union is the single source of truth for both
+ * the compiler's Zod schema and the resolver.
+ */
+export const PRICING_EFFECT_TYPES = [
+	'rate_eur_per_hour',
+	'markup_percent',
+	'vat_rate',
+	'flat_fee_eur',
+	'per_km_eur',
+	'surcharge_percent',
+	'discount_percent',
+	'discount_eur',
+	'minimum_eur'
+] as const;
+export type PricingEffectType = (typeof PRICING_EFFECT_TYPES)[number];
+
+/** Narrow an unknown `effect.type` (read off the open `effect` JSON) to the union,
+ * so consumers can `switch` exhaustively over it. */
+export function isPricingEffectType(value: unknown): value is PricingEffectType {
+	return typeof value === 'string' && (PRICING_EFFECT_TYPES as readonly string[]).includes(value);
+}
+
+/**
  * JSON-safe value type for the `condition` + `effect` payloads. Used in place
  * of `Record<string, unknown>` so TanStack Start's server-fn return-type
  * validator can prove the shape is wire-serializable.

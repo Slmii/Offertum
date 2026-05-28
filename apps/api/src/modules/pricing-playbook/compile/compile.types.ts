@@ -1,4 +1,4 @@
-import { PRICING_RULE_TYPES } from '@offertum/shared';
+import { PRICING_EFFECT_TYPES, PRICING_RULE_TYPES } from '@offertum/shared';
 import { z } from 'zod';
 
 /**
@@ -26,12 +26,11 @@ const ConditionSchema = z.object({
 
 const EffectSchema = z.object({
 	/**
-	 * Effect discriminator. The DB CHECK constraint enforces this is non-empty;
-	 * the engine routes on it. Allowed values (per the Dutch compile prompt):
-	 *   rate_eur_per_hour, markup_percent, vat_rate, flat_fee_eur, per_km_eur,
-	 *   surcharge_percent, discount_percent, discount_eur, minimum_eur.
+	 * Effect discriminator the engine routes on. Constrained to the documented token
+	 * set (`PRICING_EFFECT_TYPES`) — a compiled rule with an unknown effect type now
+	 * fails validation instead of silently persisting a type the engine never matches.
 	 */
-	type: z.string().min(1),
+	type: z.enum(PRICING_EFFECT_TYPES),
 	/** The numeric value the effect applies (rate, percentage, euros). */
 	value: z.number(),
 	/** Travel-only: km below which the per_km_eur charge is waived. NULL otherwise. */

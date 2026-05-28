@@ -1,4 +1,4 @@
-import type { CatalogItemUnit, ProposedQuoteLine } from '@offertum/shared';
+import type { CatalogItemUnit, PricingEffectType, ProposedQuoteLine } from '@offertum/shared';
 import { type EvaluableRule, evaluateRules } from '@/modules/pricing-playbook/rule-engine';
 import type { LineItemProposal } from '@/modules/ai/line-item-proposer/line-item-proposer.types';
 
@@ -182,7 +182,7 @@ function ruleLine(description: string, netCents: number, rule: MatchedRule): Pro
 interface MatchedRule {
 	ruleId: string;
 	ruleType: string;
-	effectType: string;
+	effectType: PricingEffectType;
 	value: number;
 	description: string;
 }
@@ -197,7 +197,7 @@ function findRule(
 	urgency: ResolveQuoteLinesInput['urgency'],
 	lineKind: 'labor' | 'material' | null,
 	ruleType: string,
-	effectType: string
+	effectType: PricingEffectType
 ): MatchedRule | null {
 	const applied = evaluateRules(rules, { category: null, urgency, jurisdiction: null, lineKind });
 	const match = applied.find(rule => rule.ruleType === ruleType);
