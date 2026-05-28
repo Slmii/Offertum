@@ -1,8 +1,9 @@
 import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { QuoteDraftResponseDto } from '@/modules/quote-drafts/dto/quote-draft.response.dto';
 import { CreateQuoteLineItemDto, UpdateQuoteLineItemDto } from '@/modules/quote-drafts/dto/quote-line-item-input.dto';
+import { ReplaceQuoteLinesDto } from '@/modules/quote-drafts/dto/replace-quote-lines.dto';
 import { QuoteDraftsService } from '@/modules/quote-drafts/quote-drafts.service';
-import { Body, Controller, Delete, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Param, ParseUUIDPipe, Patch, Post, Put, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -26,6 +27,18 @@ export class QuoteDraftLineItemsController {
 		@Body() body: CreateQuoteLineItemDto
 	): Promise<QuoteDraftResponseDto> {
 		return this.quoteDrafts.addLine(request.organizationId!, quoteDraftId, body);
+	}
+
+	@ApiOperation({ summary: 'Replace all line items on a quote draft (regenerate apply)' })
+	@ApiOkResponse({ type: QuoteDraftResponseDto })
+	@MemberWrite()
+	@Put()
+	replace(
+		@Req() request: Request,
+		@Param('quoteDraftId', new ParseUUIDPipe()) quoteDraftId: string,
+		@Body() body: ReplaceQuoteLinesDto
+	): Promise<QuoteDraftResponseDto> {
+		return this.quoteDrafts.replaceLines(request.organizationId!, quoteDraftId, body.lines);
 	}
 
 	@ApiOperation({ summary: 'Update a quote-draft line item' })

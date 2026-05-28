@@ -5,15 +5,23 @@ import {
 	useAddQuoteLineItem,
 	useDeleteQuoteLineItem,
 	useGenerateQuoteDraft,
+	useGenerateQuotePreview,
+	useReplaceQuoteLines,
 	useUpdateQuoteLineItem
 } from '@/lib/queries/quote-drafts.queries';
 import { toReadableEuro } from '@/lib/utils/number.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -25,12 +33,14 @@ import Typography from '@mui/material/Typography';
 import {
 	computeQuoteTotals,
 	lineNetCents,
+	type ProposedQuoteLine,
 	type QuoteDraft,
 	type QuoteLineItem,
-	type QuoteVatBracketTotal
+	type QuoteVatBracketTotal,
+	type ReplaceQuoteLineInput
 } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 const MONEY_PATTERN = /^\d{1,8}(\.\d{1,2})?$/;
 const QUANTITY_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
@@ -58,20 +68,67 @@ const VAT_OPTIONS = [
 export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 	const { data } = useSuspenseQuery(quoteDraftsQueryOptions(opportunityId));
 	const generate = useGenerateQuoteDraft(opportunityId);
+	const preview = useGenerateQuotePreview(opportunityId);
+	const [regenerateOpen, setRegenerateOpen] = useState(false);
 
 	const latest = data.drafts[0] ?? null;
+	// `updatedAt` bumps when the lines are (re)generated, so this resets after a
+	// regenerate-apply. ISO-UTC strings compare lexicographically → SSR-safe (no Date/locale).
+	const pricingStale = latest !== null && data.pricingUpdatedAt !== null && data.pricingUpdatedAt > latest.updatedAt;
+
+	const openRegenerate = () => preview.mutate(undefined, { onSuccess: () => setRegenerateOpen(true) });
 
 	return (
 		<Box sx={{ mt: 4 }}>
-			<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
-				Offerte
-			</Typography>
+			<Stack
+				direction='row'
+				useFlexGap
+				spacing={1}
+				sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
+			>
+				<Typography variant='h2' sx={{ fontSize: 18 }}>
+					Offerte
+				</Typography>
+				{latest && (
+					<Button
+						size='small'
+						variant='outlined'
+						onClick={openRegenerate}
+						disabled={preview.isPending}
+						startIcon={preview.isPending ? <CircularProgress size={14} /> : null}
+					>
+						{preview.isPending ? 'Bezig…' : 'Opnieuw genereren'}
+					</Button>
+				)}
+			</Stack>
+
 			{generate.isError && (
 				<Alert severity='error' sx={{ mb: 1 }}>
 					Offerte opstellen mislukt:{' '}
 					{generate.error instanceof Error ? generate.error.message : 'Onbekende fout'}
 				</Alert>
 			)}
+			{preview.isError && (
+				<Alert severity='error' sx={{ mb: 1 }}>
+					Nieuw voorstel maken mislukt:{' '}
+					{preview.error instanceof Error ? preview.error.message : 'Onbekende fout'}
+				</Alert>
+			)}
+			{pricingStale && (
+				<Alert
+					severity='info'
+					sx={{ mb: 1 }}
+					action={
+						<Button color='inherit' size='small' onClick={openRegenerate} disabled={preview.isPending}>
+							Opnieuw genereren
+						</Button>
+					}
+				>
+					Je prijsregels zijn bijgewerkt sinds deze offerte werd opgesteld. Wil je de offerte opnieuw laten
+					genereren met de nieuwe prijzen?
+				</Alert>
+			)}
+
 			{latest ? (
 				<QuoteDraftEditor draft={latest} opportunityId={opportunityId} />
 			) : (
@@ -90,8 +147,397 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 					</Button>
 				</Paper>
 			)}
+
+			{latest && regenerateOpen && preview.data && (
+				<QuoteRegenerateModal
+					opportunityId={opportunityId}
+					draft={latest}
+					proposed={preview.data.lines}
+					onClose={() => setRegenerateOpen(false)}
+				/>
+			)}
 		</Box>
 	);
+}
+
+type QuoteLineDiffStatus = 'unchanged' | 'changed' | 'new' | 'removed';
+
+interface QuoteLineDiffEntry {
+	key: string;
+	status: QuoteLineDiffStatus;
+	/** Rule-derived line (spoedtoeslag/voorrijkosten/minimum) — auto-recalculated. */
+	isRule: boolean;
+	current: QuoteLineItem | null;
+	proposed: ProposedQuoteLine | null;
+}
+
+/**
+ * Regenerate diff modal. Matches the current draft against a fresh proposal and shows
+ * one row per logical line — ongewijzigd / gewijzigd / nieuw / vervalt — so a line
+ * never appears twice. The owner decides per line; rule-derived lines (toeslagen,
+ * voorrijkosten, minimum) are always recalculated and shown read-only. Manually edited
+ * lines default to "keep" so owner work isn't silently overwritten.
+ */
+function QuoteRegenerateModal({
+	opportunityId,
+	draft,
+	proposed,
+	onClose
+}: {
+	opportunityId: string;
+	draft: QuoteDraft;
+	proposed: ProposedQuoteLine[];
+	onClose: () => void;
+}) {
+	const replace = useReplaceQuoteLines(opportunityId);
+	const entries = useMemo(() => diffQuoteLines(draft.lineItems, proposed), [draft.lineItems, proposed]);
+
+	// Per-entry selection. For `changed`: true = take new, false = keep current.
+	// For `new`: true = add. For `removed`: true = keep. `unchanged` is always kept.
+	const [selection, setSelection] = useState<Record<string, boolean>>(() =>
+		Object.fromEntries(entries.map(entry => [entry.key, defaultSelection(entry)]))
+	);
+	const setKey = (key: string, value: boolean) => setSelection(prev => ({ ...prev, [key]: value }));
+
+	const lineEntries = entries.filter(entry => !entry.isRule);
+	const ruleEntries = entries.filter(entry => entry.isRule);
+	const resultLines = buildResultLines(lineEntries, ruleEntries, selection);
+
+	return (
+		<Dialog open onClose={onClose} maxWidth='md' fullWidth>
+			<DialogTitle>Offerte opnieuw genereren</DialogTitle>
+			<DialogContent dividers>
+				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+					Vergelijk je huidige offerte met het nieuwe voorstel en kies per regel wat er gebeurt. Toeslagen en
+					voorrijkosten worden automatisch opnieuw berekend.
+				</Typography>
+
+				<Typography variant='subtitle2' sx={{ mb: 1 }}>
+					Werk &amp; materialen
+				</Typography>
+				<Stack useFlexGap spacing={1}>
+					{lineEntries.length === 0 && (
+						<Typography variant='body2' color='text.secondary'>
+							Geen werk- of materiaalregels.
+						</Typography>
+					)}
+					{lineEntries.map(entry => (
+						<QuoteDiffRow
+							key={entry.key}
+							entry={entry}
+							checked={selection[entry.key] ?? false}
+							onChange={value => setKey(entry.key, value)}
+						/>
+					))}
+				</Stack>
+
+				{ruleEntries.length > 0 && (
+					<>
+						<Divider sx={{ my: 2 }} />
+						<Typography variant='subtitle2' sx={{ mb: 1 }}>
+							Automatisch herberekend (prijsregels)
+						</Typography>
+						<Stack useFlexGap spacing={0.5}>
+							{ruleEntries.map(entry => (
+								<RuleDiffRow key={entry.key} entry={entry} />
+							))}
+						</Stack>
+					</>
+				)}
+
+				{replace.isError && (
+					<Alert severity='error' sx={{ mt: 2 }}>
+						Toepassen mislukt: {replace.error instanceof Error ? replace.error.message : 'Onbekende fout'}
+					</Alert>
+				)}
+			</DialogContent>
+			<DialogActions>
+				<Button onClick={onClose} disabled={replace.isPending}>
+					Annuleren
+				</Button>
+				<Button
+					variant='contained'
+					onClick={() =>
+						replace.mutate({ quoteDraftId: draft.id, lines: resultLines }, { onSuccess: onClose })
+					}
+					disabled={replace.isPending || resultLines.length === 0}
+					startIcon={replace.isPending ? <CircularProgress size={14} /> : null}
+				>
+					Toepassen ({resultLines.length})
+				</Button>
+			</DialogActions>
+		</Dialog>
+	);
+}
+
+const DIFF_CHIP: Record<QuoteLineDiffStatus, { label: string; color: 'default' | 'success' | 'warning' | 'info' }> = {
+	unchanged: { label: 'Ongewijzigd', color: 'default' },
+	changed: { label: 'Gewijzigd', color: 'warning' },
+	new: { label: 'Nieuw', color: 'success' },
+	removed: { label: 'Vervalt', color: 'info' }
+};
+
+function QuoteDiffRow({
+	entry,
+	checked,
+	onChange
+}: {
+	entry: QuoteLineDiffEntry;
+	checked: boolean;
+	onChange: (value: boolean) => void;
+}) {
+	const chip = (
+		<Chip
+			size='small'
+			variant='outlined'
+			color={DIFF_CHIP[entry.status].color}
+			label={DIFF_CHIP[entry.status].label}
+		/>
+	);
+
+	if (entry.status === 'unchanged' && entry.proposed) {
+		return (
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', pl: '11px' }}>
+				{chip}
+				<LineSummary line={entry.proposed} />
+			</Stack>
+		);
+	}
+
+	if (entry.status === 'changed' && entry.current && entry.proposed) {
+		return (
+			<Box>
+				<FormControlLabel
+					control={<Checkbox size='small' checked={checked} onChange={e => onChange(e.target.checked)} />}
+					label={
+						<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+							{chip}
+							<Typography variant='body2'>{entry.proposed.description}</Typography>
+						</Stack>
+					}
+				/>
+				<Typography variant='caption' color='text.secondary' sx={{ display: 'block', pl: '30px' }}>
+					huidig: {summarize(entry.current.quantity, entry.current.unitPriceEur)} → nieuw:{' '}
+					{summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)} ·{' '}
+					{checked ? 'nieuwe regel gebruiken' : 'huidige regel behouden'}
+				</Typography>
+			</Box>
+		);
+	}
+
+	if (entry.status === 'new' && entry.proposed) {
+		return (
+			<FormControlLabel
+				control={<Checkbox size='small' checked={checked} onChange={e => onChange(e.target.checked)} />}
+				label={
+					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+						{chip}
+						<LineSummary line={entry.proposed} />
+					</Stack>
+				}
+			/>
+		);
+	}
+
+	if (entry.status === 'removed' && entry.current) {
+		return (
+			<FormControlLabel
+				control={<Checkbox size='small' checked={checked} onChange={e => onChange(e.target.checked)} />}
+				label={
+					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+						{chip}
+						<LineSummary line={entry.current} />
+						<Typography variant='caption' color='text.secondary'>
+							(behouden?)
+						</Typography>
+					</Stack>
+				}
+			/>
+		);
+	}
+
+	return null;
+}
+
+function RuleDiffRow({ entry }: { entry: QuoteLineDiffEntry }) {
+	if (!entry.proposed) {
+		return (
+			<Typography variant='body2' color='text.secondary'>
+				{entry.current?.description} — vervalt
+			</Typography>
+		);
+	}
+	const changed = entry.current !== null && !sameLine(entry.current, entry.proposed);
+	return (
+		<Typography variant='body2'>
+			{entry.proposed.description} · {summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)}
+			{changed && entry.current && (
+				<Typography component='span' variant='caption' color='text.secondary'>
+					{' '}
+					(was {formatLinePrice(entry.current.unitPriceEur)})
+				</Typography>
+			)}
+		</Typography>
+	);
+}
+
+function LineSummary({ line }: { line: QuoteLineItem | ProposedQuoteLine }) {
+	return (
+		<Typography variant='body2'>
+			{line.description}{' '}
+			<Typography component='span' variant='caption' color='text.secondary'>
+				· {summarize(String(line.quantity), line.unitPriceEur)}
+			</Typography>
+		</Typography>
+	);
+}
+
+function summarize(quantity: string, unitPriceEur: string | null): string {
+	return `${quantity} × ${formatLinePrice(unitPriceEur)}`;
+}
+
+function formatLinePrice(unitPriceEur: string | null): string {
+	return unitPriceEur === null ? 'prijs n.t.b.' : toReadableEuro(Number(unitPriceEur));
+}
+
+/** Stable identity for matching a line across a regenerate: catalog item, then
+ * pricing rule, else the (normalized) description for inferred work. */
+function lineKey(
+	source: string,
+	catalogItemId: string | null,
+	appliedRuleId: string | null,
+	description: string
+): string {
+	if (source === 'catalog_match' && catalogItemId) {
+		return `c:${catalogItemId}`;
+	}
+	if (source === 'rule_applied' && appliedRuleId) {
+		return `r:${appliedRuleId}`;
+	}
+	return `i:${description.trim().toLowerCase()}`;
+}
+
+function sameLine(current: QuoteLineItem, proposed: ProposedQuoteLine): boolean {
+	return (
+		Number(current.quantity) === proposed.quantity &&
+		current.unitPriceEur === proposed.unitPriceEur &&
+		current.vatRate === proposed.vatRate &&
+		!current.vatReverseCharged
+	);
+}
+
+function diffQuoteLines(current: QuoteLineItem[], proposed: ProposedQuoteLine[]): QuoteLineDiffEntry[] {
+	const currentByKey = new Map<string, QuoteLineItem>();
+	for (const line of current) {
+		currentByKey.set(lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description), line);
+	}
+	const proposedByKey = new Map<string, ProposedQuoteLine>();
+	for (const line of proposed) {
+		proposedByKey.set(lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description), line);
+	}
+
+	const entries: QuoteLineDiffEntry[] = [];
+	for (const line of proposed) {
+		const key = lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description);
+		const match = currentByKey.get(key) ?? null;
+		entries.push({
+			key,
+			status: match ? (sameLine(match, line) ? 'unchanged' : 'changed') : 'new',
+			isRule: line.source === 'rule_applied',
+			current: match,
+			proposed: line
+		});
+	}
+	for (const line of current) {
+		const key = lineKey(line.source, line.catalogItemId, line.appliedRuleId, line.description);
+		if (!proposedByKey.has(key)) {
+			entries.push({
+				key,
+				status: 'removed',
+				isRule: line.source === 'rule_applied',
+				current: line,
+				proposed: null
+			});
+		}
+	}
+	return entries;
+}
+
+function defaultSelection(entry: QuoteLineDiffEntry): boolean {
+	switch (entry.status) {
+		case 'changed':
+			// Keep the owner's manual edit by default; otherwise adopt the new value.
+			return !(entry.current?.wasEditedByUser ?? false);
+		case 'new':
+			return true;
+		case 'removed':
+			return entry.current?.wasEditedByUser ?? false;
+		default:
+			return true;
+	}
+}
+
+function buildResultLines(
+	lineEntries: QuoteLineDiffEntry[],
+	ruleEntries: QuoteLineDiffEntry[],
+	selection: Record<string, boolean>
+): ReplaceQuoteLineInput[] {
+	const result: ReplaceQuoteLineInput[] = [];
+	for (const entry of lineEntries) {
+		const selected = selection[entry.key] ?? false;
+		if (entry.status === 'unchanged' && entry.proposed) {
+			result.push(proposedLineToReplaceInput(entry.proposed));
+		} else if (entry.status === 'changed') {
+			if (selected && entry.proposed) {
+				result.push(proposedLineToReplaceInput(entry.proposed));
+			} else if (!selected && entry.current) {
+				result.push(currentLineToReplaceInput(entry.current));
+			}
+		} else if (entry.status === 'new' && selected && entry.proposed) {
+			result.push(proposedLineToReplaceInput(entry.proposed));
+		} else if (entry.status === 'removed' && selected && entry.current) {
+			result.push(currentLineToReplaceInput(entry.current));
+		}
+	}
+	// Rule-derived lines always refresh to the new proposal; removed ones drop.
+	for (const entry of ruleEntries) {
+		if (entry.proposed) {
+			result.push(proposedLineToReplaceInput(entry.proposed));
+		}
+	}
+	return result;
+}
+
+function currentLineToReplaceInput(line: QuoteLineItem): ReplaceQuoteLineInput {
+	return {
+		description: line.description,
+		unit: line.unit,
+		quantity: line.quantity,
+		unitPriceEur: line.unitPriceEur,
+		vatRate: line.vatRate,
+		vatReverseCharged: line.vatReverseCharged,
+		source: line.source,
+		wasEditedByUser: line.wasEditedByUser,
+		catalogItemId: line.catalogItemId,
+		appliedRuleId: line.appliedRuleId,
+		note: line.note
+	};
+}
+
+function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineInput {
+	return {
+		description: line.description,
+		unit: line.unit,
+		quantity: String(line.quantity),
+		unitPriceEur: line.unitPriceEur,
+		vatRate: line.vatRate,
+		vatReverseCharged: false,
+		source: line.source,
+		wasEditedByUser: false,
+		catalogItemId: line.catalogItemId,
+		appliedRuleId: line.appliedRuleId,
+		note: line.note
+	};
 }
 
 function QuoteDraftEditor({ draft, opportunityId }: { draft: QuoteDraft; opportunityId: string }) {

@@ -13,7 +13,8 @@ import type { CatalogItemUnit } from './catalog-items.js';
  *                      rule. Description + quantity are the model's; the price is
  *                      `null` and the owner must set it (flagged in the UI).
  */
-export type QuoteLineSource = 'catalog_match' | 'rule_applied' | 'inferred';
+export const QUOTE_LINE_SOURCES = ['catalog_match', 'rule_applied', 'inferred'] as const;
+export type QuoteLineSource = (typeof QUOTE_LINE_SOURCES)[number];
 
 /**
  * A single proposed line on a draft quote. Output of the W10.1 line-item

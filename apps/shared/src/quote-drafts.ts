@@ -51,6 +51,34 @@ export interface QuoteDraft {
 /** `GET /api/opportunities/:id/quote-drafts` response. */
 export interface QuoteDraftListResponse {
 	drafts: QuoteDraft[];
+	/** Most recent moment the org's pricing changed (playbook recompiled or a rule
+	 * edited). Compare against a draft's `createdAt` to know whether its pricing is
+	 * stale. `null` when the org has no playbook yet. */
+	pricingUpdatedAt: string | null;
+}
+
+/**
+ * One line for a full draft replacement (`PUT …/line-items`). Carries the complete
+ * denormalized shape — used when regenerating: the owner picks which current + newly
+ * proposed lines survive, and the chosen set replaces the draft's lines wholesale.
+ */
+export interface ReplaceQuoteLineInput {
+	description: string;
+	unit: string;
+	quantity: string;
+	unitPriceEur: string | null;
+	vatRate: number;
+	vatReverseCharged: boolean;
+	source: QuoteLineSource;
+	wasEditedByUser: boolean;
+	catalogItemId: string | null;
+	appliedRuleId: string | null;
+	note: string | null;
+}
+
+/** `PUT /api/quote-drafts/:id/line-items` — replace all lines on the draft. */
+export interface ReplaceQuoteLinesInput {
+	lines: ReplaceQuoteLineInput[];
 }
 
 /**

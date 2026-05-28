@@ -37,6 +37,20 @@ export interface AddQuoteLineRepoInput {
 	vatReverseCharged: boolean;
 }
 
+export interface ReplaceQuoteLineRepoInput {
+	description: string;
+	unit: string;
+	quantity: string;
+	unitPriceEur: string | null;
+	vatRate: number;
+	vatReverseCharged: boolean;
+	source: PrismaQuoteLineSource;
+	catalogItemId: string | null;
+	appliedRuleId: string | null;
+	note: string | null;
+	wasEditedByUser: boolean;
+}
+
 export interface UpdateQuoteLineRepoInput {
 	description?: string;
 	unit?: string;
@@ -139,5 +153,32 @@ export class QuoteDraftsRepository {
 
 	async deleteLine(lineItemId: string): Promise<void> {
 		await this.prisma.quoteLineItem.delete({ where: { id: lineItemId } });
+	}
+
+	/** Replace every line on a draft atomically (regenerate-merge apply). Also bumps
+	 * the draft's `updatedAt` so the "pricing changed since this quote" staleness check
+	 * resets — the lines now reflect the current pricing. */
+	async replaceLines(quoteDraftId: string, lines: ReadonlyArray<ReplaceQuoteLineRepoInput>): Promise<void> {
+		await this.prisma.$transaction([
+			this.prisma.quoteLineItem.deleteMany({ where: { quoteDraftId } }),
+			this.prisma.quoteLineItem.createMany({
+				data: lines.map((line, index) => ({
+					quoteDraftId,
+					position: index,
+					description: line.description,
+					unit: line.unit,
+					quantity: line.quantity,
+					unitPriceEur: line.unitPriceEur,
+					vatRate: line.vatRate,
+					vatReverseCharged: line.vatReverseCharged,
+					source: line.source,
+					catalogItemId: line.catalogItemId,
+					appliedRuleId: line.appliedRuleId,
+					note: line.note,
+					wasEditedByUser: line.wasEditedByUser
+				}))
+			}),
+			this.prisma.quoteDraft.update({ where: { id: quoteDraftId }, data: { updatedAt: new Date() } })
+		]);
 	}
 }

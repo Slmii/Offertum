@@ -1,12 +1,14 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { QUOTE_DRAFT_NOT_FOUND, QUOTE_LINE_ITEM_NOT_FOUND } from '@/lib/errors';
 import { LogService } from '@/modules/logger/log.service';
+import { PricingPlaybookRepository } from '@/modules/pricing-playbook/pricing-playbook.repository';
 import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-items.service';
 import { toQuoteDraftWire } from '@/modules/quote-drafts/quote-drafts.mapper';
 import {
 	type CreateQuoteLineRepoInput,
 	type QuoteDraftWithLines,
-	QuoteDraftsRepository
+	QuoteDraftsRepository,
+	type ReplaceQuoteLineRepoInput
 } from '@/modules/quote-drafts/quote-drafts.repository';
 import { QUOTE_LINE_SOURCE_FROM_WIRE } from '@/modules/quote-drafts/quote-line-source.mapper';
 import { Injectable, NotFoundException } from '@nestjs/common';
@@ -14,6 +16,8 @@ import type {
 	CreateQuoteLineItemInput,
 	ProposedQuoteLine,
 	QuoteDraft,
+	QuoteDraftListResponse,
+	ReplaceQuoteLineInput,
 	UpdateQuoteLineItemInput
 } from '@offertum/shared';
 
@@ -30,6 +34,7 @@ export class QuoteDraftsService {
 	constructor(
 		private readonly quoteLineItems: QuoteLineItemsService,
 		private readonly repository: QuoteDraftsRepository,
+		private readonly pricingPlaybook: PricingPlaybookRepository,
 		private readonly logService: LogService
 	) {}
 
@@ -65,10 +70,40 @@ export class QuoteDraftsService {
 		return toQuoteDraftWire(row);
 	}
 
-	/** All persisted drafts for an opportunity (newest-first). */
-	async listForOpportunity(organizationId: string, opportunityId: string): Promise<QuoteDraft[]> {
-		const rows = await this.repository.listForOpportunity(organizationId, opportunityId);
-		return rows.map(toQuoteDraftWire);
+	/** All persisted drafts for an opportunity (newest-first) + when the org's pricing
+	 * last changed, so the UI can flag a draft whose pricing is now stale. */
+	async listForOpportunity(organizationId: string, opportunityId: string): Promise<QuoteDraftListResponse> {
+		const [rows, pricingUpdatedAt] = await Promise.all([
+			this.repository.listForOpportunity(organizationId, opportunityId),
+			this.computePricingUpdatedAt(organizationId)
+		]);
+		return { drafts: rows.map(toQuoteDraftWire), pricingUpdatedAt };
+	}
+
+	/** Replace every line on a draft (regenerate-merge apply). */
+	async replaceLines(
+		organizationId: string,
+		quoteDraftId: string,
+		lines: ReplaceQuoteLineInput[]
+	): Promise<QuoteDraft> {
+		await this.loadDraft(organizationId, quoteDraftId);
+		await this.repository.replaceLines(quoteDraftId, lines.map(toReplaceRepoLine));
+		return this.reload(organizationId, quoteDraftId);
+	}
+
+	/** Most recent moment the org's pricing changed: the playbook compile time or the
+	 * latest active-rule edit. Drives the "pricing changed since this quote" banner. */
+	private async computePricingUpdatedAt(organizationId: string): Promise<string | null> {
+		const playbook = await this.pricingPlaybook.findByOrganizationId(organizationId);
+		if (!playbook) {
+			return null;
+		}
+		const rules = await this.pricingPlaybook.listRules(playbook.id);
+		const timestamps = [
+			...(playbook.compiledAt ? [playbook.compiledAt.getTime()] : []),
+			...rules.filter(rule => rule.active).map(rule => rule.updatedAt.getTime())
+		];
+		return timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : null;
 	}
 
 	/** Add an owner-authored line to a draft (W10.3). */
@@ -140,5 +175,21 @@ function toRepoLine(line: ProposedQuoteLine, index: number): CreateQuoteLineRepo
 		catalogItemId: line.catalogItemId,
 		appliedRuleId: line.appliedRuleId,
 		note: line.note
+	};
+}
+
+function toReplaceRepoLine(line: ReplaceQuoteLineInput): ReplaceQuoteLineRepoInput {
+	return {
+		description: line.description,
+		unit: line.unit,
+		quantity: line.quantity,
+		unitPriceEur: line.unitPriceEur,
+		vatRate: line.vatRate,
+		vatReverseCharged: line.vatReverseCharged,
+		source: QUOTE_LINE_SOURCE_FROM_WIRE[line.source],
+		catalogItemId: line.catalogItemId,
+		appliedRuleId: line.appliedRuleId,
+		note: line.note,
+		wasEditedByUser: line.wasEditedByUser
 	};
 }

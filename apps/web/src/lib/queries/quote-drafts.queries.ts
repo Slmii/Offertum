@@ -2,8 +2,10 @@ import { api } from '@/lib/api/client';
 import { listQuoteDraftsServer } from '@/lib/api/quote-drafts.api';
 import type {
 	CreateQuoteLineItemInput,
+	ProposeQuoteLinesResponse,
 	QuoteDraft,
 	QuoteDraftListResponse,
+	ReplaceQuoteLineInput,
 	UpdateQuoteLineItemInput
 } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,6 +32,28 @@ export function useGenerateQuoteDraft(opportunityId: string) {
 			// Timeline gains a "quote_created" event — refresh the opportunity detail too.
 			void queryClient.invalidateQueries({ queryKey: ['opportunities', 'detail', opportunityId] });
 		}
+	});
+}
+
+/** POST — generate a fresh proposal WITHOUT persisting (powers the regenerate
+ * compare modal). Returns the engine-priced lines for side-by-side review. */
+export function useGenerateQuotePreview(opportunityId: string) {
+	return useMutation({
+		mutationFn: () =>
+			api<ProposeQuoteLinesResponse>(`/api/opportunities/${opportunityId}/quote-line-items/preview`, {
+				method: 'POST'
+			})
+	});
+}
+
+/** PUT — replace all lines on a draft with the owner's chosen merge set. */
+export function useReplaceQuoteLines(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({ quoteDraftId, lines }: { quoteDraftId: string; lines: ReplaceQuoteLineInput[] }) =>
+			api<QuoteDraft>(`/api/quote-drafts/${quoteDraftId}/line-items`, { method: 'PUT', body: { lines } }),
+		onSuccess: updated => patchDraftInList(queryClient, opportunityId, updated)
 	});
 }
 
@@ -85,7 +109,7 @@ function patchDraftInList(
 ): void {
 	queryClient.setQueryData<QuoteDraftListResponse | undefined>(QuoteDraftKeys.list(opportunityId), current =>
 		current
-			? { drafts: current.drafts.map(draft => (draft.id === updated.id ? updated : draft)) }
-			: { drafts: [updated] }
+			? { ...current, drafts: current.drafts.map(draft => (draft.id === updated.id ? updated : draft)) }
+			: { drafts: [updated], pricingUpdatedAt: null }
 	);
 }

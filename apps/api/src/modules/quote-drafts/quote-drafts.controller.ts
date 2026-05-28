@@ -33,12 +33,11 @@ export class QuoteDraftsController {
 	@ApiOkResponse({ type: QuoteDraftListResponseDto })
 	@UseGuards(OrganizationGuard)
 	@Get()
-	async list(
+	list(
 		@Req() request: Request,
 		@Param('opportunityId', new ParseUUIDPipe()) opportunityId: string
 	): Promise<QuoteDraftListResponseDto> {
-		const drafts = await this.quoteDrafts.listForOpportunity(request.organizationId!, opportunityId);
-		return { drafts };
+		return this.quoteDrafts.listForOpportunity(request.organizationId!, opportunityId);
 	}
 }
 

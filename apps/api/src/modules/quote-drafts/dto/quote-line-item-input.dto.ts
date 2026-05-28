@@ -7,24 +7,27 @@ import {
 } from '@/lib/validators/decimal-string';
 import {
 	QUOTE_LINE_DESCRIPTION_MAX_LENGTH,
-	QUOTE_VAT_RATES,
 	type CreateQuoteLineItemInput,
 	type UpdateQuoteLineItemInput
 } from '@offertum/shared';
 import {
 	IsBoolean,
-	IsIn,
 	IsInt,
 	IsOptional,
 	IsString,
 	Matches,
+	Max,
 	MaxLength,
 	Min,
 	MinLength,
 	ValidateIf
 } from 'class-validator';
 
-const VAT_RATES: number[] = [...QUOTE_VAT_RATES];
+// VAT is a percentage (0-100). The pricing engine derives a line's rate from the
+// owner's VAT rules, so range-validate rather than hardcode {0,9,21}; the UI dropdown
+// is what constrains manual edits to the common NL brackets.
+const MIN_VAT_RATE = 0;
+const MAX_VAT_RATE = 100;
 
 /** `POST /api/quote-drafts/:id/line-items` — add an owner-authored line. */
 export class CreateQuoteLineItemDto implements CreateQuoteLineItemInput {
@@ -44,7 +47,8 @@ export class CreateQuoteLineItemDto implements CreateQuoteLineItemInput {
 	unitPriceEur!: string | null;
 
 	@IsInt()
-	@IsIn(VAT_RATES)
+	@Min(MIN_VAT_RATE)
+	@Max(MAX_VAT_RATE)
 	vatRate!: number;
 
 	@IsBoolean()
@@ -77,7 +81,8 @@ export class UpdateQuoteLineItemDto implements UpdateQuoteLineItemInput {
 
 	@IsOptional()
 	@IsInt()
-	@IsIn(VAT_RATES)
+	@Min(MIN_VAT_RATE)
+	@Max(MAX_VAT_RATE)
 	vatRate?: number;
 
 	@IsOptional()

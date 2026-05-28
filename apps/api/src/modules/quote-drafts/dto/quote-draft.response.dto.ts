@@ -34,4 +34,5 @@ export class QuoteDraftResponseDto implements QuoteDraft {
 
 export class QuoteDraftListResponseDto implements QuoteDraftListResponse {
 	drafts!: QuoteDraftResponseDto[];
+	pricingUpdatedAt!: string | null;
 }
