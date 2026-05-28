@@ -121,6 +121,12 @@ export const EmailConnectErrorCode = {
 
 export type EmailConnectErrorCode = (typeof EmailConnectErrorCode)[keyof typeof EmailConnectErrorCode];
 export const EMAIL_ACCOUNT_NOT_FOUND = 'No connected mail account for this organization.';
+export const GMAIL_WEBHOOK_NOT_CONFIGURED = 'Gmail webhook not configured';
+export const GMAIL_WEBHOOK_AUTH_HEADER_MISSING = 'Missing or malformed Authorization header';
+export const GMAIL_WEBHOOK_JWT_INVALID = 'Invalid Pub/Sub JWT';
+export const GMAIL_WEBHOOK_DATA_MISSING = 'Pub/Sub push body must include message.data';
+export const GMAIL_WEBHOOK_DATA_INVALID = 'Pub/Sub message.data is not valid base64 JSON';
+export const MICROSOFT_WEBHOOK_VALUE_MISSING = 'Graph notification body must include a `value` array';
 // Dev-facing — surfaced as generic 500 when a Gmail or Graph API endpoint returns non-2xx.
 // Optional `cause` is the provider's own `error.message` field when we can parse it (Graph
 // returns `{ error: { code, message } }`); surfacing it in the thrown exception makes the

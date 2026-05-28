@@ -1,5 +1,12 @@
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
+import {
+	GMAIL_WEBHOOK_AUTH_HEADER_MISSING,
+	GMAIL_WEBHOOK_DATA_INVALID,
+	GMAIL_WEBHOOK_DATA_MISSING,
+	GMAIL_WEBHOOK_JWT_INVALID,
+	GMAIL_WEBHOOK_NOT_CONFIGURED
+} from '@/lib/errors';
 import { PubSubJWTVerificationError, verifyPubSubJWT } from '@/lib/oauth/pubsub-jwt-verifier';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
@@ -87,12 +94,12 @@ export class GmailWebhookController {
 				level: 'error',
 				context: 'GmailWebhookController'
 			});
-			throw new ServiceUnavailableException('Gmail webhook not configured');
+			throw new ServiceUnavailableException(GMAIL_WEBHOOK_NOT_CONFIGURED);
 		}
 
 		const token = parseBearerToken(authorization);
 		if (!token) {
-			throw new UnauthorizedException('Missing or malformed Authorization header');
+			throw new UnauthorizedException(GMAIL_WEBHOOK_AUTH_HEADER_MISSING);
 		}
 
 		try {
@@ -106,19 +113,19 @@ export class GmailWebhookController {
 					level: 'warn',
 					context: 'GmailWebhookController'
 				});
-				throw new UnauthorizedException('Invalid Pub/Sub JWT');
+				throw new UnauthorizedException(GMAIL_WEBHOOK_JWT_INVALID);
 			}
 			throw error;
 		}
 
 		const body = request.body as PubSubPushBody | undefined;
 		if (!body?.message?.data) {
-			throw new BadRequestException('Pub/Sub push body must include message.data');
+			throw new BadRequestException(GMAIL_WEBHOOK_DATA_MISSING);
 		}
 
 		const payload = decodeNotification(body.message.data);
 		if (!payload) {
-			throw new BadRequestException('Pub/Sub message.data is not valid base64 JSON');
+			throw new BadRequestException(GMAIL_WEBHOOK_DATA_INVALID);
 		}
 
 		// Fan-out: the same Gmail mailbox can be connected to multiple organizations
@@ -127,7 +134,11 @@ export class GmailWebhookController {
 		// so a push to a shared mailbox doesn't silently drop sync for every org except
 		// the first one returned.
 		const accounts = await this.prisma.emailAccount.findMany({
-			where: { provider: EmailProvider.GMAIL, email: payload.emailAddress, disconnectedAt: null },
+			where: {
+				provider: EmailProvider.GMAIL,
+				email: { equals: payload.emailAddress, mode: 'insensitive' },
+				disconnectedAt: null
+			},
 			select: { id: true, organizationId: true, userId: true }
 		});
 

@@ -120,14 +120,29 @@ export class ReplyDraftAttachmentsService {
 
 		await this.storage.put({ storageKey, data: file.buffer, contentType: file.mimetype });
 
-		const row = await this.repository.create({
-			replyDraftId: draft.draftId,
-			filename: sanitizedFilename,
-			contentType: file.mimetype,
-			sizeBytes: file.size,
-			storageKey,
-			storageDriver: this.storage.driver
-		});
+		let row: ReplyDraftAttachmentRow;
+		try {
+			row = await this.repository.create({
+				replyDraftId: draft.draftId,
+				filename: sanitizedFilename,
+				contentType: file.mimetype,
+				sizeBytes: file.size,
+				storageKey,
+				storageDriver: this.storage.driver
+			});
+		} catch (error) {
+			await this.storage.delete(storageKey).catch(cleanupError => {
+				this.logService.logAction({
+					action: 'reply_draft.attachment.upload_blob_cleanup_failed',
+					message: `Attachment row creation failed and blob cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : 'unknown'}`,
+					metadata: { organizationId, opportunityId, replyDraftId: draft.draftId, storageKey },
+					level: 'warn',
+					stack: cleanupError instanceof Error ? cleanupError.stack : undefined,
+					context: 'ReplyDraftAttachmentsService'
+				});
+			});
+			throw error;
+		}
 
 		this.logService.logAction({
 			action: 'reply_draft.attachment.uploaded',

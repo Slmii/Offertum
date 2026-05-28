@@ -11,6 +11,15 @@
 
 const NL_NUMBER_FORMATTER = new Intl.NumberFormat('nl-NL');
 
+const NL_WHOLE_NUMBER_FORMATTER = new Intl.NumberFormat('nl-NL', {
+	maximumFractionDigits: 0
+});
+
+const NL_ONE_DECIMAL_FORMATTER = new Intl.NumberFormat('nl-NL', {
+	minimumFractionDigits: 1,
+	maximumFractionDigits: 1
+});
+
 const NL_EUR_FORMATTER = new Intl.NumberFormat('nl-NL', {
 	style: 'currency',
 	currency: 'EUR',
@@ -40,6 +49,17 @@ const NL_PERCENT_FORMATTER = new Intl.NumberFormat('nl-NL', {
 
 /** `1234567` → `"1.234.567"`. Use for any human-readable integer (counts, tokens, etc.). */
 export const toReadableNumber = (value: number): string => NL_NUMBER_FORMATTER.format(value);
+
+/** `1536` → `"2 KB"`, `1572864` → `"1,5 MB"`. Use for file sizes. */
+export const toReadableBytes = (bytes: number): string => {
+	if (bytes >= 1024 * 1024) {
+		return `${NL_ONE_DECIMAL_FORMATTER.format(bytes / (1024 * 1024))} MB`;
+	}
+	if (bytes >= 1024) {
+		return `${NL_WHOLE_NUMBER_FORMATTER.format(bytes / 1024)} KB`;
+	}
+	return `${NL_WHOLE_NUMBER_FORMATTER.format(bytes)} B`;
+};
 
 /** `1234.56` → `"€ 1.234,56"`. For everything user-facing where the currency is EUR. */
 export const toReadableEuro = (value: number): string => NL_EUR_FORMATTER.format(value);

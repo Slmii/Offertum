@@ -7,6 +7,11 @@ import {
 	type UpdateCatalogItemInput
 } from '@offertum/shared';
 import {
+	CATALOG_ITEM_PRICE_MESSAGE,
+	CATALOG_ITEM_PRICE_PATTERN
+} from '@/modules/catalog-items/dto/catalog-item-price.dto';
+import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators/non-whitespace-pattern';
+import {
 	IsBoolean,
 	IsIn,
 	IsInt,
@@ -25,6 +30,7 @@ export class UpdateCatalogItemDto implements UpdateCatalogItemInput {
 	@IsString()
 	@MinLength(1)
 	@MaxLength(CATALOG_ITEM_NAME_MAX_LENGTH)
+	@Matches(NON_WHITESPACE_PATTERN, { message: `name ${NON_WHITESPACE_MESSAGE}` })
 	name?: string;
 
 	@ValidateIf((_, value) => value !== null)
@@ -35,7 +41,7 @@ export class UpdateCatalogItemDto implements UpdateCatalogItemInput {
 
 	@IsOptional()
 	@IsString()
-	@Matches(/^\d+(\.\d{1,2})?$/, { message: 'defaultPriceEur must be a decimal with up to 2 decimal places' })
+	@Matches(CATALOG_ITEM_PRICE_PATTERN, { message: CATALOG_ITEM_PRICE_MESSAGE })
 	defaultPriceEur?: string;
 
 	@IsOptional()

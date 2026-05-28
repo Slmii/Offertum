@@ -63,7 +63,7 @@ import {
 	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
 	OPPORTUNITY_STATUSES
 } from '@offertum/shared';
-import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller } from 'react-hook-form';
@@ -151,16 +151,10 @@ function OpportunitiesIndexPage() {
 		});
 	}, [debouncedSearch, navigate, urlSearch]);
 
-	const initial = useSuspenseQuery(
+	const { data, isFetching } = useSuspenseQuery(
 		opportunitiesListQueryOptions(activeStatus, urlSearchTerm || null, dismissedFilter, ownerFilter, assigneeFilter)
 	);
-	const typingSearch = debouncedSearch !== urlSearchTerm.trim() ? debouncedSearch : '';
-	const searched = useQuery({
-		...opportunitiesListQueryOptions(activeStatus, typingSearch, dismissedFilter, ownerFilter, assigneeFilter),
-		enabled: typingSearch.length > 0
-	});
-	const data = typingSearch.length > 0 ? (searched.data ?? initial.data) : initial.data;
-	const searching = typingSearch.length > 0 && searched.isFetching;
+	const searching = isFetching || debouncedSearch !== urlSearchTerm.trim();
 
 	const visibleOpportunities = useMemo(() => sortOpportunities(data.opportunities, sort), [data.opportunities, sort]);
 
@@ -223,6 +217,7 @@ function OpportunitiesIndexPage() {
 				<StandaloneSwitch
 					name='showDismissed'
 					label='Toon afgewezen'
+					checked={showDismissed}
 					onChange={isChecked =>
 						navigate({
 							to: '/opportunities',

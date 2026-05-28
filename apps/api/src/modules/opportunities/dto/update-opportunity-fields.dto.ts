@@ -23,11 +23,11 @@ export class UpdateOpportunityFieldsDto implements UpdateOpportunityFieldsInput 
 
 	@IsOptional()
 	@ValidateIf((_, value) => value !== null)
-	@IsISO8601()
+	@IsISO8601({ strict: true })
 	customerDeadline?: string | null;
 
 	@IsOptional()
 	@ValidateIf((_, value) => value !== null)
-	@IsISO8601()
+	@IsISO8601({ strict: true })
 	customerAppointment?: string | null;
 }

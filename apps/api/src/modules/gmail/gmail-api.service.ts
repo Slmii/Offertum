@@ -381,7 +381,7 @@ export class GmailApiService {
 		if (!response.ok) {
 			const text = await response.text();
 			this.logApiError(opName, response.status, text);
-			throw new InternalServerErrorException(`Gmail API ${opName} failed`);
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED(opName));
 		}
 
 		return (await response.json()) as T;

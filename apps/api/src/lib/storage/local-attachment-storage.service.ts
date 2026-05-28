@@ -3,7 +3,7 @@ import { LogService } from '@/modules/logger/log.service';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, normalize, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type {
 	AttachmentStorage,
 	AttachmentStoragePutInput,
@@ -35,7 +35,7 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 		private readonly logService: LogService
 	) {
 		const configured = this.config.get('ATTACHMENT_STORAGE_LOCAL_DIR', { infer: true });
-		this.rootDir = isAbsolute(configured) ? configured : resolve(process.cwd(), configured);
+		this.rootDir = isAbsolute(configured) ? resolve(configured) : resolve(process.cwd(), configured);
 	}
 
 	async put(input: AttachmentStoragePutInput): Promise<{ storageKey: string }> {
@@ -83,9 +83,9 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 	 * user-supplied input into the key.
 	 */
 	private resolveSafePath(storageKey: string): string {
-		const normalized = normalize(storageKey);
-		const fullPath = resolve(join(this.rootDir, normalized));
-		if (!fullPath.startsWith(this.rootDir)) {
+		const fullPath = resolve(this.rootDir, storageKey);
+		const relativeToRoot = relative(this.rootDir, fullPath);
+		if (relativeToRoot.startsWith('..') || isAbsolute(relativeToRoot)) {
 			throw new Error(`Refusing to write outside attachment root: ${storageKey}`);
 		}
 		return fullPath;

@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries/opportunities.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
+import { toReadableBytes } from '@/lib/utils/number.utils';
 import {
 	getStatusOptionsForCurrent,
 	OPPORTUNITY_STATUS_CHIP_COLORS,
@@ -610,7 +611,7 @@ function SendConfirmDialog({
 								<Chip
 									key={attachment.id}
 									size='small'
-									label={`${attachment.filename} · ${formatBytes(attachment.sizeBytes)}`}
+									label={`${attachment.filename} · ${toReadableBytes(attachment.sizeBytes)}`}
 								/>
 							))}
 						</Stack>
@@ -943,7 +944,7 @@ function AttachmentsPanel({
 					{attachments.map(attachment => (
 						<Chip
 							key={attachment.id}
-							label={`${attachment.filename} · ${formatBytes(attachment.sizeBytes)}`}
+							label={`${attachment.filename} · ${toReadableBytes(attachment.sizeBytes)}`}
 							component='a'
 							clickable
 							href={`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachment.id}/download`}
@@ -967,16 +968,6 @@ function AttachmentsPanel({
 			)}
 		</Paper>
 	);
-}
-
-function formatBytes(bytes: number): string {
-	if (bytes >= 1024 * 1024) {
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
-	if (bytes >= 1024) {
-		return `${(bytes / 1024).toFixed(0)} KB`;
-	}
-	return `${bytes} B`;
 }
 
 /**
@@ -1385,7 +1376,7 @@ function ReplyDraftHistoryEntry({
 								<Chip
 									key={attachment.id}
 									size='small'
-									label={`${attachment.filename} · ${formatBytes(attachment.sizeBytes)}`}
+									label={`${attachment.filename} · ${toReadableBytes(attachment.sizeBytes)}`}
 									component='a'
 									clickable
 									href={`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachment.id}/download`}

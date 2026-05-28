@@ -8,7 +8,8 @@ import {
 	PAYMENT_TERMS_DAYS_MIN,
 	type UpdateBusinessDetailsInput
 } from '@offertum/shared';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators/non-whitespace-pattern';
+import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 
 /**
  * Request body for `PATCH /api/me/business-details`. Every field is optional —
@@ -25,6 +26,7 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@IsString()
 	@MinLength(1)
 	@MaxLength(COMPANY_NAME_MAX_LENGTH)
+	@Matches(NON_WHITESPACE_PATTERN, { message: `name ${NON_WHITESPACE_MESSAGE}` })
 	name?: string;
 
 	@ValidateIf((_, value) => value !== null)

@@ -1,4 +1,5 @@
 import { EmailProvider } from '@/generated/prisma/enums';
+import { MICROSOFT_WEBHOOK_VALUE_MISSING } from '@/lib/errors';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
@@ -92,7 +93,7 @@ export class MicrosoftWebhookController {
 		// 2) Change notification path.
 		const body = request.body as GraphNotificationBody | undefined;
 		if (!body || !Array.isArray(body.value)) {
-			throw new BadRequestException('Graph notification body must include a `value` array');
+			throw new BadRequestException(MICROSOFT_WEBHOOK_VALUE_MISSING);
 		}
 
 		// Group by subscriptionId so we look up each EmailAccount once even when a batch
