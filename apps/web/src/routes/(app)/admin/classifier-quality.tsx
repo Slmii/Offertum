@@ -8,7 +8,6 @@ import { OPPORTUNITY_DISMISS_REASON_LABELS_NL } from '@/lib/utils/opportunity.ut
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import ButtonGroup from '@mui/material/ButtonGroup';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
@@ -29,7 +28,7 @@ import type {
 } from '@offertum/shared';
 import { OPPORTUNITY_DISMISS_REASONS } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { z } from 'zod';
 
 const SearchSchema = z.object({
@@ -54,13 +53,8 @@ const RANGE_LABELS: Record<AIUsageRange, string> = {
 };
 
 function ClassifierQualityPage() {
-	const navigate = useNavigate();
 	const { range } = Route.useSearch();
 	const { data } = useSuspenseQuery(classifierQualityQueryOptions(range));
-
-	const setRange = (next: AIUsageRange) => {
-		void navigate({ to: '/admin/classifier-quality', search: { range: next } });
-	};
 
 	return (
 		<Container maxWidth='lg' sx={{ py: 6 }}>
@@ -73,23 +67,26 @@ function ClassifierQualityPage() {
 				<BackToHomeButton />
 			</Box>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Precision = <code>1 − (any dismissal / total opportunities)</code>. Every dismiss reason counts — from
-				the owner's perspective the system was wrong regardless of which subsystem failed. The reason chips
+				Precision = <code>1 − (any dismissal / total opportunities)</code>. Every dismiss reason counts (from
+				the owner's perspective the system was wrong regardless of which subsystem failed). The reason chips
 				below + bulk-mail recall card diagnose <em>which</em> subsystem (classifier, bulk-mail filter, dedup) is
 				to blame.
 			</Typography>
 
-			<ButtonGroup variant='outlined' size='small' sx={{ mb: 3 }}>
+			<Stack direction='row' spacing={1} sx={{ mb: 3 }}>
 				{(Object.keys(RANGE_LABELS) as AIUsageRange[]).map(option => (
-					<Button
+					<Link
 						key={option}
-						variant={option === range ? 'contained' : 'outlined'}
-						onClick={() => setRange(option)}
+						to='/admin/classifier-quality'
+						search={{ range: option }}
+						style={{ textDecoration: 'none' }}
 					>
-						{RANGE_LABELS[option]}
-					</Button>
+						<Button size='small' variant={option === range ? 'contained' : 'outlined'}>
+							{RANGE_LABELS[option]}
+						</Button>
+					</Link>
 				))}
-			</ButtonGroup>
+			</Stack>
 
 			<Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
 				<SummaryCard label='Overall precision' value={toReadablePercent(data.summary.overallPrecision)} />
@@ -117,7 +114,7 @@ function ClassifierQualityPage() {
 			<RecentDismissalsTable rows={data.recentDismissals} />
 
 			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
-				Window: {toReadableDateTime(data.rangeStart)} — {toReadableDateTime(data.rangeEnd)}
+				Window: {toReadableDateTime(data.rangeStart)} to {toReadableDateTime(data.rangeEnd)}
 			</Typography>
 		</Container>
 	);
@@ -162,7 +159,7 @@ function BulkMailFilterPanel({
 	if (recall.caughtCount === 0 && recall.missedCount === 0) {
 		return (
 			<Alert severity='info' sx={{ mb: 3 }}>
-				No bulk-mail activity in this window — the filter hasn't fired and no opportunities were dismissed as
+				No bulk-mail activity in this window: the filter hasn't fired and no opportunities were dismissed as
 				SPAM yet. Numbers will populate once mail starts flowing.
 			</Alert>
 		);
@@ -174,9 +171,9 @@ function BulkMailFilterPanel({
 		<Alert severity={severity} sx={{ mb: 3 }}>
 			Bulk-mail filter caught <strong>{toReadableNumber(recall.caughtCount)}</strong> marketing emails before the
 			classifier ran. Users dismissed <strong>{toReadableNumber(recall.missedCount)}</strong> opportunities as
-			SPAM (the filter missed those). Recall = <strong>{toReadablePercent(recall.recall)}</strong>. Low recall =
-			the filter's signals (List-Unsubscribe header, tracking-domain count, unsubscribe phrases) need tightening —
-			promote the missed bodies to the filter's fixture corpus via the export CLI.
+			SPAM (the filter missed those). Recall = <strong>{toReadablePercent(recall.recall)}</strong>. Low recall
+			means the filter's signals (List-Unsubscribe header, tracking-domain count, unsubscribe phrases) need
+			tightening: promote the missed bodies to the filter's fixture corpus via the export CLI.
 		</Alert>
 	);
 }
@@ -210,7 +207,7 @@ function PrecisionTable({ rows }: { rows: readonly ClassifierPrecisionRow[] }) {
 								sx={{ backgroundColor: row.precision < 0.9 ? '#FAF3E8' : undefined }}
 							>
 								<TableCell>
-									<code style={{ fontSize: '0.7rem' }}>{row.organizationId.slice(0, 8)}</code>
+									<code style={{ fontSize: '0.75rem' }}>{row.organizationId.slice(0, 8)}</code>
 								</TableCell>
 								<TableCell>{row.provider}</TableCell>
 								<TableCell>
@@ -238,7 +235,7 @@ function ReasonChipsCompact({ counts }: { counts: DismissReasonCounts }) {
 	if (visible.length === 0) {
 		return (
 			<Typography variant='caption' color='text.secondary'>
-				—
+				(none)
 			</Typography>
 		);
 	}
@@ -249,7 +246,7 @@ function ReasonChipsCompact({ counts }: { counts: DismissReasonCounts }) {
 					key={reason}
 					size='small'
 					label={`${OPPORTUNITY_DISMISS_REASON_LABELS_NL[reason]}: ${counts[reason]}`}
-					sx={{ fontSize: '0.65rem', height: 18 }}
+					sx={{ fontSize: 12, height: 20 }}
 				/>
 			))}
 		</Stack>
@@ -308,7 +305,7 @@ function RecentDismissalsTable({ rows }: { rows: readonly ClassifierDismissedRow
 								</TableCell>
 								<TableCell>
 									{row.classifierProvider && row.classifierModel ? (
-										<code style={{ fontSize: '0.7rem' }}>
+										<code style={{ fontSize: '0.75rem' }}>
 											{row.classifierProvider}/{row.classifierModel}
 										</code>
 									) : (
@@ -322,7 +319,9 @@ function RecentDismissalsTable({ rows }: { rows: readonly ClassifierDismissedRow
 								</TableCell>
 								<TableCell>
 									{row.classifiedAiCallId ? (
-										<code style={{ fontSize: '0.7rem' }}>{row.classifiedAiCallId.slice(0, 8)}</code>
+										<code style={{ fontSize: '0.75rem' }}>
+											{row.classifiedAiCallId.slice(0, 8)}
+										</code>
 									) : (
 										'—'
 									)}

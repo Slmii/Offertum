@@ -20,15 +20,18 @@ import { useEffect } from 'react';
  */
 export function BillingRequiredBanner() {
 	const notice = useBillingNotice();
-	const location = useLocation();
+	// Subscribe to just the pathname via the selector — a reactive primitive that
+	// drives the effect below, rather than reading the whole (mutable-looking)
+	// location object.
+	const pathname = useLocation({ select: location => location.pathname });
 
 	// Self-dismiss the banner once the user lands on the billing flow. The
 	// banner has already done its job; keeping it visible there is noise.
 	useEffect(() => {
-		if (location.pathname.startsWith('/billing')) {
+		if (pathname.startsWith('/billing')) {
 			billingNoticeStore.clear();
 		}
-	}, [location.pathname]);
+	}, [pathname]);
 
 	if (!notice) {
 		return null;

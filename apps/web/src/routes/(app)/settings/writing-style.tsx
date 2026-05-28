@@ -1,7 +1,7 @@
-import { SectionError } from '@/components/SectionError.component';
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
+import { SectionError } from '@/components/SectionError.component';
 import { tonePlaybookQueryOptions, useUpdateTonePlaybook } from '@/lib/queries/tone-playbook.queries';
 import { WritingStyleSchema, type WritingStyleForm } from '@/lib/schemas/writing-style.schema';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
@@ -27,7 +27,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
  * writes in plain Dutch; the reply-draft generator injects it verbatim into
  * the prompt. NULL = generic Dutch neutral-professional baseline.
  * Per-user (not per-org): each team member's drafts sound like that person, not a
- * homogenized house style. Persists across orgs — voice belongs to the person.
+ * homogenized house style. Persists across orgs, voice belongs to the person.
  * Form composition: `<Form>` owns the `text` field via react-hook-form with a Zod
  * schema in `lib/schemas/writing-style.schema.ts`. Save flows through the form's
  * action; Wissen (clear) is a separate mutation that bypasses the form so it works
@@ -75,7 +75,7 @@ function WritingStylePage() {
 				<BackToHomeButton />
 			</Box>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Vertel ons in een paar zinnen hoe je schrijft — begroeting, afsluiting, toon, vaste zinnetjes. Offertum
+				Vertel ons in een paar zinnen hoe je schrijft, begroeting, afsluiting, toon, vaste zinnetjes. Offertum
 				gebruikt dit voor concept-antwoorden op je offerteaanvragen, zodat ze klinken zoals jij. Leeg laten =
 				een neutrale, professionele standaard.
 			</Typography>
@@ -103,8 +103,7 @@ function WritingStylePage() {
 				Voorbeelden om je op weg te helpen
 			</Typography>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-				Schrijf in je eigen woorden — dit zijn alleen aanknopingspunten. Je hoeft niets letterlijk over te
-				nemen.
+				Schrijf in je eigen woorden, dit zijn alleen aanknopingspunten. Je hoeft niets letterlijk over te nemen.
 			</Typography>
 
 			<ExampleAccordion

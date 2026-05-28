@@ -66,9 +66,9 @@ function CatalogSettingsPage() {
 						Catalogus
 					</Typography>
 					<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 560 }}>
-						Producten en diensten met standaardprijzen die Offertum voorstelt bij het opstellen van offertes.
-						De AI matcht binnenkomende vragen tegen deze lijst — exacte matches gaan deterministisch, de
-						rest valt terug op een LLM-voorstel.
+						Producten en diensten met standaardprijzen die Offertum voorstelt bij het opstellen van
+						offertes. De AI matcht binnenkomende vragen tegen deze lijst, exacte matches gaan
+						deterministisch, de rest valt terug op een LLM-voorstel.
 					</Typography>
 				</Box>
 				<Button variant='contained' onClick={() => setCreating(true)} sx={{ flexShrink: 0 }}>
@@ -248,7 +248,7 @@ function DeleteConfirmDialog({ item, onClose }: DeleteConfirmDialogProps) {
 			<DialogContent>
 				<DialogContentText>
 					Weet je zeker dat je <strong>{item.name}</strong> wilt verwijderen? Eerder opgestelde offertes
-					behouden hun regels — alleen toekomstige voorstellen worden geraakt.
+					behouden hun regels, alleen toekomstige voorstellen worden geraakt.
 				</DialogContentText>
 				{remove.error && (
 					<Alert severity='error' sx={{ mt: 2 }}>

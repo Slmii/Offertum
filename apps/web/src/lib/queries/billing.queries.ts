@@ -20,6 +20,7 @@ export const billingStatusQueryOptions = queryOptions({
 
 /** Hit POST /api/billing/checkout-session, then redirect the browser to Stripe Checkout. */
 export function useStartCheckout() {
+	// No local state to invalidate — redirects to Stripe Checkout via window.location.
 	return useMutation({
 		mutationFn: async () => {
 			const { url } = await api<CheckoutSessionResponse>('/api/billing/checkout-session', {
@@ -32,6 +33,7 @@ export function useStartCheckout() {
 
 /** Hit POST /api/billing/portal-session, then redirect the browser to the Customer Portal. */
 export function useOpenPortal() {
+	// No local state to invalidate — redirects to Stripe Customer Portal via window.location.
 	return useMutation({
 		mutationFn: async () => {
 			const { url } = await api<PortalSessionResponse>('/api/billing/portal-session', {

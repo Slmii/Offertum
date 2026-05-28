@@ -3,8 +3,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { DatePicker as MuiDatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useState } from 'react';
-import { Controller, useFormContext } from 'react-hook-form';
+import { useState } from 'react';
 import slugify from 'slugify';
 import type { DatePickerProps } from './DatePicker.types';
 
@@ -41,12 +40,15 @@ export const StandaloneDatePicker = ({
 	// MUI v6+ pickers need the parent to reflect onChange into the value prop for
 	// the multi-view flow (year → month → day) to advance. Local mirror lets the
 	// picker progress through views while consumers only see the committed value via
-	// onAccept. Re-syncs from the external value prop on change.
+	// onAccept. Re-syncs from the external value prop using the render-phase
+	// derived-state pattern (avoids a useEffect re-render cycle).
 	const [internalValue, setInternalValue] = useState<Dayjs | null>(value);
-	useEffect(() => {
-		// eslint-disable-next-line react-hooks/set-state-in-effect
+	const [prevValue, setPrevValue] = useState<Dayjs | null>(value);
+
+	if (value !== prevValue) {
+		setPrevValue(value);
 		setInternalValue(value);
-	}, [value]);
+	}
 
 	const handleInternalChange = (date: Dayjs | null) => {
 		setInternalValue(date);
@@ -118,30 +120,5 @@ export const StandaloneDatePicker = ({
 				/>
 			)}
 		</>
-	);
-};
-
-export const DatePicker = (props: DatePickerProps) => {
-	const { control } = useFormContext();
-
-	return (
-		<Controller
-			name={props.name}
-			control={control}
-			rules={{
-				required: props.required
-			}}
-			render={({ field, fieldState }) => (
-				<StandaloneDatePicker
-					{...props}
-					{...field}
-					error={fieldState.error?.message || (props.error ? props.helperText : undefined)}
-					onChange={e => {
-						field.onChange(e);
-						props.onChange?.(e);
-					}}
-				/>
-			)}
-		/>
 	);
 };

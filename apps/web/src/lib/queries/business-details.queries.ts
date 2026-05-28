@@ -3,7 +3,7 @@ import { getBusinessDetailsServer } from '@/lib/api/business-details.api';
 import type { BusinessDetails, UpdateBusinessDetailsInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const BusinessDetailsKeys = {
+const BusinessDetailsKeys = {
 	all: ['me', 'business-details'] as const
 };
 

@@ -1,5 +1,3 @@
-import Autocomplete from '@mui/material/Autocomplete';
-import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControl from '@mui/material/FormControl';
 import FormHelperText from '@mui/material/FormHelperText';
@@ -10,14 +8,14 @@ import ListSubheader, { type ListSubheaderProps } from '@mui/material/ListSubhea
 import MenuItem from '@mui/material/MenuItem';
 import MuiSelect from '@mui/material/Select';
 import Skeleton from '@mui/material/Skeleton';
-import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
-import { cloneElement, useEffect, useMemo, useState, type JSX, type ReactNode, type Ref } from 'react';
-import { Controller, useFormContext } from 'react-hook-form';
+import { cloneElement, useMemo, type JSX, type ReactNode, type Ref } from 'react';
+import { Controller } from 'react-hook-form';
 import slugify from 'slugify';
-import type { Option, SelectAutocompleteMultipleProps, SelectProps, StandaloneSelectProps } from './Select.types';
+import type { Option, SelectProps, StandaloneSelectProps } from './Select.types';
 
 const UNGROUPED = 'Ungrouped';
+
+const EMPTY_OPTIONS: Option<string | JSX.Element>[] = [];
 
 /**
  * React 19 ref-as-prop pattern (no `React.forwardRef` wrapper). The `Controller`
@@ -30,7 +28,7 @@ export function StandaloneSelect({
 	value,
 	error,
 	label,
-	options = [],
+	options = EMPTY_OPTIONS,
 	onChange,
 	required,
 	autoWidth,
@@ -222,186 +220,6 @@ export const Select = (props: SelectProps) => {
 					/>
 				);
 			}}
-		/>
-	);
-};
-
-export const SelectAutocompleteMultiple = ({
-	name,
-	label,
-	placeholder,
-	options = [],
-	onChange,
-	required,
-	disabled,
-	fullWidth,
-	isLoading,
-	endElement,
-	helperText,
-	...rest
-}: SelectAutocompleteMultipleProps<Option>) => {
-	const { control, setValue: setFormValue, getValues } = useFormContext();
-	const [values, setValues] = useState<Option[]>([]);
-	const formValues = getValues(name) as Option[];
-
-	useEffect(() => {
-		if (options.length > 0) {
-			const defaultFormValues = getValues(name) as Option[];
-
-			// Find the options that match the defaultValues in the formContext
-			// and prefill those in the input field as a `Chip` tag. Legitimate
-			// external → local mirror (the buffered-input pattern, CLAUDE.md #12).
-			const foundOptions = options.filter(option => defaultFormValues?.find(value => value.id === option.id));
-			// eslint-disable-next-line react-hooks/set-state-in-effect
-			setValues(foundOptions);
-		}
-	}, [name, options, getValues]);
-
-	useEffect(() => {
-		// Same mirror pattern: react-hook-form's `formValues` (external source of
-		// truth) → local `values` (drives the rendered Chip list).
-		// eslint-disable-next-line react-hooks/set-state-in-effect
-		setValues(formValues);
-	}, [formValues, setValues]);
-
-	const labelId = `${slugify(name)}-select-autocomplete-multiple`;
-
-	return (
-		<Controller
-			name={name}
-			control={control}
-			defaultValue={getValues(name)}
-			rules={{ required }}
-			render={({ field, fieldState }) => (
-				<Autocomplete
-					{...rest}
-					multiple
-					disableCloseOnSelect
-					id={labelId}
-					value={values}
-					options={options}
-					isOptionEqualToValue={(option, value) => option.id === value.id}
-					getOptionLabel={option => option.label}
-					getOptionDisabled={option => option.disabled ?? false}
-					disabled={isLoading || disabled}
-					fullWidth={fullWidth}
-					disableClearable
-					renderOption={(props, option) => {
-						const { key, ...optionProps } = props;
-
-						return (
-							<li key={key} {...optionProps}>
-								{option.label}
-							</li>
-						);
-					}}
-					noOptionsText={<i>No Options</i>}
-					renderInput={params => (
-						<FormControl fullWidth={fullWidth} disabled={disabled} required={required}>
-							{label && (
-								<InputLabel shrink required={required} htmlFor={labelId}>
-									{label}
-								</InputLabel>
-							)}
-							<TextField
-								{...params}
-								id={labelId}
-								placeholder={placeholder}
-								disabled={disabled || isLoading}
-								error={Boolean(fieldState.error)}
-								fullWidth={fullWidth}
-								variant='outlined'
-								required={required}
-								sx={{
-									'label + &': {
-										marginTop: theme => theme.spacing(3)
-									}
-								}}
-								slotProps={{
-									input: {
-										...params.slotProps.input,
-										autoComplete: 'off',
-										sx: {
-											'& input[type=number]': {
-												MozAppearance: 'textfield'
-											},
-											'& input[type=number]::-webkit-outer-spin-button': {
-												WebkitAppearance: 'none',
-												margin: 0
-											},
-											'& input[type=number]::-webkit-inner-spin-button': {
-												WebkitAppearance: 'none',
-												margin: 0
-											}
-										},
-										endAdornment: isLoading ? (
-											<InputAdornment
-												position='end'
-												sx={{
-													padding: 0.5
-												}}
-											>
-												<CircularProgress size={20} />
-											</InputAdornment>
-										) : endElement ? (
-											<InputAdornment position='end'>
-												{cloneElement(endElement, {
-													size: 'small',
-													fontSize: 'small'
-												})}
-											</InputAdornment>
-										) : (
-											params.slotProps.input.endAdornment
-										)
-									}
-								}}
-								helperText={helperText || fieldState.error?.message}
-								onKeyDown={event => {
-									if (event.key === 'Backspace' || event.key === 'Delete') {
-										event.stopPropagation();
-									}
-								}}
-							/>
-							{values.length > 0 && (
-								<Stack
-									direction='row'
-									spacing={1}
-									sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}
-								>
-									{values.map(option => (
-										<Chip
-											key={option.id}
-											label={option.label}
-											disabled={disabled || isLoading}
-											onDelete={() => {
-												const next = values.filter(value => value.id !== option.id);
-												setValues(next);
-												setFormValue(name, next);
-												onChange?.(next);
-											}}
-										/>
-									))}
-								</Stack>
-							)}
-						</FormControl>
-					)}
-					onChange={(_e, values) => {
-						// Execute custom onChange passed as a prop
-						onChange?.(values);
-						// Set value in the Autocomplete component
-						setValues(values);
-						// Set value in the formContext
-						setFormValue(name, values);
-					}}
-					onBlur={field.onBlur}
-					onInputChange={(_e, value) => {
-						if (!value) {
-							// If no value if provided then pass an empty array to the custom onChange
-							onChange?.([]);
-						}
-					}}
-				/>
-			)}
 		/>
 	);
 };

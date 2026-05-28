@@ -3,7 +3,7 @@ import { listCatalogItemsServer } from '@/lib/api/catalog-items.api';
 import type { CatalogItem, CatalogItemList, CreateCatalogItemInput, UpdateCatalogItemInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const CatalogItemsKeys = {
+const CatalogItemsKeys = {
 	all: ['catalog-items'] as const
 };
 

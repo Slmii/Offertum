@@ -4,7 +4,7 @@ import type { OAuthProviderId } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 
-export const AuthKeys = {
+const AuthKeys = {
 	session: ['auth', 'session'] as const
 };
 
@@ -25,6 +25,7 @@ async function getCsrfToken(): Promise<string> {
 }
 
 export function useSignInWithEmail() {
+	// No invalidation needed — this fires a magic-link email and doesn't change session state.
 	return useMutation({
 		mutationFn: async (email: string) => {
 			const csrfToken = await getCsrfToken();
@@ -75,13 +76,17 @@ interface SignupResponse {
  * Caller redirects to /verify-request on success.
  */
 export function useSignUp() {
+	// No invalidation needed — user is not yet authenticated; caller redirects to /verify-request.
 	return useMutation({
 		mutationFn: async ({ email, companyName }: SignupInput) => {
-			const { email: normalized } = await api<SignupResponse>('/api/signup', {
-				method: 'POST',
-				body: { email, companyName }
-			});
-			const csrfToken = await getCsrfToken();
+			// Signup + CSRF fetch are independent — run concurrently then send the magic-link.
+			const [{ email: normalized }, csrfToken] = await Promise.all([
+				api<SignupResponse>('/api/signup', {
+					method: 'POST',
+					body: { email, companyName }
+				}),
+				getCsrfToken()
+			]);
 			await postForm('/api/auth/signin/resend', { email: normalized, csrfToken });
 		}
 	});

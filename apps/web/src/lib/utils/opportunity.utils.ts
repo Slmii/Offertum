@@ -48,7 +48,7 @@ export const OPPORTUNITY_URGENCY_LABELS_NL: Record<OpportunityUrgency, string> =
  *   - won/lost → terminal; surface the active state first, then offer the recovery
  *                paths (mark as replied if the deal flipped status).
  */
-export const OPPORTUNITY_STATUS_ORDER_BY_CURRENT: Record<OpportunityStatus, ReadonlyArray<OpportunityStatus>> = {
+const OPPORTUNITY_STATUS_ORDER_BY_CURRENT: Record<OpportunityStatus, ReadonlyArray<OpportunityStatus>> = {
 	new: ['new', 'replied', 'cold', 'waiting', 'won', 'lost'],
 	replied: ['replied', 'won', 'lost', 'cold', 'new', 'waiting'],
 	waiting: ['waiting', 'replied', 'cold', 'new', 'won', 'lost'],
@@ -65,7 +65,7 @@ export function getStatusOptionsForCurrent(current: OpportunityStatus): Readonly
  * Sort weight for urgency. Lower = more urgent (sorts first). Used by client-side sort
  * over a loaded page.
  */
-export const OPPORTUNITY_URGENCY_RANK: Record<OpportunityUrgency, number> = {
+const OPPORTUNITY_URGENCY_RANK: Record<OpportunityUrgency, number> = {
 	emergency: 0,
 	high: 1,
 	normal: 2,

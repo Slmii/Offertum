@@ -12,18 +12,19 @@ import { createFileRoute } from '@tanstack/react-router';
 
 /**
  * Landing page for an authenticated user who's not currently a member of any organization
- * — e.g. they were the last removed member of their only org. The `(app)/route.tsx`
+ *, e.g. they were the last removed member of their only org. The `(app)/route.tsx`
  * beforeLoad redirects here when `myOrganizations` comes back empty.
  *
  * If the user is in this state but the orgs list IS non-empty (i.e. they have memberships
  * but their `currentOrganizationId` is null for some reason), show a list of orgs to
- * switch into. That's a less common path — primary case is the empty list.
+ * switch into. That's a less common path, primary case is the empty list.
  *
  * No "create a new organization" CTA today: the only `/api/signup` flow requires a fresh
  * email + creates a new User, which doesn't fit a user who's already signed in. A
  * dedicated "create-org-for-existing-user" endpoint can land later as a follow-up.
  */
 export const Route = createFileRoute('/(app)/no-organization')({
+	loader: ({ context }) => context.queryClient.ensureQueryData(myOrganizationsQueryOptions),
 	head: () => ({
 		meta: createPageMeta({
 			title: 'No organization · Offertum',
@@ -31,7 +32,6 @@ export const Route = createFileRoute('/(app)/no-organization')({
 			path: '/no-organization'
 		})
 	}),
-	loader: ({ context }) => context.queryClient.ensureQueryData(myOrganizationsQueryOptions),
 	component: NoOrganizationPage
 });
 
@@ -57,7 +57,7 @@ function NoOrganizationPage() {
 				{organizations.length === 0 ? (
 					<Stack spacing={2}>
 						<Typography variant='body1'>
-							If you were expecting an invitation, check your email — the link expires after 7 days.
+							If you were expecting an invitation, check your email, the link expires after 7 days.
 						</Typography>
 						<Typography variant='body2' color='text.secondary'>
 							Otherwise, sign out and sign up with a different email to start a new organization.

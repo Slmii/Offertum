@@ -44,7 +44,7 @@ const EVENT_LABELS_NL: Record<NotificationEventType, { title: string; descriptio
 	},
 	weekly_digest: {
 		title: 'Wekelijks overzicht',
-		description: 'Maandagochtend 08:00 — samenvatting van open + koude offerteaanvragen.'
+		description: 'Maandagochtend 08:00, samenvatting van open + koude offerteaanvragen.'
 	}
 };
 
@@ -62,14 +62,20 @@ export const Route = createFileRoute('/(app)/settings/notifications')({
 function buildDefaults(
 	preferences: ReadonlyArray<{ eventType: NotificationEventType; channel: NotificationChannel; enabled: boolean }>
 ): NotificationPreferencesForm {
+	// Index the stored preferences once (O(1) lookups) instead of a `.find` per cell.
+	const storedByKey = new Map<string, boolean>();
+	for (const p of preferences) {
+		storedByKey.set(preferenceKey(p.eventType, p.channel), p.enabled);
+	}
+
 	const map: NotificationPreferencesForm = {};
 	for (const event of NOTIFICATION_EVENT_TYPES) {
 		for (const channel of NOTIFICATION_CHANNELS) {
 			if (channel === 'email' && !isEmailChannelAvailable(event)) {
 				continue;
 			}
-			const stored = preferences.find(p => p.eventType === event && p.channel === channel);
-			map[preferenceKey(event, channel)] = stored?.enabled ?? true;
+			const key = preferenceKey(event, channel);
+			map[key] = storedByKey.get(key) ?? true;
 		}
 	}
 	return map;
@@ -83,12 +89,17 @@ function NotificationsSettingsPage() {
 	const onSubmit = (values: NotificationPreferencesForm) => {
 		const input: UpdateNotificationPreferencesInput = {
 			preferences: NOTIFICATION_EVENT_TYPES.flatMap(event =>
-				NOTIFICATION_CHANNELS.filter(channel => channel !== 'email' || isEmailChannelAvailable(event)).map(
-					channel => ({
-						eventType: event,
-						channel,
-						enabled: values[preferenceKey(event, channel)] === true
-					})
+				// Single pass: flatMap emits the row or drops it, instead of filter().map().
+				NOTIFICATION_CHANNELS.flatMap(channel =>
+					channel === 'email' && !isEmailChannelAvailable(event)
+						? []
+						: [
+								{
+									eventType: event,
+									channel,
+									enabled: values[preferenceKey(event, channel)] === true
+								}
+							]
 				)
 			)
 		};
@@ -108,7 +119,7 @@ function NotificationsSettingsPage() {
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
 					Bepaal per gebeurtenis hoe je op de hoogte gehouden wilt worden. Notificaties zijn alleen
-					informatief — niets wordt automatisch verstuurd of geaccepteerd.
+					informatief, niets wordt automatisch verstuurd of geaccepteerd.
 				</Typography>
 			</Box>
 
@@ -128,15 +139,17 @@ function NotificationsSettingsPage() {
 									{EVENT_LABELS_NL[event].description}
 								</Typography>
 								<Stack direction='row' spacing={3}>
-									{NOTIFICATION_CHANNELS.filter(
-										channel => channel !== 'email' || isEmailChannelAvailable(event)
-									).map(channel => (
-										<Switch
-											key={channel}
-											name={preferenceKey(event, channel)}
-											label={CHANNEL_LABELS_NL[channel]}
-										/>
-									))}
+									{NOTIFICATION_CHANNELS.flatMap(channel =>
+										channel === 'email' && !isEmailChannelAvailable(event)
+											? []
+											: [
+													<Switch
+														key={channel}
+														name={preferenceKey(event, channel)}
+														label={CHANNEL_LABELS_NL[channel]}
+													/>
+												]
+									)}
 								</Stack>
 							</Box>
 						))}

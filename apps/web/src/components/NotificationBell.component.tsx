@@ -17,6 +17,8 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
+const NOTIFICATION_DIVIDER = <Divider />;
+
 export function NotificationBell() {
 	const { data } = useSuspenseQuery(notificationsListQueryOptions);
 	const markRead = useMarkNotificationRead();
@@ -60,7 +62,7 @@ export function NotificationBell() {
 						</Typography>
 					</Box>
 				) : (
-					<Stack divider={<Divider />}>
+					<Stack divider={NOTIFICATION_DIVIDER}>
 						{notifications.map(n => (
 							<NotificationRow
 								key={n.id}

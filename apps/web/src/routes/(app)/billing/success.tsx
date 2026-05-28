@@ -37,7 +37,7 @@ function BillingSuccessPage() {
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
 						<Typography variant='body2' color='text.secondary'>
-							Confirming your subscription...
+							Confirming your subscription…
 						</Typography>
 					</Box>
 				)}
@@ -63,7 +63,7 @@ function BillingSuccessPage() {
 						</Typography>
 						<Typography variant='body1' color='text.secondary' sx={{ mb: 4 }}>
 							We received your payment but couldn't refresh your subscription state. It will sync shortly
-							via Stripe webhooks — refresh in a minute.
+							via Stripe webhooks, refresh in a minute.
 						</Typography>
 						<Button variant='outlined' onClick={() => navigate({ to: '/' })}>
 							Go to dashboard

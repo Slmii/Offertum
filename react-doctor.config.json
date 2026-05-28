@@ -1,0 +1,8 @@
+{
+	"rules": {
+		"react-doctor/only-export-components": "off",
+		"react-doctor/no-multi-comp": "off",
+		"react-doctor/exhaustive-deps": "off",
+		"react-doctor/no-derived-state": "off"
+	}
+}

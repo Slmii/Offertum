@@ -10,10 +10,6 @@
  */
 
 const NL_NUMBER_FORMATTER = new Intl.NumberFormat('nl-NL');
-const NL_DECIMAL_FORMATTER = new Intl.NumberFormat('nl-NL', {
-	minimumFractionDigits: 2,
-	maximumFractionDigits: 2
-});
 
 const NL_EUR_FORMATTER = new Intl.NumberFormat('nl-NL', {
 	style: 'currency',
@@ -44,9 +40,6 @@ const NL_PERCENT_FORMATTER = new Intl.NumberFormat('nl-NL', {
 
 /** `1234567` → `"1.234.567"`. Use for any human-readable integer (counts, tokens, etc.). */
 export const toReadableNumber = (value: number): string => NL_NUMBER_FORMATTER.format(value);
-
-/** `1234.56` → `"1.234,56"`. For non-currency decimals. */
-export const toReadableDecimal = (value: number): string => NL_DECIMAL_FORMATTER.format(value);
 
 /** `1234.56` → `"€ 1.234,56"`. For everything user-facing where the currency is EUR. */
 export const toReadableEuro = (value: number): string => NL_EUR_FORMATTER.format(value);

@@ -48,7 +48,7 @@ function AcceptInvitePage() {
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
 						<Typography variant='body2' color='text.secondary'>
-							Accepting invitation...
+							Accepting invitation…
 						</Typography>
 					</Box>
 				)}

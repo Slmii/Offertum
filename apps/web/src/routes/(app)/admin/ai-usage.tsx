@@ -7,7 +7,6 @@ import { toReadableNumber, toReadableUsd, toReadableUsdPrecise } from '@/lib/uti
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import ButtonGroup from '@mui/material/ButtonGroup';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
@@ -21,7 +20,7 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import type { AIUsageRange } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { z } from 'zod';
 
 const SearchSchema = z.object({
@@ -46,13 +45,8 @@ const RANGE_LABELS: Record<AIUsageRange, string> = {
 };
 
 function AIUsagePage() {
-	const navigate = useNavigate();
 	const { range } = Route.useSearch();
 	const { data } = useSuspenseQuery(aiUsageQueryOptions(range));
-
-	const setRange = (next: AIUsageRange) => {
-		void navigate({ to: '/admin/ai-usage', search: { range: next } });
-	};
 
 	return (
 		<Container maxWidth='lg' sx={{ py: 6 }}>
@@ -67,20 +61,23 @@ function AIUsagePage() {
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
 				Aggregated <code>AICall</code> rows. Cost is in USD, computed from each row's prompt + completion tokens
 				against the model rates in <code>apps/api/src/modules/ai-usage/pricing.ts</code>. Estimate badge marks
-				rows whose model isn't in that table — add it there to get a real number.
+				rows whose model isn't in that table: add it there to get a real number.
 			</Typography>
 
-			<ButtonGroup variant='outlined' size='small' sx={{ mb: 3 }}>
+			<Stack direction='row' spacing={1} sx={{ mb: 3 }}>
 				{(Object.keys(RANGE_LABELS) as AIUsageRange[]).map(option => (
-					<Button
+					<Link
 						key={option}
-						variant={option === range ? 'contained' : 'outlined'}
-						onClick={() => setRange(option)}
+						to='/admin/ai-usage'
+						search={{ range: option }}
+						style={{ textDecoration: 'none' }}
 					>
-						{RANGE_LABELS[option]}
-					</Button>
+						<Button size='small' variant={option === range ? 'contained' : 'outlined'}>
+							{RANGE_LABELS[option]}
+						</Button>
+					</Link>
 				))}
-			</ButtonGroup>
+			</Stack>
 
 			<Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
 				<SummaryCard label='Total cost (USD)' value={toReadableUsd(data.summary.totalCostUsd)} />
@@ -91,8 +88,8 @@ function AIUsagePage() {
 
 			{data.summary.unpricedModels.length > 0 && (
 				<Alert severity='warning' sx={{ mb: 3 }}>
-					<strong>{data.summary.unpricedModels.length}</strong> model(s) aren't in the pricing table — costs
-					for those rows are conservative estimates. Add them to{' '}
+					<strong>{data.summary.unpricedModels.length}</strong> model(s) aren't in the pricing table (costs
+					for those rows are conservative estimates). Add them to{' '}
 					<code>apps/api/src/modules/ai-usage/pricing.ts</code>:{' '}
 					{data.summary.unpricedModels.map(m => (
 						<Chip key={m} label={m} size='small' sx={{ ml: 0.5 }} />
@@ -141,7 +138,7 @@ function AIUsagePage() {
 										/>
 									</TableCell>
 									<TableCell>
-										<code style={{ fontSize: '0.7rem' }}>
+										<code style={{ fontSize: '0.75rem' }}>
 											{row.organizationId?.slice(0, 8) ?? '—'}
 										</code>
 									</TableCell>
@@ -151,7 +148,7 @@ function AIUsagePage() {
 									<TableCell align='right'>
 										{toReadableUsdPrecise(row.costUsd)}
 										{row.costIsEstimate && (
-											<Chip label='est' size='small' sx={{ ml: 0.5, fontSize: '0.65rem' }} />
+											<Chip label='est' size='small' sx={{ ml: 0.5, fontSize: 12 }} />
 										)}
 									</TableCell>
 								</TableRow>
@@ -162,7 +159,7 @@ function AIUsagePage() {
 			</TableContainer>
 
 			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
-				Window: {toReadableDateTime(data.rangeStart)} — {toReadableDateTime(data.rangeEnd)}
+				Window: {toReadableDateTime(data.rangeStart)} to {toReadableDateTime(data.rangeEnd)}
 			</Typography>
 		</Container>
 	);

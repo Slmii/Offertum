@@ -2,7 +2,7 @@ import { getAIUsageServer } from '@/lib/api/ai-usage.api';
 import type { AIUsageRange } from '@offertum/shared';
 import { queryOptions } from '@tanstack/react-query';
 
-export const AIUsageKeys = {
+const AIUsageKeys = {
 	all: ['admin', 'ai-usage'] as const,
 	byRange: (range: AIUsageRange) => ['admin', 'ai-usage', range] as const
 };

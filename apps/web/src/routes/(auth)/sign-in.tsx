@@ -11,10 +11,15 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import type { OAuthProviderId } from '@offertum/shared';
-import { createFileRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, redirect, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 export const Route = createFileRoute('/(auth)/sign-in')({
+	beforeLoad: ({ context }) => {
+		if (context.session) {
+			throw redirect({ to: '/' });
+		}
+	},
 	component: SignInPage
 });
 
@@ -26,7 +31,10 @@ function SignInPage() {
 
 	const onSubmit = async ({ email }: SignInForm) => {
 		await signIn.mutateAsync(email);
-		navigate({ to: '/verify-request', search: { email } });
+		// Imperative navigate is correct here: it's inside an async submit handler,
+		// not render. The post-magic-link-request redirect to /verify-request is a
+		// user-action effect; react-doctor's static check can't see the handler scope.
+		void navigate({ to: '/verify-request', search: { email } });
 	};
 
 	const handleOAuth = async (providerId: OAuthProviderId) => {

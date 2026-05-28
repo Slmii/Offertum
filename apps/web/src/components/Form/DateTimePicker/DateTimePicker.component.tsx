@@ -3,8 +3,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { DateTimePicker as MuiDateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { MobileDateTimePicker } from '@mui/x-date-pickers/MobileDateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useState } from 'react';
-import { Controller, useFormContext } from 'react-hook-form';
+import { useState } from 'react';
 import slugify from 'slugify';
 import type { DateTimePickerProps } from './DateTimePicker.types';
 
@@ -44,13 +43,15 @@ export const StandaloneDateTimePicker = ({
 	// MUI v6+ pickers need the parent to reflect onChange into the value prop for
 	// the multi-view flow (year → month → day → hour → minute) to advance. Local
 	// mirror lets the picker progress through views while consumers only see the
-	// committed value via onAccept. Re-syncs from the external value prop on change
-	// (parent's controlled value won, e.g. server-side update on save).
+	// committed value via onAccept. Re-syncs from the external value prop using the
+	// render-phase derived-state pattern (avoids a useEffect re-render cycle).
 	const [internalValue, setInternalValue] = useState<Dayjs | null>(value);
-	useEffect(() => {
-		// eslint-disable-next-line react-hooks/set-state-in-effect
+	const [prevValue, setPrevValue] = useState<Dayjs | null>(value);
+
+	if (value !== prevValue) {
+		setPrevValue(value);
 		setInternalValue(value);
-	}, [value]);
+	}
 
 	const handleInternalChange = (date: Dayjs | null) => {
 		setInternalValue(date);
@@ -125,30 +126,5 @@ export const StandaloneDateTimePicker = ({
 				/>
 			)}
 		</>
-	);
-};
-
-export const DateTimePicker = (props: DateTimePickerProps) => {
-	const { control } = useFormContext();
-
-	return (
-		<Controller
-			name={props.name}
-			control={control}
-			rules={{
-				required: props.required
-			}}
-			render={({ field, fieldState }) => (
-				<StandaloneDateTimePicker
-					{...props}
-					{...field}
-					error={fieldState.error?.message || (props.error ? props.helperText : undefined)}
-					onChange={e => {
-						field.onChange(e);
-						props.onChange?.(e);
-					}}
-				/>
-			)}
-		/>
 	);
 };

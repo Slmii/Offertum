@@ -37,7 +37,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
 
 /**
- * Pricing playbook editor — free-form prose the LLM compile pass turns into typed
+ * Pricing playbook editor, free-form prose the LLM compile pass turns into typed
  * pricing rules (W11.3). Owner-only at the route level mirroring the same gate
  * `/settings/follow-ups` uses; members get bounced to `/` so they
  * don't see a page that won't accept their writes.
@@ -61,7 +61,7 @@ export const Route = createFileRoute('/(app)/settings/pricing-playbook')({
 
 const EXAMPLES = [
 	{
-		title: 'Voorbeeld — generieke MKB',
+		title: 'Voorbeeld, generieke MKB',
 		body: [
 			'Standaard uurtarief: € 75 per uur.',
 			'BTW: 21% op alle diensten en materialen.',
@@ -72,7 +72,7 @@ const EXAMPLES = [
 		].join('\n')
 	},
 	{
-		title: 'Voorbeeld — dienstverlener',
+		title: 'Voorbeeld, dienstverlener',
 		body: [
 			'Mijn uurtarief is € 95 per uur voor consultancy, € 65 voor administratieve werkzaamheden.',
 			'Voor projecten boven de € 5.000 geef ik 5% korting.',
@@ -81,7 +81,7 @@ const EXAMPLES = [
 		].join('\n')
 	},
 	{
-		title: 'Voorbeeld — vakman',
+		title: 'Voorbeeld, vakman',
 		body: [
 			'Loodgieterswerk: € 85/uur. Elektrotechniek: € 95/uur.',
 			'Voorrijkosten € 35 binnen Utrecht-stad, € 0,50/km buiten de stad.',
@@ -129,7 +129,7 @@ function PricingPlaybookSettingsPage() {
 					Prijsregels
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 640 }}>
-					Beschrijf hoe je je prijzen bepaalt — in je eigen woorden, geen vaste vorm. Offertum leest je tekst
+					Beschrijf hoe je je prijzen bepaalt, in je eigen woorden, geen vaste vorm. Offertum leest je tekst
 					en vertaalt 'm naar regels die je offertes automatisch invullen. De voorbeelden hieronder helpen je
 					op weg.
 				</Typography>
@@ -156,7 +156,7 @@ function PricingPlaybookSettingsPage() {
 								<strong>Tip:</strong> schrijf elke prijsregel op een eigen regel of in een eigen zin.
 								Eén uitspraak per regel maakt het makkelijker voor Offertum om je tekst correct te
 								vertalen naar losse regels.{' '}
-								<em>Bijv. "€ 85/uur voor loodgieterswerk en € 95 voor elektra"</em> werkt — maar twee
+								<em>Bijv. "€ 85/uur voor loodgieterswerk en € 95 voor elektra"</em> werkt, maar twee
 								aparte regels geven beter resultaat.
 							</Alert>
 							<Field
@@ -264,7 +264,7 @@ function CompiledRulesPanel() {
 					Regels
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary' }}>
-					Nog geen regels. Sla je tekst hierboven op — Offertum maakt de regels in de achtergrond.
+					Nog geen regels. Sla je tekst hierboven op, Offertum maakt de regels in de achtergrond.
 				</Typography>
 			</Box>
 		);
@@ -385,7 +385,7 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 
 	// Read the current effect value (the most owner-tweaked field) from the
 	// existing blob so the form pre-fills it. Falls back to 0 if the LLM emitted
-	// a non-numeric value somehow (shouldn't happen — the Zod schema rejects it
+	// a non-numeric value somehow (shouldn't happen, the Zod schema rejects it
 	// at compile time).
 	const currentValue = typeof rule.effect.value === 'number' ? rule.effect.value : 0;
 
@@ -443,7 +443,7 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 						<Field
 							name='conditionNarrative'
 							label='AI-conditie (optioneel)'
-							helperText='Vrije tekst waaraan de AI elke offerte toetst voordat de regel wordt toegepast — bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
+							helperText='Vrije tekst waaraan de AI elke offerte toetst voordat de regel wordt toegepast, bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
 							fullWidth
 							multiline
 							minRows={2}
@@ -470,7 +470,7 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 }
 
 /** Human-readable unit hint for the effect's `value` field, used as the input
- * label suffix in the edit modal. Best-effort — returns null for shapes we
+ * label suffix in the edit modal. Best-effort, returns null for shapes we
  * haven't classified yet. */
 function effectUnitFor(effect: Record<string, unknown>): string | null {
 	if (typeof effect.type !== 'string') {

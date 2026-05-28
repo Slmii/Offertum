@@ -17,6 +17,11 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/(app)/')({
+	loader: ({ context }) =>
+		Promise.all([
+			context.queryClient.ensureQueryData(myMembershipQueryOptions),
+			context.queryClient.ensureQueryData(myOrganizationsQueryOptions)
+		]),
 	head: () => {
 		return {
 			meta: createPageMeta({
@@ -26,11 +31,6 @@ export const Route = createFileRoute('/(app)/')({
 			})
 		};
 	},
-	loader: ({ context }) =>
-		Promise.all([
-			context.queryClient.ensureQueryData(myMembershipQueryOptions),
-			context.queryClient.ensureQueryData(myOrganizationsQueryOptions)
-		]),
 	component: HomePage,
 	errorComponent: SectionError
 });

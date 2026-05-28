@@ -9,10 +9,7 @@ import type { ReplyDraftStatus } from '@offertum/shared';
  * lock (permanent). Opp.status is informational and does not affect editability —
  * see the API helper's docblock for the reasoning.
  */
-export interface ReplyDraftEditabilityInput {
-	draftStatus: ReplyDraftStatus | null;
-}
 
-export function isReplyDraftEditable(input: ReplyDraftEditabilityInput): boolean {
-	return input.draftStatus !== 'sent';
+export function isReplyDraftEditable(draftStatus?: ReplyDraftStatus): boolean {
+	return draftStatus !== 'sent';
 }

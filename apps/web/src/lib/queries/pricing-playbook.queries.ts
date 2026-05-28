@@ -3,7 +3,7 @@ import { getPricingPlaybookServer, listPricingRulesServer } from '@/lib/api/pric
 import type { PricingPlaybook, PricingRule, UpdatePricingPlaybookInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const PricingPlaybookKeys = {
+const PricingPlaybookKeys = {
 	all: ['pricing-playbook'] as const,
 	root: ['pricing-playbook', 'root'] as const,
 	rules: ['pricing-playbook', 'rules'] as const

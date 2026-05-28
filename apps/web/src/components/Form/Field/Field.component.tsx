@@ -64,7 +64,7 @@ export function StandaloneField({
 		return trimmedValue;
 	};
 
-	const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+	const forwardChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
 		if (!maxLength) {
 			onChange?.(event);
 			return;
@@ -131,7 +131,7 @@ export function StandaloneField({
 							>
 								{isLoading && <CircularProgress size={20} />}
 								{endElement && cloneElement(endElement)}
-								{maxLength && (
+								{maxLength != null && maxLength > 0 && (
 									<FormHelperText
 										sx={{
 											color: 'text.secondary',
@@ -149,7 +149,7 @@ export function StandaloneField({
 			inputRef={ref}
 			helperText={error || helperText}
 			{...field}
-			onChange={handleChange}
+			onChange={forwardChange}
 			onKeyDown={onKeyDown}
 		/>
 	);

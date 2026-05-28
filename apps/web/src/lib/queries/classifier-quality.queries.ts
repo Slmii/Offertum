@@ -2,7 +2,7 @@ import { getClassifierQualityServer } from '@/lib/api/classifier-quality.api';
 import type { AIUsageRange } from '@offertum/shared';
 import { queryOptions } from '@tanstack/react-query';
 
-export const ClassifierQualityKeys = {
+const ClassifierQualityKeys = {
 	all: ['admin', 'classifier-quality'] as const,
 	byRange: (range: AIUsageRange) => ['admin', 'classifier-quality', range] as const
 };

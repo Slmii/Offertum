@@ -1,9 +1,9 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
-import { SectionError } from '@/components/SectionError.component';
 import { Field, StandaloneField } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
+import { SectionError } from '@/components/SectionError.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import {
@@ -65,7 +65,7 @@ import {
 } from '@offertum/shared';
 import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -139,7 +139,8 @@ function OpportunitiesIndexPage() {
 
 	useEffect(() => {
 		// Local input stabilised → reflect into URL. `replace: true` so history doesn't
-		// grow per keystroke.
+		// grow per keystroke. Guard prevents spurious navigations when other URL params
+		// (status, sort) change while the search term is already synced.
 		if ((urlSearch.search ?? '') === debouncedSearch) {
 			return;
 		}
@@ -148,8 +149,7 @@ function OpportunitiesIndexPage() {
 			search: { ...urlSearch, search: debouncedSearch || undefined },
 			replace: true
 		});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [debouncedSearch]);
+	}, [debouncedSearch, navigate, urlSearch]);
 
 	const initial = useSuspenseQuery(
 		opportunitiesListQueryOptions(activeStatus, urlSearchTerm || null, dismissedFilter, ownerFilter, assigneeFilter)
@@ -557,7 +557,7 @@ function DismissDialog({
 			<DialogContent>
 				{hasSentReply && (
 					<Alert severity='warning' sx={{ mb: 2 }}>
-						Je hebt al een antwoord verstuurd — afwijzen markeert deze offerteaanvraag alleen intern als
+						Je hebt al een antwoord verstuurd, maar afwijzen markeert deze offerteaanvraag alleen intern als
 						geen offerte. Het verzonden e-mailbericht blijft staan.
 					</Alert>
 				)}
@@ -649,7 +649,7 @@ function EmptyState({ filtered, showDismissed }: { filtered: boolean; showDismis
 				Nog geen offerteaanvragen.
 			</Typography>
 			<Typography variant='body2' color='text.secondary'>
-				Zodra er een binnenkomt op je verbonden mailbox, zie je 'm hier — meestal binnen een paar seconden.
+				Zodra er een binnenkomt op je verbonden mailbox, zie je 'm hier, meestal binnen een paar seconden.
 			</Typography>
 		</Paper>
 	);
@@ -678,7 +678,7 @@ function LoadMoreButton({
 }) {
 	const queryClient = useQueryClient();
 	const [cursor, setCursor] = useState<string | null>(initialCursor);
-	const [extra, setExtra] = useState<Opportunity[]>([]);
+	const extraRef = useRef<Opportunity[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -694,8 +694,8 @@ function LoadMoreButton({
 			const next = await listOpportunitiesServer({
 				data: { cursor, status, dismissed, owner, assignee, limit: 25 }
 			});
-			const accumulated = [...initialList, ...extra, ...next.opportunities];
-			setExtra(prev => [...prev, ...next.opportunities]);
+			extraRef.current = [...extraRef.current, ...next.opportunities];
+			const accumulated = [...initialList, ...extraRef.current];
 			setCursor(next.nextCursor);
 			// Mirror the appended rows into the React Query cache so a re-mount of the
 			// route doesn't lose the user's "Load more" history.

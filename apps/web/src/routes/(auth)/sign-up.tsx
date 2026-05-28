@@ -9,9 +9,14 @@ import Container from '@mui/material/Container';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import { createFileRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, redirect, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/(auth)/sign-up')({
+	beforeLoad: ({ context }) => {
+		if (context.session) {
+			throw redirect({ to: '/' });
+		}
+	},
 	component: SignUpPage
 });
 
@@ -21,7 +26,7 @@ function SignUpPage() {
 
 	const onSubmit = async ({ email, companyName }: SignUpForm) => {
 		await signUp.mutateAsync({ email, companyName });
-		navigate({ to: '/verify-request', search: { email } });
+		void navigate({ to: '/verify-request', search: { email } });
 	};
 
 	const errorMessage =

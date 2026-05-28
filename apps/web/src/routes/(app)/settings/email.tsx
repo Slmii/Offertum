@@ -53,7 +53,7 @@ function EmailSettingsPage() {
 
 	// OAuth callback params (`connected=1`, `error=…`, `adminConsentUrl=…`) are one-shot
 	// signals tied to the just-completed handshake. Capture them into local state on mount
-	// so the success/error UI survives — then strip them from the URL so a refresh doesn't
+	// so the success/error UI survives, then strip them from the URL so a refresh doesn't
 	// keep the alerts visible. `replace: true` keeps the cleaned URL out of the browser history.
 	const [oauthFeedback] = useState(() => ({
 		connected: search.connected,
@@ -67,7 +67,7 @@ function EmailSettingsPage() {
 		}
 
 		void navigate({ to: '/settings/email', search: {}, replace: true });
-		// Run once on mount only — we intentionally do NOT depend on `search` because the
+		// Run once on mount only, we intentionally do NOT depend on `search` because the
 		// effect's job is to clear the URL once, not to react to ongoing changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -152,7 +152,7 @@ function EmailSettingsPage() {
 						useDisconnect={useDisconnectMicrosoft}
 						disconnectNote={
 							<>
-								Use <strong>Disconnect</strong> above to revoke our access — that's what stops Offertum
+								Use <strong>Disconnect</strong> above to revoke our access, that's what stops Offertum
 								from reading your mailbox. To also remove Offertum from your Microsoft account's app
 								list, visit{' '}
 								<MuiLink
@@ -162,7 +162,7 @@ function EmailSettingsPage() {
 								>
 									account.microsoft.com/privacy
 								</MuiLink>{' '}
-								— this is optional and doesn't disconnect us on its own.
+								this is optional and doesn't disconnect us on its own.
 							</>
 						}
 					/>
@@ -185,14 +185,14 @@ interface ProviderPanelProps {
 	useDisconnect: () => { mutate: () => void; isPending: boolean };
 	// Optional caption shown under the Disconnect/Reconnect buttons. Used by the Microsoft
 	// panel to nudge users at Entra's user-revoke page since Microsoft offers no
-	// programmatic revoke endpoint — clearing the local row removes our access, but the
+	// programmatic revoke endpoint, clearing the local row removes our access, but the
 	// grant itself lingers in the user's Microsoft account until they delete it there.
 	disconnectNote?: React.ReactNode;
 }
 
 /**
  * One provider section. Owns its own connect/disconnect lifecycle. Same shape for
- * Gmail and Microsoft — the only differences are the labels, the connect URL, and
+ * Gmail and Microsoft, the only differences are the labels, the connect URL, and
  * the disconnect mutation.
  */
 function ProviderPanel({
@@ -265,7 +265,7 @@ function ProviderPanel({
 /**
  * Surfaced when a user in a work tenant tries to connect Microsoft and Entra rejects the
  * request because their admin has disabled user-level consent for Mail.* scopes. The user
- * can't fix this themselves — their IT admin has to approve the app once for the whole
+ * can't fix this themselves, their IT admin has to approve the app once for the whole
  * tenant. We provide a copyable link they can forward to that admin.
  */
 function AdminConsentAlert({ adminConsentUrl }: { adminConsentUrl: string }) {
@@ -290,7 +290,7 @@ function AdminConsentAlert({ adminConsentUrl }: { adminConsentUrl: string }) {
 			</Typography>
 			<Typography variant='body2' sx={{ mb: 2 }}>
 				Microsoft requires a one-time admin approval before anyone in your company can connect their mailbox.
-				Forward this link to your IT admin — once they approve, you and your colleagues can connect your Outlook
+				Forward this link to your IT admin, once they approve, you and your colleagues can connect your Outlook
 				mailboxes normally.
 			</Typography>
 			<Box
@@ -323,7 +323,7 @@ function billingBlockedCopy(state: BillingState, isOwner: boolean): string {
 		case 'canceled':
 			return `Your subscription has been canceled. ${ownerSuffix}`;
 		case 'unpaid':
-			return `Your subscription is unpaid — update your payment method first. ${ownerSuffix}`;
+			return `Your subscription is unpaid, update your payment method first. ${ownerSuffix}`;
 		case 'paused':
 			return `Your subscription is paused. ${isOwner ? 'Resume it to connect a mailbox.' : 'Ask your owner to resume the subscription.'}`;
 		case 'incomplete':

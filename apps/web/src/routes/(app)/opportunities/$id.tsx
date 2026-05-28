@@ -106,7 +106,7 @@ function OpportunityDetailPage() {
 	// gates the editor; courtesy follow-ups on a WON/LOST deal stay editable until
 	// they're sent. `null` draftStatus means "no draft generated yet" → editable
 	// (caller decides); the detail page only renders the editor once a draft exists.
-	const isDraftEditable = isReplyDraftEditable({ draftStatus: replyDraft?.status ?? null });
+	const isDraftEditable = isReplyDraftEditable(replyDraft?.status);
 	const [body, setBody] = useState(replyDraft?.body ?? '');
 	const debouncedBody = useDebouncedValue(body, AUTOSAVE_DEBOUNCE_MS);
 	// Track the last body we PUT to the server so we don't refire the mutation on
@@ -214,7 +214,7 @@ function OpportunityDetailPage() {
 						</Button>
 					}
 				>
-					Vertel ons in een paar zinnen hoe je schrijft — dan klinken concept-antwoorden zoals jou. Nu
+					Vertel ons in een paar zinnen hoe je schrijft, dan klinken concept-antwoorden zoals jou. Nu
 					gebruiken we een neutrale standaardtoon.
 				</Alert>
 			)}
@@ -368,7 +368,7 @@ function OpportunityDetailPage() {
 					) : opportunity.dismissedAt ? (
 						<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 							<Typography variant='body2' color='text.secondary'>
-								Deze offerteaanvraag is afgewezen — er wordt geen concept-antwoord opgesteld.
+								Deze offerteaanvraag is afgewezen: er wordt geen concept-antwoord opgesteld.
 							</Typography>
 						</Paper>
 					) : (
@@ -718,6 +718,7 @@ function ExtractedFieldsPanel({
 	// regenerate / mutation success picks up the canonical value. Text + dates commit
 	// on blur (or change for dates); urgency commits on change.
 	const [address, setAddress] = useState<string>(opportunity.address ?? '');
+
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setAddress(opportunity.address ?? '');
@@ -838,7 +839,7 @@ function ExtractedFieldsPanel({
 						Onderdelen
 					</Typography>
 					{opportunity.deliverableHints.length === 0 ? (
-						<Typography variant='body2'>—</Typography>
+						<Typography variant='body2'>–</Typography>
 					) : (
 						<Stack direction='row' spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>
 							{opportunity.deliverableHints.map(hint => (
@@ -911,6 +912,7 @@ function AttachmentsPanel({
 							type='file'
 							hidden
 							multiple
+							aria-label='Bijlage uploaden'
 							onChange={event => {
 								const file = event.target.files?.[0];
 								if (file) {
@@ -1008,12 +1010,22 @@ function TimelinePanel({
 	// draft's RFC `Message-Id` from Gmail/Graph and parsing the inbound's
 	// `In-Reply-To` header — schema + send-path work we've deferred). Heuristic
 	// matches the user-visible result for ~all real conversations.
+	// Build an O(1)-lookup map of sent drafts keyed by id, then iterate the pre-filtered
+	// sent-only list (newest-first, same order as `drafts`) per reply instead of calling
+	// .find() inside the loop — O(n+m) instead of O(n*m).
+	const sentDrafts = drafts.filter(d => d.status === 'sent' && d.sentAt !== null);
 	const repliesByDraftId = new Map<string, CustomerReplyEntry[]>();
 	const orphanReplies: CustomerReplyEntry[] = [];
 	for (const reply of customerReplies) {
-		// `drafts` is newest-first; the FIRST sent draft whose sentAt < receivedAt
-		// is the most-recent sent draft that predates the reply.
-		const target = drafts.find(d => d.status === 'sent' && d.sentAt !== null && d.sentAt < reply.receivedAt);
+		// `sentDrafts` is newest-first; the first entry whose sentAt < receivedAt is
+		// the most-recent sent draft that predates the reply.
+		let target: (typeof sentDrafts)[0] | undefined;
+		for (const d of sentDrafts) {
+			if (d.sentAt !== null && d.sentAt < reply.receivedAt) {
+				target = d;
+				break;
+			}
+		}
 		if (target) {
 			const existing = repliesByDraftId.get(target.id);
 			if (existing) {

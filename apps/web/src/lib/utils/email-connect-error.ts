@@ -9,7 +9,7 @@
  * back to `UNKNOWN_COPY`.
  */
 
-export const EMAIL_CONNECT_ERROR_COPY: Record<string, { title: string; description: string }> = {
+const EMAIL_CONNECT_ERROR_COPY: Record<string, { title: string; description: string }> = {
 	oauth_state_mismatch: {
 		title: 'Your connection got mixed up.',
 		description:
@@ -51,7 +51,7 @@ export const EMAIL_CONNECT_ERROR_COPY: Record<string, { title: string; descripti
 	}
 } as const;
 
-export const UNKNOWN_EMAIL_CONNECT_ERROR_COPY: { title: string; description: string } = {
+const UNKNOWN_EMAIL_CONNECT_ERROR_COPY: { title: string; description: string } = {
 	title: 'Something went wrong while connecting your mailbox.',
 	description: 'Try connecting again. If it keeps failing, contact support.'
 };

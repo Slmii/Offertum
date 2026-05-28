@@ -4,7 +4,7 @@ import { TeamKeys } from '@/lib/queries/team.queries';
 import type { TonePlaybook, UpdateTonePlaybookInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const TonePlaybookKeys = {
+const TonePlaybookKeys = {
 	all: ['me', 'tone-playbook'] as const
 };
 

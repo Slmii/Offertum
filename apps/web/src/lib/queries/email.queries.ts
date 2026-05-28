@@ -3,7 +3,7 @@ import { api } from '@/lib/api/client';
 import type { OkResponse } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const EmailKeys = {
+const EmailKeys = {
 	gmailStatus: ['email', 'gmail', 'status'] as const,
 	microsoftStatus: ['email', 'microsoft', 'status'] as const
 };

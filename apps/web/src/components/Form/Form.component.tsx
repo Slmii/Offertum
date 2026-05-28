@@ -1,7 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import FormGroup from '@mui/material/FormGroup';
-import { useEffect } from 'react';
-import { type FieldValues, FormProvider, type SubmitHandler, useForm, useFormContext } from 'react-hook-form';
+import { type FieldValues, FormProvider, type SubmitHandler, useForm } from 'react-hook-form';
 import type { FormProps } from './Form.types';
 
 export function Form<T extends FieldValues>({
@@ -50,23 +49,3 @@ export function Form<T extends FieldValues>({
 		</FormProvider>
 	);
 }
-
-export const FormListener = <T extends FieldValues>({
-	onValid,
-	onUnsaved
-}: {
-	onValid?: (isValid: boolean) => void;
-	onUnsaved?: (hasUnsavedChanges: boolean) => void;
-}) => {
-	const { formState } = useFormContext<T>();
-
-	useEffect(() => {
-		onValid?.(formState.isValid ?? false);
-	}, [formState, onValid]);
-
-	useEffect(() => {
-		onUnsaved?.(formState.isDirty && !formState.isSubmitSuccessful && !formState.isSubmitting);
-	}, [formState, onUnsaved]);
-
-	return null;
-};

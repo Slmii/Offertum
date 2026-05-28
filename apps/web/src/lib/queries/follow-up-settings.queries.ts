@@ -3,7 +3,7 @@ import { getFollowUpSettingsServer } from '@/lib/api/follow-up-settings.api';
 import type { FollowUpSettings, UpdateFollowUpSettingsInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const FollowUpSettingsKeys = {
+const FollowUpSettingsKeys = {
 	all: ['me', 'follow-up-settings'] as const
 };
 

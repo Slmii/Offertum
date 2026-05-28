@@ -1,4 +1,4 @@
-import { createTheme, type Theme } from '@mui/material/styles';
+import { createTheme } from '@mui/material/styles';
 
 const fonts = {
 	body: '"Inter", system-ui, -apple-system, sans-serif',
@@ -32,9 +32,3 @@ export const theme = createTheme({
 		}
 	}
 });
-
-export const transition = (theme: Theme) => {
-	return theme.transitions.create('all', {
-		duration: 250
-	});
-};

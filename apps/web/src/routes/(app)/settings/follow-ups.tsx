@@ -21,7 +21,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
  * Per-org follow-up cadence + cap. Owner-only at the route level (mirrors the
  * API guard); members get bounced back to `/` so they don't see a page
  * that won't accept their writes.
- * Form composition: every input — `cadenceDays`, `maxCount`, and the preset dropdown —
+ * Form composition: every input, `cadenceDays`, `maxCount`, and the preset dropdown —
  * goes through `react-hook-form` via the in-house `<Field>` / `<Select>` components.
  * `cadencePreset` lives in the form state (Zod schema marks it as a UI-only string)
  * so picking a preset can call `setValue('cadenceDays', N)` and stay in sync.
@@ -54,7 +54,7 @@ function FollowUpsSettingsPage() {
 	const [savedFlash, setSavedFlash] = useState(false);
 
 	const onSubmit = (values: FollowUpSettingsForm) => {
-		// `cadencePreset` is UI-only — drop it before sending the API payload.
+		// `cadencePreset` is UI-only, drop it before sending the API payload.
 		update.mutate(
 			{
 				cadenceDays: values.cadenceDays,
@@ -78,7 +78,7 @@ function FollowUpsSettingsPage() {
 				</Typography>
 				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
 					Offertum kan automatisch een korte herinnering schrijven als een klant na je antwoord stil blijft.
-					Jij beoordeelt en verstuurt — niets gaat zonder jouw klik de deur uit.
+					Jij beoordeelt en verstuurt, niets gaat zonder jouw klik de deur uit.
 				</Typography>
 			</Box>
 
@@ -204,7 +204,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Offertum de
 					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
-					— je houdt opportunities dan zelf bij.
+					je houdt opportunities dan zelf bij.
 				</Typography>
 				<Stack direction='row' spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>

@@ -3,7 +3,7 @@ import { getNotificationPreferencesServer, listNotificationsServer } from '@/lib
 import type { NotificationPreferencesResponse, UpdateNotificationPreferencesInput } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export const NotificationsKeys = {
+const NotificationsKeys = {
 	list: ['me', 'notifications'] as const,
 	preferences: ['me', 'notification-preferences'] as const
 };
