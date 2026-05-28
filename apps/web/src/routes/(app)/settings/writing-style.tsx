@@ -188,6 +188,7 @@ function WritingStyleBody({
 			/>
 			<Stack
 				direction='row'
+				useFlexGap
 				spacing={2}
 				sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
 			>
@@ -195,7 +196,7 @@ function WritingStyleBody({
 					{trimmedLength} / {TONE_PLAYBOOK_MAX_LENGTH} tekens
 					{savedAt && ` · Laatst opgeslagen ${toReadableDateTime(savedAt)}`}
 				</Typography>
-				<Stack direction='row' spacing={1}>
+				<Stack direction='row' useFlexGap spacing={1}>
 					{serverText !== null && (
 						<Button variant='text' color='inherit' onClick={onClear} disabled={isSaving}>
 							Wissen

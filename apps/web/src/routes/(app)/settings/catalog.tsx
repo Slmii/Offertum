@@ -86,7 +86,7 @@ function CatalogSettingsPage() {
 					</Button>
 				</Paper>
 			) : (
-				<Stack spacing={2}>
+				<Stack useFlexGap spacing={2}>
 					{data.items.map(item => (
 						<CatalogItemRow
 							key={item.id}
@@ -114,9 +114,9 @@ interface CatalogItemRowProps {
 function CatalogItemRow({ item, onEdit, onDelete }: CatalogItemRowProps) {
 	return (
 		<Paper variant='outlined' sx={{ p: 4, borderRadius: 2, opacity: item.active ? 1 : 0.6 }}>
-			<Stack direction='row' spacing={3} sx={{ alignItems: 'center' }}>
+			<Stack direction='row' useFlexGap spacing={3} sx={{ alignItems: 'center' }}>
 				<Box sx={{ flexGrow: 1, minWidth: 0 }}>
-					<Stack direction='row' spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
+					<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
 						<Typography variant='subtitle2'>{item.name}</Typography>
 						{!item.active && <Chip label='Inactief' size='small' />}
 						{item.sku && <Chip label={`SKU: ${item.sku}`} size='small' variant='outlined' />}
@@ -131,7 +131,7 @@ function CatalogItemRow({ item, onEdit, onDelete }: CatalogItemRowProps) {
 						{item.defaultVatRate}%
 					</Typography>
 				</Box>
-				<Stack direction='row' spacing={1} sx={{ flexShrink: 0 }}>
+				<Stack direction='row' useFlexGap spacing={1} sx={{ flexShrink: 0 }}>
 					<Button size='small' variant='outlined' onClick={onEdit}>
 						Bewerken
 					</Button>
@@ -200,10 +200,10 @@ function CatalogItemDialog({ mode, item, onClose }: CatalogItemDialogProps) {
 			<Form<CatalogItemForm> action={handleSubmit} schema={CatalogItemSchema} defaultValues={defaultValues}>
 				<DialogTitle>{mode === 'create' ? 'Nieuw catalogusitem' : 'Catalogusitem bewerken'}</DialogTitle>
 				<DialogContent dividers>
-					<Stack spacing={3} sx={{ pt: 1 }}>
+					<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
 						<Field name='name' label='Naam' fullWidth autoFocus />
 						<Field name='description' label='Omschrijving (optioneel)' fullWidth multiline />
-						<Stack direction='row' spacing={2}>
+						<Stack direction='row' useFlexGap spacing={2}>
 							<Field name='defaultPriceEur' label='Prijs (€)' fullWidth />
 							<Select name='unit' label='Eenheid' options={UNIT_OPTIONS} fullWidth />
 							<Field name='defaultVatRate' label='BTW (%)' type='number' fullWidth />

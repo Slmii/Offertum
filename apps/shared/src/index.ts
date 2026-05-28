@@ -30,6 +30,8 @@ export * from './business-details.js';
 export * from './catalog-items.js';
 export * from './opportunities.js';
 export * from './pricing-playbook.js';
+export * from './quote-drafts.js';
+export * from './quote-line-items.js';
 export * from './reply-drafts.js';
 export * from './team.js';
 export * from './tone-playbook.js';

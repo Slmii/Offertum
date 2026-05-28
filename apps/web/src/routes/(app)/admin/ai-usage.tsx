@@ -64,7 +64,7 @@ function AIUsagePage() {
 				rows whose model isn't in that table: add it there to get a real number.
 			</Typography>
 
-			<Stack direction='row' spacing={1} sx={{ mb: 3 }}>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3 }}>
 				{(Object.keys(RANGE_LABELS) as AIUsageRange[]).map(option => (
 					<Link
 						key={option}
@@ -79,7 +79,7 @@ function AIUsagePage() {
 				))}
 			</Stack>
 
-			<Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
+			<Stack direction={{ xs: 'column', md: 'row' }} useFlexGap spacing={2} sx={{ mb: 3 }}>
 				<SummaryCard label='Total cost (USD)' value={toReadableUsd(data.summary.totalCostUsd)} />
 				<SummaryCard label='Total calls' value={toReadableNumber(data.summary.totalCalls)} />
 				<SummaryCard label='Prompt tokens' value={toReadableNumber(data.summary.totalPromptTokens)} />

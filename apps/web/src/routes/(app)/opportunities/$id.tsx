@@ -153,7 +153,7 @@ function OpportunityDetailPage() {
 	return (
 		<Container maxWidth='lg' sx={{ py: 6 }}>
 			<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
-				<Stack direction='row' spacing={2} sx={{ alignItems: 'baseline' }}>
+				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'baseline' }}>
 					<MuiBackToList />
 					<Typography variant='h1' sx={{ fontSize: 24 }}>
 						{opportunityCustomerLabel(opportunity)} · {opportunity.requestType}
@@ -161,7 +161,7 @@ function OpportunityDetailPage() {
 				</Stack>
 				<BackToHomeButton />
 			</Box>
-			<Stack direction='row' spacing={1} sx={{ alignItems: 'center', mb: 3, flexWrap: 'wrap' }}>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', mb: 3, flexWrap: 'wrap' }}>
 				<Box
 					sx={{
 						width: 10,
@@ -248,14 +248,20 @@ function OpportunityDetailPage() {
 				</Alert>
 			)}
 
-			<Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
+			<Stack direction={{ xs: 'column', md: 'row' }} useFlexGap spacing={3}>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
 					<Stack
 						direction='row'
+						useFlexGap
 						spacing={1}
 						sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
 					>
-						<Stack direction='row' spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+						<Stack
+							direction='row'
+							useFlexGap
+							spacing={1}
+							sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
+						>
 							<Typography variant='h2' sx={{ fontSize: 18 }}>
 								Concept-antwoord
 							</Typography>
@@ -316,6 +322,7 @@ function OpportunityDetailPage() {
 							{replyDraft.status === 'sent' && replyDraft.sentAt ? (
 								<Stack
 									direction='row'
+									useFlexGap
 									spacing={1}
 									sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
 								>
@@ -338,6 +345,7 @@ function OpportunityDetailPage() {
 							) : (
 								<Stack
 									direction='row'
+									useFlexGap
 									spacing={1}
 									sx={{ mt: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
 								>
@@ -509,6 +517,7 @@ function DraftEditor({
 			/>
 			<Stack
 				direction='row'
+				useFlexGap
 				spacing={1}
 				sx={{ mt: 1, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
 			>
@@ -606,7 +615,7 @@ function SendConfirmDialog({
 						<Typography variant='caption' color='text.secondary'>
 							Bijlagen ({attachments.length})
 						</Typography>
-						<Stack direction='row' spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
+						<Stack direction='row' useFlexGap spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
 							{attachments.map(attachment => (
 								<Chip
 									key={attachment.id}
@@ -766,7 +775,7 @@ function ExtractedFieldsPanel({
 
 	return (
 		<Paper variant='outlined' sx={{ p: 2 }}>
-			<Stack spacing={2.5}>
+			<Stack useFlexGap spacing={2.5}>
 				<ExtractedField label='Klant' value={opportunity.customerName} />
 				<ExtractedField label='E-mail' value={opportunity.customerEmail} />
 				<StandaloneField
@@ -842,7 +851,7 @@ function ExtractedFieldsPanel({
 					{opportunity.deliverableHints.length === 0 ? (
 						<Typography variant='body2'>–</Typography>
 					) : (
-						<Stack direction='row' spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>
+						<Stack direction='row' useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>
 							{opportunity.deliverableHints.map(hint => (
 								<Chip key={hint} size='small' label={hint} />
 							))}
@@ -902,7 +911,12 @@ function AttachmentsPanel({
 
 	return (
 		<Paper variant='outlined' sx={{ p: 2, mt: 2 }}>
-			<Stack direction='row' spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+			<Stack
+				direction='row'
+				useFlexGap
+				spacing={1}
+				sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
+			>
 				<Typography variant='subtitle2'>
 					Bijlagen{attachments.length > 0 ? ` (${attachments.length})` : ''}
 				</Typography>
@@ -940,7 +954,7 @@ function AttachmentsPanel({
 					Geen bijlagen toegevoegd.
 				</Typography>
 			) : (
-				<Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+				<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
 					{attachments.map(attachment => (
 						<Chip
 							key={attachment.id}
@@ -1068,7 +1082,7 @@ function TimelinePanel({
 			<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
 				Tijdlijn ({totalEntries})
 			</Typography>
-			<Stack spacing={1}>
+			<Stack useFlexGap spacing={1}>
 				{merged.map(entry => {
 					if (entry.kind === 'draft') {
 						return (
@@ -1176,6 +1190,16 @@ function describeTimelineEvent(event: OpportunityTimelineEvent): TimelineEventCo
 				headline: `Aanvraag binnengekomen via ${event.mailboxEmail}`,
 				detail: event.mailboxOwnerName ? `Mailbox van ${event.mailboxOwnerName}` : null
 			};
+		case 'quote_created':
+			return {
+				chipLabel: 'Offerte',
+				chipColor: 'success',
+				headline:
+					event.lineCount === 1
+						? 'Offerte opgesteld (1 regel)'
+						: `Offerte opgesteld (${event.lineCount} regels)`,
+				detail: null
+			};
 	}
 }
 
@@ -1214,6 +1238,7 @@ function TimelineEventEntry({ event }: { event: OpportunityTimelineEvent }) {
 		<Paper variant='outlined' sx={{ px: 2, py: 1.25, bgcolor: 'background.default' }}>
 			<Stack
 				direction='row'
+				useFlexGap
 				spacing={1}
 				sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 			>
@@ -1253,6 +1278,7 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 			<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
 				<Stack
 					direction='row'
+					useFlexGap
 					spacing={1}
 					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 				>
@@ -1317,6 +1343,7 @@ function ReplyDraftHistoryEntry({
 			<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
 				<Stack
 					direction='row'
+					useFlexGap
 					spacing={1}
 					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 				>
@@ -1371,7 +1398,7 @@ function ReplyDraftHistoryEntry({
 						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
 							Bijlagen
 						</Typography>
-						<Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+						<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
 							{draft.attachments.map(attachment => (
 								<Chip
 									key={attachment.id}
@@ -1392,7 +1419,7 @@ function ReplyDraftHistoryEntry({
 						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
 							Antwoorden van de klant op deze versie
 						</Typography>
-						<Stack spacing={0.5}>
+						<Stack useFlexGap spacing={0.5}>
 							{replies
 								.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
 								.map(reply => (

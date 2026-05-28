@@ -157,7 +157,7 @@ function BusinessDetailsSettingsPage() {
 						defaultPaymentTermsDays: data.defaultPaymentTermsDays
 					}}
 				>
-					<Stack spacing={4}>
+					<Stack useFlexGap spacing={4}>
 						{!isOwner && (
 							<Alert severity='info'>
 								Alleen eigenaren kunnen bedrijfsgegevens, logo en briefpapier aanpassen.
@@ -165,12 +165,12 @@ function BusinessDetailsSettingsPage() {
 						)}
 
 						<Field name='name' label='Bedrijfsnaam' fullWidth disabled={!isOwner} />
-						<Stack direction='row' spacing={2}>
+						<Stack direction='row' useFlexGap spacing={2}>
 							<Field name='companyRegistrationNumber' label='KvK-nummer' fullWidth disabled={!isOwner} />
 							<Field name='companyVatNumber' label='BTW-nummer' fullWidth disabled={!isOwner} />
 						</Stack>
 						<Field name='companyAddress' label='Adres' fullWidth multiline disabled={!isOwner} />
-						<Stack direction='row' spacing={2}>
+						<Stack direction='row' useFlexGap spacing={2}>
 							<Field name='companyPhone' label='Telefoonnummer' fullWidth disabled={!isOwner} />
 							<Field name='companyWebsite' label='Website' fullWidth disabled={!isOwner} />
 						</Stack>
@@ -198,7 +198,7 @@ function BusinessDetailsSettingsPage() {
 						{isOwner && savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
 
 						{isOwner && (
-							<Stack direction='row' spacing={2} sx={{ justifyContent: 'flex-end' }}>
+							<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
 								<Button type='submit' variant='contained' disabled={update.isPending}>
 									{update.isPending ? 'Opslaan…' : 'Opslaan'}
 								</Button>
@@ -209,7 +209,7 @@ function BusinessDetailsSettingsPage() {
 			</Paper>
 
 			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4 }}>
-				<Stack spacing={4}>
+				<Stack useFlexGap spacing={4}>
 					<Box>
 						<Typography variant='h6' component='h2' sx={{ mb: 1 }}>
 							Logo en briefpapier
@@ -219,7 +219,7 @@ function BusinessDetailsSettingsPage() {
 						</Typography>
 					</Box>
 
-					<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+					<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={2}>
 						<BusinessAssetControl
 							label='Logo'
 							previewAlt='Logo'
@@ -269,7 +269,7 @@ function BusinessDetailsSettingsPage() {
 
 			{isOwner && (
 				<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4, borderColor: 'error.light' }}>
-					<Stack spacing={3}>
+					<Stack useFlexGap spacing={3}>
 						<Box>
 							<Typography variant='h6' component='h2' sx={{ color: 'error.main', mb: 1 }}>
 								Danger zone
@@ -335,7 +335,7 @@ function BusinessAssetControl({
 }: BusinessAssetControlProps) {
 	return (
 		<Box sx={{ p: 3, flex: 1, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-			<Stack spacing={2}>
+			<Stack useFlexGap spacing={2}>
 				<Typography variant='subtitle2'>{label}</Typography>
 				{hasAsset ? (
 					<Box
@@ -370,7 +370,7 @@ function BusinessAssetControl({
 					</Typography>
 				)}
 				{canEdit && (
-					<Stack direction='row' spacing={1}>
+					<Stack direction='row' useFlexGap spacing={1}>
 						<Button variant='outlined' component='label' disabled={isPending}>
 							Upload
 							<input

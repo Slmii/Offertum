@@ -60,7 +60,7 @@ function HomePage() {
 					Quote management for SMBs
 				</Typography>
 
-				<Stack spacing={2}>
+				<Stack useFlexGap spacing={2}>
 					<Typography variant='body1' sx={{ mb: 1 }}>
 						Signed in as <strong>{user.email}</strong>
 					</Typography>

@@ -2,6 +2,7 @@ import { AI_CLIENT } from '@/modules/ai/clients/ai-client.interface';
 import { OpenAIClient } from '@/modules/ai/clients/openai-client.service';
 import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
+import { LineItemProposerService } from '@/modules/ai/line-item-proposer/line-item-proposer.service';
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
 import { ReplyDraftGenerator } from '@/modules/ai/reply-draft/reply-draft-generator.service';
 import { ShouldReplyClassifier } from '@/modules/ai/should-reply/should-reply.service';
@@ -36,8 +37,17 @@ import { Module } from '@nestjs/common';
 		ClassifierService,
 		ExtractorService,
 		ReplyDraftGenerator,
-		ShouldReplyClassifier
+		ShouldReplyClassifier,
+		LineItemProposerService
 	],
-	exports: [AI_CLIENT, AICallLogger, ClassifierService, ExtractorService, ReplyDraftGenerator, ShouldReplyClassifier]
+	exports: [
+		AI_CLIENT,
+		AICallLogger,
+		ClassifierService,
+		ExtractorService,
+		ReplyDraftGenerator,
+		ShouldReplyClassifier,
+		LineItemProposerService
+	]
 })
 export class AiModule {}

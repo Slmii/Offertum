@@ -20,6 +20,8 @@ import { OpportunitiesModule } from '@/modules/opportunities/opportunities.modul
 import { PricingPlaybookModule } from '@/modules/pricing-playbook/pricing-playbook.module';
 import { PrismaModule } from '@/modules/prisma/prisma.module';
 import { PrismaService } from '@/modules/prisma/prisma.service';
+import { QuoteDraftsModule } from '@/modules/quote-drafts/quote-drafts.module';
+import { QuoteLineItemsModule } from '@/modules/quote-line-items/quote-line-items.module';
 import { QuotePdfsModule } from '@/modules/quote-pdfs/quote-pdfs.module';
 import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 import { Module } from '@nestjs/common';
@@ -61,6 +63,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		PricingPlaybookModule,
 		CatalogItemsModule,
 		QuotePdfsModule,
+		QuoteLineItemsModule,
+		QuoteDraftsModule,
 		ReplyDraftsModule,
 		InngestModule,
 		AiModule,

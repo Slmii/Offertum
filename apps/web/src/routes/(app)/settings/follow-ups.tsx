@@ -114,7 +114,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 	const schedulerDisabled = maxCount === 0;
 
 	return (
-		<Stack spacing={5}>
+		<Stack useFlexGap spacing={5}>
 			<Box>
 				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 					Cadans
@@ -122,7 +122,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Hoeveel dagen stilte voordat Offertum een herinnering opstelt.
 				</Typography>
-				<Stack direction='row' spacing={2} sx={{ alignItems: 'flex-start' }}>
+				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'flex-start' }}>
 					<Box sx={{ minWidth: 160 }}>
 						<Select
 							name='cadencePreset'
@@ -179,7 +179,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					Het aantal herinneringen dat Offertum maximaal per offerteaanvraag mag opstellen. Zet op{' '}
 					<strong>0</strong> om de scheduler volledig uit te zetten.
 				</Typography>
-				<Stack direction='row' spacing={2} sx={{ alignItems: 'center' }}>
+				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>
 						<Field name='maxCount' type='number' fullWidth />
 					</Box>
@@ -206,7 +206,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
 					je houdt opportunities dan zelf bij.
 				</Typography>
-				<Stack direction='row' spacing={2} sx={{ alignItems: 'center' }}>
+				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>
 						<Field name='coldAfterDays' type='number' fullWidth />
 					</Box>
@@ -248,7 +248,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 			{error && <Alert severity='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Alert>}
 			{savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
 
-			<Stack direction='row' spacing={2} sx={{ justifyContent: 'flex-end' }}>
+			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
 				<Button type='submit' variant='contained' disabled={isSaving}>
 					{isSaving ? 'Opslaan…' : 'Opslaan'}
 				</Button>

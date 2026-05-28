@@ -214,7 +214,8 @@ export const OPPORTUNITY_TIMELINE_EVENT_KINDS = [
 	'undismissed',
 	'fields_updated',
 	'assigned',
-	'received_via_mailbox'
+	'received_via_mailbox',
+	'quote_created'
 ] as const;
 export type OpportunityTimelineEventKind = (typeof OPPORTUNITY_TIMELINE_EVENT_KINDS)[number];
 
@@ -290,6 +291,16 @@ export interface OpportunityReceivedViaMailboxEvent extends OpportunityTimelineE
 	mailboxOwnerName: string | null;
 }
 
+/**
+ * Written when the owner generates a quote draft (W10.2). Carries the draft id so
+ * the FE can deep-link to the quote, plus the line count for a one-glance summary.
+ */
+export interface OpportunityQuoteCreatedEvent extends OpportunityTimelineEventBase {
+	kind: 'quote_created';
+	quoteDraftId: string;
+	lineCount: number;
+}
+
 export type OpportunityTimelineEvent =
 	| OpportunityStatusChangedEvent
 	| OpportunityAutoColdEvent
@@ -297,7 +308,8 @@ export type OpportunityTimelineEvent =
 	| OpportunityUndismissedEvent
 	| OpportunityFieldsUpdatedEvent
 	| OpportunityAssignedEvent
-	| OpportunityReceivedViaMailboxEvent;
+	| OpportunityReceivedViaMailboxEvent
+	| OpportunityQuoteCreatedEvent;
 
 /**
  * Direction of a thread message relative to the connected mailbox.

@@ -55,7 +55,7 @@ function NoOrganizationPage() {
 				</Typography>
 
 				{organizations.length === 0 ? (
-					<Stack spacing={2}>
+					<Stack useFlexGap spacing={2}>
 						<Typography variant='body1'>
 							If you were expecting an invitation, check your email, the link expires after 7 days.
 						</Typography>
@@ -69,9 +69,9 @@ function NoOrganizationPage() {
 						</Box>
 					</Stack>
 				) : (
-					<Stack spacing={2}>
+					<Stack useFlexGap spacing={2}>
 						<Typography variant='body1'>Pick an organization to continue:</Typography>
-						<Stack spacing={1}>
+						<Stack useFlexGap spacing={1}>
 							{organizations.map(m => (
 								<Button
 									key={m.organizationId}

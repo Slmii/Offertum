@@ -2266,6 +2266,21 @@ function toOpportunityTimelineEvent(
 				mailboxOwnerName: readString(row.metadata, 'mailboxOwnerName')
 			};
 		}
+		case 'opportunity.quote_created': {
+			const quoteDraftId = readString(row.metadata, 'quoteDraftId');
+			if (quoteDraftId === null) {
+				return null;
+			}
+			return {
+				id: row.id,
+				kind: 'quote_created',
+				occurredAt,
+				actorUserId,
+				actorName,
+				quoteDraftId,
+				lineCount: readNumber(row.metadata, 'lineCount') ?? 0
+			};
+		}
 		default:
 			return null;
 	}

@@ -7,6 +7,7 @@ config({ path: resolve(__dirname, '../.env') });
 import type { CatalogItemUnit } from '@offertum/shared';
 import {
 	EmailProvider,
+	LogLevel,
 	MembershipRole,
 	OpportunityStatus,
 	type Prisma,
@@ -65,6 +66,20 @@ const emailAccounts = [
 	}
 ] as const;
 
+// Wrap a plain-text body in the minimal Gmail payload shape that
+// `buildRawMessageAIInput` (src/lib/email/raw-message-ai-input.ts) knows how to
+// decode, so seeded opportunities render a real original email in the detail view.
+function gmailTextPayload(bodyText: string): Prisma.InputJsonValue {
+	return {
+		seed: true,
+		note: 'Synthetic RawMessage produced by prisma/seed.ts — not a real provider payload.',
+		payload: {
+			mimeType: 'text/plain',
+			body: { data: Buffer.from(bodyText, 'utf8').toString('base64url') }
+		}
+	};
+}
+
 interface SeedOpportunity {
 	rawMessageId: string;
 	opportunityId: string;
@@ -73,6 +88,9 @@ interface SeedOpportunity {
 	subject: string;
 	fromEmail: string;
 	fromName: string;
+	/** Plain-text email body, embedded in the RawMessage `raw` as a Gmail
+	 * `text/plain` payload so the detail view renders an original email. */
+	bodyText: string;
 	customerName: string;
 	customerEmail: string;
 	address: string | null;
@@ -99,6 +117,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Offerte aanvragen voor CV-ketel vervanging',
 		fromEmail: 'marieke.jansen@example.nl',
 		fromName: 'Marieke Jansen',
+		bodyText: [
+			'Geachte heer/mevrouw,',
+			'',
+			'Onze CV-ketel (een Remeha Calenta 25c) is inmiddels ruim 14 jaar oud en aan vervanging toe. Wij wonen in een tussenwoning in Amersfoort en zouden graag overstappen op een hybride opstelling met een warmtepomp.',
+			'',
+			'Kunt u een offerte opstellen voor het vervangen van de ketel en het plaatsen van een hybride warmtepomp? Een afspraak voor een inspectie ter plaatse is wat ons betreft prima.',
+			'',
+			'Met vriendelijke groet,',
+			'Marieke Jansen',
+			'Hoofdstraat 12, 3811 EN Amersfoort'
+		].join('\n'),
 		customerName: 'Marieke Jansen',
 		customerEmail: 'marieke.jansen@example.nl',
 		address: 'Hoofdstraat 12, 3811 EN Amersfoort',
@@ -107,7 +136,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.NEW,
 		classifierConfidence: 0.94,
 		classifierReason: 'Expliciete offerte-aanvraag met locatie + werkzaamheden.',
-		deliverableHints: { rooms: 1, currentSystem: 'Remeha Calenta 25c', wantsHybrid: true },
+		deliverableHints: ['Remeha Calenta 25c', 'hybride warmtepomp', 'tussenwoning', 'CV-ketel vervangen'],
 		internalDateDaysAgo: 1,
 		deadlineDaysFromNow: 21,
 		appointmentDaysFromNow: 7
@@ -120,6 +149,18 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'SPOED: lekkage badkamer eerste verdieping',
 		fromEmail: 'pieter.devos@example.nl',
 		fromName: 'Pieter de Vos',
+		bodyText: [
+			'Goedemiddag,',
+			'',
+			'Wij hebben sinds vanochtend een lekkage in de badkamer op de eerste verdieping. Er komt water door het plafond van de gang eronder en het lijkt erger te worden.',
+			'',
+			'Kunnen jullie met spoed langskomen? Dit kan echt niet wachten tot volgende week.',
+			'',
+			'Groet,',
+			'Pieter de Vos',
+			'Kerkstraat 88, 1011 AB Amsterdam',
+			'Tel: 06-12345678'
+		].join('\n'),
 		customerName: 'Pieter de Vos',
 		customerEmail: 'pieter.devos@example.nl',
 		address: 'Kerkstraat 88, 1011 AB Amsterdam',
@@ -128,7 +169,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.NEW,
 		classifierConfidence: 0.99,
 		classifierReason: 'Spoedklus met duidelijke locatie en symptoom.',
-		deliverableHints: { issue: 'lekkage', visibleDamage: true },
+		deliverableHints: ['lekkage badkamervloer', 'eerste verdieping', 'zichtbare waterschade plafond'],
 		internalDateDaysAgo: 0,
 		deadlineDaysFromNow: 1,
 		appointmentDaysFromNow: 0
@@ -141,6 +182,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Vraag — aansluiten inductiekookplaat',
 		fromEmail: 'lisa.bakker@example.nl',
 		fromName: 'Lisa Bakker',
+		bodyText: [
+			'Hallo,',
+			'',
+			'Wij hebben een nieuwe inductiekookplaat gekocht (7,4 kW) die een krachtstroomaansluiting nodig heeft. Op dit moment hebben we in de keuken alleen een gewoon stopcontact.',
+			'',
+			'Kunnen jullie een aparte groep aanleggen in de meterkast en de kookplaat aansluiten? Graag verneem ik wat dit ongeveer kost en wanneer jullie kunnen langskomen.',
+			'',
+			'Met vriendelijke groet,',
+			'Lisa Bakker',
+			'Lange Voorhout 4, 2514 EE Den Haag'
+		].join('\n'),
 		customerName: 'Lisa Bakker',
 		customerEmail: 'lisa.bakker@example.nl',
 		address: 'Lange Voorhout 4, 2514 EE Den Haag',
@@ -149,7 +201,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.REPLIED,
 		classifierConfidence: 0.91,
 		classifierReason: 'Specifieke installatie met datum-indicatie.',
-		deliverableHints: { rangeKw: 7.4, hasCrackedTile: false },
+		deliverableHints: ['inductiekookplaat 7,4 kW', 'krachtstroomgroep', 'meterkast uitbreiden'],
 		internalDateDaysAgo: 4,
 		deadlineDaysFromNow: 14,
 		appointmentDaysFromNow: null
@@ -162,6 +214,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Offerte airco woonkamer + slaapkamer',
 		fromEmail: 'jurgen@bedrijfx.nl',
 		fromName: 'Jurgen ten Have',
+		bodyText: [
+			'Beste,',
+			'',
+			'Ik zou graag een offerte ontvangen voor een airco-installatie. Het gaat om een multi-split systeem met twee binnenunits: één in de woonkamer (ca. 35 m²) en één in de slaapkamer (ca. 14 m²). De woning is goed geïsoleerd.',
+			'',
+			'Kunt u aangeven wat de kosten zijn inclusief montage en plaatsing van de buitenunit?',
+			'',
+			'Met vriendelijke groet,',
+			'Jurgen ten Have',
+			'Industrieweg 22, 5708 AK Helmond'
+		].join('\n'),
 		customerName: 'Jurgen ten Have',
 		customerEmail: 'jurgen@bedrijfx.nl',
 		address: 'Industrieweg 22, 5708 AK Helmond',
@@ -170,7 +233,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.WAITING,
 		classifierConfidence: 0.87,
 		classifierReason: 'Offerte-aanvraag, klant wacht op prijs.',
-		deliverableHints: { rooms: 2, isInsulated: true },
+		deliverableHints: ['multi-split airco', 'twee binnenunits', 'woonkamer ~35 m²', 'slaapkamer ~14 m²'],
 		internalDateDaysAgo: 9,
 		deadlineDaysFromNow: 30,
 		appointmentDaysFromNow: null
@@ -183,6 +246,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Onderhoud cv — jaarbeurt 2026',
 		fromEmail: 'familie.vanderberg@example.nl',
 		fromName: 'Familie van der Berg',
+		bodyText: [
+			'Geachte,',
+			'',
+			'Wij willen graag een jaarlijks onderhoudscontract afsluiten voor onze CV-ketel. De ketel is 3 jaar oud en nog in goede staat; we willen vooral de jaarbeurt netjes geregeld hebben.',
+			'',
+			'Kunt u ons informeren over de mogelijkheden en de jaarlijkse kosten?',
+			'',
+			'Vriendelijke groet,',
+			'Familie van der Berg',
+			'Dorpsstraat 3, 7152 GE Eibergen'
+		].join('\n'),
 		customerName: 'Familie van der Berg',
 		customerEmail: 'familie.vanderberg@example.nl',
 		address: 'Dorpsstraat 3, 7152 GE Eibergen',
@@ -191,7 +265,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.WON,
 		classifierConfidence: 0.96,
 		classifierReason: 'Terugkerend onderhoudscontract.',
-		deliverableHints: { contractTerm: 'jaarlijks' },
+		deliverableHints: ['jaarlijks onderhoudscontract', 'CV-jaarbeurt'],
 		internalDateDaysAgo: 30,
 		deadlineDaysFromNow: null,
 		appointmentDaysFromNow: 21
@@ -204,6 +278,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Verbouwing achterkamer — schatting kosten',
 		fromEmail: 'sara.kuipers@example.nl',
 		fromName: 'Sara Kuipers',
+		bodyText: [
+			'Hallo,',
+			'',
+			'Wij overwegen een uitbouw aan de achterkant van onze woning van ongeveer 12 m². Het gaat om het vergroten van de achterkamer met een plat dak. We hebben nog geen tekeningen, maar wel een duidelijk idee voor ogen.',
+			'',
+			'Zouden jullie een eerste kostenschatting kunnen maken en langskomen om de situatie te bekijken?',
+			'',
+			'Met vriendelijke groet,',
+			'Sara Kuipers',
+			'Brouwersgracht 41, 1015 GA Amsterdam'
+		].join('\n'),
 		customerName: 'Sara Kuipers',
 		customerEmail: 'sara.kuipers@example.nl',
 		address: 'Brouwersgracht 41, 1015 GA Amsterdam',
@@ -212,7 +297,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.NEW,
 		classifierConfidence: 0.92,
 		classifierReason: 'Concreet project met afmetingen.',
-		deliverableHints: { surfaceSqm: 12, hasDrawings: false },
+		deliverableHints: ['uitbouw ~12 m²', 'achterkamer', 'plat dak', 'geen tekeningen'],
 		internalDateDaysAgo: 2,
 		deadlineDaysFromNow: 45,
 		appointmentDaysFromNow: 5
@@ -225,6 +310,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Vraag — dakkapel plaatsen',
 		fromEmail: 'tom.visser@example.nl',
 		fromName: 'Tom Visser',
+		bodyText: [
+			'Beste,',
+			'',
+			'Wij willen aan de voorzijde van ons huis een dakkapel laten plaatsen van ongeveer 2,5 meter breed, om de zolder bruikbaar te maken als slaapkamer. We hebben nog geen vergunning aangevraagd.',
+			'',
+			'Kunnen jullie een offerte maken en daarbij aangeven of jullie ook de vergunningsaanvraag kunnen verzorgen?',
+			'',
+			'Groet,',
+			'Tom Visser',
+			'Wilgenlaan 17, 3742 BX Baarn'
+		].join('\n'),
 		customerName: 'Tom Visser',
 		customerEmail: 'tom.visser@example.nl',
 		address: 'Wilgenlaan 17, 3742 BX Baarn',
@@ -233,7 +329,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.REPLIED,
 		classifierConfidence: 0.93,
 		classifierReason: 'Klassieke offerte-aanvraag dakkapel.',
-		deliverableHints: { widthM: 2.5, hasPermit: false },
+		deliverableHints: ['dakkapel ~2,5 m breed', 'voorzijde', 'zolder als slaapkamer', 'vergunning nodig'],
 		internalDateDaysAgo: 7,
 		deadlineDaysFromNow: 60,
 		appointmentDaysFromNow: null
@@ -246,6 +342,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Re: badkamerrenovatie — meer info',
 		fromEmail: 'familie.geerts@example.nl',
 		fromName: 'Familie Geerts',
+		bodyText: [
+			'Beste,',
+			'',
+			'Naar aanleiding van jullie vorige bericht stuur ik wat aanvullende informatie. De badkamer is ongeveer 8 m². We willen graag een complete renovatie: alles eruit en nieuw, inclusief een inloopdouche met regendouche.',
+			'',
+			'Kunnen jullie op basis hiervan de offerte aanvullen?',
+			'',
+			'Met vriendelijke groet,',
+			'Familie Geerts',
+			'Oranjestraat 25, 6711 GG Ede'
+		].join('\n'),
 		customerName: 'Familie Geerts',
 		customerEmail: 'familie.geerts@example.nl',
 		address: 'Oranjestraat 25, 6711 GG Ede',
@@ -254,7 +361,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.WAITING,
 		classifierConfidence: 0.95,
 		classifierReason: 'Vervolgvraag op eerdere offerte met aanvullende info.',
-		deliverableHints: { surfaceSqm: 8, wantsRainShower: true },
+		deliverableHints: ['badkamer ~8 m²', 'complete renovatie', 'inloopdouche', 'regendouche'],
 		internalDateDaysAgo: 12,
 		deadlineDaysFromNow: 21,
 		appointmentDaysFromNow: 3
@@ -267,6 +374,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Offerte schuur isoleren',
 		fromEmail: 'wouter.smits@example.nl',
 		fromName: 'Wouter Smits',
+		bodyText: [
+			'Hallo,',
+			'',
+			'Ik heb een vrijstaande schuur van ongeveer 18 m² die op dit moment helemaal niet geïsoleerd is. Ik wil de schuur als werkruimte gaan gebruiken en daarom de wanden en het dak laten isoleren.',
+			'',
+			'Kunnen jullie een offerte maken voor het isoleren?',
+			'',
+			'Met vriendelijke groet,',
+			'Wouter Smits',
+			'Schoolweg 9, 8061 BB Hasselt'
+		].join('\n'),
 		customerName: 'Wouter Smits',
 		customerEmail: 'wouter.smits@example.nl',
 		address: 'Schoolweg 9, 8061 BB Hasselt',
@@ -275,7 +393,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.COLD,
 		classifierConfidence: 0.88,
 		classifierReason: 'Isolatiewerkzaamheden, klant niet gereageerd na 2 herinneringen.',
-		deliverableHints: { surfaceSqm: 18, currentInsulation: 'none' },
+		deliverableHints: ['vrijstaande schuur ~18 m²', 'wand- en dakisolatie', 'geen huidige isolatie'],
 		internalDateDaysAgo: 28,
 		deadlineDaysFromNow: null,
 		appointmentDaysFromNow: null
@@ -288,6 +406,17 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		subject: 'Vraag offerte — keukenrenovatie',
 		fromEmail: 'jasper.koopmans@example.nl',
 		fromName: 'Jasper Koopmans',
+		bodyText: [
+			'Beste,',
+			'',
+			'Wij willen onze keuken renoveren met een IKEA Metod inbouwkeuken die we zelf aanschaffen. We zoeken iemand die de montage verzorgt, inclusief het inbouwen en aansluiten van de apparatuur.',
+			'',
+			'Kunnen jullie een offerte uitbrengen voor de montage?',
+			'',
+			'Met vriendelijke groet,',
+			'Jasper Koopmans',
+			'Markt 14, 5611 EB Eindhoven'
+		].join('\n'),
 		customerName: 'Jasper Koopmans',
 		customerEmail: 'jasper.koopmans@example.nl',
 		address: 'Markt 14, 5611 EB Eindhoven',
@@ -296,7 +425,7 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		status: OpportunityStatus.LOST,
 		classifierConfidence: 0.9,
 		classifierReason: 'Keukenofferte, klant koos andere aannemer.',
-		deliverableHints: { brand: 'IKEA Metod', wantsAppliancesInstalled: true },
+		deliverableHints: ['IKEA Metod inbouwkeuken', 'montage', 'apparatuur inbouwen en aansluiten'],
 		internalDateDaysAgo: 60,
 		deadlineDaysFromNow: null,
 		appointmentDaysFromNow: null
@@ -497,6 +626,12 @@ async function main() {
 		const owner = await prisma.user.findUniqueOrThrow({
 			where: { email: opp.organizationId === ORG_ACME ? 'selami1992@gmail.com' : 'bart@offertum.dev' }
 		});
+		const account = emailAccounts.find(a => a.id === opp.emailAccountId);
+		if (!account) {
+			throw new Error(
+				`Seed misconfiguration: no email account ${opp.emailAccountId} for opp ${opp.opportunityId}`
+			);
+		}
 
 		await prisma.rawMessage.upsert({
 			where: { id: opp.rawMessageId },
@@ -504,6 +639,7 @@ async function main() {
 				subject: opp.subject,
 				fromEmail: opp.fromEmail,
 				fromName: opp.fromName,
+				raw: gmailTextPayload(opp.bodyText),
 				isQuoteRequest: true,
 				classifiedAt: daysAgo(opp.internalDateDaysAgo)
 			},
@@ -517,10 +653,7 @@ async function main() {
 				subject: opp.subject,
 				fromEmail: opp.fromEmail,
 				fromName: opp.fromName,
-				raw: {
-					seed: true,
-					note: 'Synthetic RawMessage produced by prisma/seed.ts — not a real provider payload.'
-				},
+				raw: gmailTextPayload(opp.bodyText),
 				isQuoteRequest: true,
 				classifiedAt: daysAgo(opp.internalDateDaysAgo)
 			}
@@ -563,6 +696,34 @@ async function main() {
 				deliverableHints: opp.deliverableHints,
 				assignedToUserId: owner.id,
 				createdAt: daysAgo(opp.internalDateDaysAgo)
+			}
+		});
+
+		// Mirror the production `opportunity.received_via_mailbox` audit row so the
+		// detail timeline shows a "Binnengekomen" event. The mapper prefers
+		// `originatingInternalDate` over `Log.createdAt` for the displayed time.
+		const receivedAt = daysAgo(opp.internalDateDaysAgo);
+		const receivedLogId = opp.opportunityId.replace(/^33333333/, '55555555');
+		await prisma.log.upsert({
+			where: { id: receivedLogId },
+			update: {},
+			create: {
+				id: receivedLogId,
+				level: LogLevel.INFO,
+				message: `Opportunity ${opp.opportunityId} received via mailbox ${account.mailboxEmail}`,
+				context: 'OpportunitiesService',
+				organizationId: opp.organizationId,
+				createdAt: receivedAt,
+				metadata: {
+					action: 'opportunity.received_via_mailbox',
+					organizationId: opp.organizationId,
+					opportunityId: opp.opportunityId,
+					mailboxEmail: account.mailboxEmail,
+					mailboxOwnerUserId: owner.id,
+					mailboxOwnerName: owner.name,
+					originatingRawMessageId: opp.rawMessageId,
+					originatingInternalDate: receivedAt.toISOString()
+				}
 			}
 		});
 	}

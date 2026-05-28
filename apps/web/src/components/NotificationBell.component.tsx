@@ -90,7 +90,7 @@ export function NotificationBell() {
 
 function NotificationRow({ notification, onActivate }: { notification: AppNotification; onActivate: () => void }) {
 	const content = (
-		<Stack spacing={0.5}>
+		<Stack useFlexGap spacing={0.5}>
 			<Typography variant='body2' sx={{ fontWeight: notification.readAt ? 400 : 600 }}>
 				{notification.title}
 			</Typography>

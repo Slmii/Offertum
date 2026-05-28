@@ -266,7 +266,7 @@ function InviteFormBody({ isSending, trialCapReached }: { isSending: boolean; tr
 	const disabled = isSending || trialCapReached;
 	return (
 		<>
-			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+			<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={1}>
 				<Field
 					type='email'
 					name='email'

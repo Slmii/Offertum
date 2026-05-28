@@ -73,7 +73,7 @@ function ClassifierQualityPage() {
 				to blame.
 			</Typography>
 
-			<Stack direction='row' spacing={1} sx={{ mb: 3 }}>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3 }}>
 				{(Object.keys(RANGE_LABELS) as AIUsageRange[]).map(option => (
 					<Link
 						key={option}
@@ -88,7 +88,7 @@ function ClassifierQualityPage() {
 				))}
 			</Stack>
 
-			<Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
+			<Stack direction={{ xs: 'column', md: 'row' }} useFlexGap spacing={2} sx={{ mb: 2 }}>
 				<SummaryCard label='Overall precision' value={toReadablePercent(data.summary.overallPrecision)} />
 				<SummaryCard label='Opportunities' value={toReadableNumber(data.summary.totalOpportunities)} />
 				<SummaryCard label='Dismissed (total)' value={toReadableNumber(data.summary.totalDismissed)} />
@@ -134,7 +134,7 @@ function DismissReasonBreakdown({ counts }: { counts: DismissReasonCounts }) {
 	}
 
 	return (
-		<Stack direction='row' spacing={1} sx={{ mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+		<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
 			<Typography variant='caption' color='text.secondary' sx={{ mr: 1 }}>
 				By reason:
 			</Typography>
@@ -240,7 +240,7 @@ function ReasonChipsCompact({ counts }: { counts: DismissReasonCounts }) {
 		);
 	}
 	return (
-		<Stack direction='row' spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+		<Stack direction='row' useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap' }}>
 			{visible.map(reason => (
 				<Chip
 					key={reason}

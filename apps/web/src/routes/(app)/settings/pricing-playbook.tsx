@@ -136,8 +136,8 @@ function PricingPlaybookSettingsPage() {
 			</Box>
 
 			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, boxShadow: 1 }}>
-				<Stack spacing={5}>
-					<Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+				<Stack useFlexGap spacing={5}>
+					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 						<Chip size='small' label={compileStatus.label} color={compileStatus.color} variant='outlined' />
 						{data.compiledAt && (
 							<Typography variant='caption' color='text.secondary'>
@@ -151,7 +151,7 @@ function PricingPlaybookSettingsPage() {
 						schema={PricingPlaybookSchema}
 						defaultValues={{ playbookText: data.playbookText }}
 					>
-						<Stack spacing={4}>
+						<Stack useFlexGap spacing={4}>
 							<Alert severity='info' variant='outlined' sx={{ alignItems: 'flex-start' }}>
 								<strong>Tip:</strong> schrijf elke prijsregel op een eigen regel of in een eigen zin.
 								Eén uitspraak per regel maakt het makkelijker voor Offertum om je tekst correct te
@@ -187,7 +187,7 @@ function PricingPlaybookSettingsPage() {
 								</Alert>
 							)}
 
-							<Stack direction='row' spacing={1} sx={{ justifyContent: 'flex-end' }}>
+							<Stack direction='row' useFlexGap spacing={1} sx={{ justifyContent: 'flex-end' }}>
 								<Button type='submit' variant='contained' disabled={update.isPending}>
 									{update.isPending ? 'Opslaan…' : 'Opslaan'}
 								</Button>
@@ -206,7 +206,7 @@ function PricingPlaybookSettingsPage() {
 				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
 					Klik open om te zien hoe andere ondernemers hun prijsregels in eigen woorden hebben opgeschreven.
 				</Typography>
-				<Stack spacing={1}>
+				<Stack useFlexGap spacing={1}>
 					{EXAMPLES.map(example => (
 						<Accordion key={example.title} variant='outlined' disableGutters>
 							<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
@@ -275,7 +275,7 @@ function CompiledRulesPanel() {
 			<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
 				Regels ({rules.filter(r => r.active).length} actief, {rules.length} totaal)
 			</Typography>
-			<Stack spacing={1}>
+			<Stack useFlexGap spacing={1}>
 				{rules.map(rule => (
 					<RuleCard key={rule.id} rule={rule} />
 				))}
@@ -294,9 +294,14 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 
 	return (
 		<Paper variant='outlined' sx={{ p: 3, opacity: rule.active ? 1 : 0.55 }}>
-			<Stack direction='row' spacing={1} sx={{ alignItems: 'flex-start' }}>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'flex-start' }}>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
-					<Stack direction='row' spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+					<Stack
+						direction='row'
+						useFlexGap
+						spacing={1}
+						sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
+					>
 						<Chip
 							size='small'
 							label={RULE_TYPE_LABELS_NL[rule.ruleType]}
@@ -328,6 +333,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 						>
 							<Stack
 								direction='row'
+								useFlexGap
 								spacing={0.5}
 								sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap', rowGap: 0.5 }}
 							>
@@ -339,7 +345,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 						</Tooltip>
 					)}
 				</Box>
-				<Stack direction='row' spacing={0.5} sx={{ flexShrink: 0, alignItems: 'center' }}>
+				<Stack direction='row' useFlexGap spacing={0.5} sx={{ flexShrink: 0, alignItems: 'center' }}>
 					<Tooltip title='Bewerken'>
 						<IconButton
 							size='small'
@@ -425,7 +431,7 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 				}}
 			>
 				<DialogContent>
-					<Stack spacing={3} sx={{ pt: 1 }}>
+					<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
 						<Field name='description' label='Omschrijving' fullWidth />
 						<Field
 							name='value'

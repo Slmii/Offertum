@@ -183,7 +183,12 @@ function OpportunitiesIndexPage() {
 				}
 			/>
 
-			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 2, mb: 2, alignItems: 'center' }}>
+			<Stack
+				direction={{ xs: 'column', sm: 'row' }}
+				useFlexGap
+				spacing={2}
+				sx={{ mt: 2, mb: 2, alignItems: 'center' }}
+			>
 				<StandaloneField
 					name='search'
 					placeholder='Zoek op klant, adres of type…'
@@ -228,7 +233,7 @@ function OpportunitiesIndexPage() {
 				/>
 			</Stack>
 
-			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+			<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={2} sx={{ mb: 2 }}>
 				<StandaloneSelect
 					name='owner'
 					label='Mailbox'
@@ -270,7 +275,7 @@ function OpportunitiesIndexPage() {
 				/>
 			</Stack>
 
-			<Stack spacing={1.5}>
+			<Stack useFlexGap spacing={1.5}>
 				{visibleOpportunities.length === 0 ? (
 					<EmptyState
 						filtered={activeStatus !== null || debouncedSearch.length > 0}
@@ -372,7 +377,7 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					aria-label={`Urgentie: ${urgency}`}
 				/>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
-					<Stack direction='row' spacing={1} sx={{ mb: 0.25, alignItems: 'center' }}>
+					<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 0.25, alignItems: 'center' }}>
 						<StandaloneSelect
 							name={`status-${opportunity.id}`}
 							size='small'

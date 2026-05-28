@@ -133,7 +133,7 @@ function EmailSettingsPage() {
 					</Alert>
 				)}
 
-				<Stack spacing={4}>
+				<Stack useFlexGap spacing={4}>
 					<ProviderPanel
 						providerLabel='Gmail'
 						connectUrl='/api/email/gmail/connect'

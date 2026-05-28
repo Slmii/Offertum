@@ -54,7 +54,7 @@ function SignInPage() {
 					Continue with Google or Microsoft, or use a magic link.
 				</Typography>
 
-				<Stack spacing={1.5}>
+				<Stack useFlexGap spacing={1.5}>
 					<Button
 						variant='outlined'
 						fullWidth

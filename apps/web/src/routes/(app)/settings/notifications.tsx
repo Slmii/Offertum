@@ -129,7 +129,7 @@ function NotificationsSettingsPage() {
 					schema={NotificationPreferencesSchema}
 					defaultValues={buildDefaults(data.preferences)}
 				>
-					<Stack spacing={3}>
+					<Stack useFlexGap spacing={3}>
 						{NOTIFICATION_EVENT_TYPES.map(event => (
 							<Box key={event}>
 								<Typography sx={{ fontWeight: 500, mb: 0.5 }}>
@@ -138,7 +138,7 @@ function NotificationsSettingsPage() {
 								<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
 									{EVENT_LABELS_NL[event].description}
 								</Typography>
-								<Stack direction='row' spacing={3}>
+								<Stack direction='row' useFlexGap spacing={3}>
 									{NOTIFICATION_CHANNELS.flatMap(channel =>
 										channel === 'email' && !isEmailChannelAvailable(event)
 											? []
@@ -161,7 +161,7 @@ function NotificationsSettingsPage() {
 						)}
 						{savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
 
-						<Stack direction='row' spacing={1} sx={{ justifyContent: 'flex-end' }}>
+						<Stack direction='row' useFlexGap spacing={1} sx={{ justifyContent: 'flex-end' }}>
 							<Button type='submit' variant='contained' disabled={update.isPending}>
 								{update.isPending ? 'Opslaan…' : 'Opslaan'}
 							</Button>
