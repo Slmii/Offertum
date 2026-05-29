@@ -5,10 +5,13 @@ import {
 	useAddQuoteLineItem,
 	useDeleteQuoteLineItem,
 	useGenerateQuoteDraft,
+	useGenerateQuotePdf,
 	useGenerateQuotePreview,
 	useReplaceQuoteLines,
-	useUpdateQuoteLineItem
+	useUpdateQuoteLineItem,
+	quotePdfDownloadUrl
 } from '@/lib/queries/quote-drafts.queries';
+import { toReadableDateTime } from '@/lib/utils/date.utils';
 import { toReadableEuro } from '@/lib/utils/number.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -22,6 +25,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -36,6 +40,7 @@ import {
 	type ProposedQuoteLine,
 	type QuoteDraft,
 	type QuoteLineItem,
+	type QuotePdf,
 	type QuoteVatBracketTotal,
 	type ReplaceQuoteLineInput
 } from '@offertum/shared';
@@ -149,6 +154,8 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 				</Paper>
 			)}
 
+			<QuotePdfHistory pdfs={data.pdfs} />
+
 			{latest && regenerateOpen && preview.data && (
 				<QuoteRegenerateModal
 					opportunityId={opportunityId}
@@ -157,6 +164,40 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 					onClose={() => setRegenerateOpen(false)}
 				/>
 			)}
+		</Box>
+	);
+}
+
+/** Version history of generated quote PDFs — each viewable/downloadable. */
+function QuotePdfHistory({ pdfs }: { pdfs: QuotePdf[] }) {
+	if (pdfs.length === 0) {
+		return null;
+	}
+	return (
+		<Box sx={{ mt: 3 }}>
+			<Typography variant='subtitle2' sx={{ mb: 1 }}>
+				PDF-versies ({pdfs.length})
+			</Typography>
+			<Paper variant='outlined' sx={{ p: 1.5 }}>
+				<Stack useFlexGap spacing={0.5}>
+					{pdfs.map(pdf => (
+						<Stack
+							key={pdf.id}
+							direction='row'
+							useFlexGap
+							spacing={1}
+							sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
+						>
+							<Link href={quotePdfDownloadUrl(pdf.id)} target='_blank' rel='noopener' underline='hover'>
+								{pdf.filename}
+							</Link>
+							<Typography variant='caption' color='text.secondary'>
+								{toReadableDateTime(pdf.createdAt)}
+							</Typography>
+						</Stack>
+					))}
+				</Stack>
+			</Paper>
 		</Box>
 	);
 }
@@ -554,6 +595,7 @@ function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineIn
 
 function QuoteDraftEditor({ draft, opportunityId }: { draft: QuoteDraft; opportunityId: string }) {
 	const addLine = useAddQuoteLineItem(opportunityId);
+	const generatePdf = useGenerateQuotePdf(opportunityId);
 	const totals = computeQuoteTotals(draft.lineItems);
 
 	return (
@@ -607,6 +649,15 @@ function QuoteDraftEditor({ draft, opportunityId }: { draft: QuoteDraft; opportu
 				>
 					+ Regel toevoegen
 				</Button>
+				<Button
+					size='small'
+					variant='outlined'
+					onClick={() => generatePdf.mutate(draft.id)}
+					disabled={generatePdf.isPending || totals.unpricedLineCount > 0}
+					startIcon={generatePdf.isPending ? <CircularProgress size={14} /> : null}
+				>
+					{generatePdf.isPending ? 'Bezig…' : 'Genereer PDF'}
+				</Button>
 			</Stack>
 
 			{totals.unpricedLineCount > 0 && (
@@ -614,6 +665,17 @@ function QuoteDraftEditor({ draft, opportunityId }: { draft: QuoteDraft; opportu
 					{totals.unpricedLineCount === 1
 						? 'Eén regel heeft nog geen prijs en telt niet mee in het totaal.'
 						: `${totals.unpricedLineCount} regels hebben nog geen prijs en tellen niet mee in het totaal.`}
+				</Alert>
+			)}
+			{generatePdf.isError && (
+				<Alert severity='error' sx={{ mt: 2 }}>
+					PDF genereren mislukt:{' '}
+					{generatePdf.error instanceof Error ? generatePdf.error.message : 'Onbekende fout'}
+				</Alert>
+			)}
+			{generatePdf.isSuccess && !generatePdf.isPending && (
+				<Alert severity='success' sx={{ mt: 2 }}>
+					PDF-versie aangemaakt. Kies hem onder "Bijlagen" om mee te sturen met het concept-antwoord.
 				</Alert>
 			)}
 

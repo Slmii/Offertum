@@ -286,6 +286,7 @@ model Organization {
   pricingPlaybook         PricingPlaybook?
   catalogItems            CatalogItem[]
   quoteDrafts             QuoteDraft[]
+  quotePdfs               QuotePdf[]
 }
 
 model Log {
@@ -699,6 +700,7 @@ model Opportunity {
   // `orderBy: createdAt desc, take: 1` to surface the *current* draft.
   replyDrafts              ReplyDraft[]
   quoteDrafts              QuoteDraft[]
+  quotePdfs                QuotePdf[]
 
   @@index([organizationId, status, createdAt(sort: Desc)])
   @@index([organizationId, customerDeadline])
@@ -790,11 +792,18 @@ model ReplyDraftAttachment {
   // to migrate FROM.
   storageKey    String   @db.Text
   storageDriver String   @default("local")
+  // Set when this attachment is a copy of a generated quote PDF version (W10.4). NULL
+  // for owner-uploaded files. Used to enforce "one quote PDF attached at a time" + to
+  // show which version is currently selected. SetNull so deleting the source version
+  // leaves the already-attached copy intact on the draft.
+  quotePdfId    String?  @db.Uuid
   createdAt     DateTime @default(now())
 
   replyDraft ReplyDraft @relation(fields: [replyDraftId], references: [id], onDelete: Cascade)
+  quotePdf   QuotePdf?  @relation(fields: [quotePdfId], references: [id], onDelete: SetNull)
 
   @@index([replyDraftId])
+  @@index([quotePdfId])
 }
 
 // One in-app notification row. Bell icon in the header queries the
@@ -998,6 +1007,7 @@ model QuoteDraft {
   opportunity  Opportunity     @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   aiCall       AICall?         @relation("QuoteDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
   lineItems    QuoteLineItem[]
+  pdfs         QuotePdf[]
 
   // Fast "latest draft for this opp" lookup (detail view + W10.3 editor).
   @@index([opportunityId, createdAt(sort: Desc)])
@@ -1043,4 +1053,32 @@ model QuoteLineItem {
   quoteDraft QuoteDraft @relation(fields: [quoteDraftId], references: [id], onDelete: Cascade)
 
   @@index([quoteDraftId, position])
+}
+
+// A generated quote PDF — a version in the opportunity's PDF history (W10.4). The
+// binary lives in the configured `AttachmentStorage`; this row holds metadata. Owners
+// generate one per (re)priced draft and pick which version to attach to the outgoing
+// reply. Not deleted when a draft changes, so the history is preserved.
+model QuotePdf {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  opportunityId  String   @db.Uuid
+  // The draft this version was rendered from. SetNull keeps the PDF in history even if
+  // the draft is later removed.
+  quoteDraftId   String?  @db.Uuid
+  filename       String
+  contentType    String   @default("application/pdf")
+  sizeBytes      Int
+  storageKey     String   @db.Text
+  storageDriver  String   @default("local")
+  createdAt      DateTime @default(now())
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity            @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  quoteDraft   QuoteDraft?            @relation(fields: [quoteDraftId], references: [id], onDelete: SetNull)
+  attachments  ReplyDraftAttachment[]
+
+  @@index([opportunityId, createdAt(sort: Desc)])
+  @@index([organizationId])
+  @@index([quoteDraftId])
 }

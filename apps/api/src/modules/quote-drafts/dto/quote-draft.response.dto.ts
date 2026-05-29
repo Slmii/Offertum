@@ -1,3 +1,4 @@
+import { QuotePdfResponseDto } from '@/modules/quote-pdfs/dto/quote-pdf.response.dto';
 import type {
 	QuoteDraft,
 	QuoteDraftListResponse,
@@ -34,5 +35,6 @@ export class QuoteDraftResponseDto implements QuoteDraft {
 
 export class QuoteDraftListResponseDto implements QuoteDraftListResponse {
 	drafts!: QuoteDraftResponseDto[];
+	pdfs!: QuotePdfResponseDto[];
 	pricingUpdatedAt!: string | null;
 }

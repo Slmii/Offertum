@@ -1,5 +1,7 @@
 import { OrganizationGuard } from '@/common/guards/organization.guard';
+import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { TenantWrite } from '@/common/decorators/tenant-write.decorator';
+import { AttachQuotePdfDto } from '@/modules/reply-draft-attachments/dto/attach-quote-pdf.dto';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { ATTACHMENT_MAX_FILE_BYTES } from '@/lib/storage/attachment-constraints';
 import { AssignOpportunityDto } from '@/modules/opportunities/dto/assign-opportunity.dto';
@@ -136,6 +138,24 @@ export class OpportunitiesController {
 		@Req() request: Request,
 		@Param('id', new ParseUUIDPipe()) id: string
 	): Promise<ReplyDraftAttachmentResponseDto[]> {
+		const rows = await this.attachments.list(request.organizationId!, id);
+		return rows.map(toAttachmentResponseDto);
+	}
+
+	@ApiOperation({ summary: 'Attach (or detach) a generated quote PDF version to the reply draft' })
+	@ApiOkResponse({ type: [ReplyDraftAttachmentResponseDto] })
+	@MemberWrite()
+	@Post(':id/reply-draft/quote-pdf')
+	async setReplyDraftQuotePdf(
+		@Req() request: Request,
+		@Param('id', new ParseUUIDPipe()) id: string,
+		@Body() body: AttachQuotePdfDto
+	): Promise<ReplyDraftAttachmentResponseDto[]> {
+		if (body.quotePdfId === null) {
+			await this.attachments.detachQuotePdf(request.organizationId!, id);
+		} else {
+			await this.attachments.attachQuotePdf(request.organizationId!, id, body.quotePdfId);
+		}
 		const rows = await this.attachments.list(request.organizationId!, id);
 		return rows.map(toAttachmentResponseDto);
 	}
@@ -290,6 +310,7 @@ function toAttachmentResponseDto(row: {
 	filename: string;
 	contentType: string;
 	sizeBytes: number;
+	quotePdfId: string | null;
 	createdAt: Date;
 }): ReplyDraftAttachmentResponseDto {
 	return {
@@ -298,6 +319,7 @@ function toAttachmentResponseDto(row: {
 		filename: row.filename,
 		contentType: row.contentType,
 		sizeBytes: row.sizeBytes,
+		quotePdfId: row.quotePdfId,
 		createdAt: row.createdAt.toISOString()
 	};
 }

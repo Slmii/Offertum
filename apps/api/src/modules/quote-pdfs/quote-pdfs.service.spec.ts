@@ -1,5 +1,6 @@
 import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
 import type { QuotePdfRendererService } from '@/modules/quote-pdfs/quote-pdf-renderer.service';
+import type { QuotePdfsRepository } from '@/modules/quote-pdfs/quote-pdfs.repository';
 import type { PrismaService } from '@/modules/prisma/prisma.service';
 import type { AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
 
@@ -30,7 +31,8 @@ describe('QuotePdfsService', () => {
 				contentType: 'image/png'
 			}))
 		} as unknown as AttachmentStorage;
-		const service = new QuotePdfsService(prisma, renderer, storage);
+		const repository = {} as unknown as QuotePdfsRepository;
+		const service = new QuotePdfsService(prisma, renderer, repository, storage);
 
 		const pdf = await service.preview('org-1', {
 			customerName: 'Van Dijk Bouw',

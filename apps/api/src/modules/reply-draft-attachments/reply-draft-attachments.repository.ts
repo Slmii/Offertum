@@ -17,6 +17,7 @@ export interface ReplyDraftAttachmentRow {
 	sizeBytes: number;
 	storageKey: string;
 	storageDriver: string;
+	quotePdfId: string | null;
 	createdAt: Date;
 }
 
@@ -27,6 +28,8 @@ export interface CreateAttachmentInput {
 	sizeBytes: number;
 	storageKey: string;
 	storageDriver: string;
+	/** Set when the attachment is a copy of a generated quote PDF version. */
+	quotePdfId?: string | null;
 }
 
 /**
@@ -110,8 +113,17 @@ export class ReplyDraftAttachmentsRepository {
 				contentType: input.contentType,
 				sizeBytes: input.sizeBytes,
 				storageKey: input.storageKey,
-				storageDriver: input.storageDriver
+				storageDriver: input.storageDriver,
+				quotePdfId: input.quotePdfId ?? null
 			}
+		});
+	}
+
+	/** The draft's currently-attached quote-PDF copy (if any) — used to replace it so at
+	 * most one quote PDF is attached at a time. */
+	async findQuotePdfAttachment(replyDraftId: string): Promise<ReplyDraftAttachmentRow | null> {
+		return this.prisma.replyDraftAttachment.findFirst({
+			where: { replyDraftId, quotePdfId: { not: null } }
 		});
 	}
 

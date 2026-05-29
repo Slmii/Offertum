@@ -265,7 +265,11 @@ export class QuotePdfRendererService {
 				`${formatQuantity(item.quantity)} ${CATALOG_ITEM_UNIT_LABELS_NL[item.unit]}`
 			),
 			h(renderer.Text, { style: [styles.tableCell, styles.priceCell] }, formatEuro(toCents(item.unitPriceEur))),
-			h(renderer.Text, { style: [styles.tableCell, styles.vatCell] }, `${item.vatRate}%`),
+			h(
+				renderer.Text,
+				{ style: [styles.tableCell, styles.vatCell] },
+				item.vatReverseCharged ? 'verlegd' : `${item.vatRate}%`
+			),
 			h(renderer.Text, { style: [styles.tableCell, styles.totalCell] }, formatEuro(lineTotals.netCents))
 		);
 	}
@@ -358,7 +362,8 @@ export function calculateTotals(items: QuotePdfLineItem[]): QuotePdfTotals {
 
 export function calculateLineTotals(item: QuotePdfLineItem): QuotePdfLineTotals {
 	const netCents = Math.round(toCents(item.unitPriceEur) * item.quantity);
-	const vatCents = Math.round((netCents * item.vatRate) / 100);
+	// Reverse-charge lines carry no VAT (the customer self-accounts it).
+	const vatCents = item.vatReverseCharged ? 0 : Math.round((netCents * item.vatRate) / 100);
 	return {
 		netCents,
 		vatCents,

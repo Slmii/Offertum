@@ -48,9 +48,22 @@ export interface QuoteDraft {
 	sentAt: string | null;
 }
 
+/** A generated quote PDF version (W10.4). The binary is fetched via the download
+ * endpoint; this is just the history-list metadata. */
+export interface QuotePdf {
+	id: string;
+	opportunityId: string;
+	quoteDraftId: string | null;
+	filename: string;
+	sizeBytes: number;
+	createdAt: string;
+}
+
 /** `GET /api/opportunities/:id/quote-drafts` response. */
 export interface QuoteDraftListResponse {
 	drafts: QuoteDraft[];
+	/** Generated PDF versions for the opportunity, newest-first. */
+	pdfs: QuotePdf[];
 	/** Most recent moment the org's pricing changed (playbook recompiled or a rule
 	 * edited). Compare against a draft's `updatedAt` (which bumps when its lines are
 	 * (re)generated) to know whether its pricing is stale. `null` when the org has no
@@ -80,6 +93,12 @@ export interface ReplaceQuoteLineInput {
 /** `PUT /api/quote-drafts/:id/line-items` — replace all lines on the draft. */
 export interface ReplaceQuoteLinesInput {
 	lines: ReplaceQuoteLineInput[];
+}
+
+/** `POST /api/opportunities/:id/reply-draft/quote-pdf` — attach one PDF version to
+ * the reply draft (replacing any previously attached version), or detach with `null`. */
+export interface AttachQuotePdfInput {
+	quotePdfId: string | null;
 }
 
 /**

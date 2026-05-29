@@ -19,6 +19,9 @@ export interface QuotePdfLineItem {
 	unitPriceEur: string;
 	quantity: number;
 	vatRate: number;
+	/** BTW verlegd (reverse charge): the line's net counts but it carries €0 VAT and
+	 * prints "verlegd" in the BTW column. */
+	vatReverseCharged: boolean;
 }
 
 export interface QuotePdfRenderInput {

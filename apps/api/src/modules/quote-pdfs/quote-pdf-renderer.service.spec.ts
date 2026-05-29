@@ -44,14 +44,16 @@ describe('QuotePdfRendererService', () => {
 					quantity: 2,
 					unit: 'hour',
 					unitPriceEur: '85.00',
-					vatRate: 21
+					vatRate: 21,
+					vatReverseCharged: false
 				},
 				{
 					description: 'Voorrijkosten Amsterdam',
 					quantity: 1,
 					unit: 'flat_fee',
 					unitPriceEur: '35.00',
-					vatRate: 21
+					vatRate: 21,
+					vatReverseCharged: false
 				}
 			]
 		};
@@ -70,6 +72,7 @@ const line = (overrides: Partial<QuotePdfLineItem> = {}): QuotePdfLineItem => ({
 	unitPriceEur: '85.00',
 	quantity: 1,
 	vatRate: 21,
+	vatReverseCharged: false,
 	...overrides
 });
 
@@ -97,8 +100,18 @@ describe('calculateLineTotals', () => {
 		});
 	});
 
-	it('handles a 0% VAT line (reverse-charge / exempt)', () => {
+	it('handles a 0% VAT line (exempt)', () => {
 		expect(calculateLineTotals(line({ unitPriceEur: '100.00', quantity: 1, vatRate: 0 }))).toEqual({
+			netCents: 10000,
+			vatCents: 0,
+			grossCents: 10000
+		});
+	});
+
+	it('charges €0 VAT on a reverse-charge line even at a non-zero rate', () => {
+		expect(
+			calculateLineTotals(line({ unitPriceEur: '100.00', quantity: 1, vatRate: 21, vatReverseCharged: true }))
+		).toEqual({
 			netCents: 10000,
 			vatCents: 0,
 			grossCents: 10000

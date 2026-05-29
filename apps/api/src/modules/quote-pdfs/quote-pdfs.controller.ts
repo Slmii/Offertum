@@ -1,7 +1,8 @@
 import { MemberWrite } from '@/common/decorators/member-write.decorator';
+import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { PreviewQuotePdfDto } from '@/modules/quote-pdfs/dto/preview-quote-pdf.dto';
 import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
-import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBody, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
@@ -33,5 +34,25 @@ export class QuotePdfsController {
 		response.setHeader('Content-Disposition', 'inline; filename="offerte-preview.pdf"');
 		response.setHeader('Content-Length', String(pdf.byteLength));
 		response.end(pdf);
+	}
+
+	@ApiOperation({ summary: 'Download a generated quote PDF version' })
+	@ApiProduces('application/pdf')
+	@ApiOkResponse({
+		description: 'PDF bytes',
+		content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } }
+	})
+	@UseGuards(OrganizationGuard)
+	@Get(':quotePdfId/download')
+	async download(
+		@Req() request: Request,
+		@Param('quotePdfId', new ParseUUIDPipe()) quotePdfId: string,
+		@Res() response: Response
+	): Promise<void> {
+		const { filename, contentType, data } = await this.quotePdfs.getDownload(request.organizationId!, quotePdfId);
+		response.setHeader('Content-Type', contentType);
+		response.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+		response.setHeader('Content-Length', String(data.byteLength));
+		response.end(data);
 	}
 }

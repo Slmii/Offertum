@@ -1937,6 +1937,7 @@ function toReplyDraftResponseDto(draft: OpportunityDetailRecord['replyDrafts'][n
 			filename: a.filename,
 			contentType: a.contentType,
 			sizeBytes: a.sizeBytes,
+			quotePdfId: a.quotePdfId,
 			createdAt: a.createdAt.toISOString()
 		}))
 	};

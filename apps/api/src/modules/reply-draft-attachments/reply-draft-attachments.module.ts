@@ -1,3 +1,4 @@
+import { QuotePdfsModule } from '@/modules/quote-pdfs/quote-pdfs.module';
 import { ReplyDraftAttachmentsRepository } from '@/modules/reply-draft-attachments/reply-draft-attachments.repository';
 import { ReplyDraftAttachmentsService } from '@/modules/reply-draft-attachments/reply-draft-attachments.service';
 import { Module } from '@nestjs/common';
@@ -10,6 +11,7 @@ import { Module } from '@nestjs/common';
  * to re-import it here.
  */
 @Module({
+	imports: [QuotePdfsModule],
 	providers: [ReplyDraftAttachmentsService, ReplyDraftAttachmentsRepository],
 	exports: [ReplyDraftAttachmentsService, ReplyDraftAttachmentsRepository]
 })

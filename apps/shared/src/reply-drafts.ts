@@ -61,6 +61,9 @@ export interface ReplyDraftAttachment {
 	filename: string;
 	contentType: string;
 	sizeBytes: number;
+	/** Set when this attachment is a copy of a generated quote PDF version (W10.4);
+	 * `null` for owner-uploaded files. Drives the "which version is attached" selection. */
+	quotePdfId: string | null;
 	createdAt: string;
 }
 

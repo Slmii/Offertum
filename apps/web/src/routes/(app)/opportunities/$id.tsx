@@ -4,6 +4,7 @@ import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateT
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { QuotePanel } from '@/components/QuotePanel.component';
+import { QuotePdfAttachSelect } from '@/components/QuotePdfAttachSelect.component';
 import { SectionError } from '@/components/SectionError.component';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import {
@@ -954,6 +955,7 @@ function AttachmentsPanel({
 					</>
 				)}
 			</Stack>
+			<QuotePdfAttachSelect opportunityId={opportunityId} attachments={attachments} readOnly={readOnly} />
 			{attachments.length === 0 ? (
 				<Typography variant='body2' color='text.secondary'>
 					Geen bijlagen toegevoegd.

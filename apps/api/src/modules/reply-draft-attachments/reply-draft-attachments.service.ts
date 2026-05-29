@@ -9,6 +9,7 @@ import {
 	ATTACHMENT_FILE_MISSING,
 	ATTACHMENT_NOT_FOUND,
 	OPPORTUNITY_NOT_FOUND,
+	QUOTE_PDF_NOT_FOUND,
 	REPLY_DRAFT_LOCKED,
 	attachmentCountExceeded,
 	attachmentFileTooLarge,
@@ -16,6 +17,7 @@ import {
 	attachmentTotalTooLarge
 } from '@/lib/errors';
 import { LogService } from '@/modules/logger/log.service';
+import { QuotePdfsRepository } from '@/modules/quote-pdfs/quote-pdfs.repository';
 import {
 	ReplyDraftAttachmentsRepository,
 	type ReplyDraftAttachmentRow
@@ -67,9 +69,71 @@ export interface DownloadAttachmentResult {
 export class ReplyDraftAttachmentsService {
 	constructor(
 		private readonly repository: ReplyDraftAttachmentsRepository,
+		private readonly quotePdfs: QuotePdfsRepository,
 		@Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage,
 		private readonly logService: LogService
 	) {}
+
+	/** Attach one generated quote-PDF version to the draft, replacing any previously
+	 * attached version (at most one quote PDF at a time). W10.4. */
+	async attachQuotePdf(
+		organizationId: string,
+		opportunityId: string,
+		quotePdfId: string
+	): Promise<ReplyDraftAttachmentRow> {
+		const draft = await this.repository.findDraftForUpload(organizationId, opportunityId);
+		if (!draft) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+		if (!isReplyDraftEditable({ draftStatus: draft.status })) {
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
+		}
+
+		const pdf = await this.quotePdfs.findForOrganization(organizationId, quotePdfId);
+		if (!pdf) {
+			throw new NotFoundException(QUOTE_PDF_NOT_FOUND);
+		}
+
+		await this.removeQuotePdfAttachment(draft.draftId);
+
+		// Copy the version's bytes into a draft-scoped attachment so the two have
+		// independent lifecycles (deleting the attachment never touches the version).
+		const asset = await this.storage.get(pdf.storageKey);
+		const filename = sanitizeFilename(pdf.filename);
+		const { storageKey } = await this.storage.put({
+			storageKey: `${draft.draftId}/${randomUUID()}-${filename}`,
+			data: asset.data,
+			contentType: 'application/pdf'
+		});
+
+		return this.repository.create({
+			replyDraftId: draft.draftId,
+			filename,
+			contentType: 'application/pdf',
+			sizeBytes: pdf.sizeBytes,
+			storageKey,
+			storageDriver: this.storage.driver,
+			quotePdfId: pdf.id
+		});
+	}
+
+	/** Remove the attached quote-PDF copy (if any) from the draft. */
+	async detachQuotePdf(organizationId: string, opportunityId: string): Promise<void> {
+		const draft = await this.repository.findDraftForUpload(organizationId, opportunityId);
+		if (!draft) {
+			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
+		}
+		await this.removeQuotePdfAttachment(draft.draftId);
+	}
+
+	private async removeQuotePdfAttachment(replyDraftId: string): Promise<void> {
+		const existing = await this.repository.findQuotePdfAttachment(replyDraftId);
+		if (!existing) {
+			return;
+		}
+		await this.repository.deleteById(existing.id);
+		await this.storage.delete(existing.storageKey).catch(() => undefined);
+	}
 
 	async list(organizationId: string, opportunityId: string): Promise<ReplyDraftAttachmentRow[]> {
 		const draft = await this.repository.findDraftForUpload(organizationId, opportunityId);

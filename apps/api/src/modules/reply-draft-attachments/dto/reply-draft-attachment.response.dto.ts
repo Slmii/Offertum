@@ -11,5 +11,6 @@ export class ReplyDraftAttachmentResponseDto implements ReplyDraftAttachment {
 	filename!: string;
 	contentType!: string;
 	sizeBytes!: number;
+	quotePdfId!: string | null;
 	createdAt!: string;
 }
