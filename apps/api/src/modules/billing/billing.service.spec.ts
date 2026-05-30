@@ -203,7 +203,8 @@ describe('BillingService.syncFromStripe', () => {
 				cancelAtPeriodEnd: false,
 				pendingUpdateExpiresAt: null,
 				paymentMethodBrand: null,
-				paymentMethodLast4: null
+				paymentMethodLast4: null,
+				paymentProcessing: false
 			}
 		});
 	});
@@ -253,7 +254,8 @@ describe('BillingService.syncFromStripe', () => {
 				cancelAtPeriodEnd: false,
 				pendingUpdateExpiresAt: null,
 				paymentMethodBrand: null,
-				paymentMethodLast4: null
+				paymentMethodLast4: null,
+				paymentProcessing: false
 			}
 		});
 	});
@@ -407,7 +409,7 @@ describe('BillingService.endTrialNow', () => {
 		// focused on the trial-ending behavior (syncFromStripe has its own describe block).
 		const syncSpy = jest
 			.spyOn(service, 'syncFromStripe')
-			.mockReturnValue(Promise.resolve({ status: 'active' }));
+			.mockReturnValue(Promise.resolve({ status: 'active', isPaymentProcessing: false }));
 
 		const result = await service.endTrialNow('org-1');
 
@@ -420,7 +422,7 @@ describe('BillingService.endTrialNow', () => {
 		expect(result).toEqual({ ok: true, status: 'active' });
 	});
 
-	it('reports ok=false when the charge fails and the sub lands on past_due', async () => {
+	it('reports ok=true when the sub is past_due but the SEPA payment is still processing', async () => {
 		const prisma = makePrisma({
 			subscription: {
 				findUnique: jest.fn().mockReturnValue(
@@ -434,11 +436,38 @@ describe('BillingService.endTrialNow', () => {
 		});
 		const update = jest.fn().mockReturnValue(Promise.resolve({ id: 'sub_123', status: 'past_due' }));
 		const service = buildService(prisma, { subscriptions: { update } });
-		jest.spyOn(service, 'syncFromStripe').mockReturnValue(Promise.resolve({ status: 'past_due' }));
+		// SEPA/iDEAL settle over days: past_due + a processing payment is a success in flight,
+		// not a failure — `ok` must be true so we don't show "payment failed" on a good upgrade.
+		jest.spyOn(service, 'syncFromStripe').mockReturnValue(
+			Promise.resolve({ status: 'past_due', isPaymentProcessing: true })
+		);
 
 		const result = await service.endTrialNow('org-1');
 
-		// Trial was ended (Stripe was called), but the payment didn't go through — `ok` must
+		expect(result).toEqual({ ok: true, status: 'past_due' });
+	});
+
+	it('reports ok=false when the charge actually fails (past_due, no processing payment)', async () => {
+		const prisma = makePrisma({
+			subscription: {
+				findUnique: jest.fn().mockReturnValue(
+					Promise.resolve({
+						stripeCustomerId: 'cus_123',
+						stripeSubscriptionId: 'sub_123',
+						status: 'trialing'
+					})
+				)
+			}
+		});
+		const update = jest.fn().mockReturnValue(Promise.resolve({ id: 'sub_123', status: 'past_due' }));
+		const service = buildService(prisma, { subscriptions: { update } });
+		jest.spyOn(service, 'syncFromStripe').mockReturnValue(
+			Promise.resolve({ status: 'past_due', isPaymentProcessing: false })
+		);
+
+		const result = await service.endTrialNow('org-1');
+
+		// Trial was ended (Stripe was called), but the payment genuinely failed — `ok` must
 		// be false so the caller can prompt for a new card instead of reporting success.
 		expect(update).toHaveBeenCalled();
 		expect(result).toEqual({ ok: false, status: 'past_due' });

@@ -348,12 +348,13 @@ export class BillingService {
 		);
 
 		const result = await this.syncFromStripe(sub.stripeCustomerId);
-		// `ok` reflects whether the charge actually went through (sub is now `active`), NOT
-		// merely that we ended the trial. A declined card lands the sub on `past_due`/`incomplete`
-		// — the trial seat cap lifts either way (it only gates `trialing`), but the caller needs
-		// to know the payment didn't complete so it can prompt the owner to fix their card rather
-		// than report a clean success.
-		const upgraded = result.status === 'active';
+		// `ok` reflects whether the upgrade is on track, NOT merely that we ended the trial.
+		// `active` = charged + paid. `past_due` WITH a processing payment = a SEPA/iDEAL debit
+		// still settling (can take days) — also a success in flight, so `ok: true`. A genuine
+		// failure (declined card → `past_due` with a retry scheduled, or `incomplete`) is
+		// `ok: false` so the caller can prompt the owner to fix their payment method. The trial
+		// seat cap lifts either way (it only gates `trialing`).
+		const upgraded = result.status === 'active' || (result.status === 'past_due' && result.isPaymentProcessing);
 		this.logService.logAction({
 			action: 'billing.trial.ended_early',
 			message: `Trial ended early for org ${organizationId} (trialing → ${result.status ?? 'unknown'})`,
@@ -369,7 +370,7 @@ export class BillingService {
 	 * to our local DB. Single source-of-truth function — called from the success
 	 * endpoint AND every webhook. Never trust webhook payloads directly.
 	 */
-	async syncFromStripe(customerId: string): Promise<{ status: string | null }> {
+	async syncFromStripe(customerId: string): Promise<{ status: string | null; isPaymentProcessing: boolean }> {
 		// Stripe returns subscriptions in reverse chronological order by default
 		// (newest `created` first) — documented behavior, no `order_by` param exists
 		// on this endpoint. So `data[0]` is reliably the most recent subscription
@@ -378,7 +379,10 @@ export class BillingService {
 			customer: customerId,
 			limit: 1,
 			status: 'all',
-			expand: ['data.default_payment_method', 'data.items']
+			// `latest_invoice` lets us tell a payment that's still settling (SEPA/iDEAL — a
+			// delayed-notification method, can take days) from one that actually failed, so the
+			// UI shows "processing" rather than "failed" for `past_due`.
+			expand: ['data.default_payment_method', 'data.items', 'data.latest_invoice']
 		});
 
 		// Capture the previous status BEFORE we overwrite it so we can log the transition.
@@ -408,7 +412,8 @@ export class BillingService {
 					cancelAtPeriodEnd: false,
 					pendingUpdateExpiresAt: null,
 					paymentMethodBrand: null,
-					paymentMethodLast4: null
+					paymentMethodLast4: null,
+					paymentProcessing: false
 				}
 			});
 			this.logService.logAction({
@@ -417,7 +422,7 @@ export class BillingService {
 				metadata: { organizationId, customerId, previousStatus, newStatus: null },
 				context: 'BillingService'
 			});
-			return { status: null };
+			return { status: null, isPaymentProcessing: false };
 		}
 
 		const sub = subscriptions.data[0]!;
@@ -432,6 +437,7 @@ export class BillingService {
 		// shape on Stripe: `{ expires_at: <unix>, ...staged change details we don't store }`.
 		const pendingUpdate = sub.pending_update;
 		const pendingUpdateExpiresAt = pendingUpdate?.expires_at ? new Date(pendingUpdate.expires_at * 1000) : null;
+		const paymentProcessing = isInvoicePaymentProcessing(sub.latest_invoice);
 
 		// `updateMany` for the same race-safety reason as the no-subscription branch above.
 		await this.prisma.subscription.updateMany({
@@ -445,7 +451,8 @@ export class BillingService {
 				cancelAtPeriodEnd: sub.cancel_at_period_end,
 				pendingUpdateExpiresAt,
 				paymentMethodBrand: paymentMethod?.type ?? null,
-				paymentMethodLast4: extractLast4(paymentMethod)
+				paymentMethodLast4: extractLast4(paymentMethod),
+				paymentProcessing
 			}
 		});
 
@@ -496,7 +503,7 @@ export class BillingService {
 			});
 		}
 
-		return { status: sub.status };
+		return { status: sub.status, isPaymentProcessing: paymentProcessing };
 	}
 
 	/**
@@ -523,6 +530,7 @@ export class BillingService {
 				state: sub.status as BillingState,
 				currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
 				cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+				isPaymentProcessing: sub.paymentProcessing,
 				pendingUpdateExpiresAt: sub.pendingUpdateExpiresAt?.toISOString() ?? null,
 				paymentMethodBrand: sub.paymentMethodBrand,
 				paymentMethodLast4: sub.paymentMethodLast4,
@@ -538,6 +546,7 @@ export class BillingService {
 			state: 'none',
 			currentPeriodEnd: null,
 			cancelAtPeriodEnd: false,
+			isPaymentProcessing: false,
 			pendingUpdateExpiresAt: null,
 			paymentMethodBrand: null,
 			paymentMethodLast4: null,
@@ -830,6 +839,15 @@ interface PaymentMethodLike {
 	sepa_debit?: { last4?: string | null } | null;
 }
 
+// Structural view of the fields we read off the latest invoice — same duck-typing approach
+// as PaymentMethodLike (Stripe's CJS `export =` makes the `Stripe.Invoice` namespace type
+// awkward to reference directly).
+interface InvoiceLike {
+	status: string | null;
+	attempted: boolean;
+	next_payment_attempt: number | null;
+}
+
 /**
  * Stripe's "No such customer / object" errors come back as `code: 'resource_missing'`.
  * Detect via duck-typing to avoid relying on the SDK's instanceof types (which are
@@ -864,4 +882,19 @@ function extractLast4(pm: PaymentMethodLike | null): string | null {
 	}
 
 	return null;
+}
+
+/**
+ * Whether the latest invoice's payment is still settling (a delayed-notification method like
+ * SEPA Direct Debit, which can take days) rather than failed. Stripe leaves such an invoice
+ * `open` + `attempted` with NO `next_payment_attempt` scheduled while the bank debit is in
+ * flight; a genuine failure (declined card, rejected mandate) schedules a retry
+ * (`next_payment_attempt` set) or moves the sub to `unpaid`/`canceled`. We use this to render
+ * `past_due` as "Payment processing" instead of "Payment failed".
+ */
+function isInvoicePaymentProcessing(invoice: InvoiceLike | string | null | undefined): boolean {
+	if (!invoice || typeof invoice === 'string') {
+		return false;
+	}
+	return invoice.status === 'open' && invoice.attempted && invoice.next_payment_attempt === null;
 }

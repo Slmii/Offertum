@@ -25,6 +25,10 @@ export class BillingStatusResponseDto implements BillingStatus {
 
 	cancelAtPeriodEnd!: boolean;
 
+	/** True when the latest invoice's payment is still settling (e.g. SEPA Direct Debit)
+	 * rather than failed. See shared `BillingStatus.isPaymentProcessing`. */
+	isPaymentProcessing!: boolean;
+
 	/** ISO timestamp; non-null when Stripe has a `pending_update` staged on the
 	 * subscription that's waiting for payment confirmation. See shared
 	 * `BillingStatus.pendingUpdateExpiresAt` for the full description. */

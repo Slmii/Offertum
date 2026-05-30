@@ -168,9 +168,10 @@ function StatusPanel({
 	onOpenPortal: () => void;
 	portalOpening: boolean;
 }) {
-	const { state, currentPeriodEnd, cancelAtPeriodEnd, paymentMethodBrand, paymentMethodLast4 } = status;
+	const { state, currentPeriodEnd, cancelAtPeriodEnd, isPaymentProcessing, paymentMethodBrand, paymentMethodLast4 } =
+		status;
 	const endDate = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
-	const chip = stateChip(state);
+	const chip = stateChip(state, isPaymentProcessing);
 	const showCancellationBanner = cancelAtPeriodEnd && endDate !== null;
 
 	return (
@@ -183,11 +184,11 @@ function StatusPanel({
 			</Box>
 
 			<Typography variant='body1' sx={{ mb: 0.5 }}>
-				{primaryLine(state, endDate)}
+				{primaryLine(state, endDate, isPaymentProcessing)}
 			</Typography>
-			{secondaryLine(state) && (
+			{secondaryLine(state, isPaymentProcessing) && (
 				<Typography variant='body2' color='text.secondary'>
-					{secondaryLine(state)}
+					{secondaryLine(state, isPaymentProcessing)}
 				</Typography>
 			)}
 
@@ -277,8 +278,11 @@ function formatEuros(cents: number): string {
 	return `€${whole}.${remainder.toString().padStart(2, '0')}`;
 }
 
-function stateChip(state: BillingStatus['state']): {
-	color: 'default' | 'primary' | 'success' | 'warning' | 'error';
+function stateChip(
+	state: BillingStatus['state'],
+	isPaymentProcessing: boolean
+): {
+	color: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info';
 	label: string;
 } {
 	switch (state) {
@@ -289,7 +293,9 @@ function stateChip(state: BillingStatus['state']): {
 		case 'active':
 			return { color: 'success', label: 'Active' };
 		case 'past_due':
-			return { color: 'warning', label: 'Payment failed' };
+			return isPaymentProcessing
+				? { color: 'info', label: 'Payment processing' }
+				: { color: 'warning', label: 'Payment failed' };
 		case 'paused':
 			return { color: 'warning', label: 'Paused' };
 		case 'canceled':
@@ -301,7 +307,7 @@ function stateChip(state: BillingStatus['state']): {
 	}
 }
 
-function primaryLine(state: BillingStatus['state'], endDate: Date | null): string {
+function primaryLine(state: BillingStatus['state'], endDate: Date | null, isPaymentProcessing: boolean): string {
 	switch (state) {
 		case 'none':
 			return "You haven't started your trial yet.";
@@ -310,7 +316,9 @@ function primaryLine(state: BillingStatus['state'], endDate: Date | null): strin
 		case 'active':
 			return `Subscription active — renews ${endDate ? toReadableDate(endDate, 'D MMM YYYY') : '-'}`;
 		case 'past_due':
-			return "We couldn't collect your last payment.";
+			return isPaymentProcessing
+				? 'Payment processing — bank debits (SEPA) can take a few days to clear.'
+				: "We couldn't collect your last payment.";
 		case 'paused':
 			return 'Subscription paused.';
 		case 'canceled':
@@ -324,12 +332,14 @@ function primaryLine(state: BillingStatus['state'], endDate: Date | null): strin
 	}
 }
 
-function secondaryLine(state: BillingStatus['state']): string | null {
+function secondaryLine(state: BillingStatus['state'], isPaymentProcessing: boolean): string | null {
 	switch (state) {
 		case 'none':
 			return 'Start your 14-day free trial. A card is required at signup, but you won’t be charged for 14 days. Cancel any time before then.';
 		case 'past_due':
-			return 'Update your payment method to keep your subscription active.';
+			return isPaymentProcessing
+				? 'No action needed — we’ll confirm once your bank completes the payment.'
+				: 'Update your payment method to keep your subscription active.';
 		case 'canceled':
 			return 'Subscribe again to restore access.';
 		default:

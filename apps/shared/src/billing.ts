@@ -39,6 +39,12 @@ export interface BillingStatus {
 	currentPeriodEnd: string | null;
 	cancelAtPeriodEnd: boolean;
 	/**
+	 * True when the latest invoice's payment is still settling (a delayed-notification method
+	 * like SEPA Direct Debit, which can take days) rather than failed. Only meaningful for
+	 * `past_due` — lets the UI render "Payment processing" instead of "Payment failed".
+	 */
+	isPaymentProcessing: boolean;
+	/**
 	 * When non-null, Stripe has a `pending_update` staged on the subscription — a
 	 * change (e.g. plan upgrade through the Portal that requires 3DS confirmation)
 	 * is waiting for payment, and this is the ISO timestamp when it expires if the

@@ -468,6 +468,11 @@ model Subscription {
   pendingUpdateExpiresAt DateTime?
   paymentMethodBrand     String?
   paymentMethodLast4     String?
+  // True when the latest invoice's payment is still in flight (a delayed-notification
+  // method like SEPA Direct Debit, which can take days to clear) rather than failed. Lets
+  // the UI render `past_due` as "Payment processing" instead of "Payment failed". Set during
+  // `syncFromStripe` from the latest invoice; defaults false.
+  paymentProcessing      Boolean   @default(false)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
