@@ -45,7 +45,7 @@ function makeRequest(payload: unknown): Request {
 describe('GmailWebhookController.receive', () => {
 	beforeEach(() => {
 		jest.restoreAllMocks();
-		(pubsubVerifier.verifyPubSubJWT as jest.Mock).mockResolvedValue(undefined);
+		(pubsubVerifier.verifyPubSubJWT as jest.Mock).mockResolvedValue(undefined as never);
 		jest.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 	});
 
@@ -56,7 +56,7 @@ describe('GmailWebhookController.receive', () => {
 				organizationId: 'org-1',
 				userId: 'user-1'
 			}
-		]);
+		] as never);
 		const prisma = {
 			emailAccount: { findMany }
 		} as unknown as PrismaService;

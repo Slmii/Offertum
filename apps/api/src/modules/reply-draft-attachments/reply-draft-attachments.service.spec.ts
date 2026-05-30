@@ -9,20 +9,20 @@ import { describe, expect, it, jest } from '@jest/globals';
 describe('ReplyDraftAttachmentsService.upload', () => {
 	it('deletes the stored blob when attachment row creation fails', async () => {
 		const repository = {
-			findDraftForUpload: jest.fn().mockResolvedValue({
+			findDraftForUpload: jest.fn<ReplyDraftAttachmentsRepository['findDraftForUpload']>().mockResolvedValue({
 				draftId: 'draft-1',
 				opportunityId: 'opp-1',
 				status: ReplyDraftStatus.PENDING_APPROVAL,
 				attachmentCount: 0,
 				attachmentTotalBytes: 0
 			}),
-			create: jest.fn().mockRejectedValue(new Error('db unavailable'))
+			create: jest.fn<ReplyDraftAttachmentsRepository['create']>().mockRejectedValue(new Error('db unavailable'))
 		} as unknown as ReplyDraftAttachmentsRepository;
 		const storage = {
 			driver: 'local',
-			put: jest.fn().mockResolvedValue({ storageKey: 'ignored' }),
+			put: jest.fn<AttachmentStorage['put']>().mockResolvedValue({ storageKey: 'ignored' }),
 			get: jest.fn(),
-			delete: jest.fn().mockResolvedValue(undefined)
+			delete: jest.fn<AttachmentStorage['delete']>().mockResolvedValue(undefined)
 		} as unknown as AttachmentStorage;
 		const quotePdfs = {} as unknown as QuotePdfsRepository;
 		const service = new ReplyDraftAttachmentsService(repository, quotePdfs, storage, {
