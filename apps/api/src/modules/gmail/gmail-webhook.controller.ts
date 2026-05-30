@@ -7,7 +7,7 @@ import {
 	GMAIL_WEBHOOK_JWT_INVALID,
 	GMAIL_WEBHOOK_NOT_CONFIGURED
 } from '@/lib/errors';
-import { PubSubJWTVerificationError, verifyPubSubJWT } from '@/lib/oauth/pubsub-jwt-verifier';
+import { type PubSubJWTPayload, PubSubJWTVerificationError, verifyPubSubJWT } from '@/lib/oauth/pubsub-jwt-verifier';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
@@ -77,6 +77,16 @@ export class GmailWebhookController {
 		private readonly logService: LogService
 	) {}
 
+	/**
+	 * Seam over the module-level `verifyPubSubJWT` so it can be stubbed in tests. Under this
+	 * project's `@swc/jest` setup a free function import can't be mocked (no `jest.mock`
+	 * hoisting, and SWC compiles exports as non-configurable getters so `jest.spyOn` can't
+	 * patch them); an instance method is spy-able. Production behavior is unchanged.
+	 */
+	protected verifyToken(token: string, audience: string, serviceAccount: string): Promise<PubSubJWTPayload> {
+		return verifyPubSubJWT(token, audience, serviceAccount);
+	}
+
 	@SkipThrottle()
 	@HttpCode(HttpStatus.NO_CONTENT)
 	@Post()
@@ -103,7 +113,7 @@ export class GmailWebhookController {
 		}
 
 		try {
-			await verifyPubSubJWT(token, audience, serviceAccount);
+			await this.verifyToken(token, audience, serviceAccount);
 		} catch (error) {
 			if (error instanceof PubSubJWTVerificationError) {
 				this.logService.logAction({

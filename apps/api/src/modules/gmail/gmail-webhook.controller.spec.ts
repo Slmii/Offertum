@@ -1,6 +1,5 @@
 import type { EnvSchema } from '@/config/env.schema';
 import { EmailProvider } from '@/generated/prisma/enums';
-import * as pubsubVerifier from '@/lib/oauth/pubsub-jwt-verifier';
 import { inngest } from '@/modules/inngest/inngest.client';
 import type { LogService } from '@/modules/logger/log.service';
 import { GmailWebhookController } from '@/modules/gmail/gmail-webhook.controller';
@@ -8,11 +7,6 @@ import type { PrismaService } from '@/modules/prisma/prisma.service';
 import type { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { Request } from 'express';
-
-jest.mock('@/lib/oauth/pubsub-jwt-verifier', () => ({
-	PubSubJWTVerificationError: class PubSubJWTVerificationError extends Error {},
-	verifyPubSubJWT: jest.fn()
-}));
 
 function makeConfig(): ConfigService<EnvSchema, true> {
 	return {
@@ -45,7 +39,6 @@ function makeRequest(payload: unknown): Request {
 describe('GmailWebhookController.receive', () => {
 	beforeEach(() => {
 		jest.restoreAllMocks();
-		(pubsubVerifier.verifyPubSubJWT as jest.Mock).mockResolvedValue(undefined as never);
 		jest.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 	});
 
@@ -63,6 +56,11 @@ describe('GmailWebhookController.receive', () => {
 		const controller = new GmailWebhookController(makeConfig(), prisma, {
 			logAction: jest.fn()
 		} as unknown as LogService);
+		// Stub JWT verification (instance-method seam — see GmailWebhookController.verifyToken).
+		jest.spyOn(
+			controller as unknown as { verifyToken: () => Promise<void> },
+			'verifyToken'
+		).mockResolvedValue(undefined);
 
 		await controller.receive(
 			makeRequest({ emailAddress: 'Owner@Example.COM', historyId: '123' }),
