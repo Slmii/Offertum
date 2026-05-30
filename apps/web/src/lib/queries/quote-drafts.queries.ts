@@ -48,6 +48,8 @@ export function useGenerateQuotePdf(opportunityId: string) {
 		onSuccess: () => {
 			// New version lands in the PDF history (carried on the quote-drafts list response).
 			void queryClient.invalidateQueries({ queryKey: QuoteDraftKeys.list(opportunityId) });
+			// Timeline gains a "quote_pdf_generated" event — refresh the opportunity detail too.
+			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.detail(opportunityId) });
 		}
 	});
 }

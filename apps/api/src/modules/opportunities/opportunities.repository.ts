@@ -32,7 +32,8 @@ const OPPORTUNITY_TIMELINE_ACTIONS = [
 	'opportunity.fields_updated',
 	'opportunity.assigned',
 	'opportunity.received_via_mailbox',
-	'opportunity.quote_created'
+	'opportunity.quote_created',
+	'opportunity.quote_pdf_generated'
 ] as const;
 
 const TIMELINE_QUERY_CAP = 200;

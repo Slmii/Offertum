@@ -1,5 +1,6 @@
 import type { EnvSchema } from '@/config/env.schema';
 import {
+	NotificationEventType as PrismaNotificationEventType,
 	OpportunityStatus as PrismaOpportunityStatus,
 	ReplyDraftKind as PrismaReplyDraftKind,
 	ReplyDraftStatus as PrismaReplyDraftStatus
@@ -21,11 +22,10 @@ import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
 import { ShouldReplyClassifier } from '@/modules/ai/should-reply/should-reply.service';
-import { NotificationsService } from '@/modules/notifications/notifications.service';
-import { NotificationEventType as PrismaNotificationEventType } from '@/generated/prisma/enums';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
+import { NotificationsService } from '@/modules/notifications/notifications.service';
 import {
 	OpportunityDetailResponseDto,
 	ReplyDraftResponseDto
@@ -67,11 +67,11 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import type {
 	OpportunityAssigneeFilter,
-	OpportunityDismissReason as WireDismissReason,
 	OpportunityFieldChange,
 	OpportunityMailboxOwnershipFilter,
-	OpportunityStatus as WireOpportunityStatus,
 	OpportunityTimelineEvent,
+	OpportunityDismissReason as WireDismissReason,
+	OpportunityStatus as WireOpportunityStatus,
 	OpportunityUrgency as WireOpportunityUrgency
 } from '@offertum/shared';
 
@@ -2280,6 +2280,21 @@ function toOpportunityTimelineEvent(
 				actorName,
 				quoteDraftId,
 				lineCount: readNumber(row.metadata, 'lineCount') ?? 0
+			};
+		}
+		case 'opportunity.quote_pdf_generated': {
+			const quotePdfId = readString(row.metadata, 'quotePdfId');
+			if (quotePdfId === null) {
+				return null;
+			}
+			return {
+				id: row.id,
+				kind: 'quote_pdf_generated',
+				occurredAt,
+				actorUserId,
+				actorName,
+				quotePdfId,
+				filename: readString(row.metadata, 'filename') ?? 'offerte.pdf'
 			};
 		}
 		default:

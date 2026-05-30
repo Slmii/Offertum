@@ -1207,6 +1207,13 @@ function describeTimelineEvent(event: OpportunityTimelineEvent): TimelineEventCo
 						: `Offerte opgesteld (${event.lineCount} regels)`,
 				detail: null
 			};
+		case 'quote_pdf_generated':
+			return {
+				chipLabel: 'Offerte-PDF',
+				chipColor: 'success',
+				headline: 'Offerte-PDF gegenereerd',
+				detail: event.filename
+			};
 	}
 }
 

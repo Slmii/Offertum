@@ -1,5 +1,6 @@
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { quoteDraftsQueryOptions, useAttachQuotePdf } from '@/lib/queries/quote-drafts.queries';
+import { toReadableDateTime } from '@/lib/utils/date.utils';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import type { ReplyDraftAttachment } from '@offertum/shared';
@@ -29,6 +30,9 @@ export function QuotePdfAttachSelect({
 	}
 
 	const currentQuotePdfId = attachments.find(attachment => attachment.quotePdfId)?.quotePdfId ?? NONE;
+	// Newest-first list → highest version number = latest. Disambiguates multiple
+	// generations on the same day.
+	const versionByPdfId = new Map(data.pdfs.map((pdf, index) => [pdf.id, data.pdfs.length - index]));
 
 	return (
 		<Box sx={{ mb: 1.5 }}>
@@ -41,8 +45,27 @@ export function QuotePdfAttachSelect({
 				disabled={readOnly || attach.isPending}
 				options={[
 					{ id: NONE, label: 'Geen offerte-PDF' },
-					...data.pdfs.map(pdf => ({ id: pdf.id, label: pdf.filename }))
+					...data.pdfs.map((pdf, index) => ({
+						id: pdf.id,
+						label: (
+							<Box>
+								<Typography variant='body2'>
+									v{data.pdfs.length - index} · {pdf.filename}
+								</Typography>
+								<Typography variant='caption' color='text.secondary'>
+									{toReadableDateTime(pdf.createdAt)}
+								</Typography>
+							</Box>
+						)
+					}))
 				]}
+				renderValue={value => {
+					if (value === NONE) {
+						return 'Geen offerte-PDF';
+					}
+					const pdf = data.pdfs.find(candidate => candidate.id === value);
+					return pdf ? `v${versionByPdfId.get(pdf.id)} · ${pdf.filename}` : value;
+				}}
 				onChange={event => attach.mutate(event.target.value === NONE ? null : event.target.value)}
 			/>
 			{attach.isError && (

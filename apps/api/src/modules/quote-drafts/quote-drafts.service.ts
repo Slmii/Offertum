@@ -9,9 +9,6 @@ import { CatalogItemsRepository } from '@/modules/catalog-items/catalog-items.re
 import { LogService } from '@/modules/logger/log.service';
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
 import { PricingPlaybookRepository } from '@/modules/pricing-playbook/pricing-playbook.repository';
-import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
-import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
-import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-items.service';
 import { toQuoteDraftWire } from '@/modules/quote-drafts/quote-drafts.mapper';
 import {
 	type CreateQuoteLineRepoInput,
@@ -20,9 +17,12 @@ import {
 	type ReplaceQuoteLineRepoInput
 } from '@/modules/quote-drafts/quote-drafts.repository';
 import { QUOTE_LINE_SOURCE_FROM_WIRE } from '@/modules/quote-drafts/quote-line-source.mapper';
+import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-items.service';
+import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
+import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { CatalogItemUnit } from '@offertum/shared';
 import type {
+	CatalogItemUnit,
 	CreateQuoteLineItemInput,
 	ProposedQuoteLine,
 	QuoteDraft,
@@ -205,13 +205,14 @@ export class QuoteDraftsService {
 		const pdf = await this.quotePdfs.storeVersion(organizationId, draft.opportunityId, quoteDraftId, rendered);
 
 		this.logService.logAction({
-			action: 'quote_draft.pdf_generated',
+			action: 'opportunity.quote_pdf_generated',
 			message: `Quote PDF ${pdf.filename} (version ${pdf.id}) generated for opportunity ${draft.opportunityId} from draft ${quoteDraftId}`,
 			metadata: {
 				organizationId,
 				opportunityId: draft.opportunityId,
 				quoteDraftId,
-				quotePdfId: pdf.id
+				quotePdfId: pdf.id,
+				filename: pdf.filename
 			},
 			context: 'QuoteDraftsService'
 		});

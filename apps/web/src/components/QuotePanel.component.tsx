@@ -2,14 +2,14 @@ import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import {
 	quoteDraftsQueryOptions,
+	quotePdfDownloadUrl,
 	useAddQuoteLineItem,
 	useDeleteQuoteLineItem,
 	useGenerateQuoteDraft,
 	useGenerateQuotePdf,
 	useGenerateQuotePreview,
 	useReplaceQuoteLines,
-	useUpdateQuoteLineItem,
-	quotePdfDownloadUrl
+	useUpdateQuoteLineItem
 } from '@/lib/queries/quote-drafts.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import { toReadableEuro } from '@/lib/utils/number.utils';
@@ -180,7 +180,7 @@ function QuotePdfHistory({ pdfs }: { pdfs: QuotePdf[] }) {
 			</Typography>
 			<Paper variant='outlined' sx={{ p: 1.5 }}>
 				<Stack useFlexGap spacing={0.5}>
-					{pdfs.map(pdf => (
+					{pdfs.map((pdf, index) => (
 						<Stack
 							key={pdf.id}
 							direction='row'
@@ -188,6 +188,9 @@ function QuotePdfHistory({ pdfs }: { pdfs: QuotePdf[] }) {
 							spacing={1}
 							sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
 						>
+							<Typography variant='body2' color='text.secondary'>
+								v{pdfs.length - index}
+							</Typography>
 							<Link href={quotePdfDownloadUrl(pdf.id)} target='_blank' rel='noopener' underline='hover'>
 								{pdf.filename}
 							</Link>

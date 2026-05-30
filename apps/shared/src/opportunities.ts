@@ -215,7 +215,8 @@ export const OPPORTUNITY_TIMELINE_EVENT_KINDS = [
 	'fields_updated',
 	'assigned',
 	'received_via_mailbox',
-	'quote_created'
+	'quote_created',
+	'quote_pdf_generated'
 ] as const;
 export type OpportunityTimelineEventKind = (typeof OPPORTUNITY_TIMELINE_EVENT_KINDS)[number];
 
@@ -301,6 +302,13 @@ export interface OpportunityQuoteCreatedEvent extends OpportunityTimelineEventBa
 	lineCount: number;
 }
 
+/** Written when the owner generates a quote PDF version (W10.4). */
+export interface OpportunityQuotePdfGeneratedEvent extends OpportunityTimelineEventBase {
+	kind: 'quote_pdf_generated';
+	quotePdfId: string;
+	filename: string;
+}
+
 export type OpportunityTimelineEvent =
 	| OpportunityStatusChangedEvent
 	| OpportunityAutoColdEvent
@@ -309,7 +317,8 @@ export type OpportunityTimelineEvent =
 	| OpportunityFieldsUpdatedEvent
 	| OpportunityAssignedEvent
 	| OpportunityReceivedViaMailboxEvent
-	| OpportunityQuoteCreatedEvent;
+	| OpportunityQuoteCreatedEvent
+	| OpportunityQuotePdfGeneratedEvent;
 
 /**
  * Direction of a thread message relative to the connected mailbox.

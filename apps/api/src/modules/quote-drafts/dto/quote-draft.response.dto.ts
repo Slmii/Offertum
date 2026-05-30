@@ -1,4 +1,4 @@
-import { QuotePdfResponseDto } from '@/modules/quote-pdfs/dto/quote-pdf.response.dto';
+import type { QuotePdfResponseDto } from '@/modules/quote-pdfs/dto/quote-pdf.response.dto';
 import type {
 	QuoteDraft,
 	QuoteDraftListResponse,

@@ -54,10 +54,12 @@ export function useUpdateNotificationPreferences() {
 		mutationFn: (input: UpdateNotificationPreferencesInput) =>
 			api<void>('/api/me/notification-preferences', { method: 'PUT', body: input }),
 		onSuccess: (_data, variables) => {
-			// PUT returns 204; merge the optimistic state into the cache.
+			// PUT returns 204; merge the optimistic state into the cache. Spread `current`
+			// first so the new `preferences` wins — the reverse order let the stale value
+			// clobber the optimistic write.
 			queryClient.setQueryData<NotificationPreferencesResponse>(NotificationsKeys.preferences, current => ({
-				preferences: variables.preferences,
-				...(current ?? {})
+				...(current ?? {}),
+				preferences: variables.preferences
 			}));
 			queryClient.invalidateQueries({ queryKey: NotificationsKeys.preferences });
 		}

@@ -1,8 +1,9 @@
+import { ReplyDraftStatus } from '@/generated/prisma/enums';
 import type { AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
 import type { LogService } from '@/modules/logger/log.service';
+import type { QuotePdfsRepository } from '@/modules/quote-pdfs/quote-pdfs.repository';
 import type { ReplyDraftAttachmentsRepository } from '@/modules/reply-draft-attachments/reply-draft-attachments.repository';
 import { ReplyDraftAttachmentsService } from '@/modules/reply-draft-attachments/reply-draft-attachments.service';
-import { ReplyDraftStatus } from '@/generated/prisma/enums';
 import { describe, expect, it, jest } from '@jest/globals';
 
 describe('ReplyDraftAttachmentsService.upload', () => {
@@ -23,7 +24,8 @@ describe('ReplyDraftAttachmentsService.upload', () => {
 			get: jest.fn(),
 			delete: jest.fn().mockResolvedValue(undefined)
 		} as unknown as AttachmentStorage;
-		const service = new ReplyDraftAttachmentsService(repository, storage, {
+		const quotePdfs = {} as unknown as QuotePdfsRepository;
+		const service = new ReplyDraftAttachmentsService(repository, quotePdfs, storage, {
 			logAction: jest.fn()
 		} as unknown as LogService);
 
