@@ -63,6 +63,15 @@ export class BillingController {
 		return this.billing.createCheckoutSession(request.organizationId!);
 	}
 
+	@ApiOperation({ summary: 'End the trial immediately and convert to a paid subscription' })
+	@ApiOkResponse({ type: BillingSyncResponseDto })
+	@UseGuards(OwnerGuard)
+	@HttpCode(HttpStatus.OK)
+	@Post('end-trial')
+	async endTrial(@Req() request: Request): Promise<BillingSyncResponseDto> {
+		return this.billing.endTrialNow(request.organizationId!);
+	}
+
 	@ApiOperation({ summary: 'Create a Stripe Customer Portal session for self-service management' })
 	@ApiOkResponse({ type: CheckoutSessionResponseDto })
 	@UseGuards(OwnerGuard)

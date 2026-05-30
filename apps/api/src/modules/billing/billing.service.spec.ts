@@ -1,6 +1,7 @@
-import { PER_SEAT_OVERAGE_CENTS, SEATS_INCLUDED } from '@/modules/billing/billing.constants';
+import { BASE_PRICE_CENTS, PER_SEAT_OVERAGE_CENTS, SEATS_INCLUDED } from '@/modules/billing/billing.constants';
 import { BillingService } from '@/modules/billing/billing.service';
 import type { PrismaService } from '@/modules/prisma/prisma.service';
+import { ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { describe, expect, it, jest } from '@jest/globals';
 
 interface FakePrisma {
@@ -96,7 +97,8 @@ describe('BillingService.getStatus', () => {
 		expect(status.seats).toEqual({
 			used: 0,
 			included: SEATS_INCLUDED,
-			overagePerSeatCents: PER_SEAT_OVERAGE_CENTS
+			overagePerSeatCents: PER_SEAT_OVERAGE_CENTS,
+			baseMonthlyPriceCents: BASE_PRICE_CENTS
 		});
 	});
 
@@ -383,5 +385,90 @@ describe('BillingService.syncFromStripe', () => {
 		};
 		expect(call.data.priceId).toBeNull();
 		expect(call.data.currentPeriodStart).toBeNull();
+	});
+});
+
+describe('BillingService.endTrialNow', () => {
+	it('ends the Stripe trial and re-syncs when the org is trialing', async () => {
+		const prisma = makePrisma({
+			subscription: {
+				findUnique: jest.fn().mockReturnValue(
+					Promise.resolve({
+						stripeCustomerId: 'cus_123',
+						stripeSubscriptionId: 'sub_123',
+						status: 'trialing'
+					})
+				)
+			}
+		});
+		const update = jest.fn().mockReturnValue(Promise.resolve({ id: 'sub_123', status: 'active' }));
+		const service = buildService(prisma, { subscriptions: { update } });
+		// endTrialNow delegates persistence to syncFromStripe; stub it so this test stays
+		// focused on the trial-ending behavior (syncFromStripe has its own describe block).
+		const syncSpy = jest
+			.spyOn(service, 'syncFromStripe')
+			.mockReturnValue(Promise.resolve({ status: 'active' }));
+
+		const result = await service.endTrialNow('org-1');
+
+		expect(update).toHaveBeenCalledWith(
+			'sub_123',
+			{ trial_end: 'now' },
+			expect.objectContaining({ idempotencyKey: expect.any(String) })
+		);
+		expect(syncSpy).toHaveBeenCalledWith('cus_123');
+		expect(result).toEqual({ ok: true, status: 'active' });
+	});
+
+	it('reports ok=false when the charge fails and the sub lands on past_due', async () => {
+		const prisma = makePrisma({
+			subscription: {
+				findUnique: jest.fn().mockReturnValue(
+					Promise.resolve({
+						stripeCustomerId: 'cus_123',
+						stripeSubscriptionId: 'sub_123',
+						status: 'trialing'
+					})
+				)
+			}
+		});
+		const update = jest.fn().mockReturnValue(Promise.resolve({ id: 'sub_123', status: 'past_due' }));
+		const service = buildService(prisma, { subscriptions: { update } });
+		jest.spyOn(service, 'syncFromStripe').mockReturnValue(Promise.resolve({ status: 'past_due' }));
+
+		const result = await service.endTrialNow('org-1');
+
+		// Trial was ended (Stripe was called), but the payment didn't go through — `ok` must
+		// be false so the caller can prompt for a new card instead of reporting success.
+		expect(update).toHaveBeenCalled();
+		expect(result).toEqual({ ok: false, status: 'past_due' });
+	});
+
+	it('rejects with 409 and never calls Stripe when the subscription is not trialing', async () => {
+		const prisma = makePrisma({
+			subscription: {
+				findUnique: jest.fn().mockReturnValue(
+					Promise.resolve({
+						stripeCustomerId: 'cus_123',
+						stripeSubscriptionId: 'sub_123',
+						status: 'active'
+					})
+				)
+			}
+		});
+		const update = jest.fn();
+		const service = buildService(prisma, { subscriptions: { update } });
+
+		await expect(service.endTrialNow('org-1')).rejects.toThrow(ConflictException);
+		expect(update).not.toHaveBeenCalled();
+	});
+
+	it('rejects when the org has no live subscription to upgrade', async () => {
+		const prisma = makePrisma({
+			subscription: { findUnique: jest.fn().mockReturnValue(Promise.resolve(null)) }
+		});
+		const service = buildService(prisma, {});
+
+		await expect(service.endTrialNow('org-1')).rejects.toThrow(InternalServerErrorException);
 	});
 });

@@ -88,6 +88,8 @@ export const subscriptionAlreadyActive = (status: string) =>
 	`Organization already has an active subscription (${status}). Use the Customer Portal to manage it.`;
 export const trialSeatLimitReached = (cap: number) =>
 	`Trial accounts are limited to ${cap} seats. Subscribe to invite more teammates.`;
+export const trialUpgradeNotTrialing = (status: string) =>
+	`You can only upgrade to paid from an active trial. The subscription is currently ${status}.`;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Gmail / email connection (Dev-facing config + User-facing OAuth failures)

@@ -44,6 +44,20 @@ export function useOpenPortal() {
 	});
 }
 
+/**
+ * POST /api/billing/end-trial — "Upgrade to paid now". Ends the Stripe trial immediately
+ * (charges the saved card, flips trialing → active) so the org can grow past the trial seat
+ * cap. Invalidates the status query so the page reflects the new state + seat math.
+ */
+export function useEndTrial() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: () => api<BillingSyncResponse>('/api/billing/end-trial', { method: 'POST' }),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: BillingKeys.status })
+	});
+}
+
 /** Force a re-sync of subscription state from Stripe. Called from /billing/success. */
 export function useSyncBilling() {
 	const queryClient = useQueryClient();

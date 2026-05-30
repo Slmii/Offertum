@@ -48,6 +48,14 @@ export const SEATS_INCLUDED = 3;
 export const PER_SEAT_OVERAGE_CENTS = 1000;
 
 /**
+ * Flat base price (graduated tier 1) in cents (EUR) — the monthly charge that covers the
+ * first `SEATS_INCLUDED` seats. Surfaced on the billing status so the UI renders one sourced
+ * value instead of hardcoding "€50" in copy. MUST match the Stripe Price's tier-1 flat amount
+ * (Dashboard → Products → Offertum monthly), same contract as the two constants above.
+ */
+export const BASE_PRICE_CENTS = 5000;
+
+/**
  * States in which we cap orgs at `SEATS_INCLUDED` seats. Prevents a trial user from
  * inviting an unbounded team and then being surprised by a large first invoice when
  * the trial ends. Once they actually subscribe (`active | past_due | paused`), they can

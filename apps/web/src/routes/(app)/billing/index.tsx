@@ -1,18 +1,24 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SectionError } from '@/components/SectionError.component';
-import { billingStatusQueryOptions, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
+import { billingStatusQueryOptions, useEndTrial, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
 import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import type { BillingStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/(app)/billing/')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions),
@@ -24,6 +30,25 @@ function BillingPage() {
 	const { data: status } = useSuspenseQuery(billingStatusQueryOptions);
 	const startCheckout = useStartCheckout();
 	const openPortal = useOpenPortal();
+	const endTrial = useEndTrial();
+	const [confirmUpgradeOpen, setConfirmUpgradeOpen] = useState(false);
+
+	const showUpgrade = shouldShowUpgrade(status);
+	const hasPrimaryAction = shouldShowSubscribe(status) || showUpgrade;
+
+	const confirmUpgrade = () =>
+		endTrial.mutate(undefined, {
+			// Close only on a real upgrade. `ok: false` means we ended the trial but the charge
+			// didn't go through (declined card → past_due) — keep the dialog open so the
+			// payment-incomplete notice is visible instead of silently reporting success.
+			onSuccess: data => {
+				if (data.ok) {
+					setConfirmUpgradeOpen(false);
+				}
+			}
+		});
+
+	const upgradeIncomplete = endTrial.isSuccess && !endTrial.data.ok;
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
@@ -35,7 +60,8 @@ function BillingPage() {
 					<BackToHomeButton />
 				</Box>
 				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Manage your Offertum subscription. €50/month after a 14-day free trial.
+					Manage your Offertum subscription. {formatEuros(status.seats.baseMonthlyPriceCents)}/month after a
+					14-day free trial.
 				</Typography>
 
 				<StatusPanel
@@ -44,13 +70,15 @@ function BillingPage() {
 					portalOpening={openPortal.isPending}
 				/>
 
-				{(startCheckout.isError || openPortal.isError) && (
+				{(startCheckout.isError || openPortal.isError || endTrial.isError) && (
 					<Alert severity='error' sx={{ mb: 3, mt: 2 }}>
 						{startCheckout.error instanceof Error
 							? startCheckout.error.message
 							: openPortal.error instanceof Error
 								? openPortal.error.message
-								: 'Something went wrong. Please try again.'}
+								: endTrial.error instanceof Error
+									? endTrial.error.message
+									: 'Something went wrong. Please try again.'}
 					</Alert>
 				)}
 
@@ -66,10 +94,21 @@ function BillingPage() {
 						</Button>
 					)}
 
+					{showUpgrade && (
+						<Button
+							variant='contained'
+							size='large'
+							onClick={() => setConfirmUpgradeOpen(true)}
+							disabled={endTrial.isPending}
+						>
+							{endTrial.isPending ? 'Upgrading...' : 'Upgrade to paid now'}
+						</Button>
+					)}
+
 					{shouldShowManage(status) && (
 						<Button
-							variant={shouldShowSubscribe(status) ? 'outlined' : 'contained'}
-							size={shouldShowSubscribe(status) ? 'medium' : 'large'}
+							variant={hasPrimaryAction ? 'outlined' : 'contained'}
+							size={hasPrimaryAction ? 'medium' : 'large'}
 							onClick={() => openPortal.mutate()}
 							disabled={openPortal.isPending}
 						>
@@ -82,6 +121,40 @@ function BillingPage() {
 					Pay with card, iDEAL, or SEPA Direct Debit. Cancel any time.
 				</Typography>
 			</Paper>
+
+			<Dialog open={confirmUpgradeOpen} onClose={() => setConfirmUpgradeOpen(false)} maxWidth='xs' fullWidth>
+				<DialogTitle>End trial and subscribe now?</DialogTitle>
+				<DialogContent>
+					<DialogContentText>
+						This ends your free trial immediately. Your saved payment method will be charged for the{' '}
+						{formatEuros(status.seats.baseMonthlyPriceCents)}/month plan (plus any applicable VAT) and your
+						subscription becomes active right away. You can then invite teammates beyond the{' '}
+						{status.seats.included}-seat trial limit — extra seats are{' '}
+						{formatEuros(status.seats.overagePerSeatCents)}/month each.
+					</DialogContentText>
+					{endTrial.isError && (
+						<Alert severity='error' sx={{ mt: 2 }}>
+							{endTrial.error instanceof Error
+								? endTrial.error.message
+								: 'Upgrade failed. Please try again.'}
+						</Alert>
+					)}
+					{upgradeIncomplete && (
+						<Alert severity='warning' sx={{ mt: 2 }}>
+							Your trial was ended, but the payment didn’t go through. Close this and use “Manage
+							subscription” to update your payment method.
+						</Alert>
+					)}
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={() => setConfirmUpgradeOpen(false)} disabled={endTrial.isPending}>
+						Cancel
+					</Button>
+					<Button variant='contained' onClick={confirmUpgrade} disabled={endTrial.isPending}>
+						{endTrial.isPending ? 'Upgrading...' : 'Subscribe now'}
+					</Button>
+				</DialogActions>
+			</Dialog>
 		</Container>
 	);
 }
@@ -278,6 +351,12 @@ const SUBSCRIBE_STATES: ReadonlyArray<BillingStatus['state']> = ['none', 'cancel
 
 function shouldShowSubscribe(status: BillingStatus): boolean {
 	return SUBSCRIBE_STATES.includes(status.state);
+}
+
+// "Upgrade to paid now" converts a trial to an active subscription early (ends the Stripe
+// trial + charges the saved card) — the only in-product path past the trial seat cap.
+function shouldShowUpgrade(status: BillingStatus): boolean {
+	return status.state === 'trialing';
 }
 
 function shouldShowManage(status: BillingStatus): boolean {

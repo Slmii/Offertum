@@ -4,9 +4,11 @@ import {
 	STRIPE_CHECKOUT_URL_MISSING,
 	STRIPE_PRICE_ID_MISSING,
 	STRIPE_SECRET_KEY_MISSING,
-	subscriptionAlreadyActive
+	subscriptionAlreadyActive,
+	trialUpgradeNotTrialing
 } from '@/lib/errors';
 import {
+	BASE_PRICE_CENTS,
 	LIVE_SUBSCRIPTION_STATUSES,
 	PER_SEAT_OVERAGE_CENTS,
 	SEAT_SYNC_STATUSES,
@@ -311,6 +313,58 @@ export class BillingService {
 	}
 
 	/**
+	 * "Upgrade to paid now" — end the Stripe trial immediately so the org converts from
+	 * `trialing` → `active` (or `past_due`/`incomplete` if the saved card declines). Setting
+	 * `trial_end: 'now'` makes Stripe finalize the first invoice + charge the payment method
+	 * captured at Checkout. We re-sync straight away (rather than waiting for the webhook) so
+	 * the caller's next status read reflects the new state in one round-trip — the same trust
+	 * model as the success endpoint. The trialing → active transition inside `syncFromStripe`
+	 * also pushes the current seat count to Stripe via `syncSeatCount`.
+	 *
+	 * Guarded to `trialing` only: there's nothing to end on a non-trial sub, and short-circuiting
+	 * here avoids charging a customer who is already `active`/`past_due`. The web button is only
+	 * shown during trial; this is the server-side enforcement.
+	 */
+	async endTrialNow(organizationId: string): Promise<{ ok: boolean; status: string | null }> {
+		const sub = await this.prisma.subscription.findUnique({
+			where: { organizationId },
+			select: { stripeCustomerId: true, stripeSubscriptionId: true, status: true }
+		});
+
+		if (!sub?.stripeSubscriptionId) {
+			throw new InternalServerErrorException(noStripeCustomerForOrg(organizationId));
+		}
+		if (sub.status !== 'trialing') {
+			throw new ConflictException(trialUpgradeNotTrialing(sub.status ?? 'none'));
+		}
+
+		// Stable (un-salted) idempotency key: ending a trial must never double-charge. A retry
+		// returns the same result; a second deliberate call is already blocked by the `trialing`
+		// guard above once the status has flipped.
+		await this.stripe.subscriptions.update(
+			sub.stripeSubscriptionId,
+			{ trial_end: 'now' },
+			{ idempotencyKey: `end-trial:${organizationId}:${sub.stripeSubscriptionId}` }
+		);
+
+		const result = await this.syncFromStripe(sub.stripeCustomerId);
+		// `ok` reflects whether the charge actually went through (sub is now `active`), NOT
+		// merely that we ended the trial. A declined card lands the sub on `past_due`/`incomplete`
+		// — the trial seat cap lifts either way (it only gates `trialing`), but the caller needs
+		// to know the payment didn't complete so it can prompt the owner to fix their card rather
+		// than report a clean success.
+		const upgraded = result.status === 'active';
+		this.logService.logAction({
+			action: 'billing.trial.ended_early',
+			message: `Trial ended early for org ${organizationId} (trialing → ${result.status ?? 'unknown'})`,
+			metadata: { organizationId, customerId: sub.stripeCustomerId, newStatus: result.status, upgraded },
+			level: upgraded ? undefined : 'warn',
+			context: 'BillingService'
+		});
+		return { ok: upgraded, status: result.status };
+	}
+
+	/**
 	 * Fetch the current state of the customer's subscription from Stripe and persist it
 	 * to our local DB. Single source-of-truth function — called from the success
 	 * endpoint AND every webhook. Never trust webhook payloads directly.
@@ -459,7 +513,8 @@ export class BillingService {
 		const seats = {
 			used: seatsUsed,
 			included: SEATS_INCLUDED,
-			overagePerSeatCents: PER_SEAT_OVERAGE_CENTS
+			overagePerSeatCents: PER_SEAT_OVERAGE_CENTS,
+			baseMonthlyPriceCents: BASE_PRICE_CENTS
 		};
 
 		// Stripe-tracked path: status is the source of truth.

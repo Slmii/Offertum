@@ -7,6 +7,8 @@ export class BillingSeatsDto implements BillingSeats {
 	included!: number;
 	/** Per-seat price for seats beyond `included`, in cents (EUR). */
 	overagePerSeatCents!: number;
+	/** Flat monthly base price covering the included seats, in cents (EUR). */
+	baseMonthlyPriceCents!: number;
 }
 
 export class BillingStatusResponseDto implements BillingStatus {

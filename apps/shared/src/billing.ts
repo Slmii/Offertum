@@ -22,6 +22,8 @@ export interface BillingSeats {
 	included: number;
 	/** Per-seat price for seats beyond `included`, in cents (EUR). */
 	overagePerSeatCents: number;
+	/** Flat monthly base price covering the included seats, in cents (EUR). */
+	baseMonthlyPriceCents: number;
 }
 
 /** `GET /api/billing/status` response. The UI renders state-specific copy off `state`. */
