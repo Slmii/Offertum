@@ -10,7 +10,6 @@ export interface CalendarEventSource {
 	customerName: string | null;
 	customerDeadline: Date | null;
 	customerAppointment: Date | null;
-	assignedToUserId: string | null;
 	sentQuoteDrafts: { id: string; sentAt: Date }[];
 	latestSentReplyDraftAt: Date | null;
 	priorCheckInCount: number;
@@ -88,8 +87,10 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		);
 	}
 
-	// Follow-up: same eligibility as the silence-check-in scheduler — REPLIED, a sent reply
-	// draft exists, and the per-opp check-in cap isn't exhausted (cap 0 disables it entirely).
+	// Follow-up: an APPROXIMATE "nudge due" marker — REPLIED, a sent reply draft exists, and the
+	// per-opp check-in cap isn't exhausted (cap 0 disables it). This is intentionally looser than
+	// the silence-check-in scheduler (which also requires the latest draft to be SENT + org
+	// entitlement); the calendar shows a hint, the scheduler remains the source of truth for sends.
 	const followUpEligible =
 		src.status === 'REPLIED' &&
 		src.latestSentReplyDraftAt !== null &&

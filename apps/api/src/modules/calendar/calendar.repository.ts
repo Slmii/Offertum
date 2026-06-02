@@ -34,7 +34,6 @@ export class CalendarRepository {
 				customerName: true,
 				customerDeadline: true,
 				customerAppointment: true,
-				assignedToUserId: true,
 				quoteDrafts: {
 					where: { sentAt: { not: null } },
 					select: { id: true, sentAt: true }
@@ -57,7 +56,6 @@ export class CalendarRepository {
 				customerName: opp.customerName,
 				customerDeadline: opp.customerDeadline,
 				customerAppointment: opp.customerAppointment,
-				assignedToUserId: opp.assignedToUserId,
 				sentQuoteDrafts: opp.quoteDrafts
 					.filter((draft): draft is { id: string; sentAt: Date } => draft.sentAt !== null)
 					.map(draft => ({ id: draft.id, sentAt: draft.sentAt })),

@@ -65,6 +65,22 @@ describe('serializeICalendar', () => {
 		expect(ics).toContain('SUMMARY:A\\, B\\; C \\\\ D\r\n');
 	});
 
+	it('uses the Europe/Amsterdam calendar day for all-day events (CEST off-by-one guard)', () => {
+		// 23:30 UTC on 2026-07-01 is 01:30 on 2026-07-02 in Amsterdam (CEST, UTC+2).
+		const event: ICalEvent = {
+			uid: 'qd-9:expiry@offertum',
+			summary: 'Offerte verloopt — Jansen',
+			at: new Date('2026-07-01T23:30:00.000Z'),
+			allDay: true
+		};
+		const ics = serializeICalendar({
+			prodId: PROD_ID,
+			dtstamp: new Date('2026-06-02T00:00:00.000Z'),
+			events: [event]
+		});
+		expect(ics).toContain('DTSTART;VALUE=DATE:20260702\r\n');
+	});
+
 	it('folds lines longer than 75 octets', () => {
 		const longName = 'X'.repeat(200);
 		const event: ICalEvent = {

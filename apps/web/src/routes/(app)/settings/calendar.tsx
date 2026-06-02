@@ -31,8 +31,8 @@ function CalendarSettingsPage() {
 				Agenda-abonnement
 			</Typography>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om je offertes, deadlines en
-				afspraken automatisch te zien.
+				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om alle offertes, deadlines en
+				afspraken van je organisatie automatisch te zien.
 			</Typography>
 
 			<Alert severity='warning' sx={{ mb: 3 }}>

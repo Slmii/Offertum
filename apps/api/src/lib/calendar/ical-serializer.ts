@@ -28,9 +28,16 @@ function formatUtc(date: Date): string {
 		.replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** `YYYYMMDD` (UTC date) for all-day values. */
+/** `YYYYMMDD` in Europe/Amsterdam (the business time zone) for all-day values. */
 function formatDate(date: Date): string {
-	return date.toISOString().slice(0, 10).replace(/-/g, '');
+	// en-CA formats as YYYY-MM-DD; the Amsterdam time zone is the owner's local calendar day.
+	const parts = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'Europe/Amsterdam',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(date);
+	return parts.replace(/-/g, '');
 }
 
 /**

@@ -40,7 +40,6 @@ describe('CalendarService', () => {
 					customerName: 'Jansen',
 					customerDeadline: new Date('2026-06-15T00:00:00.000Z'), // in window
 					customerAppointment: new Date('2026-09-01T00:00:00.000Z'), // out of window
-					assignedToUserId: null,
 					sentQuoteDrafts: [],
 					latestSentReplyDraftAt: null,
 					priorCheckInCount: 0

@@ -12,7 +12,6 @@ function baseSource(overrides: Partial<CalendarEventSource> = {}): CalendarEvent
 		customerName: 'Jansen',
 		customerDeadline: null,
 		customerAppointment: null,
-		assignedToUserId: null,
 		sentQuoteDrafts: [],
 		latestSentReplyDraftAt: null,
 		priorCheckInCount: 0,

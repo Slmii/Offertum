@@ -1,6 +1,6 @@
 // apps/api/src/modules/calendar/calendar.controller.ts
 import { OrganizationGuard } from '@/common/guards/organization.guard';
-import { NOT_AUTHENTICATED } from '@/lib/errors';
+import { CALENDAR_INVALID_DATE_RANGE, NOT_AUTHENTICATED } from '@/lib/errors';
 import { CalendarService } from '@/modules/calendar/calendar.service';
 import { CalendarEventDto } from '@/modules/calendar/dto/calendar-event.response.dto';
 import { IcalFeedResponseDto } from '@/modules/calendar/dto/ical-feed.response.dto';
@@ -40,7 +40,7 @@ export class CalendarController {
 		const fromDate = new Date(from);
 		const toDate = new Date(to);
 		if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
-			throw new BadRequestException('Query params `from` and `to` must be valid ISO dates.');
+			throw new BadRequestException(CALENDAR_INVALID_DATE_RANGE);
 		}
 		return this.calendar.getEvents(request.organizationId!, {
 			scope: scope === 'mine' ? 'mine' : 'all',

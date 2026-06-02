@@ -1,6 +1,6 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
 import { calendarEventsQueryOptions } from '@/lib/queries/calendar.queries';
-import { calendarEventColor } from '@/lib/utils/calendar.utils';
+import { calendarEventColor, calendarEventLabel } from '@/lib/utils/calendar.utils';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import listPlugin from '@fullcalendar/list';
 import FullCalendar from '@fullcalendar/react';
@@ -8,16 +8,18 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
-import { CALENDAR_EVENT_SCOPES, type CalendarEventScope } from '@offertum/shared';
+import { CALENDAR_EVENT_SCOPES, CALENDAR_EVENT_TYPES, type CalendarEventScope } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
-// Visible window the loader prefetches. FullCalendar then refetches via the events query
-// as the user navigates months; the route keeps a wide static window so first paint is full.
+// The route prefetches a single wide window (−60d…+180d) and passes it to FullCalendar as a
+// static events array. Month/week navigation stays within this window without refetching; this
+// covers normal navigation. (A datesSet→query handler could widen it later if needed.)
 const WINDOW_PAST_DAYS = 60;
 const WINDOW_FUTURE_DAYS = 180;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -96,6 +98,23 @@ function CalendarPage() {
 					label='Aan mij toegewezen'
 				/>
 			</Box>
+			<Stack direction='row' spacing={2} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+				{CALENDAR_EVENT_TYPES.map(type => (
+					<Box key={type} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+						<Box
+							sx={{
+								width: 12,
+								height: 12,
+								borderRadius: '2px',
+								backgroundColor: calendarEventColor(type)
+							}}
+						/>
+						<Typography variant='caption' color='text.secondary'>
+							{calendarEventLabel(type)}
+						</Typography>
+					</Box>
+				))}
+			</Stack>
 			{mounted ? (
 				<FullCalendar
 					plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}

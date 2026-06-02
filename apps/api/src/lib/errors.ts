@@ -251,3 +251,4 @@ export const buildMicrosoftAdminConsentUrl = (clientId: string, redirectUri: str
 // ── Calendar (W12) ────────────────────────────────────────────────────────────
 export const ICAL_FEED_TOKEN_NOT_FOUND = 'Calendar feed not found.';
 export const ICAL_FEED_NO_ORGANIZATION = 'The calendar feed owner has no active organization.';
+export const CALENDAR_INVALID_DATE_RANGE = 'Query params `from` and `to` must be valid ISO dates.';

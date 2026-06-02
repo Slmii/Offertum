@@ -2,7 +2,6 @@
 import { CalendarService } from '@/modules/calendar/calendar.service';
 import { Controller, Get, Header, Param, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
 /**
@@ -18,7 +17,6 @@ import type { Response } from 'express';
 export class CalendarIcalController {
 	constructor(private readonly calendar: CalendarService) {}
 
-	@SkipThrottle()
 	@Get(':token')
 	@Header('Content-Type', 'text/calendar; charset=utf-8')
 	async feed(@Param('token') token: string, @Res({ passthrough: true }) response: Response): Promise<string> {
