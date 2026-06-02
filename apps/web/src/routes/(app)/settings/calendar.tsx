@@ -31,13 +31,13 @@ function CalendarSettingsPage() {
 				Agenda-abonnement
 			</Typography>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om je offertes,
-				deadlines en afspraken automatisch te zien.
+				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om je offertes, deadlines en
+				afspraken automatisch te zien.
 			</Typography>
 
 			<Alert severity='warning' sx={{ mb: 3 }}>
-				Iedereen met deze link kan je agenda-items zien (klantnaam + type aanvraag). Deel hem
-				niet en vernieuw de link als je hem per ongeluk hebt gedeeld.
+				Iedereen met deze link kan je agenda-items zien (klantnaam + type aanvraag). Deel hem niet en vernieuw
+				de link als je hem per ongeluk hebt gedeeld.
 			</Alert>
 
 			{feed.url ? (
@@ -56,7 +56,12 @@ function CalendarSettingsPage() {
 						<Button variant='outlined' onClick={() => generate.mutate()} disabled={generate.isPending}>
 							Vernieuwen
 						</Button>
-						<Button color='error' variant='outlined' onClick={() => revoke.mutate()} disabled={revoke.isPending}>
+						<Button
+							color='error'
+							variant='outlined'
+							onClick={() => revoke.mutate()}
+							disabled={revoke.isPending}
+						>
 							Intrekken
 						</Button>
 					</Stack>

@@ -61,7 +61,11 @@ describe('toCalendarEvents', () => {
 
 	it('emits a follow_up event when REPLIED, under cap, with a sent reply draft', () => {
 		const events = toCalendarEvents(
-			baseSource({ status: 'REPLIED', latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'), priorCheckInCount: 1 }),
+			baseSource({
+				status: 'REPLIED',
+				latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'),
+				priorCheckInCount: 1
+			}),
 			CFG
 		);
 		const followUp = events.find(e => e.type === 'follow_up');
@@ -70,7 +74,11 @@ describe('toCalendarEvents', () => {
 
 	it('suppresses follow_up when the check-in cap is reached', () => {
 		const events = toCalendarEvents(
-			baseSource({ status: 'REPLIED', latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'), priorCheckInCount: 2 }),
+			baseSource({
+				status: 'REPLIED',
+				latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'),
+				priorCheckInCount: 2
+			}),
 			CFG
 		);
 		expect(events.some(e => e.type === 'follow_up')).toBe(false);
@@ -85,7 +93,10 @@ describe('toCalendarEvents', () => {
 	});
 
 	it('falls back to "Aanvraag" when customerName is null', () => {
-		const events = toCalendarEvents(baseSource({ customerName: null, customerDeadline: new Date('2026-06-15') }), CFG);
+		const events = toCalendarEvents(
+			baseSource({ customerName: null, customerDeadline: new Date('2026-06-15') }),
+			CFG
+		);
 		expect(events[0]?.title).toBe('Deadline klant — Aanvraag');
 	});
 });

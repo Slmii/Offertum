@@ -47,14 +47,24 @@ describe('CalendarService', () => {
 				}
 			]);
 			const service = new CalendarService(repo, makeConfig());
-			const events = await service.getEvents('org-1', { scope: 'all', requestingUserId: 'u1', from: new Date('2026-06-01'), to: new Date('2026-06-30') });
+			const events = await service.getEvents('org-1', {
+				scope: 'all',
+				requestingUserId: 'u1',
+				from: new Date('2026-06-01'),
+				to: new Date('2026-06-30')
+			});
 			expect(events.map(e => e.type)).toEqual(['deadline']);
 		});
 
 		it('returns [] when the org has no calendar config', async () => {
 			repo.findOrgCalendarConfig.mockResolvedValue(null);
 			const service = new CalendarService(repo, makeConfig());
-			const events = await service.getEvents('org-1', { scope: 'all', requestingUserId: null, from: new Date('2026-06-01'), to: new Date('2026-06-30') });
+			const events = await service.getEvents('org-1', {
+				scope: 'all',
+				requestingUserId: null,
+				from: new Date('2026-06-01'),
+				to: new Date('2026-06-30')
+			});
 			expect(events).toEqual([]);
 		});
 	});
@@ -77,7 +87,9 @@ describe('CalendarService', () => {
 		it('getFeedToken returns the existing url, or null when disabled', async () => {
 			repo.findIcalToken.mockResolvedValue('existing-token');
 			const service = new CalendarService(repo, makeConfig());
-			expect((await service.getFeedToken('user-1')).url).toBe('https://app.offertum.test/api/calendar/ical/existing-token.ics');
+			expect((await service.getFeedToken('user-1')).url).toBe(
+				'https://app.offertum.test/api/calendar/ical/existing-token.ics'
+			);
 			repo.findIcalToken.mockResolvedValue(null);
 			expect((await service.getFeedToken('user-1')).url).toBeNull();
 		});

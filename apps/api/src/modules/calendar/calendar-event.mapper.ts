@@ -28,7 +28,13 @@ function addDays(date: Date, days: number): Date {
 	return new Date(date.getTime() + days * DAY_MS);
 }
 
-function buildEvent(id: string, opportunityId: string, type: CalendarEventType, label: string, at: Date): CalendarEvent {
+function buildEvent(
+	id: string,
+	opportunityId: string,
+	type: CalendarEventType,
+	label: string,
+	at: Date
+): CalendarEvent {
 	return {
 		id,
 		opportunityId,
@@ -52,16 +58,34 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 	const events: CalendarEvent[] = [];
 
 	if (src.customerAppointment) {
-		events.push(buildEvent(`${src.opportunityId}:appointment`, src.opportunityId, 'appointment', label, src.customerAppointment));
+		events.push(
+			buildEvent(
+				`${src.opportunityId}:appointment`,
+				src.opportunityId,
+				'appointment',
+				label,
+				src.customerAppointment
+			)
+		);
 	}
 
 	if (src.customerDeadline) {
-		events.push(buildEvent(`${src.opportunityId}:deadline`, src.opportunityId, 'deadline', label, src.customerDeadline));
+		events.push(
+			buildEvent(`${src.opportunityId}:deadline`, src.opportunityId, 'deadline', label, src.customerDeadline)
+		);
 	}
 
 	for (const draft of src.sentQuoteDrafts) {
 		events.push(buildEvent(`${draft.id}:sent`, src.opportunityId, 'sent', label, draft.sentAt));
-		events.push(buildEvent(`${draft.id}:expiry`, src.opportunityId, 'expiry', label, addDays(draft.sentAt, cfg.quoteValidityDays)));
+		events.push(
+			buildEvent(
+				`${draft.id}:expiry`,
+				src.opportunityId,
+				'expiry',
+				label,
+				addDays(draft.sentAt, cfg.quoteValidityDays)
+			)
+		);
 	}
 
 	// Follow-up: same eligibility as the silence-check-in scheduler — REPLIED, a sent reply
@@ -73,7 +97,13 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		src.priorCheckInCount < cfg.followUpMaxCount;
 	if (followUpEligible && src.latestSentReplyDraftAt) {
 		events.push(
-			buildEvent(`${src.opportunityId}:follow_up`, src.opportunityId, 'follow_up', label, addDays(src.latestSentReplyDraftAt, cfg.followUpCadenceDays))
+			buildEvent(
+				`${src.opportunityId}:follow_up`,
+				src.opportunityId,
+				'follow_up',
+				label,
+				addDays(src.latestSentReplyDraftAt, cfg.followUpCadenceDays)
+			)
 		);
 	}
 

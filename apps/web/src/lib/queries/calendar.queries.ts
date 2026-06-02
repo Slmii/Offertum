@@ -5,7 +5,8 @@ import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query
 
 export const CalendarKeys = {
 	all: ['calendar'] as const,
-	events: (from: string, to: string, scope: CalendarEventScope) => ['calendar', 'events', { from, to, scope }] as const,
+	events: (from: string, to: string, scope: CalendarEventScope) =>
+		['calendar', 'events', { from, to, scope }] as const,
 	feed: ['calendar', 'feed'] as const
 };
 

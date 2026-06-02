@@ -1,6 +1,6 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
 import { calendarEventsQueryOptions } from '@/lib/queries/calendar.queries';
-import { calendarEventColor, calendarEventLabel } from '@/lib/utils/calendar.utils';
+import { calendarEventColor } from '@/lib/utils/calendar.utils';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import listPlugin from '@fullcalendar/list';
 import FullCalendar from '@fullcalendar/react';
@@ -57,6 +57,10 @@ function CalendarPage() {
 	// only defers the calendar chrome, not the fetch.
 	const [mounted, setMounted] = useState(false);
 	useEffect(() => {
+		// One-time mount flag so the client-only FullCalendar renders after hydration. This is the
+		// legitimate "render after mount" pattern (single bounded re-render), not a state mirror —
+		// same documented exception the opportunities route uses for its URL↔input effects.
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setMounted(true);
 	}, []);
 	const initialView = mounted && window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth';
@@ -82,7 +86,10 @@ function CalendarPage() {
 						<Switch
 							checked={activeScope === 'mine'}
 							onChange={(_, checked) =>
-								navigate({ search: prev => ({ ...prev, scope: checked ? 'mine' : undefined }), replace: true })
+								navigate({
+									search: prev => ({ ...prev, scope: checked ? 'mine' : undefined }),
+									replace: true
+								})
 							}
 						/>
 					}
@@ -93,7 +100,11 @@ function CalendarPage() {
 				<FullCalendar
 					plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
 					initialView={initialView}
-					headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' }}
+					headerToolbar={{
+						left: 'prev,next today',
+						center: 'title',
+						right: 'dayGridMonth,timeGridWeek,listWeek'
+					}}
 					locale='nl'
 					firstDay={1}
 					height='auto'

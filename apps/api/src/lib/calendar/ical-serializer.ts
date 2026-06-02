@@ -22,7 +22,10 @@ function escapeText(value: string): string {
 
 /** `YYYYMMDDTHHMMSSZ` (UTC) for timed values. */
 function formatUtc(date: Date): string {
-	return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+	return date
+		.toISOString()
+		.replace(/[-:]/g, '')
+		.replace(/\.\d{3}Z$/, 'Z');
 }
 
 /** `YYYYMMDD` (UTC date) for all-day values. */

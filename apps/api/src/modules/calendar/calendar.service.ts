@@ -35,7 +35,11 @@ export class CalendarService {
 		if (!config) {
 			return [];
 		}
-		const sources = await this.repository.findActiveSources(organizationId, options.scope, options.requestingUserId);
+		const sources = await this.repository.findActiveSources(
+			organizationId,
+			options.scope,
+			options.requestingUserId
+		);
 		const fromMs = options.from.getTime();
 		const toMs = options.to.getTime();
 		return sources
@@ -59,7 +63,12 @@ export class CalendarService {
 		const from = new Date(now.getTime() - FEED_WINDOW_PAST_DAYS * DAY_MS);
 		const to = new Date(now.getTime() + FEED_WINDOW_FUTURE_DAYS * DAY_MS);
 		// Feed always shows the whole org (a subscribed feed has no per-user toggle).
-		const events = await this.getEvents(user.currentOrganizationId, { scope: 'all', requestingUserId: null, from, to });
+		const events = await this.getEvents(user.currentOrganizationId, {
+			scope: 'all',
+			requestingUserId: null,
+			from,
+			to
+		});
 		const icalEvents: ICalEvent[] = events.map(event => ({
 			uid: `${event.id}@offertum`,
 			summary: event.title,
