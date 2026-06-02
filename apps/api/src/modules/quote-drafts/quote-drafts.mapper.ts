@@ -16,7 +16,8 @@ export function toQuoteDraftWire(row: QuoteDraftWithLines): QuoteDraft {
 		lineItems: row.lineItems.map(toQuoteLineItemWire),
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString(),
-		sentAt: row.sentAt ? row.sentAt.toISOString() : null
+		sentAt: row.sentAt ? row.sentAt.toISOString() : null,
+		validUntil: row.validUntil ? row.validUntil.toISOString() : null
 	};
 }
 

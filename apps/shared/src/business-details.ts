@@ -24,6 +24,7 @@ export interface BusinessDetails {
 	companyWebsite: string | null;
 	companyFooter: string | null;
 	defaultPaymentTermsDays: number;
+	quoteValidityDays: number;
 	/** When set, `GET /api/me/business-details/logo` streams the binary. NULL
 	 * means no logo uploaded — the quote PDF falls back to a text-only header. */
 	hasLogo: boolean;
@@ -40,6 +41,7 @@ export interface UpdateBusinessDetailsInput {
 	companyWebsite?: string | null;
 	companyFooter?: string | null;
 	defaultPaymentTermsDays?: number;
+	quoteValidityDays?: number;
 }
 
 export const COMPANY_NAME_MAX_LENGTH = 200;
@@ -51,3 +53,5 @@ export const COMPANY_WEBSITE_MAX_LENGTH = 200;
 export const COMPANY_FOOTER_MAX_LENGTH = 2_000;
 export const PAYMENT_TERMS_DAYS_MIN = 0;
 export const PAYMENT_TERMS_DAYS_MAX = 365;
+export const QUOTE_VALIDITY_DAYS_MIN = 1;
+export const QUOTE_VALIDITY_DAYS_MAX = 365;

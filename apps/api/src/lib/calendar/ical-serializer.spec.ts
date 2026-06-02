@@ -18,6 +18,12 @@ describe('serializeICalendar', () => {
 		expect(ics.trimEnd().endsWith('END:VCALENDAR')).toBe(true);
 	});
 
+	it('includes an advisory ~1h refresh hint', () => {
+		const ics = serializeICalendar({ prodId: PROD_ID, dtstamp: new Date('2026-06-02T00:00:00.000Z'), events: [] });
+		expect(ics).toContain('REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n');
+		expect(ics).toContain('X-PUBLISHED-TTL:PT1H\r\n');
+	});
+
 	it('emits a timed VEVENT with UTC DTSTART', () => {
 		const event: ICalEvent = {
 			uid: 'qd-1:sent@offertum',

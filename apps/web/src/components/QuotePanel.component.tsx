@@ -11,7 +11,7 @@ import {
 	useReplaceQuoteLines,
 	useUpdateQuoteLineItem
 } from '@/lib/queries/quote-drafts.queries';
-import { toReadableDateTime } from '@/lib/utils/date.utils';
+import { toReadableDate, toReadableDateTime } from '@/lib/utils/date.utils';
 import { toReadableEuro } from '@/lib/utils/number.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -107,6 +107,12 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 					</Button>
 				)}
 			</Stack>
+
+			{latest?.validUntil && (
+				<Typography variant='body2' color='text.secondary' sx={{ mb: 1 }}>
+					Geldig tot {toReadableDate(latest.validUntil)}
+				</Typography>
+			)}
 
 			{generate.isError && (
 				<Alert severity='error' sx={{ mb: 1 }}>

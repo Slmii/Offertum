@@ -295,6 +295,7 @@ export class MeService {
 				companyWebsite: true,
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
+				quoteValidityDays: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
@@ -309,6 +310,7 @@ export class MeService {
 			companyWebsite: row.companyWebsite,
 			companyFooter: row.companyFooter,
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
+			quoteValidityDays: row.quoteValidityDays,
 			hasLogo: row.logoStorageKey !== null,
 			hasLetterhead: row.letterheadStorageKey !== null
 		};
@@ -355,6 +357,9 @@ export class MeService {
 		if (input.defaultPaymentTermsDays !== undefined) {
 			normalized.defaultPaymentTermsDays = input.defaultPaymentTermsDays;
 		}
+		if (input.quoteValidityDays !== undefined) {
+			normalized.quoteValidityDays = input.quoteValidityDays;
+		}
 
 		const updated = await this.prisma.organization.update({
 			where: { id: organizationId },
@@ -368,6 +373,7 @@ export class MeService {
 				companyWebsite: true,
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
+				quoteValidityDays: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
@@ -401,6 +407,7 @@ export class MeService {
 			companyWebsite: updated.companyWebsite,
 			companyFooter: updated.companyFooter,
 			defaultPaymentTermsDays: updated.defaultPaymentTermsDays,
+			quoteValidityDays: updated.quoteValidityDays,
 			hasLogo: updated.logoStorageKey !== null,
 			hasLetterhead: updated.letterheadStorageKey !== null
 		};
@@ -692,6 +699,7 @@ export class MeService {
 			companyWebsite: true,
 			companyFooter: true,
 			defaultPaymentTermsDays: true,
+			quoteValidityDays: true,
 			logoStorageKey: true,
 			letterheadStorageKey: true
 		} as const;
@@ -706,6 +714,7 @@ export class MeService {
 		companyWebsite: string | null;
 		companyFooter: string | null;
 		defaultPaymentTermsDays: number;
+		quoteValidityDays: number;
 		logoStorageKey: string | null;
 		letterheadStorageKey: string | null;
 	}): BusinessDetails {
@@ -718,6 +727,7 @@ export class MeService {
 			companyWebsite: row.companyWebsite,
 			companyFooter: row.companyFooter,
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
+			quoteValidityDays: row.quoteValidityDays,
 			hasLogo: row.logoStorageKey !== null,
 			hasLetterhead: row.letterheadStorageKey !== null
 		};

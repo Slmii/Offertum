@@ -9,8 +9,6 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { QuotePdf } from '@offertum/shared';
 import { randomUUID } from 'node:crypto';
 
-const DEFAULT_QUOTE_VALID_DAYS = 30;
-
 /** Inputs that vary per quote; business details + branding are loaded from the org. */
 export interface RenderQuoteInput {
 	customerName: string;
@@ -18,6 +16,13 @@ export interface RenderQuoteInput {
 	customerAddress: string | null;
 	lineItems: QuotePdfLineItem[];
 	quoteNumber: string | null;
+	// Issue date printed on the PDF. The real generate path passes the QuoteDraft's createdAt;
+	// omitted for ad-hoc previews, which fall back to the current time.
+	issueDate?: Date;
+	// "Geldig tot" date. The real generate path passes the QuoteDraft's stored validUntil so the
+	// printed validity matches the calendar `expiry` event + opp detail exactly. Omitted for
+	// previews (and legacy drafts with no stored value) → falls back to issueDate + quoteValidityDays.
+	validUntil?: Date;
 }
 
 export interface RenderedQuotePdf {
@@ -112,11 +117,13 @@ export class QuotePdfsService {
 				companyWebsite: true,
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
+				quoteValidityDays: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
 		});
-		const issueDate = new Date();
+		const issueDate = input.issueDate ?? new Date();
+		const validUntil = input.validUntil ?? addDays(issueDate, org.quoteValidityDays);
 		const [logoDataUri, letterheadDataUri] = await Promise.all([
 			this.readAssetDataUri(org.logoStorageKey),
 			this.readAssetDataUri(org.letterheadStorageKey)
@@ -125,7 +132,7 @@ export class QuotePdfsService {
 		const buffer = await this.renderer.render({
 			quoteNumber: input.quoteNumber ?? buildQuoteNumber(issueDate),
 			issueDate,
-			validUntil: addDays(issueDate, DEFAULT_QUOTE_VALID_DAYS),
+			validUntil,
 			customerName: input.customerName,
 			customerEmail: input.customerEmail,
 			customerAddress: input.customerAddress,

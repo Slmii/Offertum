@@ -1,5 +1,6 @@
 // apps/web/src/routes/(app)/settings/calendar.tsx
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
 	calendarFeedQueryOptions,
 	useGenerateCalendarFeed,
@@ -12,9 +13,18 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/(app)/settings/calendar')({
+	// iCal phone-sync setup is subscription-gated (the in-app calendar view is NOT). Bounce
+	// non-entitled orgs to /billing before the feed-token read fires (the API also 402s the
+	// token endpoints).
+	beforeLoad: async ({ context }) => {
+		const status = await context.queryClient.ensureQueryData(billingStatusQueryOptions);
+		if (!isBillingEntitled(status.state)) {
+			throw redirect({ to: '/billing' });
+		}
+	},
 	loader: ({ context }) => context.queryClient.ensureQueryData(calendarFeedQueryOptions),
 	component: CalendarSettingsPage
 });
@@ -32,7 +42,8 @@ function CalendarSettingsPage() {
 			</Typography>
 			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
 				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om alle offertes, deadlines en
-				afspraken van je organisatie automatisch te zien.
+				afspraken van je organisatie automatisch te zien. Hoe vaak je agenda-app ververst bepaalt je telefoon
+				zelf; bij Google Calendar kan het enkele uren duren voordat nieuwe items verschijnen.
 			</Typography>
 
 			<Alert severity='warning' sx={{ mb: 3 }}>

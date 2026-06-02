@@ -1,5 +1,6 @@
 // apps/api/src/modules/calendar/calendar.repository.ts
 import { ReplyDraftKind, ReplyDraftStatus } from '@/generated/prisma/enums';
+import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import type { CalendarEventScope } from '@offertum/shared';
@@ -35,8 +36,9 @@ export class CalendarRepository {
 				customerDeadline: true,
 				customerAppointment: true,
 				quoteDrafts: {
-					where: { sentAt: { not: null } },
-					select: { id: true, sentAt: true }
+					orderBy: { createdAt: 'desc' },
+					take: 1,
+					select: { id: true, sentAt: true, validUntil: true, createdAt: true }
 				},
 				replyDrafts: {
 					where: { status: ReplyDraftStatus.SENT, sentAt: { not: null } },
@@ -56,9 +58,14 @@ export class CalendarRepository {
 				customerName: opp.customerName,
 				customerDeadline: opp.customerDeadline,
 				customerAppointment: opp.customerAppointment,
-				sentQuoteDrafts: opp.quoteDrafts
-					.filter((draft): draft is { id: string; sentAt: Date } => draft.sentAt !== null)
-					.map(draft => ({ id: draft.id, sentAt: draft.sentAt })),
+				currentQuoteDraft: opp.quoteDrafts[0]
+					? {
+							id: opp.quoteDrafts[0].id,
+							sentAt: opp.quoteDrafts[0].sentAt,
+							validUntil: opp.quoteDrafts[0].validUntil,
+							createdAt: opp.quoteDrafts[0].createdAt
+						}
+					: null,
 				latestSentReplyDraftAt,
 				priorCheckInCount
 			};
@@ -92,5 +99,18 @@ export class CalendarRepository {
 	async findIcalToken(userId: string): Promise<string | null> {
 		const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { icalFeedToken: true } });
 		return user?.icalFeedToken ?? null;
+	}
+
+	/**
+	 * Whether the org is currently entitled — the same predicate `EntitlementGuard` uses
+	 * (Subscription.status ∈ {trialing, active, past_due}). Used to gate the public iCal feed
+	 * so a canceled org's session-less feed stops serving customer data.
+	 */
+	async isOrganizationEntitled(organizationId: string): Promise<boolean> {
+		const sub = await this.prisma.subscription.findUnique({
+			where: { organizationId },
+			select: { status: true }
+		});
+		return !!sub?.status && ENTITLED_STRIPE_STATUSES.includes(sub.status);
 	}
 }

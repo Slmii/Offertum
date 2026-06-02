@@ -197,6 +197,7 @@ describe('MeService.updateBusinessDetails', () => {
 				companyWebsite: 'https://offertum.nl',
 				companyFooter: 'Footer',
 				defaultPaymentTermsDays: 14,
+				quoteValidityDays: 30,
 				logoStorageKey: null,
 				letterheadStorageKey: null
 			})

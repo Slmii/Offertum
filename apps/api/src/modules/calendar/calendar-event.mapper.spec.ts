@@ -12,7 +12,7 @@ function baseSource(overrides: Partial<CalendarEventSource> = {}): CalendarEvent
 		customerName: 'Jansen',
 		customerDeadline: null,
 		customerAppointment: null,
-		sentQuoteDrafts: [],
+		currentQuoteDraft: null,
 		latestSentReplyDraftAt: null,
 		priorCheckInCount: 0,
 		...overrides
@@ -48,14 +48,58 @@ describe('toCalendarEvents', () => {
 		expect(events[0]).toMatchObject({ type: 'deadline', allDay: true, title: 'Deadline klant — Jansen' });
 	});
 
-	it('emits sent + expiry per sent quote draft (expiry = sentAt + quoteValidityDays)', () => {
+	it('emits sent (from sentAt) + expiry (from stored validUntil) for the current quote draft', () => {
 		const events = toCalendarEvents(
-			baseSource({ sentQuoteDrafts: [{ id: 'qd-1', sentAt: new Date('2026-06-01T08:00:00.000Z') }] }),
+			baseSource({
+				currentQuoteDraft: {
+					id: 'qd-1',
+					createdAt: new Date('2026-06-01T08:00:00.000Z'),
+					sentAt: new Date('2026-06-05T09:00:00.000Z'), // anchors the sent marker
+					validUntil: new Date('2026-06-12T00:00:00.000Z') // stored validity → anchors expiry
+				}
+			}),
 			CFG
 		);
 		const byType = Object.fromEntries(events.map(e => [e.type, e]));
-		expect(byType.sent).toMatchObject({ id: 'qd-1:sent', at: '2026-06-01T08:00:00.000Z', allDay: false });
-		expect(byType.expiry).toMatchObject({ id: 'qd-1:expiry', at: '2026-07-01T08:00:00.000Z', allDay: true });
+		expect(byType.sent).toMatchObject({ id: 'qd-1:sent', at: '2026-06-05T09:00:00.000Z', allDay: false });
+		expect(byType.expiry).toMatchObject({ id: 'qd-1:expiry', at: '2026-06-12T00:00:00.000Z', allDay: true });
+	});
+
+	it('emits an expiry event for an UNSENT current quote draft (no sent marker)', () => {
+		const events = toCalendarEvents(
+			baseSource({
+				currentQuoteDraft: {
+					id: 'qd-2',
+					createdAt: new Date('2026-06-01T08:00:00.000Z'),
+					sentAt: null,
+					validUntil: new Date('2026-06-12T00:00:00.000Z')
+				}
+			}),
+			CFG
+		);
+		expect(events.some(e => e.type === 'sent')).toBe(false);
+		expect(events.find(e => e.type === 'expiry')).toMatchObject({
+			id: 'qd-2:expiry',
+			at: '2026-06-12T00:00:00.000Z'
+		});
+	});
+
+	it('falls back to createdAt + quoteValidityDays when validUntil is null (legacy draft)', () => {
+		const events = toCalendarEvents(
+			baseSource({
+				currentQuoteDraft: {
+					id: 'qd-3',
+					createdAt: new Date('2026-06-01T08:00:00.000Z'),
+					sentAt: null,
+					validUntil: null
+				}
+			}),
+			CFG // quoteValidityDays: 30
+		);
+		expect(events.find(e => e.type === 'expiry')).toMatchObject({
+			id: 'qd-3:expiry',
+			at: '2026-07-01T08:00:00.000Z'
+		});
 	});
 
 	it('emits a follow_up event when REPLIED, under cap, with a sent reply draft', () => {

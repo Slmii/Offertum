@@ -14,6 +14,7 @@ export class BusinessDetailsResponseDto implements BusinessDetails {
 	companyWebsite!: string | null;
 	companyFooter!: string | null;
 	defaultPaymentTermsDays!: number;
+	quoteValidityDays!: number;
 	hasLogo!: boolean;
 	hasLetterhead!: boolean;
 }

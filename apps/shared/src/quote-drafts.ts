@@ -46,6 +46,9 @@ export interface QuoteDraft {
 	createdAt: string;
 	updatedAt: string;
 	sentAt: string | null;
+	// Quote validity deadline ("Geldig tot"), stamped at creation. Null only for drafts
+	// created before this field existed.
+	validUntil: string | null;
 }
 
 /** A generated quote PDF version (W10.4). The binary is fetched via the download

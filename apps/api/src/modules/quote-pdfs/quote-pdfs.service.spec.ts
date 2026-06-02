@@ -17,6 +17,7 @@ describe('QuotePdfsService', () => {
 					companyWebsite: 'https://offertum.nl',
 					companyFooter: 'IBAN NL00 TEST 0123 4567 89',
 					defaultPaymentTermsDays: 14,
+					quoteValidityDays: 30,
 					logoStorageKey: 'organizations/org-1/business-assets/logo',
 					letterheadStorageKey: 'organizations/org-1/business-assets/letterhead'
 				}))
@@ -62,6 +63,7 @@ describe('QuotePdfsService', () => {
 				companyWebsite: true,
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
+				quoteValidityDays: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}

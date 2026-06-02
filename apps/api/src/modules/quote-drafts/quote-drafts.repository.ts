@@ -25,6 +25,7 @@ export interface CreateQuoteDraftRepoInput {
 	opportunityId: string;
 	generationContext: Prisma.InputJsonValue;
 	aiCallId: string | null;
+	validUntil: Date;
 	lineItems: CreateQuoteLineRepoInput[];
 }
 
@@ -73,6 +74,7 @@ export class QuoteDraftsRepository {
 				opportunityId: input.opportunityId,
 				generationContext: input.generationContext,
 				aiCallId: input.aiCallId,
+				validUntil: input.validUntil,
 				lineItems: {
 					create: input.lineItems.map(line => ({
 						position: line.position,

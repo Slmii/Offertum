@@ -15,6 +15,7 @@ function makeRepo(overrides: Partial<jest.Mocked<CalendarRepository>> = {}): jes
 		findUserByIcalToken: jest.fn<CalendarRepository['findUserByIcalToken']>().mockResolvedValue(null),
 		setIcalToken: jest.fn<CalendarRepository['setIcalToken']>().mockResolvedValue(undefined),
 		findIcalToken: jest.fn<CalendarRepository['findIcalToken']>().mockResolvedValue(null),
+		isOrganizationEntitled: jest.fn<CalendarRepository['isOrganizationEntitled']>().mockResolvedValue(true),
 		...overrides
 	} as unknown as jest.Mocked<CalendarRepository>;
 }
@@ -40,7 +41,7 @@ describe('CalendarService', () => {
 					customerName: 'Jansen',
 					customerDeadline: new Date('2026-06-15T00:00:00.000Z'), // in window
 					customerAppointment: new Date('2026-09-01T00:00:00.000Z'), // out of window
-					sentQuoteDrafts: [],
+					currentQuoteDraft: null,
 					latestSentReplyDraftAt: null,
 					priorCheckInCount: 0
 				}
@@ -98,6 +99,52 @@ describe('CalendarService', () => {
 		it('throws NotFound for an unknown token', async () => {
 			const service = new CalendarService(repo, makeConfig());
 			await expect(service.renderFeed('nope')).rejects.toBeInstanceOf(NotFoundException);
+		});
+
+		it('serves events for an entitled org', async () => {
+			repo.findUserByIcalToken.mockResolvedValue({ id: 'user-1', currentOrganizationId: 'org-1' });
+			repo.isOrganizationEntitled.mockResolvedValue(true);
+			repo.findActiveSources.mockResolvedValue([
+				{
+					opportunityId: 'opp-1',
+					status: 'NEW',
+					dismissedAt: null,
+					customerName: 'Jansen',
+					customerDeadline: new Date(),
+					customerAppointment: null,
+					currentQuoteDraft: null,
+					latestSentReplyDraftAt: null,
+					priorCheckInCount: 0
+				}
+			]);
+			const service = new CalendarService(repo, makeConfig());
+			const ics = await service.renderFeed('valid-token');
+			expect(ics).toContain('BEGIN:VEVENT');
+			expect(ics).toContain('Deadline klant — Jansen');
+		});
+
+		it('returns a valid but empty calendar when the org is not entitled', async () => {
+			repo.findUserByIcalToken.mockResolvedValue({ id: 'user-1', currentOrganizationId: 'org-1' });
+			repo.isOrganizationEntitled.mockResolvedValue(false);
+			repo.findActiveSources.mockResolvedValue([
+				{
+					opportunityId: 'opp-1',
+					status: 'NEW',
+					dismissedAt: null,
+					customerName: 'Jansen',
+					customerDeadline: new Date(),
+					customerAppointment: null,
+					currentQuoteDraft: null,
+					latestSentReplyDraftAt: null,
+					priorCheckInCount: 0
+				}
+			]);
+			const service = new CalendarService(repo, makeConfig());
+			const ics = await service.renderFeed('valid-token');
+			expect(ics).toContain('BEGIN:VCALENDAR');
+			expect(ics).not.toContain('BEGIN:VEVENT');
+			// Entitlement short-circuits before the event scan.
+			expect(repo.findActiveSources).not.toHaveBeenCalled();
 		});
 	});
 });

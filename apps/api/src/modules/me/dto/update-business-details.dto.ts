@@ -8,6 +8,8 @@ import {
 	COMPANY_WEBSITE_MAX_LENGTH,
 	PAYMENT_TERMS_DAYS_MAX,
 	PAYMENT_TERMS_DAYS_MIN,
+	QUOTE_VALIDITY_DAYS_MAX,
+	QUOTE_VALIDITY_DAYS_MIN,
 	type UpdateBusinessDetailsInput
 } from '@offertum/shared';
 import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators/non-whitespace-pattern';
@@ -72,4 +74,10 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@Min(PAYMENT_TERMS_DAYS_MIN)
 	@Max(PAYMENT_TERMS_DAYS_MAX)
 	defaultPaymentTermsDays?: number;
+
+	@IsOptional()
+	@IsInt()
+	@Min(QUOTE_VALIDITY_DAYS_MIN)
+	@Max(QUOTE_VALIDITY_DAYS_MAX)
+	quoteValidityDays?: number;
 }

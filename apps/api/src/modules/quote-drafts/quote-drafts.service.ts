@@ -9,6 +9,7 @@ import { CatalogItemsRepository } from '@/modules/catalog-items/catalog-items.re
 import { LogService } from '@/modules/logger/log.service';
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
 import { PricingPlaybookRepository } from '@/modules/pricing-playbook/pricing-playbook.repository';
+import { PrismaService } from '@/modules/prisma/prisma.service';
 import { toQuoteDraftWire } from '@/modules/quote-drafts/quote-drafts.mapper';
 import {
 	type CreateQuoteLineRepoInput,
@@ -33,6 +34,7 @@ import type {
 } from '@offertum/shared';
 
 const DEFAULT_LINE_UNIT = 'piece';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * W10.2 — persists the W10.1 line-item proposal as a `QuoteDraft` + lines, and
@@ -49,7 +51,8 @@ export class QuoteDraftsService {
 		private readonly catalogItems: CatalogItemsRepository,
 		private readonly opportunities: OpportunitiesRepository,
 		private readonly quotePdfs: QuotePdfsService,
-		private readonly logService: LogService
+		private readonly logService: LogService,
+		private readonly prisma: PrismaService
 	) {}
 
 	/** Generate a proposal for the opportunity and persist it as a new draft. */
@@ -60,11 +63,21 @@ export class QuoteDraftsService {
 	): Promise<QuoteDraft> {
 		const result = await this.quoteLineItems.generate(organizationId, opportunityId);
 
+		// Stamp the validity deadline once, at creation = now + the org's quoteValidityDays.
+		// Persisted so the PDF, calendar expiry, and opp detail all read the same fixed date
+		// (and a later change to the org default won't retroactively move existing quotes).
+		const org = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { quoteValidityDays: true }
+		});
+		const validUntil = new Date(Date.now() + org.quoteValidityDays * DAY_MS);
+
 		const row = await this.repository.create({
 			organizationId,
 			opportunityId,
 			generationContext: result.generationContext as unknown as Prisma.InputJsonValue,
 			aiCallId: result.aiCallId,
+			validUntil,
 			lineItems: result.lines.map(toRepoLine)
 		});
 
@@ -194,12 +207,30 @@ export class QuoteDraftsService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
+		// Backfill validity for drafts that predate the stamping (validUntil = null) — anchored to
+		// createdAt + the org window so the persisted value matches the creation-time stamp new
+		// drafts get. Persisted once; re-generating a PDF keeps the same date. After this, the PDF,
+		// calendar expiry, and opp detail all read the same stored validUntil.
+		let validUntil = draft.validUntil;
+		if (validUntil === null) {
+			const org = await this.prisma.organization.findUniqueOrThrow({
+				where: { id: organizationId },
+				select: { quoteValidityDays: true }
+			});
+			validUntil = new Date(draft.createdAt.getTime() + org.quoteValidityDays * DAY_MS);
+			await this.prisma.quoteDraft.update({ where: { id: quoteDraftId }, data: { validUntil } });
+		}
+
 		const rendered = await this.quotePdfs.renderQuote(organizationId, {
 			customerName: opportunity.customerName ?? 'Klant',
 			customerEmail: opportunity.customerEmail,
 			customerAddress: opportunity.address,
 			quoteNumber: null,
-			lineItems: draft.lineItems.map(toPdfLineItem)
+			lineItems: draft.lineItems.map(toPdfLineItem),
+			// Print the draft's creation date as the issue date and its stored validity deadline as
+			// "Geldig tot" — the same values the calendar expiry event + opp detail read, so all three agree.
+			issueDate: draft.createdAt,
+			validUntil
 		});
 
 		const pdf = await this.quotePdfs.storeVersion(organizationId, draft.opportunityId, quoteDraftId, rendered);

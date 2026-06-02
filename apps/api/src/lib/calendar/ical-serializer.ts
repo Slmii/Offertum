@@ -90,6 +90,11 @@ export function serializeICalendar(input: ICalendarInput): string {
 		foldLine(`PRODID:${input.prodId}`),
 		'CALSCALE:GREGORIAN',
 		'METHOD:PUBLISH',
+		// Advisory refresh hint: ~1h. Apple Calendar honors these to set a sane poll cadence;
+		// Google/Outlook largely ignore them and poll on their own (slower) schedule. Harmless
+		// everywhere — purely a suggestion, the client decides the real interval.
+		'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
+		'X-PUBLISHED-TTL:PT1H',
 		...input.events.flatMap(event => serializeEvent(event, input.dtstamp)),
 		'END:VCALENDAR'
 	];

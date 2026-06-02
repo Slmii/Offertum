@@ -60,6 +60,14 @@ export class CalendarService {
 			throw new NotFoundException(ICAL_FEED_NO_ORGANIZATION);
 		}
 		const now = new Date();
+		// Gate the persistent public feed behind subscription entitlement (same predicate as
+		// EntitlementGuard: trialing/active/past_due). In-app reads stay open to any member, but
+		// the feed is a session-less channel that would otherwise keep streaming customer data
+		// after an org cancels. When not entitled we return a valid-but-empty calendar so the
+		// subscribe URL stays live and refills automatically once the org resubscribes.
+		if (!(await this.repository.isOrganizationEntitled(user.currentOrganizationId))) {
+			return serializeICalendar({ prodId: PROD_ID, dtstamp: now, events: [] });
+		}
 		const from = new Date(now.getTime() - FEED_WINDOW_PAST_DAYS * DAY_MS);
 		const to = new Date(now.getTime() + FEED_WINDOW_FUTURE_DAYS * DAY_MS);
 		// Feed always shows the whole org (a subscribed feed has no per-user toggle).

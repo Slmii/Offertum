@@ -31,6 +31,7 @@ export class QuoteDraftResponseDto implements QuoteDraft {
 	createdAt!: string;
 	updatedAt!: string;
 	sentAt!: string | null;
+	validUntil!: string | null;
 }
 
 export class QuoteDraftListResponseDto implements QuoteDraftListResponse {

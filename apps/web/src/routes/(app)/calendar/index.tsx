@@ -14,7 +14,7 @@ import Typography from '@mui/material/Typography';
 import { CALENDAR_EVENT_SCOPES, CALENDAR_EVENT_TYPES, type CalendarEventScope } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 
 // The route prefetches a single wide window (−60d…+180d) and passes it to FullCalendar as a
@@ -24,11 +24,17 @@ const WINDOW_PAST_DAYS = 60;
 const WINDOW_FUTURE_DAYS = 180;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Anchored to the START of the current UTC day — NOT `Date.now()`. The window string feeds the
+// query key; if it carried millisecond precision it would differ between the loader call and
+// every component render, so `useSuspenseQuery` would miss the prefetched cache and refetch on
+// every render (an infinite loop that trips the rate limiter). Day granularity makes the key
+// stable across the loader + all renders within the same day.
 function windowRange(): { from: string; to: string } {
-	const now = Date.now();
+	const now = new Date();
+	const startOfDayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 	return {
-		from: new Date(now - WINDOW_PAST_DAYS * DAY_MS).toISOString(),
-		to: new Date(now + WINDOW_FUTURE_DAYS * DAY_MS).toISOString()
+		from: new Date(startOfDayMs - WINDOW_PAST_DAYS * DAY_MS).toISOString(),
+		to: new Date(startOfDayMs + WINDOW_FUTURE_DAYS * DAY_MS).toISOString()
 	};
 }
 
@@ -38,6 +44,8 @@ const SearchSchema = z.object({
 
 export const Route = createFileRoute('/(app)/calendar/')({
 	validateSearch: SearchSchema,
+	// The in-app calendar read is open to any member (not subscription-gated) — only the iCal
+	// phone-sync setup (the /settings/calendar page + the feed-token API) requires a subscription.
 	loaderDeps: ({ search }) => ({ scope: search.scope ?? 'all' }),
 	loader: ({ context, deps }) => {
 		const { from, to } = windowRange();
@@ -50,7 +58,8 @@ function CalendarPage() {
 	const { scope } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const activeScope: CalendarEventScope = scope ?? 'all';
-	const { from, to } = windowRange();
+	// Memoized so the window (and thus the query key) is computed once per mount, never per render.
+	const { from, to } = useMemo(() => windowRange(), []);
 	const { data: events } = useSuspenseQuery(calendarEventsQueryOptions(from, to, activeScope));
 
 	// FullCalendar is a client-only widget (it touches the DOM and reads window size for the

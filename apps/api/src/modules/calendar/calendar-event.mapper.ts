@@ -10,7 +10,7 @@ export interface CalendarEventSource {
 	customerName: string | null;
 	customerDeadline: Date | null;
 	customerAppointment: Date | null;
-	sentQuoteDrafts: { id: string; sentAt: Date }[];
+	currentQuoteDraft: { id: string; sentAt: Date | null; validUntil: Date | null; createdAt: Date } | null;
 	latestSentReplyDraftAt: Date | null;
 	priorCheckInCount: number;
 }
@@ -74,17 +74,17 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		);
 	}
 
-	for (const draft of src.sentQuoteDrafts) {
-		events.push(buildEvent(`${draft.id}:sent`, src.opportunityId, 'sent', label, draft.sentAt));
-		events.push(
-			buildEvent(
-				`${draft.id}:expiry`,
-				src.opportunityId,
-				'expiry',
-				label,
-				addDays(draft.sentAt, cfg.quoteValidityDays)
-			)
-		);
+	if (src.currentQuoteDraft) {
+		const draft = src.currentQuoteDraft;
+		// `sent` marks the day the quote went out — only once it's actually been sent.
+		if (draft.sentAt) {
+			events.push(buildEvent(`${draft.id}:sent`, src.opportunityId, 'sent', label, draft.sentAt));
+		}
+		// `expiry` shows as soon as the quote exists (sent or not), from the stored validUntil — the
+		// same date the PDF prints + the opp detail shows. Legacy drafts (no stored value) fall back
+		// to createdAt + the org window.
+		const expiryAt = draft.validUntil ?? addDays(draft.createdAt, cfg.quoteValidityDays);
+		events.push(buildEvent(`${draft.id}:expiry`, src.opportunityId, 'expiry', label, expiryAt));
 	}
 
 	// Follow-up: an APPROXIMATE "nudge due" marker — REPLIED, a sent reply draft exists, and the

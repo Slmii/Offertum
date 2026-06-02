@@ -1,11 +1,24 @@
 import { getBillingStatusServer } from '@/lib/api/billing.api';
 import { api } from '@/lib/api/client';
-import type { BillingSyncResponse, CheckoutSessionResponse, PortalSessionResponse } from '@offertum/shared';
+import type {
+	BillingState,
+	BillingSyncResponse,
+	CheckoutSessionResponse,
+	PortalSessionResponse
+} from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const BillingKeys = {
 	status: ['billing', 'status'] as const
 };
+
+/** Billing states that grant feature access — mirrors the API's ENTITLED_STRIPE_STATUSES. */
+const ENTITLED_BILLING_STATES: readonly BillingState[] = ['trialing', 'active', 'past_due'];
+
+/** Whether the org may use entitlement-gated features (e.g. the calendar). A trial counts. */
+export function isBillingEntitled(state: BillingState): boolean {
+	return ENTITLED_BILLING_STATES.includes(state);
+}
 
 /**
  * GET /api/billing/status — single code path for SSR + client via `createServerFn`.

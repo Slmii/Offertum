@@ -119,7 +119,8 @@ function BusinessDetailsSettingsPage() {
 				companyPhone: values.companyPhone.length === 0 ? null : values.companyPhone,
 				companyWebsite: values.companyWebsite.length === 0 ? null : values.companyWebsite,
 				companyFooter: values.companyFooter.length === 0 ? null : values.companyFooter,
-				defaultPaymentTermsDays: values.defaultPaymentTermsDays
+				defaultPaymentTermsDays: values.defaultPaymentTermsDays,
+				quoteValidityDays: values.quoteValidityDays
 			},
 			{
 				onSuccess: () => {
@@ -154,7 +155,8 @@ function BusinessDetailsSettingsPage() {
 						companyPhone: data.companyPhone ?? '',
 						companyWebsite: data.companyWebsite ?? '',
 						companyFooter: data.companyFooter ?? '',
-						defaultPaymentTermsDays: data.defaultPaymentTermsDays
+						defaultPaymentTermsDays: data.defaultPaymentTermsDays,
+						quoteValidityDays: data.quoteValidityDays
 					}}
 				>
 					<Stack useFlexGap spacing={4}>
@@ -177,6 +179,13 @@ function BusinessDetailsSettingsPage() {
 						<Field
 							name='defaultPaymentTermsDays'
 							label='Standaard betalingstermijn (dagen)'
+							type='number'
+							fullWidth
+							disabled={!isOwner}
+						/>
+						<Field
+							name='quoteValidityDays'
+							label='Geldigheidsduur offerte (dagen)'
 							type='number'
 							fullWidth
 							disabled={!isOwner}

@@ -1014,6 +1014,13 @@ model QuoteDraft {
   aiCallId          String?          @db.Uuid
   // Timestamp the quote was sent (PDF attached to a reply, W10.4). Null until then.
   sentAt            DateTime?
+  // Quote validity deadline ("Geldig tot"), stamped once at creation =
+  // createdAt + Organization.quoteValidityDays. The single source of truth for the
+  // PDF's printed validity, the calendar `expiry` event, and the opp-detail display —
+  // so all three always agree and the date never drifts. Nullable for rows created
+  // before this column existed (read sites fall back to createdAt + quoteValidityDays).
+  // W13 "smart expiry" extend/last-followup actions mutate this value.
+  validUntil        DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
