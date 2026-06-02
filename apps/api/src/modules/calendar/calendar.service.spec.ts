@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import type { EnvSchema } from '@/config/env.schema';
 import type { CalendarRepository } from './calendar.repository';
 import { CalendarService } from './calendar.service';
 
@@ -18,8 +19,8 @@ function makeRepo(overrides: Partial<jest.Mocked<CalendarRepository>> = {}): jes
 	} as unknown as jest.Mocked<CalendarRepository>;
 }
 
-function makeConfig(webOrigin = 'https://app.offertum.test'): ConfigService {
-	return { get: jest.fn(() => webOrigin) } as unknown as ConfigService;
+function makeConfig(webOrigin = 'https://app.offertum.test'): ConfigService<EnvSchema, true> {
+	return { get: jest.fn(() => webOrigin) } as unknown as ConfigService<EnvSchema, true>;
 }
 
 describe('CalendarService', () => {

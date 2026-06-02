@@ -31,7 +31,7 @@ function windowRange(): { from: string; to: string } {
 }
 
 const SearchSchema = z.object({
-	scope: z.enum(CALENDAR_EVENT_SCOPES).optional()
+	scope: z.enum(CALENDAR_EVENT_SCOPES as [CalendarEventScope, ...CalendarEventScope[]]).optional()
 });
 
 export const Route = createFileRoute('/(app)/calendar/')({

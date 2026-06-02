@@ -46,7 +46,11 @@ function foldLine(line: string): string {
 	while (start < bytes.length) {
 		let end = Math.min(start + limit, bytes.length);
 		// Back off so we don't split a multi-byte UTF-8 sequence (continuation bytes = 10xxxxxx).
-		while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) {
+		while (end < bytes.length) {
+			const byte = bytes[end];
+			if (byte === undefined || (byte & 0xc0) !== 0x80) {
+				break;
+			}
 			end -= 1;
 		}
 		chunks.push(bytes.subarray(start, end).toString('utf8'));

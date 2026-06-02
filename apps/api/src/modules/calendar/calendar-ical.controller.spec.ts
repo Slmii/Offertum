@@ -10,11 +10,11 @@ function makeResponse(): Response {
 }
 
 describe('CalendarIcalController.feed', () => {
-	let renderFeed: jest.Mock;
+	let renderFeed: jest.MockedFunction<CalendarService['renderFeed']>;
 	let controller: CalendarIcalController;
 
 	beforeEach(() => {
-		renderFeed = jest.fn();
+		renderFeed = jest.fn<CalendarService['renderFeed']>();
 		controller = new CalendarIcalController({ renderFeed } as unknown as CalendarService);
 	});
 

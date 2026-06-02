@@ -86,6 +86,6 @@ describe('toCalendarEvents', () => {
 
 	it('falls back to "Aanvraag" when customerName is null', () => {
 		const events = toCalendarEvents(baseSource({ customerName: null, customerDeadline: new Date('2026-06-15') }), CFG);
-		expect(events[0].title).toBe('Deadline klant — Aanvraag');
+		expect(events[0]?.title).toBe('Deadline klant — Aanvraag');
 	});
 });
