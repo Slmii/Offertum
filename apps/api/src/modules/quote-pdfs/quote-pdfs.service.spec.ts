@@ -1,8 +1,9 @@
-import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
+import type { AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
+import type { PrismaService } from '@/modules/prisma/prisma.service';
 import type { QuotePdfRendererService } from '@/modules/quote-pdfs/quote-pdf-renderer.service';
 import type { QuotePdfsRepository } from '@/modules/quote-pdfs/quote-pdfs.repository';
-import type { PrismaService } from '@/modules/prisma/prisma.service';
-import type { AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
+import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
+import { describe, expect, it, jest } from '@jest/globals';
 
 describe('QuotePdfsService', () => {
 	it('renders a preview using the active organization business details', async () => {

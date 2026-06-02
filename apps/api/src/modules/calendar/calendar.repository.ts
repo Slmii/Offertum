@@ -36,8 +36,11 @@ export class CalendarRepository {
 				customerDeadline: true,
 				customerAppointment: true,
 				quoteDrafts: {
+					// Newest-first; we read the current (latest) draft for expiry and scan for the
+					// most recent SENT draft for the 'sent' marker. Capped — an opp rarely has many
+					// repriced versions; the cap just bounds the scan.
 					orderBy: { createdAt: 'desc' },
-					take: 1,
+					take: 20,
 					select: { id: true, sentAt: true, validUntil: true, createdAt: true }
 				},
 				replyDrafts: {
@@ -51,6 +54,8 @@ export class CalendarRepository {
 		return opportunities.map(opp => {
 			const latestSentReplyDraftAt = opp.replyDrafts[0]?.sentAt ?? null;
 			const priorCheckInCount = opp.replyDrafts.filter(draft => draft.kind === ReplyDraftKind.CHECK_IN).length;
+			const current = opp.quoteDrafts[0] ?? null;
+			const latestSent = opp.quoteDrafts.find(draft => draft.sentAt !== null) ?? null;
 			return {
 				opportunityId: opp.id,
 				status: opp.status,
@@ -58,14 +63,11 @@ export class CalendarRepository {
 				customerName: opp.customerName,
 				customerDeadline: opp.customerDeadline,
 				customerAppointment: opp.customerAppointment,
-				currentQuoteDraft: opp.quoteDrafts[0]
-					? {
-							id: opp.quoteDrafts[0].id,
-							sentAt: opp.quoteDrafts[0].sentAt,
-							validUntil: opp.quoteDrafts[0].validUntil,
-							createdAt: opp.quoteDrafts[0].createdAt
-						}
+				currentQuoteDraft: current
+					? { id: current.id, validUntil: current.validUntil, createdAt: current.createdAt }
 					: null,
+				latestSentQuoteDraft:
+					latestSent && latestSent.sentAt !== null ? { id: latestSent.id, sentAt: latestSent.sentAt } : null,
 				latestSentReplyDraftAt,
 				priorCheckInCount
 			};

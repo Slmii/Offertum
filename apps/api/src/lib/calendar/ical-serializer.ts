@@ -1,4 +1,5 @@
 // apps/api/src/lib/calendar/ical-serializer.ts
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 
 export interface ICalEvent {
 	uid: string;
@@ -28,11 +29,11 @@ function formatUtc(date: Date): string {
 		.replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** `YYYYMMDD` in Europe/Amsterdam (the business time zone) for all-day values. */
+/** `YYYYMMDD` in the business time zone for all-day values. */
 function formatDate(date: Date): string {
-	// en-CA formats as YYYY-MM-DD; the Amsterdam time zone is the owner's local calendar day.
+	// en-CA formats as YYYY-MM-DD; the business time zone is the owner's local calendar day.
 	const parts = new Intl.DateTimeFormat('en-CA', {
-		timeZone: 'Europe/Amsterdam',
+		timeZone: BUSINESS_TIME_ZONE,
 		year: 'numeric',
 		month: '2-digit',
 		day: '2-digit'

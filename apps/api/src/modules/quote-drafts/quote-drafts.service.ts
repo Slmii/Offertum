@@ -218,7 +218,13 @@ export class QuoteDraftsService {
 				select: { quoteValidityDays: true }
 			});
 			validUntil = new Date(draft.createdAt.getTime() + org.quoteValidityDays * DAY_MS);
-			await this.prisma.quoteDraft.update({ where: { id: quoteDraftId }, data: { validUntil } });
+			// Conditional write so concurrent PDF generations don't double-stamp — only the first
+			// writer (validUntil still null) wins. The computed value is deterministic (createdAt-
+			// anchored), so the local `validUntil` is correct regardless of who won.
+			await this.prisma.quoteDraft.updateMany({
+				where: { id: quoteDraftId, validUntil: null },
+				data: { validUntil }
+			});
 		}
 
 		const rendered = await this.quotePdfs.renderQuote(organizationId, {

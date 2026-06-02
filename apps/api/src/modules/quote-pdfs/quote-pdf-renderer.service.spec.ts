@@ -4,6 +4,7 @@ import {
 	calculateTotals
 } from '@/modules/quote-pdfs/quote-pdf-renderer.service';
 import type { QuotePdfLineItem, QuotePdfRenderInput } from '@/modules/quote-pdfs/quote-pdf.types';
+import { describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('@react-pdf/renderer', () => ({
 	Document: 'Document',

@@ -12,17 +12,21 @@ import Container from '@mui/material/Container';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/(app)/settings/calendar')({
 	// iCal phone-sync setup is subscription-gated (the in-app calendar view is NOT). Bounce
-	// non-entitled orgs to /billing before the feed-token read fires (the API also 402s the
-	// token endpoints).
+	// non-entitled orgs before the feed-token read fires (the API also 402s the token endpoints).
+	// Owners go to /billing to fix it; non-owners can't access /billing (owner-only), so send them
+	// home to avoid a /billing → / double-redirect dead-end.
 	beforeLoad: async ({ context }) => {
 		const status = await context.queryClient.ensureQueryData(billingStatusQueryOptions);
 		if (!isBillingEntitled(status.state)) {
-			throw redirect({ to: '/billing' });
+			const me = await context.queryClient.ensureQueryData(myMembershipQueryOptions);
+			throw redirect({ to: me.role === 'OWNER' ? '/billing' : '/' });
 		}
 	},
 	loader: ({ context }) => context.queryClient.ensureQueryData(calendarFeedQueryOptions),
@@ -33,6 +37,18 @@ function CalendarSettingsPage() {
 	const { data: feed } = useSuspenseQuery(calendarFeedQueryOptions);
 	const generate = useGenerateCalendarFeed();
 	const revoke = useRevokeCalendarFeed();
+	const [copied, setCopied] = useState(false);
+
+	// `navigator.clipboard` is undefined on insecure (non-HTTPS) origins — guard before calling.
+	const copyFeedUrl = () => {
+		if (!feed.url || !navigator.clipboard) {
+			return;
+		}
+		void navigator.clipboard.writeText(feed.url).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		});
+	};
 
 	return (
 		<Container sx={{ py: 3, maxWidth: 640 }}>
@@ -61,8 +77,8 @@ function CalendarSettingsPage() {
 						onFocus={event => event.target.select()}
 					/>
 					<Stack direction='row' spacing={2}>
-						<Button variant='outlined' onClick={() => void navigator.clipboard.writeText(feed.url ?? '')}>
-							Kopiëren
+						<Button variant='outlined' onClick={copyFeedUrl}>
+							{copied ? 'Gekopieerd' : 'Kopiëren'}
 						</Button>
 						<Button variant='outlined' onClick={() => generate.mutate()} disabled={generate.isPending}>
 							Vernieuwen

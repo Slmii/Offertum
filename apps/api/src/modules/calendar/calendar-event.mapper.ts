@@ -1,5 +1,6 @@
 // apps/api/src/modules/calendar/calendar-event.mapper.ts
 import type { OpportunityStatus } from '@/generated/prisma/enums';
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 import type { CalendarEvent, CalendarEventType } from '@offertum/shared';
 import { CALENDAR_EVENT_TYPE_META } from './calendar-event-type';
 
@@ -10,7 +11,11 @@ export interface CalendarEventSource {
 	customerName: string | null;
 	customerDeadline: Date | null;
 	customerAppointment: Date | null;
-	currentQuoteDraft: { id: string; sentAt: Date | null; validUntil: Date | null; createdAt: Date } | null;
+	// The opp's current (latest) quote draft — drives the `expiry` marker.
+	currentQuoteDraft: { id: string; validUntil: Date | null; createdAt: Date } | null;
+	// The most recently SENT quote draft (may differ from current if a newer draft was repriced
+	// but not yet sent) — drives the `sent` marker so it survives a post-send reprice.
+	latestSentQuoteDraft: { id: string; sentAt: Date } | null;
 	latestSentReplyDraftAt: Date | null;
 	priorCheckInCount: number;
 }
@@ -27,6 +32,21 @@ function addDays(date: Date, days: number): Date {
 	return new Date(date.getTime() + days * DAY_MS);
 }
 
+/**
+ * `YYYY-MM-DD` in the business time zone. All-day events emit a date-only `at` so they are
+ * timezone-independent: the same calendar day renders in the in-app calendar AND the subscribed
+ * iCal feed regardless of the viewer's browser zone (a full UTC timestamp would shift a day for
+ * evening values / non-NL viewers).
+ */
+function businessDateString(date: Date): string {
+	return new Intl.DateTimeFormat('en-CA', {
+		timeZone: BUSINESS_TIME_ZONE,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(date);
+}
+
 function buildEvent(
 	id: string,
 	opportunityId: string,
@@ -34,13 +54,15 @@ function buildEvent(
 	label: string,
 	at: Date
 ): CalendarEvent {
+	const allDay = CALENDAR_EVENT_TYPE_META[type].allDay;
 	return {
 		id,
 		opportunityId,
 		type,
 		title: `${CALENDAR_EVENT_TYPE_META[type].labelPrefix} — ${label}`,
-		at: at.toISOString(),
-		allDay: CALENDAR_EVENT_TYPE_META[type].allDay
+		// All-day → date-only (tz-independent); timed → full UTC instant (viewer renders local).
+		at: allDay ? businessDateString(at) : at.toISOString(),
+		allDay
 	};
 }
 
@@ -74,17 +96,31 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		);
 	}
 
-	if (src.currentQuoteDraft) {
-		const draft = src.currentQuoteDraft;
-		// `sent` marks the day the quote went out — only once it's actually been sent.
-		if (draft.sentAt) {
-			events.push(buildEvent(`${draft.id}:sent`, src.opportunityId, 'sent', label, draft.sentAt));
+	// Quote markers are suppressed on terminal deals — a WON quote is accepted and a LOST one is
+	// dead, so "Offerte verstuurd / verloopt" would just be noise on the calendar.
+	const isTerminalStatus = src.status === 'WON' || src.status === 'LOST';
+	if (!isTerminalStatus) {
+		// `sent` marks the day the quote went out — from the most recently SENT draft, so it
+		// survives a later unsent reprice (which would otherwise become the "current" draft).
+		if (src.latestSentQuoteDraft) {
+			events.push(
+				buildEvent(
+					`${src.latestSentQuoteDraft.id}:sent`,
+					src.opportunityId,
+					'sent',
+					label,
+					src.latestSentQuoteDraft.sentAt
+				)
+			);
 		}
-		// `expiry` shows as soon as the quote exists (sent or not), from the stored validUntil — the
-		// same date the PDF prints + the opp detail shows. Legacy drafts (no stored value) fall back
-		// to createdAt + the org window.
-		const expiryAt = draft.validUntil ?? addDays(draft.createdAt, cfg.quoteValidityDays);
-		events.push(buildEvent(`${draft.id}:expiry`, src.opportunityId, 'expiry', label, expiryAt));
+		// `expiry` shows as soon as a quote exists (sent or not), from the current draft's stored
+		// validUntil — the same date the PDF prints + the opp detail shows. Legacy drafts (no stored
+		// value) fall back to createdAt + the org window.
+		if (src.currentQuoteDraft) {
+			const draft = src.currentQuoteDraft;
+			const expiryAt = draft.validUntil ?? addDays(draft.createdAt, cfg.quoteValidityDays);
+			events.push(buildEvent(`${draft.id}:expiry`, src.opportunityId, 'expiry', label, expiryAt));
+		}
 	}
 
 	// Follow-up: an APPROXIMATE "nudge due" marker — REPLIED, a sent reply draft exists, and the

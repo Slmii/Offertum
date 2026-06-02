@@ -95,10 +95,10 @@ export const InngestFunctionIds = {
 	/** Per-opp processor. Listens to `opportunity/silence.followup-due`,
 	 *  re-validates the eligibility window, generates the check-in draft. */
 	FollowUpProcessor: 'follow-up-processor',
-	/** Weekly digest — Monday 08:00 Amsterdam cron. Enumerates orgs and sends a
+	/** Weekly digest — Monday 08:00 BUSINESS_TIME_ZONE cron. Enumerates orgs and sends a
 	 *  digest email to every user with WEEKLY_DIGEST EMAIL enabled. */
 	WeeklyDigest: 'notifications-weekly-digest',
-	/** Auto-cold — daily 07:00 Amsterdam cron. Flips REPLIED opps to COLD once the
+	/** Auto-cold — daily 07:00 BUSINESS_TIME_ZONE cron. Flips REPLIED opps to COLD once the
 	 *  silence-check-in budget runs out + org.coldAfterDays elapsed. */
 	AutoColdScheduler: 'auto-cold-scheduler',
 	/** Pricing-playbook compile — fires on `pricing-playbook/saved` events. Debounced

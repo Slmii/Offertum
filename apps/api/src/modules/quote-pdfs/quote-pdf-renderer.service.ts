@@ -1,4 +1,5 @@
 import type { QuotePdfLineItem, QuotePdfLineTotals, QuotePdfRenderInput, QuotePdfTotals } from './quote-pdf.types';
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 import { CATALOG_ITEM_UNIT_LABELS_NL } from '@offertum/shared';
 import { Injectable } from '@nestjs/common';
 import { createElement, type ElementType, type ReactElement, type ReactNode } from 'react';
@@ -396,6 +397,6 @@ function formatDate(value: Date): string {
 		day: 'numeric',
 		month: 'long',
 		year: 'numeric',
-		timeZone: 'Europe/Amsterdam'
+		timeZone: BUSINESS_TIME_ZONE
 	}).format(value);
 }

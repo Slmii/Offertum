@@ -1,5 +1,6 @@
 import { NotificationEventType as PrismaNotificationEventType } from '@/generated/prisma/enums';
 import { buildWeeklyDigestEmail } from '@/lib/mails/notifications/weekly-digest.email';
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 import { hoursToMs } from '@/lib/time/duration';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
@@ -9,7 +10,7 @@ import { NotificationsService } from '@/modules/notifications/notifications.serv
 import { Injectable } from '@nestjs/common';
 import type { InngestFunction } from 'inngest';
 
-// Weekly digest delivery. Monday 08:00 Amsterdam local time (Inngest's TZ= prefix
+// Weekly digest delivery. Monday 08:00 ${BUSINESS_TIME_ZONE} local time (Inngest's TZ= prefix
 // handles DST). Each org's users get one email containing this week's open count +
 // cold count + pending auto follow-ups (and estimated value when W11 lands it).
 // In-app fan-out is intentional too — the digest also drops a bell-icon entry so
@@ -22,8 +23,8 @@ export class WeeklyDigestFunction {
 		this.inngestFn = inngest.createFunction(
 			{
 				id: InngestFunctionIds.WeeklyDigest,
-				name: 'Weekly digest (Monday 08:00 Amsterdam)',
-				triggers: [{ cron: 'TZ=Europe/Amsterdam 0 8 * * 1' }],
+				name: `Weekly digest (Monday 08:00 ${BUSINESS_TIME_ZONE})`,
+				triggers: [{ cron: `TZ=${BUSINESS_TIME_ZONE} 0 8 * * 1` }],
 				retries: 1
 			},
 			async ({ step }) => {

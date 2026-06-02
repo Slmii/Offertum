@@ -1,4 +1,5 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
+import { SectionError } from '@/components/SectionError.component';
 import { calendarEventsQueryOptions } from '@/lib/queries/calendar.queries';
 import { calendarEventColor, calendarEventLabel } from '@/lib/utils/calendar.utils';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -51,6 +52,7 @@ export const Route = createFileRoute('/(app)/calendar/')({
 		const { from, to } = windowRange();
 		return context.queryClient.ensureQueryData(calendarEventsQueryOptions(from, to, deps.scope));
 	},
+	errorComponent: SectionError,
 	component: CalendarPage
 });
 

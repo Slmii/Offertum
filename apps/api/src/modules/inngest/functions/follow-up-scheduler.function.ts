@@ -1,3 +1,4 @@
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents, InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
 import { logContext as requestContext } from '@/modules/logger/log-context';
@@ -10,7 +11,7 @@ import type { InngestFunction } from 'inngest';
  * Daily cron that scans REPLIED opportunities and fans out one
  * `opportunity/silence.followup-due` event per eligible row.
  *
- * Schedule: `TZ=Europe/Amsterdam 0 8 * * *` — 08:00 local Amsterdam time year-round
+ * Schedule: `TZ=${BUSINESS_TIME_ZONE} 0 8 * * *` — 08:00 local ${BUSINESS_TIME_ZONE} time year-round
  * (Inngest resolves DST automatically), so the owner sees fresh check-in drafts the
  * moment they start their workday regardless of summer/winter time.
  *
@@ -38,7 +39,7 @@ export class FollowUpSchedulerFunction {
 			{
 				id: InngestFunctionIds.FollowUpScheduler,
 				name: 'Follow-up scheduler (daily)',
-				triggers: [{ cron: 'TZ=Europe/Amsterdam 0 8 * * *' }],
+				triggers: [{ cron: `TZ=${BUSINESS_TIME_ZONE} 0 8 * * *` }],
 				retries: 2
 			},
 			async ({ runId, step }) => {

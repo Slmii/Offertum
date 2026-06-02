@@ -1,5 +1,6 @@
 import { NotificationEventType as PrismaNotificationEventType } from '@/generated/prisma/enums';
 import { buildAutoColdEmail } from '@/lib/mails/notifications/auto-cold.email';
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 import { MS_PER_DAY } from '@/lib/time/duration';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestFunctionIds, InngestSteps } from '@/modules/inngest/inngest.constants';
@@ -15,7 +16,7 @@ import type { InngestFunction } from 'inngest';
  *   - the silence-check-in budget has been spent (or was disabled with maxCount=0), AND
  *   - the latest SENT draft is older than `org.coldAfterDays` days.
  *
- * Schedule: `TZ=Europe/Amsterdam 0 7 * * *` — 07:00 local, an hour before the
+ * Schedule: `TZ=${BUSINESS_TIME_ZONE} 0 7 * * *` — 07:00 local, an hour before the
  * silence-check-in scheduler at 08:00 so the cron sees a stable snapshot before the
  * check-in fan-out generates new drafts (avoiding the "we just generated a check-in,
  * now we're cooling the same opp" thrash within the same morning).
@@ -39,8 +40,8 @@ export class AutoColdSchedulerFunction {
 		this.inngestFn = inngest.createFunction(
 			{
 				id: InngestFunctionIds.AutoColdScheduler,
-				name: 'Auto-cold scheduler (daily 07:00 Amsterdam)',
-				triggers: [{ cron: 'TZ=Europe/Amsterdam 0 7 * * *' }],
+				name: `Auto-cold scheduler (daily 07:00 ${BUSINESS_TIME_ZONE})`,
+				triggers: [{ cron: `TZ=${BUSINESS_TIME_ZONE} 0 7 * * *` }],
 				retries: 1
 			},
 			async ({ runId, step }) => {
