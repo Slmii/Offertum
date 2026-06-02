@@ -208,6 +208,11 @@ model User {
   // user has never authored a playbook; set to NOW on every successful save; reset to
   // NULL when the playbook is cleared (text → empty).
   tonePlaybookUpdatedAt DateTime?
+  // Per-user secret for the iCal subscription feed (/api/calendar/ical/:token.ics).
+  // NULL = feed disabled. Generated on first enable; regenerate to rotate (invalidates
+  // the old URL); set NULL to revoke. 32-byte base64url, unguessable. @unique so a feed
+  // lookup is a single indexed read.
+  icalFeedToken         String?   @unique
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -238,6 +243,10 @@ model Organization {
   // the silence-check-in budget (followUpMaxCount) has been exhausted. Default 14
   // days; 90-day ceiling. Set to 0 to disable the auto-cold cron entirely for the org.
   coldAfterDays             Int      @default(14)
+  // Quote expiry window: a sent quote is treated as valid for this many days.
+  // Drives the calendar `expiry` event (QuoteDraft.sentAt + quoteValidityDays).
+  // 30-day default mirrors followUpCadenceDays/coldAfterDays. Owner-configurable later.
+  quoteValidityDays         Int      @default(30)
   // ────────────────────────────────────────────────────────────────────────
   // Business details (W9.3) — appear on every quote PDF (W9.4) + invoice.
   // `name` above is the single source of truth for the customer-facing legal
