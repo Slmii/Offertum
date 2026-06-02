@@ -247,3 +247,7 @@ export const buildMicrosoftAdminConsentUrl = (clientId: string, redirectUri: str
 	});
 	return `https://login.microsoftonline.com/common/adminconsent?${params.toString()}`;
 };
+
+// ── Calendar (W12) ────────────────────────────────────────────────────────────
+export const ICAL_FEED_TOKEN_NOT_FOUND = 'Calendar feed not found.';
+export const ICAL_FEED_NO_ORGANIZATION = 'The calendar feed owner has no active organization.';
