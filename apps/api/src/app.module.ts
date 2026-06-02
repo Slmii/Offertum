@@ -6,6 +6,7 @@ import { AiModule } from '@/modules/ai/ai.module';
 import { AIUsageModule } from '@/modules/ai-usage/ai-usage.module';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { BillingModule } from '@/modules/billing/billing.module';
+import { CalendarModule } from '@/modules/calendar/calendar.module';
 import { CatalogItemsModule } from '@/modules/catalog-items/catalog-items.module';
 import { ClassifierQualityModule } from '@/modules/classifier-quality/classifier-quality.module';
 import { EmailAccountsModule } from '@/modules/email-accounts/email-accounts.module';
@@ -56,6 +57,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		MeModule,
 		NotificationsModule,
 		BillingModule,
+		CalendarModule,
 		EmailAccountsModule,
 		GmailModule,
 		MicrosoftModule,
