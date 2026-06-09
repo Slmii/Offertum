@@ -1,3 +1,4 @@
+import { formatEmailEuros } from '@/lib/mails/format';
 import { renderNotificationEmail, type RenderedEmail } from '@/lib/mails/notifications/template-shell';
 
 export interface WeeklyDigestEmailInput {
@@ -8,19 +9,13 @@ export interface WeeklyDigestEmailInput {
 	dashboardUrl: string;
 }
 
-function formatEuros(value: number): string {
-	return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(
-		value
-	);
-}
-
 export function buildWeeklyDigestEmail(input: WeeklyDigestEmailInput): RenderedEmail {
 	const { openCount, coldCount, pendingFollowUpCount, estimatedValueEuros, dashboardUrl } = input;
 	const subject = `Wekelijks overzicht: ${openCount} open offerteaanvragen`;
 
 	const valuePart =
 		estimatedValueEuros !== null
-			? `Geschatte waarde: <strong>${formatEuros(estimatedValueEuros)}</strong>.`
+			? `Geschatte waarde: <strong>${formatEmailEuros(estimatedValueEuros)}</strong>.`
 			: 'Geschatte waarde wordt zichtbaar zodra er offertes met bedragen gekoppeld zijn.';
 
 	const paragraphs: string[] = [

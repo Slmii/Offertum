@@ -45,6 +45,10 @@ const EVENT_LABELS_NL: Record<NotificationEventType, { title: string; descriptio
 	weekly_digest: {
 		title: 'Wekelijks overzicht',
 		description: 'Maandagochtend 08:00, samenvatting van open + koude offerteaanvragen.'
+	},
+	daily_digest: {
+		title: 'Dagelijks overzicht',
+		description: 'Elke ochtend 07:30, je belangrijkste offerteaanvragen gerangschikt + offertes die binnenkort verlopen.'
 	}
 };
 

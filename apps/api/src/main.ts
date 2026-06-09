@@ -11,6 +11,7 @@ import type { EnvSchema } from '@/config/env.schema';
 import { authConfig } from '@/modules/auth/auth.config';
 import { inngestFunctions } from '@/modules/inngest/functions';
 import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
+import { DailyDigestFunction } from '@/modules/inngest/functions/daily-digest.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
 import { GmailBackfillFunction } from '@/modules/inngest/functions/gmail-backfill.function';
@@ -111,6 +112,7 @@ async function bootstrap() {
 	const followUpScheduler = app.get(FollowUpSchedulerFunction);
 	const followUpProcessor = app.get(FollowUpProcessorFunction);
 	const weeklyDigest = app.get(WeeklyDigestFunction);
+	const dailyDigest = app.get(DailyDigestFunction);
 	const autoColdScheduler = app.get(AutoColdSchedulerFunction);
 	const pricingPlaybookCompile = app.get(PricingPlaybookCompileFunction);
 	app.use(
@@ -129,6 +131,7 @@ async function bootstrap() {
 				followUpScheduler.inngestFn,
 				followUpProcessor.inngestFn,
 				weeklyDigest.inngestFn,
+				dailyDigest.inngestFn,
 				autoColdScheduler.inngestFn,
 				pricingPlaybookCompile.inngestFn
 			]

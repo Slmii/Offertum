@@ -1,4 +1,5 @@
-import type { BusinessDetails } from '@offertum/shared';
+import { VERTICAL_VALUES, type BusinessDetails, type VerticalValue } from '@offertum/shared';
+import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * Response for `GET /api/me/business-details` + `PATCH /api/me/business-details`.
@@ -15,6 +16,10 @@ export class BusinessDetailsResponseDto implements BusinessDetails {
 	companyFooter!: string | null;
 	defaultPaymentTermsDays!: number;
 	quoteValidityDays!: number;
+
+	@ApiProperty({ enum: VERTICAL_VALUES })
+	vertical!: VerticalValue;
+
 	hasLogo!: boolean;
 	hasLetterhead!: boolean;
 }

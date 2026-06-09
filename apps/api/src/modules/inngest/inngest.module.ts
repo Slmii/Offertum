@@ -2,6 +2,7 @@ import { GmailModule } from '@/modules/gmail/gmail.module';
 import { MicrosoftModule } from '@/modules/microsoft/microsoft.module';
 import { PricingPlaybookModule } from '@/modules/pricing-playbook/pricing-playbook.module';
 import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
+import { DailyDigestFunction } from '@/modules/inngest/functions/daily-digest.function';
 import { PricingPlaybookCompileFunction } from '@/modules/inngest/functions/pricing-playbook-compile.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
@@ -14,6 +15,7 @@ import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/function
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
 import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { Module } from '@nestjs/common';
+import { DigestModule } from '@/modules/digest/digest.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
 import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
@@ -36,7 +38,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		OpportunitiesModule,
 		ReplyDraftsModule,
 		NotificationsModule,
-		PricingPlaybookModule
+		PricingPlaybookModule,
+		DigestModule
 	],
 	providers: [
 		GmailBackfillFunction,
@@ -49,6 +52,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
 		WeeklyDigestFunction,
+		DailyDigestFunction,
 		AutoColdSchedulerFunction,
 		PricingPlaybookCompileFunction
 	],
@@ -63,6 +67,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
 		WeeklyDigestFunction,
+		DailyDigestFunction,
 		AutoColdSchedulerFunction,
 		PricingPlaybookCompileFunction
 	]

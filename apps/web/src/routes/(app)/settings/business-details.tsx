@@ -1,6 +1,7 @@
 import { apiBlob } from '@/lib/api/client';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
+import { Select } from '@/components/Form/Select/Select.component';
 import { SectionError } from '@/components/SectionError.component';
 import {
 	businessDetailsQueryOptions,
@@ -11,6 +12,7 @@ import {
 } from '@/lib/queries/business-details.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { BusinessDetailsSchema, type BusinessDetailsForm } from '@/lib/schemas/business-details.schema';
+import { type VerticalValue } from '@offertum/shared';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -34,6 +36,24 @@ export const Route = createFileRoute('/(app)/settings/business-details')({
 	component: BusinessDetailsSettingsPage,
 	errorComponent: SectionError
 });
+
+const VERTICAL_LABELS: Record<VerticalValue, string> = {
+	LOODGIETER: 'Loodgieter',
+	ELEKTRICIEN: 'Elektricien',
+	SCHILDER: 'Schilder',
+	TIMMERMAN: 'Timmerman / Aannemer',
+	DAKDEKKER: 'Dakdekker',
+	TEGELZETTER: 'Tegelzetter',
+	HOVENIER: 'Hovenier',
+	INSTALLATEUR: 'Installateur',
+	SCHOONMAAK: 'Schoonmaak',
+	OVERIG: 'Overig'
+};
+
+const VERTICAL_OPTIONS = (Object.entries(VERTICAL_LABELS) as [VerticalValue, string][]).map(([value, label]) => ({
+	id: value,
+	label
+}));
 
 function BusinessDetailsSettingsPage() {
 	const { data } = useSuspenseQuery(businessDetailsQueryOptions);
@@ -120,7 +140,8 @@ function BusinessDetailsSettingsPage() {
 				companyWebsite: values.companyWebsite.length === 0 ? null : values.companyWebsite,
 				companyFooter: values.companyFooter.length === 0 ? null : values.companyFooter,
 				defaultPaymentTermsDays: values.defaultPaymentTermsDays,
-				quoteValidityDays: values.quoteValidityDays
+				quoteValidityDays: values.quoteValidityDays,
+				vertical: values.vertical
 			},
 			{
 				onSuccess: () => {
@@ -156,7 +177,8 @@ function BusinessDetailsSettingsPage() {
 						companyWebsite: data.companyWebsite ?? '',
 						companyFooter: data.companyFooter ?? '',
 						defaultPaymentTermsDays: data.defaultPaymentTermsDays,
-						quoteValidityDays: data.quoteValidityDays
+						quoteValidityDays: data.quoteValidityDays,
+						vertical: data.vertical
 					}}
 				>
 					<Stack useFlexGap spacing={4}>
@@ -187,6 +209,13 @@ function BusinessDetailsSettingsPage() {
 							name='quoteValidityDays'
 							label='Geldigheidsduur offerte (dagen)'
 							type='number'
+							fullWidth
+							disabled={!isOwner}
+						/>
+						<Select
+							name='vertical'
+							label='Branche'
+							options={VERTICAL_OPTIONS}
 							fullWidth
 							disabled={!isOwner}
 						/>

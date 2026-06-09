@@ -98,6 +98,9 @@ export const InngestFunctionIds = {
 	/** Weekly digest — Monday 08:00 BUSINESS_TIME_ZONE cron. Enumerates orgs and sends a
 	 *  digest email to every user with WEEKLY_DIGEST EMAIL enabled. */
 	WeeklyDigest: 'notifications-weekly-digest',
+	/** Daily digest — 07:30 BUSINESS_TIME_ZONE cron. Enumerates orgs and sends a ranked
+	 *  daily digest email to every user with DAILY_DIGEST EMAIL enabled. */
+	DailyDigest: 'daily-digest',
 	/** Auto-cold — daily 07:00 BUSINESS_TIME_ZONE cron. Flips REPLIED opps to COLD once the
 	 *  silence-check-in budget runs out + org.coldAfterDays elapsed. */
 	AutoColdScheduler: 'auto-cold-scheduler',
@@ -176,6 +179,10 @@ export const InngestSteps = {
 	WeeklyDigest: {
 		/** Single step: enumerate orgs + their users + send digest emails. */
 		Dispatch: 'weekly-digest-dispatch'
+	},
+	DailyDigest: {
+		/** Single step: invoke DigestService.runDailyDigest + log tick summary. */
+		Dispatch: 'daily-digest-dispatch'
 	},
 	AutoColdScheduler: {
 		/** Single step: query candidates + flip status + log. */

@@ -1,3 +1,18 @@
+export const VERTICAL_VALUES = [
+	'LOODGIETER',
+	'ELEKTRICIEN',
+	'SCHILDER',
+	'TIMMERMAN',
+	'DAKDEKKER',
+	'TEGELZETTER',
+	'HOVENIER',
+	'INSTALLATEUR',
+	'SCHOONMAAK',
+	'OVERIG'
+] as const;
+
+export type VerticalValue = (typeof VERTICAL_VALUES)[number];
+
 /**
  * Per-org business-details surface used on quote PDFs (W9.4 onward) + future
  * invoice integrations. `name` here is the same `Organization.name` set at
@@ -25,6 +40,7 @@ export interface BusinessDetails {
 	companyFooter: string | null;
 	defaultPaymentTermsDays: number;
 	quoteValidityDays: number;
+	vertical: VerticalValue;
 	/** When set, `GET /api/me/business-details/logo` streams the binary. NULL
 	 * means no logo uploaded — the quote PDF falls back to a text-only header. */
 	hasLogo: boolean;
@@ -42,6 +58,7 @@ export interface UpdateBusinessDetailsInput {
 	companyFooter?: string | null;
 	defaultPaymentTermsDays?: number;
 	quoteValidityDays?: number;
+	vertical?: VerticalValue;
 }
 
 export const COMPANY_NAME_MAX_LENGTH = 200;

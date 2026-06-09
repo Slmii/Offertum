@@ -50,9 +50,10 @@ export class WeeklyDigestFunction {
 					}
 
 					const userIds = users.map(u => u.id);
-					const alreadyNotified = await repository.findUserIdsWithRecentWeeklyDigest(
+					const alreadyNotified = await repository.findUserIdsWithRecentDigest(
 						userIds,
 						organizationId,
+						PrismaNotificationEventType.WEEKLY_DIGEST,
 						idempotencyWindowMs
 					);
 					const recipients = userIds.filter(id => !alreadyNotified.has(id));

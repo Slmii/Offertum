@@ -31,7 +31,13 @@ import {
 	UnsupportedMediaTypeException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { BusinessDetails, FollowUpSettings, TonePlaybook, UpdateBusinessDetailsInput } from '@offertum/shared';
+import type {
+	BusinessDetails,
+	FollowUpSettings,
+	TonePlaybook,
+	UpdateBusinessDetailsInput,
+	VerticalValue
+} from '@offertum/shared';
 
 /**
  * Reads + writes scoped to the current user. Controller stays thin — orchestrates
@@ -296,6 +302,7 @@ export class MeService {
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
 				quoteValidityDays: true,
+				vertical: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
@@ -311,6 +318,7 @@ export class MeService {
 			companyFooter: row.companyFooter,
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
 			quoteValidityDays: row.quoteValidityDays,
+			vertical: row.vertical,
 			hasLogo: row.logoStorageKey !== null,
 			hasLetterhead: row.letterheadStorageKey !== null
 		};
@@ -360,6 +368,9 @@ export class MeService {
 		if (input.quoteValidityDays !== undefined) {
 			normalized.quoteValidityDays = input.quoteValidityDays;
 		}
+		if (input.vertical !== undefined) {
+			normalized.vertical = input.vertical;
+		}
 
 		const updated = await this.prisma.organization.update({
 			where: { id: organizationId },
@@ -374,6 +385,7 @@ export class MeService {
 				companyFooter: true,
 				defaultPaymentTermsDays: true,
 				quoteValidityDays: true,
+				vertical: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
@@ -408,6 +420,7 @@ export class MeService {
 			companyFooter: updated.companyFooter,
 			defaultPaymentTermsDays: updated.defaultPaymentTermsDays,
 			quoteValidityDays: updated.quoteValidityDays,
+			vertical: updated.vertical,
 			hasLogo: updated.logoStorageKey !== null,
 			hasLetterhead: updated.letterheadStorageKey !== null
 		};
@@ -700,6 +713,7 @@ export class MeService {
 			companyFooter: true,
 			defaultPaymentTermsDays: true,
 			quoteValidityDays: true,
+			vertical: true,
 			logoStorageKey: true,
 			letterheadStorageKey: true
 		} as const;
@@ -715,6 +729,7 @@ export class MeService {
 		companyFooter: string | null;
 		defaultPaymentTermsDays: number;
 		quoteValidityDays: number;
+		vertical: VerticalValue;
 		logoStorageKey: string | null;
 		letterheadStorageKey: string | null;
 	}): BusinessDetails {
@@ -728,6 +743,7 @@ export class MeService {
 			companyFooter: row.companyFooter,
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
 			quoteValidityDays: row.quoteValidityDays,
+			vertical: row.vertical,
 			hasLogo: row.logoStorageKey !== null,
 			hasLetterhead: row.letterheadStorageKey !== null
 		};

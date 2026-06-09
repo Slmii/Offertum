@@ -2,7 +2,8 @@ export const NOTIFICATION_EVENT_TYPES = [
 	'opportunity_created',
 	'customer_reply',
 	'opportunity_auto_cold',
-	'weekly_digest'
+	'weekly_digest',
+	'daily_digest'
 ] as const;
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 
@@ -50,7 +51,8 @@ export const NOTIFICATION_LIST_LIMIT = 25;
 // refuses email dispatch for anything outside it.
 export const EMAIL_CHANNEL_ALLOWED_EVENTS: ReadonlyArray<NotificationEventType> = [
 	'opportunity_auto_cold',
-	'weekly_digest'
+	'weekly_digest',
+	'daily_digest'
 ];
 
 export function isEmailChannelAvailable(eventType: NotificationEventType): boolean {

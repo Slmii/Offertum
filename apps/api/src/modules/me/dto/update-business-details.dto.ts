@@ -10,10 +10,23 @@ import {
 	PAYMENT_TERMS_DAYS_MIN,
 	QUOTE_VALIDITY_DAYS_MAX,
 	QUOTE_VALIDITY_DAYS_MIN,
-	type UpdateBusinessDetailsInput
+	VERTICAL_VALUES,
+	type UpdateBusinessDetailsInput,
+	type VerticalValue
 } from '@offertum/shared';
 import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators/non-whitespace-pattern';
-import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import {
+	IsIn,
+	IsInt,
+	IsOptional,
+	IsString,
+	Matches,
+	Max,
+	MaxLength,
+	Min,
+	MinLength,
+	ValidateIf
+} from 'class-validator';
 
 /**
  * Request body for `PATCH /api/me/business-details`. Every field is optional —
@@ -80,4 +93,8 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@Min(QUOTE_VALIDITY_DAYS_MIN)
 	@Max(QUOTE_VALIDITY_DAYS_MAX)
 	quoteValidityDays?: number;
+
+	@IsOptional()
+	@IsIn(VERTICAL_VALUES)
+	vertical?: VerticalValue;
 }

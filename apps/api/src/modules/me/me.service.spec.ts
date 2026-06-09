@@ -198,6 +198,7 @@ describe('MeService.updateBusinessDetails', () => {
 				companyFooter: 'Footer',
 				defaultPaymentTermsDays: 14,
 				quoteValidityDays: 30,
+				vertical: 'LOODGIETER',
 				logoStorageKey: null,
 				letterheadStorageKey: null
 			})
@@ -206,7 +207,8 @@ describe('MeService.updateBusinessDetails', () => {
 
 		const result = await service.updateBusinessDetails('owner-1', 'org-1', {
 			companyPhone: '+31 20 123 4567',
-			companyWebsite: 'https://offertum.nl'
+			companyWebsite: 'https://offertum.nl',
+			vertical: 'LOODGIETER'
 		} as never);
 
 		expect(prisma.organization!.update).toHaveBeenCalledWith(
@@ -214,7 +216,8 @@ describe('MeService.updateBusinessDetails', () => {
 				where: { id: 'org-1' },
 				data: expect.objectContaining({
 					companyPhone: '+31 20 123 4567',
-					companyWebsite: 'https://offertum.nl'
+					companyWebsite: 'https://offertum.nl',
+					vertical: 'LOODGIETER'
 				})
 			})
 		);
@@ -222,6 +225,7 @@ describe('MeService.updateBusinessDetails', () => {
 			expect.objectContaining({
 				companyPhone: '+31 20 123 4567',
 				companyWebsite: 'https://offertum.nl',
+				vertical: 'LOODGIETER',
 				hasLetterhead: false
 			})
 		);

@@ -161,6 +161,7 @@ enum NotificationEventType {
   CUSTOMER_REPLY
   OPPORTUNITY_AUTO_COLD
   WEEKLY_DIGEST
+  DAILY_DIGEST
 }
 
 // Delivery channels for a notification. IN_APP writes a Notification row that the bell
@@ -169,6 +170,22 @@ enum NotificationEventType {
 enum NotificationChannel {
   IN_APP
   EMAIL
+}
+
+// Trade/industry of the org. Seeds the win-probability baseline in the W13 ranking
+// engine (see digest/vertical-baselines.ts). Required (no null) — backfilled to OVERIG
+// for existing rows. Editable in the business-details settings page.
+enum Vertical {
+  LOODGIETER
+  ELEKTRICIEN
+  SCHILDER
+  TIMMERMAN
+  DAKDEKKER
+  TEGELZETTER
+  HOVENIER
+  INSTALLATEUR
+  SCHOONMAAK
+  OVERIG
 }
 
 // Distinct categories of pricing rule the compile pass can emit. Each type has its
@@ -247,6 +264,9 @@ model Organization {
   // Drives the calendar `expiry` event (QuoteDraft.sentAt + quoteValidityDays).
   // 30-day default mirrors followUpCadenceDays/coldAfterDays. Owner-configurable later.
   quoteValidityDays         Int      @default(30)
+  // W13 — seeds the ranking win-probability baseline. Default OVERIG so existing
+  // rows backfill cleanly; owner refines it in business-details settings.
+  vertical                  Vertical @default(OVERIG)
   // ────────────────────────────────────────────────────────────────────────
   // Business details (W9.3) — appear on every quote PDF (W9.4) + invoice.
   // `name` above is the single source of truth for the customer-facing legal

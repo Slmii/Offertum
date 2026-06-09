@@ -9,7 +9,8 @@ import {
 	PAYMENT_TERMS_DAYS_MAX,
 	PAYMENT_TERMS_DAYS_MIN,
 	QUOTE_VALIDITY_DAYS_MAX,
-	QUOTE_VALIDITY_DAYS_MIN
+	QUOTE_VALIDITY_DAYS_MIN,
+	VERTICAL_VALUES
 } from '@offertum/shared';
 import z from 'zod';
 
@@ -37,7 +38,8 @@ export const BusinessDetailsSchema = z.object({
 		.number({ message: 'Vul een geldig aantal dagen in' })
 		.int('Vul een heel getal in')
 		.min(QUOTE_VALIDITY_DAYS_MIN, `Minimaal ${QUOTE_VALIDITY_DAYS_MIN}`)
-		.max(QUOTE_VALIDITY_DAYS_MAX, `Maximaal ${QUOTE_VALIDITY_DAYS_MAX}`)
+		.max(QUOTE_VALIDITY_DAYS_MAX, `Maximaal ${QUOTE_VALIDITY_DAYS_MAX}`),
+	vertical: z.enum(VERTICAL_VALUES)
 });
 
 export type BusinessDetailsForm = z.infer<typeof BusinessDetailsSchema>;

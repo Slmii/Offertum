@@ -178,12 +178,14 @@ export class NotificationsRepository {
 		return rows.map(r => r.id);
 	}
 
-	// Idempotency check for the weekly digest. Returns the set of user IDs in `userIds`
-	// who already got a WEEKLY_DIGEST notification within the past 24h, so the cron
-	// can skip them on retry/re-invoke without double-dispatching.
-	async findUserIdsWithRecentWeeklyDigest(
+	// Idempotency check for digest crons. Returns the set of user IDs in `userIds`
+	// who already got a notification of `eventType` within the past `windowMs`, so the
+	// cron can skip them on retry/re-invoke without double-dispatching. Generalized over
+	// the event type so both the weekly and daily digests share one query.
+	async findUserIdsWithRecentDigest(
 		userIds: ReadonlyArray<string>,
 		organizationId: string,
+		eventType: PrismaNotificationEventType,
 		windowMs: number
 	): Promise<Set<string>> {
 		if (userIds.length === 0) {
@@ -194,7 +196,7 @@ export class NotificationsRepository {
 			where: {
 				userId: { in: userIds as string[] },
 				organizationId,
-				eventType: PrismaNotificationEventType.WEEKLY_DIGEST,
+				eventType,
 				createdAt: { gte: cutoff }
 			},
 			select: { userId: true }

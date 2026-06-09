@@ -9,6 +9,7 @@ import { BillingModule } from '@/modules/billing/billing.module';
 import { CalendarModule } from '@/modules/calendar/calendar.module';
 import { CatalogItemsModule } from '@/modules/catalog-items/catalog-items.module';
 import { ClassifierQualityModule } from '@/modules/classifier-quality/classifier-quality.module';
+import { DigestModule } from '@/modules/digest/digest.module';
 import { EmailAccountsModule } from '@/modules/email-accounts/email-accounts.module';
 import { GmailModule } from '@/modules/gmail/gmail.module';
 import { InngestModule } from '@/modules/inngest/inngest.module';
@@ -71,7 +72,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		InngestModule,
 		AiModule,
 		AIUsageModule,
-		ClassifierQualityModule
+		ClassifierQualityModule,
+		DigestModule
 	],
 	controllers: [AppController],
 	providers: [AppService, PrismaService, { provide: APP_GUARD, useClass: ThrottlerGuard }]
