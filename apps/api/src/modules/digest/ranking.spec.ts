@@ -45,4 +45,41 @@ describe('rankOpportunities', () => {
 		expect(ranked[0]?.winProbability).toBeGreaterThanOrEqual(0.02);
 		expect(ranked[0]?.winProbability).toBeLessThanOrEqual(0.95);
 	});
+
+	it('clamps winProbability up to the 0.02 floor', () => {
+		// winBaseline: 0.01 × responseTimeModifier(24h → 1.0) × followUpCountModifier(0 → 1.0) = 0.01 < 0.02 → clamps up.
+		const cfg: RankingConfig = { winBaseline: 0.01, followUpCadenceDays: 4 };
+		const ranked = rankOpportunities(
+			[opp({ firstResponseHours: 24, priorCheckInCount: 0 })],
+			cfg,
+			NOW
+		);
+		expect(ranked[0]?.winProbability).toBe(0.02);
+	});
+
+	it('clamps winProbability down to the 0.95 ceiling', () => {
+		// winBaseline: 5 × 1.0 × 1.0 = 5 → clamps down to 0.95.
+		const cfg: RankingConfig = { winBaseline: 5, followUpCadenceDays: 4 };
+		const ranked = rankOpportunities(
+			[opp({ firstResponseHours: 24, priorCheckInCount: 0 })],
+			cfg,
+			NOW
+		);
+		expect(ranked[0]?.winProbability).toBe(0.95);
+	});
+
+	it('breaks priority ties by opportunityId for a stable order', () => {
+		// Both opps have identical ranking inputs; tie-break is opportunityId.localeCompare.
+		// Input is [b, a] order — output must be [a, b] with ranks [1, 2].
+		const ranked = rankOpportunities(
+			[
+				opp({ opportunityId: 'b', quoteNetEuros: 1000, firstResponseHours: 4, priorCheckInCount: 0 }),
+				opp({ opportunityId: 'a', quoteNetEuros: 1000, firstResponseHours: 4, priorCheckInCount: 0 })
+			],
+			CFG,
+			NOW
+		);
+		expect(ranked.map(r => r.opportunityId)).toEqual(['a', 'b']);
+		expect(ranked.map(r => r.rank)).toEqual([1, 2]);
+	});
 });

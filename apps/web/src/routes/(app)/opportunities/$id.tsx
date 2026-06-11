@@ -1,4 +1,5 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { ExpiryActionCard } from '@/components/ExpiryActionCard.component';
 import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
 import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
@@ -7,6 +8,7 @@ import { QuotePanel } from '@/components/QuotePanel.component';
 import { QuotePdfAttachSelect } from '@/components/QuotePdfAttachSelect.component';
 import { SectionError } from '@/components/SectionError.component';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
 	opportunityDetailQueryOptions,
 	useAssignOpportunity,
@@ -19,6 +21,7 @@ import {
 	useUpdateReplyDraft,
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
+import { opportunityExpiryActionQueryOptions } from '@/lib/queries/expiry.queries';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
@@ -85,7 +88,11 @@ export const Route = createFileRoute('/(app)/opportunities/$id')({
 			// fetch so the picker renders instantly when the panel paints.
 			context.queryClient.ensureQueryData(membershipsQueryOptions),
 			// Persisted quote drafts for the W10.3 quote panel.
-			context.queryClient.ensureQueryData(quoteDraftsQueryOptions(params.id))
+			context.queryClient.ensureQueryData(quoteDraftsQueryOptions(params.id)),
+			// W13 — live smart-expiry suggestion (or null) for the action card.
+			context.queryClient.ensureQueryData(opportunityExpiryActionQueryOptions(params.id)),
+			// W13 — billing entitlement: gates the reply/send panel for non-subscribed orgs.
+			context.queryClient.ensureQueryData(billingStatusQueryOptions)
 		]);
 	},
 	component: OpportunityDetailPage,
@@ -96,6 +103,9 @@ function OpportunityDetailPage() {
 	const { id } = Route.useParams();
 	const { data: opportunity } = useSuspenseQuery(opportunityDetailQueryOptions(id));
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const isEntitled = isBillingEntitled(billing.state);
+	const isOwner = me.role === 'OWNER';
 	const updateStatus = useUpdateOpportunityStatus();
 	const updateDraft = useUpdateReplyDraft(id);
 	const regenerateDraft = useRegenerateReplyDraft(id);
@@ -210,6 +220,8 @@ function OpportunityDetailPage() {
 				</Typography>
 			</Stack>
 
+			<ExpiryActionCard opportunityId={id} />
+
 			{me.user.hasTonePlaybook === false && (
 				<Alert
 					severity='info'
@@ -274,7 +286,7 @@ function OpportunityDetailPage() {
 								<Chip size='small' label='Automatische follow-up' color='info' variant='outlined' />
 							)}
 						</Stack>
-						{replyDraft && isDraftEditable && me.user.hasTonePlaybook && (
+						{isEntitled && replyDraft && isDraftEditable && me.user.hasTonePlaybook && (
 							<Button
 								size='small'
 								variant='text'
@@ -293,106 +305,114 @@ function OpportunityDetailPage() {
 							</Button>
 						)}
 					</Stack>
-					{regenerateDraft.isError && (
-						<Alert severity='error' sx={{ mb: 1 }}>
-							Regenereren mislukt:{' '}
-							{regenerateDraft.error instanceof Error ? regenerateDraft.error.message : 'Onbekende fout'}
-						</Alert>
-					)}
-					{replyDraft ? (
+					{isEntitled ? (
 						<>
-							<DraftEditor
-								body={body}
-								setBody={setBody}
-								isSaving={updateDraft.isPending}
-								lastUpdatedIso={replyDraft.updatedAt}
-								error={updateDraft.error}
-								readOnly={!isDraftEditable}
-							/>
-							<AttachmentsPanel
-								opportunityId={id}
-								attachments={replyDraft.attachments}
-								readOnly={!isDraftEditable}
-								isUploading={uploadAttachment.isPending}
-								uploadError={uploadAttachment.error}
-								onUpload={file => uploadAttachment.mutate({ file })}
-								deletingId={
-									deleteAttachment.isPending
-										? (deleteAttachment.variables?.attachmentId ?? null)
-										: null
-								}
-								deleteError={deleteAttachment.error}
-								onDelete={attachmentId => deleteAttachment.mutate({ attachmentId })}
-							/>
-							{replyDraft.status === 'sent' && replyDraft.sentAt ? (
-								<Stack
-									direction='row'
-									useFlexGap
-									spacing={1}
-									sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
-								>
-									{/* "Concept-vervolg opstellen". Manual follow-up entry
-									 * point for cases where the customer responded out-of-band
-									 * (phone, in-person) but the owner still wants to send a
-									 * written confirmation. The customer-driven path is handled
-									 * automatically by the inbox-side thread reconstitution. */}
-									<Button
-										variant='contained'
-										fullWidth
-										size='large'
-										onClick={() => composeFollowup.mutate()}
-										disabled={composeFollowup.isPending}
-										startIcon={composeFollowup.isPending ? <CircularProgress size={14} /> : null}
-									>
-										{composeFollowup.isPending ? 'Bezig…' : 'Concept-vervolg opstellen'}
-									</Button>
-								</Stack>
-							) : (
-								<Stack
-									direction='row'
-									useFlexGap
-									spacing={1}
-									sx={{ mt: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
-								>
-									{sendDraft.isError && (
-										<Alert severity='error' sx={{ flex: 1 }}>
-											Versturen mislukt:{' '}
-											{sendDraft.error instanceof Error
-												? sendDraft.error.message
-												: 'Onbekende fout'}
-										</Alert>
-									)}
-									<Button
-										variant='contained'
-										size='medium'
-										onClick={() => setSendConfirmOpen(true)}
-										disabled={
-											sendDraft.isPending ||
-											updateDraft.isPending ||
-											regenerateDraft.isPending ||
-											body.trim().length === 0
+							{regenerateDraft.isError && (
+								<Alert severity='error' sx={{ mb: 1 }}>
+									Regenereren mislukt:{' '}
+									{regenerateDraft.error instanceof Error
+										? regenerateDraft.error.message
+										: 'Onbekende fout'}
+								</Alert>
+							)}
+							{replyDraft ? (
+								<>
+									<DraftEditor
+										body={body}
+										setBody={setBody}
+										isSaving={updateDraft.isPending}
+										lastUpdatedIso={replyDraft.updatedAt}
+										error={updateDraft.error}
+										readOnly={!isDraftEditable}
+									/>
+									<AttachmentsPanel
+										opportunityId={id}
+										attachments={replyDraft.attachments}
+										readOnly={!isDraftEditable}
+										isUploading={uploadAttachment.isPending}
+										uploadError={uploadAttachment.error}
+										onUpload={file => uploadAttachment.mutate({ file })}
+										deletingId={
+											deleteAttachment.isPending
+												? (deleteAttachment.variables?.attachmentId ?? null)
+												: null
 										}
-										startIcon={sendDraft.isPending ? <CircularProgress size={14} /> : null}
-									>
-										{sendDraft.isPending ? 'Versturen…' : 'Verstuur'}
-									</Button>
-								</Stack>
+										deleteError={deleteAttachment.error}
+										onDelete={attachmentId => deleteAttachment.mutate({ attachmentId })}
+									/>
+									{replyDraft.status === 'sent' && replyDraft.sentAt ? (
+										<Stack
+											direction='row'
+											useFlexGap
+											spacing={1}
+											sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+										>
+											{/* "Concept-vervolg opstellen". Manual follow-up entry
+											 * point for cases where the customer responded out-of-band
+											 * (phone, in-person) but the owner still wants to send a
+											 * written confirmation. The customer-driven path is handled
+											 * automatically by the inbox-side thread reconstitution. */}
+											<Button
+												variant='contained'
+												fullWidth
+												size='large'
+												onClick={() => composeFollowup.mutate()}
+												disabled={composeFollowup.isPending}
+												startIcon={composeFollowup.isPending ? <CircularProgress size={14} /> : null}
+											>
+												{composeFollowup.isPending ? 'Bezig…' : 'Concept-vervolg opstellen'}
+											</Button>
+										</Stack>
+									) : (
+										<Stack
+											direction='row'
+											useFlexGap
+											spacing={1}
+											sx={{ mt: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
+										>
+											{sendDraft.isError && (
+												<Alert severity='error' sx={{ flex: 1 }}>
+													Versturen mislukt:{' '}
+													{sendDraft.error instanceof Error
+														? sendDraft.error.message
+														: 'Onbekende fout'}
+												</Alert>
+											)}
+											<Button
+												variant='contained'
+												size='medium'
+												onClick={() => setSendConfirmOpen(true)}
+												disabled={
+													sendDraft.isPending ||
+													updateDraft.isPending ||
+													regenerateDraft.isPending ||
+													body.trim().length === 0
+												}
+												startIcon={sendDraft.isPending ? <CircularProgress size={14} /> : null}
+											>
+												{sendDraft.isPending ? 'Versturen…' : 'Verstuur'}
+											</Button>
+										</Stack>
+									)}
+								</>
+							) : opportunity.dismissedAt ? (
+								<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
+									<Typography variant='body2' color='text.secondary'>
+										Deze offerteaanvraag is afgewezen: er wordt geen concept-antwoord opgesteld.
+									</Typography>
+								</Paper>
+							) : (
+								<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
+									<CircularProgress size={20} sx={{ mb: 1 }} />
+									<Typography variant='body2' color='text.secondary'>
+										Concept-antwoord wordt opgesteld… Dit duurt meestal een paar seconden. Ververs de
+										pagina als het langer duurt dan een minuut.
+									</Typography>
+								</Paper>
 							)}
 						</>
-					) : opportunity.dismissedAt ? (
-						<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-							<Typography variant='body2' color='text.secondary'>
-								Deze offerteaanvraag is afgewezen: er wordt geen concept-antwoord opgesteld.
-							</Typography>
-						</Paper>
 					) : (
-						<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-							<CircularProgress size={20} sx={{ mb: 1 }} />
-							<Typography variant='body2' color='text.secondary'>
-								Concept-antwoord wordt opgesteld… Dit duurt meestal een paar seconden. Ververs de pagina
-								als het langer duurt dan een minuut.
-							</Typography>
-						</Paper>
+						<LockedReplyPanel isOwner={isOwner} />
 					)}
 					<QuotePanel opportunityId={id} />
 					{(opportunity.replyDraftHistory.length > 0 ||
@@ -448,6 +468,49 @@ function MuiBackToList() {
 		<Button size='small' variant='text' component={Link} to='/opportunities'>
 			← Lijst
 		</Button>
+	);
+}
+
+/**
+ * Shown in the reply-draft area when the org has no active subscription.
+ * Owners get a direct "Abonneren" CTA; non-owners see a muted ask-the-owner line.
+ * Mirrors the LockGlyph + copy + CTA pattern from W13UpsellTeaser.
+ */
+function LockedReplyPanel({ isOwner }: { isOwner: boolean }) {
+	return (
+		<Paper
+			variant='outlined'
+			sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'flex-start' }}
+		>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+				<svg
+					xmlns='http://www.w3.org/2000/svg'
+					width='18'
+					height='18'
+					viewBox='0 0 24 24'
+					fill='currentColor'
+					aria-hidden='true'
+					style={{ opacity: 0.54, flexShrink: 0 }}
+				>
+					<path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' />
+				</svg>
+				<Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
+					Abonneer om te versturen
+				</Typography>
+			</Stack>
+			<Typography variant='body2' color='text.secondary'>
+				Abonneer om AI-antwoorden te versturen en deze aanvraag op te volgen.
+			</Typography>
+			{isOwner ? (
+				<Button component={Link} to='/billing' variant='contained' size='small'>
+					Abonneren
+				</Button>
+			) : (
+				<Typography variant='body2' color='text.secondary'>
+					Vraag de eigenaar om een abonnement.
+				</Typography>
+			)}
+		</Paper>
 	);
 }
 

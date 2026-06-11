@@ -9,18 +9,18 @@ import { quoteNetEuros, type QuoteValueLine } from './quote-value';
 export class DigestRepository {
 	constructor(private readonly prisma: PrismaService) {}
 
-	// Returns orgs that are currently entitled to write — same set as `EntitlementGuard`
-	// and the weekly digest (`NotificationsRepository.findEntitledOrganizationIds`):
-	// subscription status ∈ {trialing, active, past_due} OR no subscription row. Selects
-	// the extra columns the daily-digest ranking config needs (vertical for the win
-	// baseline, follow-up cadence for time pressure).
+	// Returns orgs that are currently entitled to write — same STRICT predicate as
+	// `EntitlementGuard` / `isOrganizationEntitled`: a Subscription row exists AND its
+	// status ∈ {trialing, active, past_due}. No-subscription / canceled orgs are excluded
+	// (INNER JOIN) so the daily digest matches the W13 write gate exactly. Selects the
+	// extra columns the daily-digest ranking config needs (vertical for the win baseline,
+	// follow-up cadence for time pressure).
 	async findEntitledOrganizations(): Promise<{ id: string; vertical: Vertical; followUpCadenceDays: number }[]> {
 		return this.prisma.$queryRaw<Array<{ id: string; vertical: Vertical; followUpCadenceDays: number }>>`
 			SELECT o."id", o."vertical", o."followUpCadenceDays"
 			FROM "Organization" o
-			LEFT JOIN "Subscription" s ON s."organizationId" = o."id"
-			WHERE s."status" IS NULL
-			   OR s."status" IN ('trialing', 'active', 'past_due')
+			JOIN "Subscription" s ON s."organizationId" = o."id"
+			WHERE s."status" IN ('trialing', 'active', 'past_due')
 		`;
 	}
 
@@ -83,8 +83,12 @@ export class DigestRepository {
 			);
 
 			const firstSentAt = opp.replyDrafts[0]?.sentAt ?? null;
+			// Clamp to 0: a backfilled opp whose sent reply predates `createdAt` would
+			// otherwise produce a negative value and silently land in the fastest win-odds tier.
 			const firstResponseHours =
-				firstSentAt === null ? null : (firstSentAt.getTime() - opp.createdAt.getTime()) / MS_PER_HOUR;
+				firstSentAt === null
+					? null
+					: Math.max(0, (firstSentAt.getTime() - opp.createdAt.getTime()) / MS_PER_HOUR);
 
 			return {
 				opportunityId: opp.id,
@@ -110,12 +114,5 @@ export class DigestRepository {
 			})
 		]);
 		return { wonCount, lostCount };
-	}
-
-	async findExpiringCallouts(
-		organizationId: string
-	): Promise<{ customerName: string | null; daysUntilExpiry: number; opportunityUrl: string }[]> {
-		// STUB — Phase C (smart expiry) wires the real ExpiryAction-backed query here.
-		return [];
 	}
 }

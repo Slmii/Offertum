@@ -3,6 +3,7 @@ import { MicrosoftModule } from '@/modules/microsoft/microsoft.module';
 import { PricingPlaybookModule } from '@/modules/pricing-playbook/pricing-playbook.module';
 import { AutoColdSchedulerFunction } from '@/modules/inngest/functions/auto-cold-scheduler.function';
 import { DailyDigestFunction } from '@/modules/inngest/functions/daily-digest.function';
+import { ExpiryWatcherFunction } from '@/modules/inngest/functions/expiry-watcher.function';
 import { PricingPlaybookCompileFunction } from '@/modules/inngest/functions/pricing-playbook-compile.function';
 import { FollowUpProcessorFunction } from '@/modules/inngest/functions/follow-up-processor.function';
 import { FollowUpSchedulerFunction } from '@/modules/inngest/functions/follow-up-scheduler.function';
@@ -16,6 +17,7 @@ import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-dr
 import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { Module } from '@nestjs/common';
 import { DigestModule } from '@/modules/digest/digest.module';
+import { ExpiryModule } from '@/modules/expiry/expiry.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
 import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
@@ -39,7 +41,8 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		ReplyDraftsModule,
 		NotificationsModule,
 		PricingPlaybookModule,
-		DigestModule
+		DigestModule,
+		ExpiryModule
 	],
 	providers: [
 		GmailBackfillFunction,
@@ -54,6 +57,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		WeeklyDigestFunction,
 		DailyDigestFunction,
 		AutoColdSchedulerFunction,
+		ExpiryWatcherFunction,
 		PricingPlaybookCompileFunction
 	],
 	exports: [
@@ -69,6 +73,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		WeeklyDigestFunction,
 		DailyDigestFunction,
 		AutoColdSchedulerFunction,
+		ExpiryWatcherFunction,
 		PricingPlaybookCompileFunction
 	]
 })

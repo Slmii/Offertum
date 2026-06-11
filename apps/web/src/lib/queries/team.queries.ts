@@ -67,6 +67,7 @@ export const invitationsQueryOptions = queryOptions({
 export function useCreateInvitation() {
 	const queryClient = useQueryClient();
 	return useMutation({
+		meta: { billingMessage: 'om teamleden uit te nodigen' },
 		mutationFn: (body: CreateInvitationInput) => api<Invitation>('/api/invitations', { method: 'POST', body }),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: TeamKeys.invitations });

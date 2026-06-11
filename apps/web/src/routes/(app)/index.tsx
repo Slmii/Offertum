@@ -1,7 +1,11 @@
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { PatternBanners } from '@/components/PatternBanners.component';
 import { SectionError } from '@/components/SectionError.component';
+import { LockGlyph, UpsellTeaser } from '@/components/UpsellTeaser.component';
 import { createPageMeta } from '@/lib/createPageMeta';
 import { useSignOut } from '@/lib/queries/auth.queries';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
+import { patternsQueryOptions } from '@/lib/queries/patterns.queries';
 import {
 	myMembershipQueryOptions,
 	myOrganizationsQueryOptions,
@@ -20,7 +24,9 @@ export const Route = createFileRoute('/(app)/')({
 	loader: ({ context }) =>
 		Promise.all([
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
-			context.queryClient.ensureQueryData(myOrganizationsQueryOptions)
+			context.queryClient.ensureQueryData(myOrganizationsQueryOptions),
+			context.queryClient.ensureQueryData(patternsQueryOptions),
+			context.queryClient.ensureQueryData(billingStatusQueryOptions)
 		]),
 	head: () => {
 		return {
@@ -43,6 +49,9 @@ function HomePage() {
 	const switchOrganization = useSwitchOrganization();
 	const signOut = useSignOut();
 
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const isEntitled = isBillingEntitled(billing.state);
+
 	const user = session?.user;
 	if (!user) {
 		return null;
@@ -52,6 +61,8 @@ function HomePage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
+			<UpsellTeaser isOwner={isOwner} />
+			<PatternBanners />
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<Typography variant='h1' sx={{ fontSize: 32, mb: 1 }}>
 					Offertum
@@ -82,7 +93,11 @@ function HomePage() {
 						<Button variant='contained' onClick={() => navigate({ to: '/opportunities' })}>
 							Opportunities
 						</Button>
-						<Button variant='contained' onClick={() => navigate({ to: '/calendar' })}>
+						<Button
+							variant='contained'
+							onClick={() => navigate({ to: '/calendar' })}
+							startIcon={!isEntitled ? <LockGlyph /> : undefined}
+						>
 							Agenda
 						</Button>
 						<Button variant='contained' onClick={() => navigate({ to: '/team' })}>
@@ -94,7 +109,11 @@ function HomePage() {
 							</Button>
 						)}
 						{isOwner && (
-							<Button variant='contained' onClick={() => navigate({ to: '/settings/pricing-playbook' })}>
+							<Button
+								variant='contained'
+								onClick={() => navigate({ to: '/settings/pricing-playbook' })}
+								startIcon={!isEntitled ? <LockGlyph /> : undefined}
+							>
 								Pricing Playbook
 							</Button>
 						)}
@@ -109,7 +128,11 @@ function HomePage() {
 							</Button>
 						)}
 						{me.role !== 'EXTERNAL' && (
-							<Button variant='contained' onClick={() => navigate({ to: '/settings/email' })}>
+							<Button
+								variant='contained'
+								onClick={() => navigate({ to: '/settings/email' })}
+								startIcon={!isEntitled ? <LockGlyph /> : undefined}
+							>
 								Email
 							</Button>
 						)}

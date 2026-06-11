@@ -1,12 +1,16 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
 import { SectionError } from '@/components/SectionError.component';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { calendarEventsQueryOptions } from '@/lib/queries/calendar.queries';
+import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { calendarEventColor, calendarEventLabel } from '@/lib/utils/calendar.utils';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import listPlugin from '@fullcalendar/list';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Stack from '@mui/material/Stack';
@@ -14,7 +18,7 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { CALENDAR_EVENT_SCOPES, CALENDAR_EVENT_TYPES, type CalendarEventScope } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 
@@ -50,7 +54,11 @@ export const Route = createFileRoute('/(app)/calendar/')({
 	loaderDeps: ({ search }) => ({ scope: search.scope ?? 'all' }),
 	loader: ({ context, deps }) => {
 		const { from, to } = windowRange();
-		return context.queryClient.ensureQueryData(calendarEventsQueryOptions(from, to, deps.scope));
+		return Promise.all([
+			context.queryClient.ensureQueryData(calendarEventsQueryOptions(from, to, deps.scope)),
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
+			context.queryClient.ensureQueryData(myMembershipQueryOptions)
+		]);
 	},
 	errorComponent: SectionError,
 	component: CalendarPage
@@ -63,6 +71,11 @@ function CalendarPage() {
 	// Memoized so the window (and thus the query key) is computed once per mount, never per render.
 	const { from, to } = useMemo(() => windowRange(), []);
 	const { data: events } = useSuspenseQuery(calendarEventsQueryOptions(from, to, activeScope));
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+
+	const isEntitled = isBillingEntitled(billing.state);
+	const isOwner = me.role === 'OWNER';
 
 	// FullCalendar is a client-only widget (it touches the DOM and reads window size for the
 	// responsive view). Gate its render behind a mounted flag so SSR emits no calendar markup
@@ -90,6 +103,27 @@ function CalendarPage() {
 
 	return (
 		<Container sx={{ py: 3 }}>
+			{!isEntitled && (
+				<Alert
+					severity='info'
+					sx={{ mb: 3 }}
+					action={
+						isOwner ? (
+							<Button component={Link} to='/billing' color='inherit' size='small'>
+								Abonneren
+							</Button>
+						) : undefined
+					}
+				>
+					Wil je deze deadlines en afspraken op je telefoon? Met een abonnement synchroniseer je je
+					agenda automatisch met Apple/Google Agenda.
+					{!isOwner && (
+						<Box component='span' sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
+							Vraag de eigenaar om een abonnement.
+						</Box>
+					)}
+				</Alert>
+			)}
 			<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
 				<Typography variant='h1' sx={{ fontSize: 28 }}>
 					Agenda

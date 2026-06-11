@@ -11,6 +11,7 @@ import { CatalogItemsModule } from '@/modules/catalog-items/catalog-items.module
 import { ClassifierQualityModule } from '@/modules/classifier-quality/classifier-quality.module';
 import { DigestModule } from '@/modules/digest/digest.module';
 import { EmailAccountsModule } from '@/modules/email-accounts/email-accounts.module';
+import { ExpiryModule } from '@/modules/expiry/expiry.module';
 import { GmailModule } from '@/modules/gmail/gmail.module';
 import { InngestModule } from '@/modules/inngest/inngest.module';
 import { InvitationsModule } from '@/modules/invitations/invitations.module';
@@ -19,6 +20,7 @@ import { LogModule } from '@/modules/logger/log.module';
 import { MeModule } from '@/modules/me/me.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
+import { PatternsModule } from '@/modules/patterns/patterns.module';
 import { PricingPlaybookModule } from '@/modules/pricing-playbook/pricing-playbook.module';
 import { PrismaModule } from '@/modules/prisma/prisma.module';
 import { PrismaService } from '@/modules/prisma/prisma.service';
@@ -63,6 +65,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		GmailModule,
 		MicrosoftModule,
 		OpportunitiesModule,
+		PatternsModule,
 		PricingPlaybookModule,
 		CatalogItemsModule,
 		QuotePdfsModule,
@@ -73,7 +76,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 		AiModule,
 		AIUsageModule,
 		ClassifierQualityModule,
-		DigestModule
+		DigestModule,
+		ExpiryModule
 	],
 	controllers: [AppController],
 	providers: [AppService, PrismaService, { provide: APP_GUARD, useClass: ThrottlerGuard }]

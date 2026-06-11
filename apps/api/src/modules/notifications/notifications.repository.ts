@@ -164,16 +164,16 @@ export class NotificationsRepository {
 		});
 	}
 
-	// Returns orgs that are currently entitled to write — same set as `EntitlementGuard`
-	// (subscription status ∈ {trialing, active, past_due} OR no subscription row). Used
-	// by the weekly-digest cron so canceled orgs don't keep receiving digests forever.
+	// Returns orgs that are currently entitled to write — same STRICT predicate as
+	// `EntitlementGuard` / `DigestRepository.findEntitledOrganizations`: a Subscription row
+	// exists AND its status ∈ {trialing, active, past_due}. No-subscription / canceled orgs
+	// are excluded (INNER JOIN) so the weekly digest matches the W13 write gate exactly.
 	async findEntitledOrganizationIds(): Promise<string[]> {
 		const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
 			SELECT o."id"
 			FROM "Organization" o
-			LEFT JOIN "Subscription" s ON s."organizationId" = o."id"
-			WHERE s."status" IS NULL
-			   OR s."status" IN ('trialing', 'active', 'past_due')
+			JOIN "Subscription" s ON s."organizationId" = o."id"
+			WHERE s."status" IN ('trialing', 'active', 'past_due')
 		`;
 		return rows.map(r => r.id);
 	}

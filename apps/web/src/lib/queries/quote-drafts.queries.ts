@@ -29,6 +29,7 @@ export function useGenerateQuoteDraft(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
+		meta: { billingMessage: 'om offertes op te stellen' },
 		mutationFn: () => api<QuoteDraft>(`/api/opportunities/${opportunityId}/quote-drafts`, { method: 'POST' }),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: QuoteDraftKeys.list(opportunityId) });
@@ -43,6 +44,7 @@ export function useGenerateQuotePdf(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
+		meta: { billingMessage: "om offerte-PDF's te genereren" },
 		mutationFn: (quoteDraftId: string) =>
 			api<QuotePdf>(`/api/quote-drafts/${quoteDraftId}/pdf`, { method: 'POST' }),
 		onSuccess: () => {

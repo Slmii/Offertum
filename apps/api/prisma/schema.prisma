@@ -188,6 +188,23 @@ enum Vertical {
   OVERIG
 }
 
+// W13 — lifecycle of a smart-expiry suggestion. SUGGESTED until the owner acts;
+// TAKEN when one of the three actions is applied; DISMISSED when waved off;
+// SUPERSEDED when a newer action replaces it (e.g. after an extend bumps validUntil).
+enum ExpiryActionStatus {
+  SUGGESTED
+  TAKEN
+  DISMISSED
+  SUPERSEDED
+}
+
+// W13 — the three one-tap actions offered on an expiring quote.
+enum ExpiryActionKind {
+  EXTEND_14D
+  LAST_FOLLOWUP
+  MARK_LOST
+}
+
 // Distinct categories of pricing rule the compile pass can emit. Each type has its
 // own contract for `condition` + `effect` jsonb shape — validated at the service
 // layer with Zod (see `pricing-playbook/dto/pricing-rule-condition.types.ts`).
@@ -242,6 +259,8 @@ model User {
   assignedOpportunities   Opportunity[]            @relation("OpportunityAssignedTo")
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  takenExpiryActions      ExpiryAction[]           @relation("ExpiryActionTakenBy")
+  patternDismissals       PatternDismissal[]
 }
 
 model Organization {
@@ -316,6 +335,8 @@ model Organization {
   catalogItems            CatalogItem[]
   quoteDrafts             QuoteDraft[]
   quotePdfs               QuotePdf[]
+  expiryActions           ExpiryAction[]
+  patternDismissals       PatternDismissal[]
 }
 
 model Log {
@@ -382,6 +403,8 @@ model AICall {
   // Reply-draft generation call. Named so it doesn't collide with the
   // classifier / extractor relations above.
   replyDrafts             ReplyDraft[]  @relation("ReplyDraftAICall")
+  // W13 expiry-suggestion call (the AI read of the customer's last message).
+  expiryActions           ExpiryAction[] @relation("ExpiryActionAICall")
 
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([purpose, status, createdAt(sort: Desc)])
@@ -735,6 +758,7 @@ model Opportunity {
   replyDrafts              ReplyDraft[]
   quoteDrafts              QuoteDraft[]
   quotePdfs                QuotePdf[]
+  expiryActions            ExpiryAction[]
 
   @@index([organizationId, status, createdAt(sort: Desc)])
   @@index([organizationId, customerDeadline])
@@ -1049,11 +1073,64 @@ model QuoteDraft {
   aiCall       AICall?         @relation("QuoteDraftAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
   lineItems    QuoteLineItem[]
   pdfs         QuotePdf[]
+  expiryActions ExpiryAction[]
 
   // Fast "latest draft for this opp" lookup (detail view + W10.3 editor).
   @@index([opportunityId, createdAt(sort: Desc)])
   @@index([organizationId, status, createdAt(sort: Desc)])
   @@index([aiCallId])
+}
+
+// W13 — a smart-expiry suggestion produced by the expiry-watcher cron ~5 days before a
+// sent quote expires without a customer reply. SUGGESTED until the owner takes/dismisses
+// it. Idempotency root: (quoteDraftId, validUntil) — the watcher can't double-insert for
+// the same expiry window. The `suggestedCopy` + `recommendedAction` come from one AI read
+// of the customer's last message; `aiCallId` FKs that AICall row for audit.
+model ExpiryAction {
+  id                String             @id @default(uuid()) @db.Uuid
+  organizationId    String             @db.Uuid
+  opportunityId     String             @db.Uuid
+  quoteDraftId      String             @db.Uuid
+  // The quote's validity deadline this suggestion fired against — part of the
+  // idempotency key so a later (extended) validUntil yields a fresh suggestion.
+  validUntil        DateTime
+  status            ExpiryActionStatus @default(SUGGESTED)
+  recommendedAction ExpiryActionKind
+  suggestedCopy     String             @db.Text
+  // What the owner actually chose (NULL until TAKEN).
+  takenAction       ExpiryActionKind?
+  aiCallId          String?            @db.Uuid
+  takenById         String?            @db.Uuid
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  quoteDraft   QuoteDraft   @relation(fields: [quoteDraftId], references: [id], onDelete: Cascade)
+  aiCall       AICall?      @relation("ExpiryActionAICall", fields: [aiCallId], references: [id], onDelete: SetNull)
+  takenBy      User?        @relation("ExpiryActionTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+
+  @@unique([quoteDraftId, validUntil])
+  @@index([organizationId, status])
+  @@index([opportunityId])
+}
+
+// W13 — per-user dismissal of a dashboard pattern banner. A pattern re-shows once 30
+// days have elapsed since `dismissedAt` (see patterns/pattern-visibility.ts). Keyed by
+// (org, user, patternKey) so each teammate dismisses independently.
+model PatternDismissal {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  // Stable banner identity: 'reply_speed' | 'win_rate_by_speed'.
+  patternKey     String
+  dismissedAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, patternKey])
+  @@index([userId, organizationId])
 }
 
 // A single line on a persisted quote. Price/name/unit/VAT are DENORMALIZED off the

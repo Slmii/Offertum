@@ -209,6 +209,7 @@ export function useRegenerateReplyDraft(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
+		meta: { billingMessage: 'om AI-antwoorden te genereren' },
 		mutationFn: () =>
 			api<ReplyDraft>(`/api/opportunities/${opportunityId}/reply-draft/regenerate`, {
 				method: 'POST'
@@ -317,6 +318,7 @@ export function useSendReplyDraft(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
+		meta: { billingMessage: 'om antwoorden te versturen' },
 		mutationFn: () =>
 			api<ReplyDraft>(`/api/opportunities/${opportunityId}/reply-draft/send`, {
 				method: 'POST'
@@ -362,6 +364,7 @@ export function useComposeFollowupReplyDraft(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
+		meta: { billingMessage: 'om een vervolgbericht op te stellen' },
 		mutationFn: () =>
 			api<ReplyDraft>(`/api/opportunities/${opportunityId}/reply-draft/followup`, {
 				method: 'POST'

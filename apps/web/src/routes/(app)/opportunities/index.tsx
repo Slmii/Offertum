@@ -6,6 +6,7 @@ import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { SectionError } from '@/components/SectionError.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
 	opportunitiesListQueryOptions,
 	OpportunityKeys,
@@ -13,6 +14,7 @@ import {
 	useUndismissOpportunity,
 	useUpdateOpportunityStatus
 } from '@/lib/queries/opportunities.queries';
+import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { DismissOpportunitySchema, type DismissOpportunityForm } from '@/lib/schemas/dismiss-opportunity.schema';
 import { toReadableDate, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
@@ -100,15 +102,19 @@ export const Route = createFileRoute('/(app)/opportunities/')({
 		assignee: assignee ?? null
 	}),
 	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(
-			opportunitiesListQueryOptions(
-				deps.status,
-				deps.search,
-				deps.showDismissed ? 'dismissed' : 'active',
-				deps.owner,
-				deps.assignee
-			)
-		),
+		Promise.all([
+			context.queryClient.ensureQueryData(
+				opportunitiesListQueryOptions(
+					deps.status,
+					deps.search,
+					deps.showDismissed ? 'dismissed' : 'active',
+					deps.owner,
+					deps.assignee
+				)
+			),
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
+			context.queryClient.ensureQueryData(myMembershipQueryOptions)
+		]),
 	component: OpportunitiesIndexPage,
 	errorComponent: SectionError
 });
@@ -154,6 +160,10 @@ function OpportunitiesIndexPage() {
 	const { data, isFetching } = useSuspenseQuery(
 		opportunitiesListQueryOptions(activeStatus, urlSearchTerm || null, dismissedFilter, ownerFilter, assigneeFilter)
 	);
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+	const isEntitled = isBillingEntitled(billing.state);
+	const isOwner = me.role === 'OWNER';
 	const searching = isFetching || debouncedSearch !== urlSearchTerm.trim();
 
 	const visibleOpportunities = useMemo(() => sortOpportunities(data.opportunities, sort), [data.opportunities, sort]);
@@ -280,6 +290,8 @@ function OpportunitiesIndexPage() {
 					<EmptyState
 						filtered={activeStatus !== null || debouncedSearch.length > 0}
 						showDismissed={showDismissed}
+						isEntitled={isEntitled}
+						isOwner={isOwner}
 					/>
 				) : (
 					visibleOpportunities.map(o => <OpportunityRow key={o.id} opportunity={o} />)
@@ -624,7 +636,17 @@ function DismissDialog({
 	);
 }
 
-function EmptyState({ filtered, showDismissed }: { filtered: boolean; showDismissed: boolean }) {
+function EmptyState({
+	filtered,
+	showDismissed,
+	isEntitled,
+	isOwner
+}: {
+	filtered: boolean;
+	showDismissed: boolean;
+	isEntitled: boolean;
+	isOwner: boolean;
+}) {
 	if (showDismissed) {
 		return (
 			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
@@ -634,6 +656,9 @@ function EmptyState({ filtered, showDismissed }: { filtered: boolean; showDismis
 			</Paper>
 		);
 	}
+	// Filter-empty: a status tab or search is active, just no matching results.
+	// Show a neutral "no match" message regardless of entitlement — the user is already
+	// interacting with the list; the subscribe nudge would be a non-sequitur here.
 	if (filtered) {
 		return (
 			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
@@ -643,6 +668,44 @@ function EmptyState({ filtered, showDismissed }: { filtered: boolean; showDismis
 			</Paper>
 		);
 	}
+	// Feature-empty (no filter active) + NOT entitled: the user can't connect a mailbox
+	// yet, so the current "wait for your connected mailbox" copy is misleading. Nudge them
+	// to subscribe instead.
+	if (!isEntitled) {
+		return (
+			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
+				<Stack useFlexGap spacing={1.5} sx={{ alignItems: 'center' }}>
+					<svg
+						xmlns='http://www.w3.org/2000/svg'
+						width='24'
+						height='24'
+						viewBox='0 0 24 24'
+						fill='currentColor'
+						aria-hidden='true'
+						style={{ opacity: 0.54 }}
+					>
+						<path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' />
+					</svg>
+					<Typography variant='body1' sx={{ fontWeight: 500 }}>
+						Nog geen offerteaanvragen.
+					</Typography>
+					<Typography variant='body2' color='text.secondary'>
+						Abonneer en verbind je mailbox om offerteaanvragen automatisch binnen te halen.
+					</Typography>
+					{isOwner ? (
+						<Button component={Link} to='/billing' variant='contained' size='small'>
+							Abonneren
+						</Button>
+					) : (
+						<Typography variant='body2' color='text.secondary'>
+							Vraag de eigenaar om een abonnement.
+						</Typography>
+					)}
+				</Stack>
+			</Paper>
+		);
+	}
+	// Feature-empty + entitled: mailbox can be connected; the original copy is correct.
 	return (
 		<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 			<Typography variant='body1' sx={{ fontWeight: 500, mb: 1 }}>

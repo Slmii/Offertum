@@ -1,6 +1,12 @@
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SectionError } from '@/components/SectionError.component';
-import { billingStatusQueryOptions, useEndTrial, useOpenPortal, useStartCheckout } from '@/lib/queries/billing.queries';
+import {
+	billingStatusQueryOptions,
+	isBillingEntitled,
+	useEndTrial,
+	useOpenPortal,
+	useStartCheckout
+} from '@/lib/queries/billing.queries';
 import { toReadableDate } from '@/lib/utils/date.utils';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -14,6 +20,8 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
+import Stack from '@mui/material/Stack';
+import type { SxProps, Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import type { BillingStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -35,6 +43,7 @@ function BillingPage() {
 
 	const showUpgrade = shouldShowUpgrade(status);
 	const hasPrimaryAction = shouldShowSubscribe(status) || showUpgrade;
+	const isEntitled = isBillingEntitled(status.state);
 
 	const confirmUpgrade = () =>
 		endTrial.mutate(undefined, {
@@ -52,6 +61,10 @@ function BillingPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
+			{/* Value-prop panel: most prominent position for non-entitled visitors (no sub yet /
+			    canceled). Entitled users see it too for reinforcement, but below the status block. */}
+			{!isEntitled && <ValuePropPanel />}
+
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
 					<Typography variant='h1' sx={{ fontSize: 28 }}>
@@ -69,6 +82,8 @@ function BillingPage() {
 					onOpenPortal={() => openPortal.mutate()}
 					portalOpening={openPortal.isPending}
 				/>
+
+				{isEntitled && <ValuePropPanel sx={{ mt: 0, mb: 3 }} />}
 
 				{(startCheckout.isError || openPortal.isError || endTrial.isError) && (
 					<Alert severity='error' sx={{ mb: 3, mt: 2 }}>
@@ -129,7 +144,7 @@ function BillingPage() {
 						This ends your free trial immediately. Your saved payment method will be charged for the{' '}
 						{formatEuros(status.seats.baseMonthlyPriceCents)}/month plan (plus any applicable VAT) and your
 						subscription becomes active right away. You can then invite teammates beyond the{' '}
-						{status.seats.included}-seat trial limit — extra seats are{' '}
+						{status.seats.included}-seat trial limit. Extra seats are{' '}
 						{formatEuros(status.seats.overagePerSeatCents)}/month each.
 					</DialogContentText>
 					{endTrial.isError && (
@@ -265,6 +280,58 @@ function SeatsLine({ seats, state }: { seats: BillingStatus['seats']; state: Bil
 				</Typography>
 			)}
 		</Box>
+	);
+}
+
+const VALUE_PROP_BULLETS = [
+	'Gmail & Outlook koppelen en aanvragen automatisch binnenhalen',
+	'AI-antwoorden in jouw eigen schrijfstijl',
+	"Offerte-PDF’s genereren en versturen",
+	'Automatische follow-ups en slimme verloop-acties',
+	'Dagelijks overzicht van je belangrijkste offertes',
+	'Agenda-sync naar je telefoon en teamleden uitnodigen'
+] as const;
+
+/**
+ * "Wat je krijgt met Offertum" feature-bullet panel.
+ * Rendered above the billing card for non-entitled owners (most visible CTA position),
+ * and inside the billing card — below the StatusPanel — for entitled users (reinforcement).
+ * The `sx` prop allows placement-specific spacing overrides.
+ */
+function ValuePropPanel({ sx }: { sx?: SxProps<Theme> }) {
+	return (
+		<Paper variant='outlined' sx={[{ p: 3, mb: 3 }, ...(Array.isArray(sx) ? sx : sx != null ? [sx] : [])]}>
+			<Stack useFlexGap spacing={2}>
+				<Typography variant='h6' component='h2' sx={{ fontWeight: 600 }}>
+					Wat je krijgt met Offertum
+				</Typography>
+
+				<Stack useFlexGap spacing={1}>
+					{VALUE_PROP_BULLETS.map(bullet => (
+						<Stack key={bullet} direction='row' useFlexGap spacing={1} sx={{ alignItems: 'flex-start' }}>
+							<CheckGlyph />
+							<Typography variant='body2'>{bullet}</Typography>
+						</Stack>
+					))}
+				</Stack>
+			</Stack>
+		</Paper>
+	);
+}
+
+function CheckGlyph() {
+	return (
+		<svg
+			xmlns='http://www.w3.org/2000/svg'
+			width='16'
+			height='16'
+			viewBox='0 0 24 24'
+			fill='currentColor'
+			aria-hidden='true'
+			style={{ color: 'inherit', opacity: 0.6, flexShrink: 0, marginTop: 2 }}
+		>
+			<path d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z' />
+		</svg>
 	);
 }
 

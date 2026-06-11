@@ -35,7 +35,7 @@ export class DailyDigestFunction {
 			},
 			async ({ runId, step }) => {
 				const result = await step.run(InngestSteps.DailyDigest.Dispatch, async () => {
-					return this.digest.runDailyDigest();
+					return this.digest.runDailyDigest(new Date(), { requestId: runId });
 				});
 
 				// Re-establish AsyncLocalStorage context for the tick log so `requestId`

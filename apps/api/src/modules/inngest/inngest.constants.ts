@@ -104,6 +104,10 @@ export const InngestFunctionIds = {
 	/** Auto-cold — daily 07:00 BUSINESS_TIME_ZONE cron. Flips REPLIED opps to COLD once the
 	 *  silence-check-in budget runs out + org.coldAfterDays elapsed. */
 	AutoColdScheduler: 'auto-cold-scheduler',
+	/** Expiry watcher — daily 06:30 BUSINESS_TIME_ZONE cron. Scans SENT quotes drifting
+	 *  toward expiry without a customer reply + persists one AI-suggested ExpiryAction
+	 *  per candidate. */
+	ExpiryWatcher: 'expiry-watcher',
 	/** Pricing-playbook compile — fires on `pricing-playbook/saved` events. Debounced
 	 *  5s so rapid typed-saves collapse into one LLM call. Runs the prose through
 	 *  the AI client, applies the compiled rules with manual-override preservation. */
@@ -187,6 +191,10 @@ export const InngestSteps = {
 	AutoColdScheduler: {
 		/** Single step: query candidates + flip status + log. */
 		FlipColdCandidates: 'auto-cold-scheduler-flip'
+	},
+	ExpiryWatcher: {
+		/** Single step: scan candidates + persist one AI suggestion per candidate. */
+		Scan: 'expiry-watcher-scan'
 	},
 	PricingPlaybookCompile: {
 		/** Load the playbook, no-op if hash matches the stored `compiledHash`. */

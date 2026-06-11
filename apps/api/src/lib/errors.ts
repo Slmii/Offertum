@@ -156,6 +156,10 @@ export const OPPORTUNITY_NOT_DISMISSED = 'Opportunity is not dismissed.';
 // consistent with the rest of the "this user can't be found here" responses.
 export const OPPORTUNITY_ASSIGNEE_NOT_IN_ORG = 'Assignee is not a member of this organization.';
 
+// User-facing — surfaced when a dismiss endpoint receives a patternKey that isn't one of
+// the registered stable keys. Defensive against typos and future stale clients.
+export const UNKNOWN_PATTERN_KEY = 'Unknown pattern key.';
+
 // User-facing — surfaced when a rule-CRUD endpoint references a rule that doesn't
 // belong to the requesting org's pricing playbook. 404 keeps cross-tenant attempts
 // indistinguishable from genuinely-missing rules.
@@ -247,6 +251,14 @@ export const buildMicrosoftAdminConsentUrl = (clientId: string, redirectUri: str
 	});
 	return `https://login.microsoftonline.com/common/adminconsent?${params.toString()}`;
 };
+
+// ── Smart expiry (W13) ──────────────────────────────────────────────────────
+// User-facing — surfaced when a take/dismiss references an expiry action that
+// doesn't exist or belongs to another org. 404 keeps cross-tenant probing opaque.
+export const EXPIRY_ACTION_NOT_FOUND = 'Expiry action not found.';
+// User-facing — surfaced when acting on an expiry action that's no longer in the
+// SUGGESTED state (already taken, dismissed, or superseded by a newer suggestion).
+export const EXPIRY_ACTION_ALREADY_RESOLVED = 'This expiry suggestion has already been resolved.';
 
 // ── Calendar (W12) ────────────────────────────────────────────────────────────
 export const ICAL_FEED_TOKEN_NOT_FOUND = 'Calendar feed not found.';
