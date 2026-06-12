@@ -16,9 +16,18 @@ export interface ICalendarInput {
 
 const CRLF = '\r\n';
 
-/** Escape per RFC 5545 §3.3.11: backslash, semicolon, comma, and newline in TEXT values. */
+/**
+ * Escape per RFC 5545 §3.3.11: backslash, semicolon, comma, and newline in TEXT values.
+ * CRs are normalized away first — a bare \r in user content would corrupt the
+ * CRLF-delimited output.
+ */
 function escapeText(value: string): string {
-	return value.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+	return value
+		.replace(/\r\n?/g, '\n')
+		.replace(/\\/g, '\\\\')
+		.replace(/;/g, '\\;')
+		.replace(/,/g, '\\,')
+		.replace(/\n/g, '\\n');
 }
 
 /** `YYYYMMDDTHHMMSSZ` (UTC) for timed values. */

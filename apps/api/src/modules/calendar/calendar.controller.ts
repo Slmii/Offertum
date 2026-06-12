@@ -1,5 +1,5 @@
 // apps/api/src/modules/calendar/calendar.controller.ts
-import { OrganizationGuard } from '@/common/guards/organization.guard';
+import { TenantMemberGuard } from '@/common/guards/tenant-member.guard';
 import { CALENDAR_INVALID_DATE_RANGE, NOT_AUTHENTICATED } from '@/lib/errors';
 import { CalendarEntitlementGuard } from '@/modules/calendar/calendar-entitlement.guard';
 import { CalendarService } from '@/modules/calendar/calendar.service';
@@ -25,14 +25,17 @@ import type { Request } from 'express';
 
 @ApiTags('calendar')
 @Controller('calendar')
-@UseGuards(OrganizationGuard)
+@UseGuards(TenantMemberGuard)
 export class CalendarController {
 	constructor(private readonly calendar: CalendarService) {}
 
-	// The in-app calendar READ is open to any org member (no entitlement) — consistent with
-	// every other read in the app. Only the iCal-sync (feed-token) endpoints below are
-	// subscription-gated via CalendarEntitlementGuard, so phone sync can't be set up without an
-	// active subscription (and stops when one is cancelled).
+	// The in-app calendar READ is open to OWNER/MEMBER roles (no entitlement) — EXTERNAL
+	// collaborators are blocked by the controller-level TenantMemberGuard: the agenda
+	// aggregates the org's whole pipeline (deadlines, appointments, quote expiry), which is
+	// more than an external collaborator should see by default. A future per-user grant
+	// could relax this. Only the iCal-sync (feed-token) endpoints below are additionally
+	// subscription-gated via CalendarEntitlementGuard, so phone sync can't be set up without
+	// an active subscription (and stops when one is cancelled).
 	@ApiOperation({ summary: 'Calendar events for the active org within a date window' })
 	@ApiOkResponse({ type: [CalendarEventDto] })
 	@Get('events')

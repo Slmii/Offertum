@@ -18,7 +18,7 @@ describe('escapeHtml', () => {
 		expect(escapeHtml('"quoted"')).toBe('&quot;quoted&quot;');
 	});
 
-	it("escapes single quotes", () => {
+	it('escapes single quotes', () => {
 		expect(escapeHtml("it's fine")).toBe('it&#39;s fine');
 	});
 

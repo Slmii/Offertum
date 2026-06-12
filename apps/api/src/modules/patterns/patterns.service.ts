@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { PatternKey } from '@offertum/shared';
+import type { PatternBanner, PatternKey } from '@offertum/shared';
 
 import { isPatternVisible } from './pattern-visibility';
 import { PatternsRepository } from './patterns.repository';
-import type { BucketStat, PatternBanner } from './patterns.types';
+import type { BucketStat } from './patterns.types';
 
 @Injectable()
 export class PatternsService {
@@ -22,35 +22,27 @@ export class PatternsService {
 			return [];
 		}
 
-		const total = await this.repository.countOpportunities(organizationId);
-		const dismissals = await this.repository.findDismissals(organizationId, userId);
+		// Independent reads + independent banner builders run concurrently — the dashboard
+		// blocks on this endpoint, so round-trips shouldn't stack serially.
+		const [total, dismissals] = await Promise.all([
+			this.repository.countOpportunities(organizationId),
+			this.repository.findDismissals(organizationId, userId)
+		]);
 
-		const banners: PatternBanner[] = [];
+		const [replySpeedBanner, winRateBanner] = await Promise.all([
+			this.buildReplySpeedBanner(organizationId, total, dismissals.get('reply_speed') ?? null, now),
+			this.buildWinRateBanner(organizationId, total, dismissals.get('win_rate_by_speed') ?? null, now)
+		]);
 
-		const replySpeedBanner = await this.buildReplySpeedBanner(
-			organizationId,
-			total,
-			dismissals.get('reply_speed') ?? null,
-			now
-		);
-		if (replySpeedBanner) {
-			banners.push(replySpeedBanner);
-		}
-
-		const winRateBanner = await this.buildWinRateBanner(
-			organizationId,
-			total,
-			dismissals.get('win_rate_by_speed') ?? null,
-			now
-		);
-		if (winRateBanner) {
-			banners.push(winRateBanner);
-		}
-
-		return banners;
+		return [replySpeedBanner, winRateBanner].filter((banner): banner is PatternBanner => banner !== null);
 	}
 
-	async dismiss(organizationId: string, userId: string, patternKey: PatternKey, now: Date = new Date()): Promise<void> {
+	async dismiss(
+		organizationId: string,
+		userId: string,
+		patternKey: PatternKey,
+		now: Date = new Date()
+	): Promise<void> {
 		await this.repository.upsertDismissal(organizationId, userId, patternKey, now);
 	}
 
@@ -64,23 +56,25 @@ export class PatternsService {
 			return null;
 		}
 
-		const { avgCustomerReplyDays } = await this.repository.replySpeedStats(organizationId);
+		const [{ avgCustomerReplyDays }, cadence] = await Promise.all([
+			this.repository.replySpeedStats(organizationId),
+			this.repository.getFollowUpCadenceDays(organizationId)
+		]);
 		// Data-sufficiency gate: need a real average to say anything.
 		if (avgCustomerReplyDays === null) {
 			return null;
 		}
 
 		const avg = Math.round(avgCustomerReplyDays * 10) / 10;
-		const cadence = await this.repository.getFollowUpCadenceDays(organizationId);
-		const headline = `Klanten reageren gemiddeld binnen ${this.formatDays(avg)} dagen`;
+		const headline = `Klanten reageren gemiddeld binnen ${this.formatDaysWithUnit(avg)}`;
 
 		let detail: string;
 		if (cadence === null) {
 			detail = 'Stel een automatische follow-up-cadans in om sneller op te volgen.';
 		} else if (avg < cadence) {
-			detail = `Je automatische follow-up staat op ${cadence} dagen — je zou eerder kunnen opvolgen.`;
+			detail = `Je automatische follow-up staat op ${this.formatDaysWithUnit(cadence)} — je zou eerder kunnen opvolgen.`;
 		} else {
-			detail = `Je follow-up cadans van ${cadence} dagen sluit hier goed op aan.`;
+			detail = `Je follow-up cadans van ${this.formatDaysWithUnit(cadence)} sluit hier goed op aan.`;
 		}
 
 		return { patternKey: 'reply_speed', headline, detail };
@@ -145,12 +139,10 @@ export class PatternsService {
 		return `Je wint ${parts.join(', ')}.`;
 	}
 
-	// 1-decimal Dutch number formatting; drops a trailing ",0" so whole days read cleanly.
-	private formatDays(value: number): string {
-		const rounded = Math.round(value * 10) / 10;
-		if (Number.isInteger(rounded)) {
-			return String(rounded);
-		}
-		return rounded.toFixed(1).replace('.', ',');
+	// 1-decimal Dutch number + unit, e.g. "1 dag", "2,5 dagen". Callers pre-round to one
+	// decimal; the formatter only handles rendering (no second rounding pass).
+	private formatDaysWithUnit(value: number): string {
+		const formatted = Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',');
+		return `${formatted} ${value === 1 ? 'dag' : 'dagen'}`;
 	}
 }

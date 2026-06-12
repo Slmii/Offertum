@@ -13,6 +13,7 @@ function makeRepo(overrides: Partial<jest.Mocked<CalendarRepository>> = {}): jes
 		findActiveSources: jest.fn<CalendarRepository['findActiveSources']>().mockResolvedValue([]),
 		findOrgCalendarConfig: jest.fn<CalendarRepository['findOrgCalendarConfig']>().mockResolvedValue(ORG_CFG),
 		findUserByIcalToken: jest.fn<CalendarRepository['findUserByIcalToken']>().mockResolvedValue(null),
+		isUserMemberOfOrganization: jest.fn<CalendarRepository['isUserMemberOfOrganization']>().mockResolvedValue(true),
 		setIcalToken: jest.fn<CalendarRepository['setIcalToken']>().mockResolvedValue(undefined),
 		findIcalToken: jest.fn<CalendarRepository['findIcalToken']>().mockResolvedValue(null),
 		isOrganizationEntitled: jest.fn<CalendarRepository['isOrganizationEntitled']>().mockResolvedValue(true),
@@ -123,6 +124,14 @@ describe('CalendarService', () => {
 			const ics = await service.renderFeed('valid-token');
 			expect(ics).toContain('BEGIN:VEVENT');
 			expect(ics).toContain('Deadline klant — Jansen');
+		});
+
+		it('throws NotFound when the token owner is no longer a member of the org', async () => {
+			repo.findUserByIcalToken.mockResolvedValue({ id: 'user-1', currentOrganizationId: 'org-1' });
+			repo.isUserMemberOfOrganization.mockResolvedValue(false);
+			const service = new CalendarService(repo, makeConfig());
+			await expect(service.renderFeed('valid-token')).rejects.toBeInstanceOf(NotFoundException);
+			expect(repo.findActiveSources).not.toHaveBeenCalled();
 		});
 
 		it('returns a valid but empty calendar when the org is not entitled', async () => {

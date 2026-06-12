@@ -144,6 +144,36 @@ export const envSchema = z
 					message: 'required when NODE_ENV=production (basic-auth gate on /docs)'
 				});
 			}
+			if (!env.RESEND_API_KEY) {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['RESEND_API_KEY'],
+					message: 'required when NODE_ENV=production (magic-link sign-in + notification emails)'
+				});
+			}
+			if (!env.INNGEST_EVENT_KEY) {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['INNGEST_EVENT_KEY'],
+					message: 'required when NODE_ENV=production (sending events to Inngest Cloud)'
+				});
+			}
+			if (!env.INNGEST_SIGNING_KEY) {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['INNGEST_SIGNING_KEY'],
+					message: 'required when NODE_ENV=production (Inngest Cloud handler verification)'
+				});
+			}
+			// WEB_ORIGIN has a localhost default that is always a misconfiguration in
+			// production — every magic link + OAuth redirect would point at localhost.
+			if (new URL(env.WEB_ORIGIN).hostname === 'localhost') {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['WEB_ORIGIN'],
+					message: 'must be the public web origin when NODE_ENV=production (localhost is the dev default)'
+				});
+			}
 		}
 	});
 

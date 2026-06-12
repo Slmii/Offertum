@@ -43,4 +43,17 @@ describe('opportunity-list-cursor', () => {
 		// Decodes but the date half is empty (separator at index 0).
 		expect(decodeOpportunityListCursor(Buffer.from('|some-id', 'utf8').toString('base64url'))).toBeNull();
 	});
+
+	it('returns null when the id half is not a UUID (would 22P02 in Postgres otherwise)', () => {
+		expect(
+			decodeOpportunityListCursor(
+				Buffer.from('2026-05-17T10:00:00.000Z|not-a-uuid', 'utf8').toString('base64url')
+			)
+		).toBeNull();
+		expect(
+			decodeOpportunityListCursor(
+				Buffer.from("2026-05-17T10:00:00.000Z|'; DROP TABLE x;--", 'utf8').toString('base64url')
+			)
+		).toBeNull();
+	});
 });

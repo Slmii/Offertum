@@ -15,6 +15,10 @@ export interface OpportunityListCursor {
 	id: string;
 }
 
+// The id half feeds a Prisma filter on a uuid column; a non-UUID would surface as a
+// Postgres 22P02 cast error (500) instead of the tolerant-null contract above.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function encodeOpportunityListCursor(cursor: OpportunityListCursor): string {
 	const payload = `${cursor.createdAt.toISOString()}|${cursor.id}`;
 	return Buffer.from(payload, 'utf8').toString('base64url');
@@ -41,6 +45,9 @@ export function decodeOpportunityListCursor(value: string | null | undefined): O
 	const id = decoded.slice(separatorIndex + 1);
 	const createdAt = new Date(createdAtIso);
 	if (Number.isNaN(createdAt.getTime())) {
+		return null;
+	}
+	if (!UUID_PATTERN.test(id)) {
 		return null;
 	}
 

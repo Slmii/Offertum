@@ -69,19 +69,22 @@ export function buildRfc2822Reply(input: BuildRfc2822ReplyInput): string {
 	const attachments = input.attachments ?? [];
 	const useMultipart = attachments.length > 0;
 
+	// Every interpolated header value is CR/LF-stripped at assembly: a stray newline in
+	// any of these (a crafted Message-ID on an inbound email, a display name, a subject)
+	// would otherwise let the value inject extra headers (e.g. Bcc) into the envelope.
 	const headers: string[] = [
-		`From: ${formatFrom(input.from, input.fromName)}`,
-		`To: ${input.to}`,
-		`Subject: ${encodeSubject(input.subject)}`,
+		`From: ${sanitizeHeaderValue(formatFrom(input.from, input.fromName))}`,
+		`To: ${sanitizeHeaderValue(input.to)}`,
+		`Subject: ${sanitizeHeaderValue(encodeSubject(input.subject))}`,
 		`MIME-Version: 1.0`
 	];
 
 	if (input.inReplyTo) {
-		headers.push(`In-Reply-To: ${input.inReplyTo}`);
+		headers.push(`In-Reply-To: ${sanitizeHeaderValue(input.inReplyTo)}`);
 		// References chain: prepend the historical chain if present, then the current
 		// In-Reply-To. Mail clients walk this header to render the thread tree.
 		const referencesChain = input.references ? `${input.references} ${input.inReplyTo}` : input.inReplyTo;
-		headers.push(`References: ${referencesChain}`);
+		headers.push(`References: ${sanitizeHeaderValue(referencesChain)}`);
 	}
 
 	if (!useMultipart) {
@@ -117,7 +120,7 @@ export function buildRfc2822Reply(input: BuildRfc2822ReplyInput): string {
 		parts.push(
 			[
 				`--${boundary}`,
-				`Content-Type: ${attachment.contentType}; name="${filenameHeader.quotedName}"`,
+				`Content-Type: ${sanitizeHeaderValue(attachment.contentType)}; name="${filenameHeader.quotedName}"`,
 				`Content-Disposition: attachment; filename="${filenameHeader.quotedName}"${filenameHeader.starParam}`,
 				`Content-Transfer-Encoding: base64`,
 				'',
@@ -129,6 +132,11 @@ export function buildRfc2822Reply(input: BuildRfc2822ReplyInput): string {
 	const envelope = headers.join('\r\n') + '\r\n\r\n' + parts.join('\r\n') + `\r\n--${boundary}--\r\n`;
 
 	return Buffer.from(envelope, 'utf-8').toString('base64url');
+}
+
+/** Strip CR/LF so an interpolated value can never terminate its header line. */
+function sanitizeHeaderValue(value: string): string {
+	return value.replace(/[\r\n]+/g, ' ');
 }
 
 /**

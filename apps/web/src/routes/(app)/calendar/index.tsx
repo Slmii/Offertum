@@ -1,5 +1,6 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
 import { SectionError } from '@/components/SectionError.component';
+import { SubscribeCta } from '@/components/SubscribeCta.component';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { calendarEventsQueryOptions } from '@/lib/queries/calendar.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
@@ -10,7 +11,6 @@ import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Stack from '@mui/material/Stack';
@@ -18,7 +18,7 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { CALENDAR_EVENT_SCOPES, CALENDAR_EVENT_TYPES, type CalendarEventScope } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 
@@ -104,24 +104,10 @@ function CalendarPage() {
 	return (
 		<Container sx={{ py: 3 }}>
 			{!isEntitled && (
-				<Alert
-					severity='info'
-					sx={{ mb: 3 }}
-					action={
-						isOwner ? (
-							<Button component={Link} to='/billing' color='inherit' size='small'>
-								Abonneren
-							</Button>
-						) : undefined
-					}
-				>
-					Wil je deze deadlines en afspraken op je telefoon? Met een abonnement synchroniseer je je
-					agenda automatisch met Apple/Google Agenda.
-					{!isOwner && (
-						<Box component='span' sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
-							Vraag de eigenaar om een abonnement.
-						</Box>
-					)}
+				<Alert severity='info' sx={{ mb: 3 }}>
+					Wil je deze deadlines en afspraken op je telefoon? Met een abonnement synchroniseer je je agenda
+					automatisch met Apple/Google Agenda.
+					<SubscribeCta isOwner={isOwner} sx={{ mt: 1 }} />
 				</Alert>
 			)}
 			<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

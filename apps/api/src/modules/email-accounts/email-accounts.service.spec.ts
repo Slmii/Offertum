@@ -171,3 +171,73 @@ describe('EmailAccountsService — parallel self-heal race', () => {
 		});
 	});
 });
+
+describe('EmailAccountsService — per-mailbox refresh serialization', () => {
+	const ORIGINAL_KEY = process.env.TOKEN_ENCRYPTION_KEY;
+
+	beforeAll(() => {
+		process.env.TOKEN_ENCRYPTION_KEY = 'ab'.repeat(32);
+	});
+
+	afterAll(() => {
+		process.env.TOKEN_ENCRYPTION_KEY = ORIGINAL_KEY;
+	});
+
+	/**
+	 * Microsoft ROTATES the refresh token on every refresh. Two overlapping refreshes
+	 * each receive a different new refresh token; last-write-wins can persist the one
+	 * Microsoft just invalidated → next refresh hits invalid_grant → a healthy mailbox
+	 * is falsely soft-disconnected. The fix serializes `getAccessToken` per mailbox —
+	 * this spec pins that the second refresh never STARTS while the first is in flight.
+	 */
+	it('never runs two token refreshes for the same mailbox concurrently', async () => {
+		const scope: MailboxScope = {
+			provider: EmailProvider.MICROSOFT,
+			organizationId: 'org-1',
+			userId: 'user-1'
+		};
+		const row = {
+			id: 'ea-1',
+			email: 'alice@offertum.dev',
+			provider: EmailProvider.MICROSOFT,
+			organizationId: 'org-1',
+			userId: 'user-1',
+			accessToken: encrypt('cached-access-token'),
+			refreshToken: encrypt('rt-1'),
+			accessTokenExpiresAt: new Date(Date.now() - hoursToMs(1)),
+			scope: 'Mail.Read'
+		};
+
+		let inFlight = 0;
+		let maxInFlight = 0;
+		const refreshAccessToken = jest.fn().mockImplementation(async () => {
+			inFlight += 1;
+			maxInFlight = Math.max(maxInFlight, inFlight);
+			await new Promise(resolve => setImmediate(resolve));
+			inFlight -= 1;
+			return {
+				accessToken: 'fresh-access-token',
+				refreshToken: 'rt-rotated',
+				expiresAt: new Date(Date.now() + hoursToMs(1)),
+				scope: 'Mail.Read'
+			};
+		});
+
+		const prisma = {
+			emailAccount: {
+				findFirst: jest.fn().mockReturnValue(Promise.resolve(row)),
+				update: jest.fn().mockReturnValue(Promise.resolve({}))
+			}
+		} as unknown as PrismaService;
+		const microsoft = { refreshAccessToken } as unknown as MicrosoftOAuthService;
+		const logService = { logAction: jest.fn() } as unknown as ConstructorParameters<typeof EmailAccountsService>[3];
+		const service = new EmailAccountsService(prisma, {} as GoogleOAuthService, microsoft, logService);
+
+		const [a, b] = await Promise.all([service.getAccessToken(scope), service.getAccessToken(scope)]);
+
+		expect(a).toBe('fresh-access-token');
+		expect(b).toBe('fresh-access-token');
+		// Both callers refreshed (the stub row stays stale), but strictly one at a time.
+		expect(maxInFlight).toBe(1);
+	});
+});

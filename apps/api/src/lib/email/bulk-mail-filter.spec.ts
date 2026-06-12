@@ -98,6 +98,97 @@ describe('detectBulkMail', () => {
 		expect(result).toEqual({ isBulk: false, reason: null });
 	});
 
+	it('does NOT count regular domains that contain a tracking domain as substring', () => {
+		const result = detectBulkMail({
+			provider: EmailProvider.MICROSOFT,
+			raw: {
+				body: {
+					contentType: 'text',
+					content:
+						'Meeting link: https://teams.microsoft.com/l/meetup/123 and docs at https://support.microsoft.com/page'
+				}
+			}
+		});
+		expect(result).toEqual({ isBulk: false, reason: null });
+	});
+
+	it('does NOT let a single tracking link cross the threshold by matching multiple rules', () => {
+		// click.list-manage.com matches both the click. prefix rule and the list-manage.com domain rule.
+		const result = detectBulkMail({
+			provider: EmailProvider.MICROSOFT,
+			raw: {
+				body: {
+					contentType: 'text',
+					content: 'Bekijk het hier: https://click.list-manage.com/track/abc'
+				}
+			}
+		});
+		expect(result).toEqual({ isBulk: false, reason: null });
+	});
+
+	it('counts subdomains of tracking domains and ESP click/track redirect hosts', () => {
+		const result = detectBulkMail({
+			provider: EmailProvider.MICROSOFT,
+			raw: {
+				body: {
+					contentType: 'text',
+					content: 'https://us1.list-manage.com/u/abc and https://click.vendor.example/c/def'
+				}
+			}
+		});
+		expect(result).toEqual({ isBulk: true, reason: 'tracking_link_density' });
+	});
+
+	it('ignores unsubscribe phrases inside quoted reply content', () => {
+		const result = detectBulkMail({
+			provider: EmailProvider.MICROSOFT,
+			raw: {
+				body: {
+					contentType: 'text',
+					content: [
+						'Goedemiddag, naar aanleiding van uw nieuwsbrief wil ik graag een offerte voor een dakkapel.',
+						'',
+						'Op 3 juni 2026 schreef Bouwbedrijf Jansen <nieuwsbrief@jansen.example>:',
+						'> Zomeractie! Vraag nu een offerte aan.',
+						'> Uitschrijven: klik hier om u af te melden.'
+					].join('\n')
+				}
+			}
+		});
+		expect(result).toEqual({ isBulk: false, reason: null });
+	});
+
+	it('ignores tracking links inside quoted reply content', () => {
+		const result = detectBulkMail({
+			provider: EmailProvider.MICROSOFT,
+			raw: {
+				body: {
+					contentType: 'text',
+					content: [
+						'Kunt u mij een offerte sturen voor het schilderwerk?',
+						'',
+						'> Bekijk de actie: https://bit.ly/actie-juni',
+						'> Of hier: https://mailchi.mp/jansen/zomer'
+					].join('\n')
+				}
+			}
+		});
+		expect(result).toEqual({ isBulk: false, reason: null });
+	});
+
+	it('still flags unsubscribe phrases in the sender own (unquoted) text', () => {
+		const result = detectBulkMail({
+			provider: EmailProvider.MICROSOFT,
+			raw: {
+				body: {
+					contentType: 'text',
+					content: 'Speciale aanbieding deze week! Uitschrijven kan onderaan deze mail.'
+				}
+			}
+		});
+		expect(result).toEqual({ isBulk: true, reason: 'body_unsubscribe_phrase' });
+	});
+
 	it('finds bulk phrases inside Gmail multi-part base64-encoded bodies', () => {
 		const result = detectBulkMail({
 			provider: EmailProvider.GMAIL,

@@ -173,8 +173,10 @@ export const InngestSteps = {
 		Generate: 'reply-draft-generate-compose'
 	},
 	FollowUpScheduler: {
-		/** Single step: query candidates + fan out one event per opp. */
-		FanOut: 'follow-up-scheduler-fan-out'
+		/** Step 1: query candidates. */
+		FanOut: 'follow-up-scheduler-fan-out',
+		/** Step 2: emit the fan-out events (memoized so retries can't double-send). */
+		Send: 'follow-up-scheduler-send'
 	},
 	FollowUpProcessor: {
 		/** Single step: re-validate eligibility + generate the check-in draft. */
@@ -189,8 +191,10 @@ export const InngestSteps = {
 		Dispatch: 'daily-digest-dispatch'
 	},
 	AutoColdScheduler: {
-		/** Single step: query candidates + flip status + log. */
-		FlipColdCandidates: 'auto-cold-scheduler-flip'
+		/** Step 1: query candidates + flip status + audit-log; returns the notify targets. */
+		FlipColdCandidates: 'auto-cold-scheduler-flip',
+		/** Step 2..N prefix: one step per flipped opp so a notify failure can't re-run the flip. */
+		NotifyPrefix: 'auto-cold-scheduler-notify'
 	},
 	ExpiryWatcher: {
 		/** Single step: scan candidates + persist one AI suggestion per candidate. */

@@ -173,6 +173,14 @@ function TeamPage() {
 								</ListItem>
 							))}
 						</List>
+
+						{revokeInvitation.error && (
+							<Alert severity='error' sx={{ mb: 2 }}>
+								{revokeInvitation.error instanceof Error
+									? revokeInvitation.error.message
+									: 'Could not revoke invitation.'}
+							</Alert>
+						)}
 					</>
 				)}
 

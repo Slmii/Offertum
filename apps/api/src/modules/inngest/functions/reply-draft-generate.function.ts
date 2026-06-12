@@ -44,7 +44,10 @@ export class ReplyDraftGenerateFunction {
 					{ event: InngestEvents.OpportunityCreated },
 					{ event: InngestEvents.OpportunityFollowupReceived }
 				],
-				retries: 3
+				retries: 3,
+				// Same cap as FollowUpProcessor: a burst of inbound mail fans out many
+				// events at once — bound the parallel OpenAI calls.
+				concurrency: { limit: 5 }
 			},
 			async ({ event, runId }) => {
 				const data = event.data as

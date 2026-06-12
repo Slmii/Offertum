@@ -58,21 +58,49 @@ const BULK_FOOTER_PHRASES = [
 ];
 
 // URL-shortener / tracking domains commonly used by bulk-mail platforms. Two or more
-// of these in one body is a high-confidence "bulk send" signal — real one-to-one
-// emails don't usually contain multiple tracking redirects.
-const TRACKING_HOST_PATTERNS = [
-	/bit\.ly/i,
-	/t\.co/i,
-	/tinyurl\.com/i,
-	/ow\.ly/i,
-	/buff\.ly/i,
-	/list-manage\.com/i,
-	/mailchi\.mp/i,
-	/sendgrid\.net/i,
-	/hubspot(?:links|email)/i,
-	/click\.[\w-]+\.[\w.-]+/i, // common pattern: click.exacttarget.com etc.
-	/track\.[\w-]+\.[\w.-]+/i,
-	/email\.[\w-]+\.[\w.-]+\/c\//i // generic email tracking redirect path
+// DISTINCT links pointing at these in one body is a high-confidence "bulk send" signal —
+// real one-to-one emails don't usually contain multiple tracking redirects. Matching is
+// anchored against the parsed URL host (exact match or subdomain), never a substring
+// scan over the body: an unanchored /t\.co/ would match `teams.microsoft.com` and drop a
+// real customer's quote request over a signature link.
+const TRACKING_DOMAINS = [
+	'bit.ly',
+	't.co',
+	'tinyurl.com',
+	'ow.ly',
+	'buff.ly',
+	'list-manage.com',
+	'mailchi.mp',
+	'sendgrid.net',
+	'hubspotlinks.com',
+	'hubspotemail.net'
+];
+
+// ESP redirect hosts follow a `click.<brand>.<tld>` / `track.<brand>.<tld>` naming
+// convention (click.exacttarget.com, track.customer.io, ...). Anchored to the START of
+// the host and requiring at least three labels so `myclick.example.com` or a bare
+// two-label host never qualifies.
+const TRACKING_HOST_PREFIXES = ['click.', 'track.'];
+
+// Generic email tracking redirect: host `email.<brand>.<tld>` with a `/c/...` path.
+const TRACKING_EMAIL_HOST_PREFIX = 'email.';
+const TRACKING_EMAIL_REDIRECT_PATH_PREFIX = '/c/';
+
+// Matches http(s) URLs in plain text AND inside HTML attributes/entities. Terminators
+// cover whitespace, quotes, angle brackets, and common HTML delimiters.
+const URL_PATTERN = /https?:\/\/[^\s<>"'()[\]]+/gi;
+
+// Lines that mark the start of quoted/forwarded content in a reply. Everything below
+// the first match is someone ELSE's text (often a newsletter the customer replied on
+// top of) — its unsubscribe footer must not get the customer's reply dropped.
+const REPLY_SEPARATOR_PATTERNS = [
+	/^On .{0,200} wrote:\s*$/i, // Gmail English
+	/^Op .{0,200} schreef .{0,200}:\s*$/i, // Gmail Dutch
+	/^-{2,}\s*Original Message\s*-{2,}$/i, // Outlook English
+	/^-{2,}\s*Oorspronkelijk bericht\s*-{2,}$/i, // Outlook Dutch
+	/^Van:\s/, // Dutch forwarded-header block
+	/^From:\s/, // English forwarded-header block
+	/^_{10,}\s*$/ // Outlook divider line
 ];
 
 export function detectBulkMail(input: BulkMailFilterInput): BulkMailFilterResult {
@@ -93,11 +121,15 @@ export function detectBulkMail(input: BulkMailFilterInput): BulkMailFilterResult
 		return { isBulk: false, reason: null };
 	}
 
-	if (containsBulkFooterPhrase(body)) {
+	// Only the sender's OWN text counts toward bulk signals — a quoted newsletter
+	// below a customer's reply must not get that reply dropped.
+	const ownText = stripQuotedContent(body);
+
+	if (containsBulkFooterPhrase(ownText)) {
 		return { isBulk: true, reason: 'body_unsubscribe_phrase' };
 	}
 
-	if (trackingLinkCount(body) >= TRACKING_LINK_THRESHOLD) {
+	if (trackingLinkCount(ownText) >= TRACKING_LINK_THRESHOLD) {
 		return { isBulk: true, reason: 'tracking_link_density' };
 	}
 
@@ -219,17 +251,67 @@ function containsBulkFooterPhrase(body: string): boolean {
 	return BULK_FOOTER_PHRASES.some(phrase => lower.includes(phrase));
 }
 
-function trackingLinkCount(body: string): number {
-	let count = 0;
-	for (const pattern of TRACKING_HOST_PATTERNS) {
-		if (pattern.test(body)) {
-			count++;
+// Drops quoted/forwarded content: everything below the first reply separator, plus any
+// '>'-prefixed quote lines above it.
+function stripQuotedContent(body: string): string {
+	const lines = body.split('\n');
+	const kept: string[] = [];
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (REPLY_SEPARATOR_PATTERNS.some(pattern => pattern.test(trimmed))) {
+			break;
 		}
-		if (count >= TRACKING_LINK_THRESHOLD) {
-			return count;
+		if (trimmed.startsWith('>')) {
+			continue;
+		}
+		kept.push(line);
+	}
+	return kept.join('\n');
+}
+
+function trackingLinkCount(body: string): number {
+	const urls = body.match(URL_PATTERN);
+	if (!urls) {
+		return 0;
+	}
+
+	const distinctTrackingLinks = new Set<string>();
+	for (const candidate of urls) {
+		// Strip trailing sentence punctuation that the pattern's terminator set lets through.
+		const cleaned = candidate.replace(/[.,;:!?]+$/, '');
+		let url: URL;
+		try {
+			url = new URL(cleaned);
+		} catch {
+			continue;
+		}
+		if (isTrackingHost(url)) {
+			distinctTrackingLinks.add(`${url.hostname}${url.pathname}${url.search}`);
+		}
+		if (distinctTrackingLinks.size >= TRACKING_LINK_THRESHOLD) {
+			break;
 		}
 	}
-	return count;
+	return distinctTrackingLinks.size;
+}
+
+function isTrackingHost(url: URL): boolean {
+	const host = url.hostname.toLowerCase();
+
+	if (TRACKING_DOMAINS.some(domain => host === domain || host.endsWith(`.${domain}`))) {
+		return true;
+	}
+
+	const labelCount = host.split('.').length;
+	if (labelCount >= 3 && TRACKING_HOST_PREFIXES.some(prefix => host.startsWith(prefix))) {
+		return true;
+	}
+
+	return (
+		labelCount >= 3 &&
+		host.startsWith(TRACKING_EMAIL_HOST_PREFIX) &&
+		url.pathname.startsWith(TRACKING_EMAIL_REDIRECT_PATH_PREFIX)
+	);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

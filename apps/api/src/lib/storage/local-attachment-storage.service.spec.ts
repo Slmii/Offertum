@@ -24,10 +24,9 @@ describe('LocalAttachmentStorage', () => {
 	});
 
 	it('rejects traversal into sibling directories whose names share the root prefix', async () => {
-		const storage = new LocalAttachmentStorage(
-			makeConfig(rootDir),
-			{ logAction: jest.fn() } as unknown as LogService
-		);
+		const storage = new LocalAttachmentStorage(makeConfig(rootDir), {
+			logAction: jest.fn()
+		} as unknown as LogService);
 
 		await expect(
 			storage.put({

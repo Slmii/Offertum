@@ -1,5 +1,5 @@
 // apps/api/src/modules/calendar/calendar.repository.ts
-import { ReplyDraftKind, ReplyDraftStatus } from '@/generated/prisma/enums';
+import { MembershipRole, ReplyDraftKind, ReplyDraftStatus } from '@/generated/prisma/enums';
 import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
@@ -90,6 +90,22 @@ export class CalendarRepository {
 			where: { icalFeedToken: token },
 			select: { id: true, currentOrganizationId: true }
 		});
+	}
+
+	/**
+	 * Membership re-verification for the session-less feed path. `User.currentOrganizationId`
+	 * alone is not an authorization claim — a user removed from the org can keep a stale
+	 * pointer, and their feed token must stop serving that org's data immediately.
+	 * EXTERNAL roles are excluded to mirror the in-app calendar's TenantMemberGuard: an
+	 * external collaborator must not receive the org's full agenda on their phone, even via
+	 * a token minted before their role was set (or while the role-gating didn't exist yet).
+	 */
+	async isUserMemberOfOrganization(userId: string, organizationId: string): Promise<boolean> {
+		const membership = await this.prisma.membership.findFirst({
+			where: { userId, organizationId, role: { not: MembershipRole.EXTERNAL } },
+			select: { id: true }
+		});
+		return membership !== null;
 	}
 
 	/** Set (or rotate, or clear with null) the requesting user's feed token. */

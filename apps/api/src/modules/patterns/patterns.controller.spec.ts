@@ -40,7 +40,9 @@ describe('PatternsController.dismiss', () => {
 	it('rejects an unknown key with BadRequestException before calling the service', async () => {
 		const service = makeFakeService();
 
-		await expect(controllerDismiss('bogus', 'org-1', 'user-1', service)).rejects.toBeInstanceOf(BadRequestException);
+		await expect(controllerDismiss('bogus', 'org-1', 'user-1', service)).rejects.toBeInstanceOf(
+			BadRequestException
+		);
 		await expect(controllerDismiss('bogus', 'org-1', 'user-1', service)).rejects.toMatchObject({
 			message: UNKNOWN_PATTERN_KEY
 		});

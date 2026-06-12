@@ -93,13 +93,15 @@ function HomePage() {
 						<Button variant='contained' onClick={() => navigate({ to: '/opportunities' })}>
 							Opportunities
 						</Button>
-						<Button
-							variant='contained'
-							onClick={() => navigate({ to: '/calendar' })}
-							startIcon={!isEntitled ? <LockGlyph /> : undefined}
-						>
-							Agenda
-						</Button>
+						{me.role !== 'EXTERNAL' && (
+							<Button
+								variant='contained'
+								onClick={() => navigate({ to: '/calendar' })}
+								startIcon={!isEntitled ? <LockGlyph /> : undefined}
+							>
+								Agenda
+							</Button>
+						)}
 						<Button variant='contained' onClick={() => navigate({ to: '/team' })}>
 							Team
 						</Button>
@@ -146,9 +148,11 @@ function HomePage() {
 								Follow-ups
 							</Button>
 						)}
-						<Button variant='outlined' onClick={() => navigate({ to: '/settings/calendar' })}>
-							Agenda-abonnement
-						</Button>
+						{me.role !== 'EXTERNAL' && (
+							<Button variant='outlined' onClick={() => navigate({ to: '/settings/calendar' })}>
+								Agenda-abonnement
+							</Button>
+						)}
 						{me.user.isAdmin && (
 							<Button variant='outlined' onClick={() => navigate({ to: '/admin/ai-usage' })}>
 								AI usage (dev)

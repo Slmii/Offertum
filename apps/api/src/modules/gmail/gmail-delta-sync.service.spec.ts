@@ -331,6 +331,30 @@ describe('GmailDeltaSyncService.run', () => {
 		});
 	});
 
+	it('does not jump the cursor past unwalked pages when the page cap is hit', async () => {
+		// 51 pages of history with the cap at 50: the walk must stop after 50 pages and
+		// advance the cursor only to the LAST PROCESSED history record — persisting the
+		// page's mailbox-current historyId would silently skip page 51's messages.
+		const pages = Array.from({ length: 51 }, (_, i) => ({ addedIds: [`p${i}`] }));
+		const prisma = makePrisma(SCOPE_ROW);
+		const api = makeApi({ historyPages: pages, finalHistoryId: 'history-current' });
+		const service = new GmailDeltaSyncService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			api,
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		expect(result.pagesFetched).toBe(50);
+		expect(result.historyId).not.toBe('history-current');
+		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
+			where: { id: 'ea-1' },
+			data: { historyId: 'h-p49' }
+		});
+	});
+
 	it('does not call createMany on an empty delta (zero messagesAdded)', async () => {
 		const prisma = makePrisma(SCOPE_ROW, []);
 		const service = new GmailDeltaSyncService(

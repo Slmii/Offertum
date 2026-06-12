@@ -1,11 +1,10 @@
+import { SubscribeCta } from '@/components/SubscribeCta.component';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 
 const VALUE_PROPS = [
 	'Dagelijks overzicht van je belangrijkste offerteaanvragen',
@@ -58,28 +57,21 @@ export function UpsellTeaser({ isOwner }: { isOwner: boolean }) {
 					))}
 				</Stack>
 
-				{isOwner ? (
-					<Box>
-						<Button component={Link} to='/billing' variant='contained' size='small'>
-							Abonneren
-						</Button>
-					</Box>
-				) : (
-					<Typography variant='body2' color='text.secondary'>
-						Vraag de eigenaar van je organisatie om een abonnement.
-					</Typography>
-				)}
+				<SubscribeCta
+					isOwner={isOwner}
+					askOwnerText='Vraag de eigenaar van je organisatie om een abonnement.'
+				/>
 			</Stack>
 		</Paper>
 	);
 }
 
-export function LockGlyph() {
+export function LockGlyph({ size = 18 }: { size?: number }) {
 	return (
 		<svg
 			xmlns='http://www.w3.org/2000/svg'
-			width='18'
-			height='18'
+			width={size}
+			height={size}
 			viewBox='0 0 24 24'
 			fill='currentColor'
 			aria-hidden='true'

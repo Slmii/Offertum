@@ -3,6 +3,7 @@ import {
 	NotificationChannel as PrismaNotificationChannel,
 	NotificationEventType as PrismaNotificationEventType
 } from '@/generated/prisma/enums';
+import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
@@ -173,7 +174,7 @@ export class NotificationsRepository {
 			SELECT o."id"
 			FROM "Organization" o
 			JOIN "Subscription" s ON s."organizationId" = o."id"
-			WHERE s."status" IN ('trialing', 'active', 'past_due')
+			WHERE s."status" = ANY(${ENTITLED_STRIPE_STATUSES as string[]}::text[])
 		`;
 		return rows.map(r => r.id);
 	}

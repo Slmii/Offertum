@@ -148,17 +148,35 @@ export const authConfig: ExpressAuthConfig = {
 		},
 		// Auth.js defaults post-signin redirects to the auth handler's own origin (the API,
 		// which has nothing at `/`). Rewrite same-origin redirects to point at the web app.
+		// Origin checks parse the URL and compare `origin` for EXACT equality — a
+		// `startsWith` prefix check would accept `https://app.example.com.evil.com`
+		// (open redirect). Anything that doesn't resolve to a known origin falls back
+		// to the web app's root.
 		async redirect({ url, baseUrl }) {
-			if (url.startsWith(baseUrl)) {
-				return url.replace(baseUrl, WEB_ORIGIN);
+			let target: URL;
+			try {
+				// Relative URLs ('/dashboard') resolve against the web origin.
+				target = new URL(url, WEB_ORIGIN);
+			} catch {
+				return WEB_ORIGIN;
 			}
 
-			if (url.startsWith('/')) {
-				return `${WEB_ORIGIN}${url}`;
+			const webOrigin = new URL(WEB_ORIGIN).origin;
+
+			if (target.origin === webOrigin) {
+				return target.toString();
 			}
 
-			if (url.startsWith(WEB_ORIGIN)) {
-				return url;
+			let authOrigin: string | null = null;
+			try {
+				authOrigin = new URL(baseUrl).origin;
+			} catch {
+				authOrigin = null;
+			}
+
+			if (authOrigin !== null && target.origin === authOrigin) {
+				// Same-origin (API) redirect — carry the path + query over to the web app.
+				return `${webOrigin}${target.pathname}${target.search}${target.hash}`;
 			}
 
 			return WEB_ORIGIN;
@@ -178,8 +196,12 @@ export const authConfig: ExpressAuthConfig = {
 		// `OrganizationGuard`'s existing membership re-verification.
 		async jwt({ token, user }) {
 			if (user?.email) {
-				const dbUser = await authPrisma.user.findUnique({
-					where: { email: user.email },
+				// Case-INsensitive match — OAuth providers can return mixed-case emails while
+				// our User rows are lowercased on write. A case-sensitive lookup would lock
+				// out a user whose provider reports `John@Gmail.com`. Mirrors
+				// `sendVerificationRequest` above.
+				const dbUser = await authPrisma.user.findFirst({
+					where: { email: { equals: user.email, mode: 'insensitive' } },
 					select: { id: true }
 				});
 

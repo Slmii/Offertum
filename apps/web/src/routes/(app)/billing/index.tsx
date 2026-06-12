@@ -286,7 +286,7 @@ function SeatsLine({ seats, state }: { seats: BillingStatus['seats']; state: Bil
 const VALUE_PROP_BULLETS = [
 	'Gmail & Outlook koppelen en aanvragen automatisch binnenhalen',
 	'AI-antwoorden in jouw eigen schrijfstijl',
-	"Offerte-PDF’s genereren en versturen",
+	'Offerte-PDF’s genereren en versturen',
 	'Automatische follow-ups en slimme verloop-acties',
 	'Dagelijks overzicht van je belangrijkste offertes',
 	'Agenda-sync naar je telefoon en teamleden uitnodigen'

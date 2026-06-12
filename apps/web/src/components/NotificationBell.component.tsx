@@ -7,6 +7,7 @@ import { toReadableTimestamp } from '@/lib/utils/date.utils';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import Popover from '@mui/material/Popover';
@@ -123,18 +124,22 @@ function NotificationRow({ notification, onActivate }: { notification: AppNotifi
 		);
 	}
 
+	// ButtonBase = real <button>: keyboard-focusable + Enter/Space activation for free,
+	// unlike a click-handled div.
 	return (
-		<Box
+		<ButtonBase
 			onClick={onActivate}
 			sx={{
 				p: 1.5,
+				width: '100%',
+				display: 'block',
+				textAlign: 'left',
 				backgroundColor: notification.readAt ? 'transparent' : 'rgba(26, 35, 126, 0.04)',
-				cursor: 'pointer',
 				'&:hover': { backgroundColor: 'action.hover' }
 			}}
 		>
 			{content}
-		</Box>
+		</ButtonBase>
 	);
 }
 

@@ -656,13 +656,29 @@ export class MeService {
 		await this.prisma.$transaction(async tx => {
 			await tx.membership.delete({ where: { id: target.id } });
 
-			// Disconnect the removed user's mailboxes scoped to this org. The cascade FK on
-			// `EmailAccount.organizationId → Organization` and the `RawMessage` cascade clear
-			// dependent rows. We don't call the provider's revoke endpoint — admin-driven
-			// removes are different from user-driven disconnects; the tokens go inert once
-			// the row is gone, and Gmail's watch (if any) expires within 7 days on its own.
-			await tx.emailAccount.deleteMany({
-				where: { userId: targetUserId, organizationId }
+			// SOFT-disconnect the removed user's mailboxes scoped to this org — never
+			// delete the rows. A hard delete cascades through `RawMessage` AND
+			// `Opportunity.emailAccount (onDelete: Cascade)`, wiping every opportunity,
+			// draft and quote that ever arrived via that inbox: the org's pipeline
+			// history is the org's data, not the member's. Same shape as
+			// `EmailAccountsService.disconnectEmailAccount`: stamp `disconnectedAt`,
+			// clear the operational sync state, and null `userId` so the send path's
+			// `no_inbox_owner` guard refuses to reissue OAuth tokens for someone who is
+			// no longer a member. We don't call the provider's revoke endpoint —
+			// admin-driven removes are different from user-driven disconnects; the
+			// stored tokens go unused once `userId` is null, and Gmail's watch (if any)
+			// expires within 7 days on its own.
+			await tx.emailAccount.updateMany({
+				where: { userId: targetUserId, organizationId },
+				data: {
+					userId: null,
+					disconnectedAt: new Date(),
+					deltaLink: null,
+					historyId: null,
+					subscriptionId: null,
+					subscriptionClientState: null,
+					watchExpiresAt: null
+				}
 			});
 
 			// If the removed user had this org as their active one, switch them to their

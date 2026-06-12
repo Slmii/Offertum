@@ -15,12 +15,14 @@ interface FakePrisma {
 	};
 	membership: { count: jest.Mock };
 	organization: { findUniqueOrThrow: jest.Mock };
+	stripeWebhookEvent: { create: jest.Mock; deleteMany: jest.Mock };
 }
 
 function makePrisma(overrides?: {
 	subscription?: Partial<FakePrisma['subscription']>;
 	membership?: Partial<FakePrisma['membership']>;
 	organization?: Partial<FakePrisma['organization']>;
+	stripeWebhookEvent?: Partial<FakePrisma['stripeWebhookEvent']>;
 }): FakePrisma {
 	return {
 		subscription: {
@@ -37,6 +39,11 @@ function makePrisma(overrides?: {
 		organization: {
 			findUniqueOrThrow: jest.fn().mockReturnValue(Promise.resolve({ id: 'org-1', name: 'Acme BV' })),
 			...overrides?.organization
+		},
+		stripeWebhookEvent: {
+			create: jest.fn().mockReturnValue(Promise.resolve({})),
+			deleteMany: jest.fn().mockReturnValue(Promise.resolve({ count: 1 })),
+			...overrides?.stripeWebhookEvent
 		}
 	};
 }
@@ -499,5 +506,153 @@ describe('BillingService.endTrialNow', () => {
 		const service = buildService(prisma, {});
 
 		await expect(service.endTrialNow('org-1')).rejects.toThrow(InternalServerErrorException);
+	});
+});
+
+describe('BillingService.handleWebhookEvent', () => {
+	const event = {
+		id: 'evt_1',
+		type: 'customer.subscription.deleted',
+		data: { object: { customer: 'cus_123' } }
+	} as unknown as Parameters<BillingService['handleWebhookEvent']>[0];
+
+	it('releases the dedup row and rethrows when the sync fails, so a redelivery reprocesses', async () => {
+		const prisma = makePrisma();
+		const service = buildService(prisma, {
+			subscriptions: { list: jest.fn().mockReturnValue(Promise.reject(new Error('stripe down'))) }
+		});
+
+		await expect(service.handleWebhookEvent(event)).rejects.toThrow('stripe down');
+		expect(prisma.stripeWebhookEvent.deleteMany).toHaveBeenCalledWith({ where: { eventId: 'evt_1' } });
+	});
+
+	it('keeps the dedup row on a successful sync', async () => {
+		const prisma = makePrisma();
+		const service = buildService(prisma, {
+			subscriptions: { list: jest.fn().mockReturnValue(Promise.resolve({ data: [] })) }
+		});
+
+		await service.handleWebhookEvent(event);
+		expect(prisma.stripeWebhookEvent.create).toHaveBeenCalledTimes(1);
+		expect(prisma.stripeWebhookEvent.deleteMany).not.toHaveBeenCalled();
+	});
+
+	it('skips processing on a duplicate delivery (P2002 on the dedup insert)', async () => {
+		const list = jest.fn();
+		const prisma = makePrisma({
+			stripeWebhookEvent: { create: jest.fn().mockReturnValue(Promise.reject({ code: 'P2002' })) }
+		});
+		const service = buildService(prisma, { subscriptions: { list } });
+
+		await service.handleWebhookEvent(event);
+		expect(list).not.toHaveBeenCalled();
+	});
+
+	it('still rethrows the sync error when the dedup release itself fails', async () => {
+		const prisma = makePrisma({
+			stripeWebhookEvent: {
+				deleteMany: jest.fn().mockReturnValue(Promise.reject(new Error('db down')))
+			}
+		});
+		const service = buildService(prisma, {
+			subscriptions: { list: jest.fn().mockReturnValue(Promise.reject(new Error('stripe down'))) }
+		});
+
+		await expect(service.handleWebhookEvent(event)).rejects.toThrow('stripe down');
+	});
+});
+
+describe('BillingService.createCheckoutSession Stripe-side live-sub guard', () => {
+	it('rejects with 409 and self-heals when Stripe reports a live sub despite a clean local row', async () => {
+		const prisma = makePrisma({
+			subscription: {
+				// Local row exists with a customer but no live status (stale after a missed webhook).
+				findUnique: jest
+					.fn()
+					.mockReturnValue(
+						Promise.resolve({ stripeCustomerId: 'cus_123', status: null, organizationId: 'org-1' })
+					)
+			}
+		});
+		const sessionsCreate = jest.fn();
+		const list = jest
+			.fn()
+			// First call: the checkout guard's list. Later calls: syncFromStripe's own list (self-heal).
+			.mockReturnValueOnce(Promise.resolve({ data: [{ id: 'sub_live', status: 'active' }] }))
+			.mockReturnValue(Promise.resolve({ data: [] }));
+		const service = buildService(prisma, {
+			customers: { retrieve: jest.fn().mockReturnValue(Promise.resolve({ id: 'cus_123', deleted: false })) },
+			subscriptions: { list },
+			checkout: { sessions: { create: sessionsCreate } }
+		});
+
+		await expect(service.createCheckoutSession('org-1')).rejects.toThrow(ConflictException);
+		expect(sessionsCreate).not.toHaveBeenCalled();
+		// Self-heal sync ran (second list call from syncFromStripe).
+		expect(list.mock.calls.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('proceeds to create the session when Stripe reports no live subs', async () => {
+		const prisma = makePrisma({
+			subscription: {
+				findUnique: jest
+					.fn()
+					.mockReturnValue(
+						Promise.resolve({ stripeCustomerId: 'cus_123', status: null, organizationId: 'org-1' })
+					)
+			}
+		});
+		const sessionsCreate = jest.fn().mockReturnValue(Promise.resolve({ url: 'https://checkout.stripe.test/s' }));
+		const service = buildService(prisma, {
+			customers: { retrieve: jest.fn().mockReturnValue(Promise.resolve({ id: 'cus_123', deleted: false })) },
+			subscriptions: { list: jest.fn().mockReturnValue(Promise.resolve({ data: [] })) },
+			checkout: { sessions: { create: sessionsCreate } }
+		});
+
+		const result = await service.createCheckoutSession('org-1');
+		expect(result.url).toBe('https://checkout.stripe.test/s');
+	});
+});
+
+describe('BillingService.syncFromStripe per-customer serialization', () => {
+	it('does not start a second sync for the same customer until the first completes', async () => {
+		const prisma = makePrisma();
+		let resolveFirst: (value: { data: never[] }) => void = () => undefined;
+		const list = jest
+			.fn()
+			.mockReturnValueOnce(new Promise(resolve => (resolveFirst = resolve)))
+			.mockReturnValue(Promise.resolve({ data: [] }));
+		const service = buildService(prisma, { subscriptions: { list } });
+
+		const first = service.syncFromStripe('cus_123');
+		const second = service.syncFromStripe('cus_123');
+
+		// Give the microtask queue a beat — the second call must still be queued.
+		await new Promise(resolve => setImmediate(resolve));
+		expect(list).toHaveBeenCalledTimes(1);
+
+		resolveFirst({ data: [] });
+		await Promise.all([first, second]);
+		expect(list).toHaveBeenCalledTimes(2);
+	});
+
+	it('runs syncs for DIFFERENT customers concurrently', async () => {
+		const prisma = makePrisma();
+		let resolveFirst: (value: { data: never[] }) => void = () => undefined;
+		const list = jest
+			.fn()
+			.mockReturnValueOnce(new Promise(resolve => (resolveFirst = resolve)))
+			.mockReturnValue(Promise.resolve({ data: [] }));
+		const service = buildService(prisma, { subscriptions: { list } });
+
+		const first = service.syncFromStripe('cus_a');
+		const second = service.syncFromStripe('cus_b');
+
+		await new Promise(resolve => setImmediate(resolve));
+		// cus_b is not blocked behind cus_a's in-flight call.
+		expect(list).toHaveBeenCalledTimes(2);
+
+		resolveFirst({ data: [] });
+		await Promise.all([first, second]);
 	});
 });

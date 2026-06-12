@@ -48,7 +48,8 @@ const EVENT_LABELS_NL: Record<NotificationEventType, { title: string; descriptio
 	},
 	daily_digest: {
 		title: 'Dagelijks overzicht',
-		description: 'Elke ochtend 07:30, je belangrijkste offerteaanvragen gerangschikt + offertes die binnenkort verlopen.'
+		description:
+			'Elke ochtend 07:30, je belangrijkste offerteaanvragen gerangschikt + offertes die binnenkort verlopen.'
 	}
 };
 

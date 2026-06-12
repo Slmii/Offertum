@@ -34,10 +34,14 @@ const USERS = [
 ];
 
 interface Fakes {
-	digestRepository: jest.Mocked<Pick<DigestRepository, 'findEntitledOrganizations' | 'findRankableOpportunities' | 'countClosedOutcomes'>>;
+	digestRepository: jest.Mocked<
+		Pick<DigestRepository, 'findEntitledOrganizations' | 'findRankableOpportunities' | 'countClosedOutcomes'>
+	>;
 	expiryRepository: jest.Mocked<Pick<ExpiryRepository, 'findExpiringCallouts'>>;
 	notifications: jest.Mocked<Pick<NotificationsService, 'notifyUsers' | 'webOrigin'>>;
-	notificationsRepository: jest.Mocked<Pick<NotificationsRepository, 'findOrganizationUsers' | 'findUserIdsWithRecentDigest'>>;
+	notificationsRepository: jest.Mocked<
+		Pick<NotificationsRepository, 'findOrganizationUsers' | 'findUserIdsWithRecentDigest'>
+	>;
 	logService: jest.Mocked<Pick<LogService, 'logAction'>>;
 }
 

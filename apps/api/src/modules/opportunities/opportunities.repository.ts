@@ -10,7 +10,7 @@ import {
 import type { ClassifierResult } from '@/modules/ai/classifier/classifier.types';
 import type { ExtractorResult, Urgency as ExtractorUrgency } from '@/modules/ai/extractor/extractor.types';
 import { PrismaService } from '@/modules/prisma/prisma.service';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 /**
  * Server-side filter for whether `listByOrganization` includes dismissed rows.
@@ -175,8 +175,19 @@ const EXTRACTOR_URGENCY_TO_PRISMA: Record<ExtractorUrgency, PrismaUrgency> = {
 	low: PrismaUrgency.LOW
 };
 
+/**
+ * Poison-message cap: a RawMessage whose pipeline run has failed this many times
+ * (malformed payload, prompt that always schema-fails) stops being retried — every
+ * scan would otherwise re-burn an OpenAI call on it forever. Capped rows stay
+ * unclassified (`classifiedAt` NULL) so a future pipeline fix can sweep them up by
+ * resetting `classifyAttempts`.
+ */
+export const MAX_CLASSIFY_ATTEMPTS = 5;
+
 @Injectable()
 export class OpportunitiesRepository {
+	private readonly logger = new Logger(OpportunitiesRepository.name);
+
 	constructor(private readonly prisma: PrismaService) {}
 
 	async findPendingRawMessagesForAccount(
@@ -188,6 +199,7 @@ export class OpportunitiesRepository {
 			where: {
 				emailAccountId,
 				classifiedAt: null,
+				classifyAttempts: { lt: MAX_CLASSIFY_ATTEMPTS },
 				...(excludedIds.length > 0 ? { id: { notIn: [...excludedIds] } } : {})
 			},
 			orderBy: { internalDate: 'asc' },
@@ -445,6 +457,22 @@ export class OpportunitiesRepository {
 			where: { id: rawMessageId },
 			data: { isQuoteRequest: false, classifiedAt: new Date() }
 		});
+	}
+
+	/**
+	 * Record one failed pipeline attempt on a RawMessage and return the new total.
+	 * Atomic increment (no read-then-write) so concurrent batches can't lose a count.
+	 * The caller logs `raw_message_poisoned` when the total reaches
+	 * `MAX_CLASSIFY_ATTEMPTS` — after which `findPendingRawMessagesForAccount` stops
+	 * scanning the row.
+	 */
+	async incrementClassifyAttempts(rawMessageId: string): Promise<number> {
+		const updated = await this.prisma.rawMessage.update({
+			where: { id: rawMessageId },
+			data: { classifyAttempts: { increment: 1 } },
+			select: { classifyAttempts: true }
+		});
+		return updated.classifyAttempts ?? 0;
 	}
 
 	// Find REPLIED opportunities eligible to auto-cold. Eligibility:
@@ -970,8 +998,12 @@ export class OpportunitiesRepository {
 		}
 
 		const diverges = body !== existing.originalBody;
-		const updated = await this.prisma.replyDraft.update({
-			where: { id: existing.id },
+		// Conditional write (`status != SENT` in the WHERE, not just in the read above):
+		// an autosave racing a concurrent send could otherwise overwrite the stored copy
+		// of an email the customer already received. The read-then-write gap is real —
+		// the service-layer editability check uses the same stale read.
+		const { count } = await this.prisma.replyDraft.updateMany({
+			where: { id: existing.id, status: { not: PrismaReplyDraftStatus.SENT } },
 			data: {
 				body,
 				// Only flip the flag forward — once edited, it stays edited even if the
@@ -981,20 +1013,32 @@ export class OpportunitiesRepository {
 				// Same forward-only transition for status — once EDITED, don't fall back
 				// to PENDING_APPROVAL even on revert. SENT is terminal (set by ).
 				status:
-					existing.status === PrismaReplyDraftStatus.SENT
-						? existing.status
-						: diverges || existing.status === PrismaReplyDraftStatus.EDITED
-							? PrismaReplyDraftStatus.EDITED
-							: PrismaReplyDraftStatus.PENDING_APPROVAL
-			},
-			select: { id: true, body: true, status: true, wasEditedByUser: true }
+					diverges || existing.status === PrismaReplyDraftStatus.EDITED
+						? PrismaReplyDraftStatus.EDITED
+						: PrismaReplyDraftStatus.PENDING_APPROVAL
+			}
 		});
 
+		// Lost the race (draft flipped to SENT between read and write): return the fresh
+		// row untouched so the caller renders the sent state rather than a 404/500.
+		const fresh = await this.prisma.replyDraft.findUnique({
+			where: { id: existing.id },
+			select: { id: true, body: true, status: true, wasEditedByUser: true }
+		});
+		if (!fresh) {
+			return null;
+		}
+		if (count === 0) {
+			this.logger.warn(
+				`Autosave skipped for draft ${existing.id} on opportunity ${opportunityId} — draft was sent concurrently`
+			);
+		}
+
 		return {
-			draftId: updated.id,
-			body: updated.body,
-			status: updated.status,
-			wasEditedByUser: updated.wasEditedByUser
+			draftId: fresh.id,
+			body: fresh.body,
+			status: fresh.status,
+			wasEditedByUser: fresh.wasEditedByUser
 		};
 	}
 }

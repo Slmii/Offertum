@@ -10,7 +10,7 @@ import { EmailAccountsService } from '@/modules/email-accounts/email-accounts.se
 import { GmailApiService } from '@/modules/gmail/gmail-api.service';
 import { LogService } from '@/modules/logger/log.service';
 import { MicrosoftGraphApiService } from '@/modules/microsoft/microsoft-graph-api.service';
-import type { SendContextAttachment } from '@/modules/reply-drafts/reply-drafts.repository';
+import type { SendContext, SendContextAttachment } from '@/modules/reply-drafts/reply-drafts.repository';
 import { ReplyDraftsRepository } from '@/modules/reply-drafts/reply-drafts.repository';
 import { Inject, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { attachmentTotalTooLarge } from '@/lib/errors';
@@ -538,49 +538,66 @@ export class ReplyDraftsService {
 			);
 		}
 
-		await this.emailAccounts.withFreshAccessToken(
-			{
-				provider: context.emailAccount.provider,
-				organizationId: context.opportunity.organizationId,
-				userId: context.emailAccount.inboxOwnerUserId
-			},
-			async accessToken => {
-				if (context.emailAccount.provider === EmailProvider.GMAIL) {
-					const rawBase64Url = buildRfc2822Reply({
-						to: recipient,
-						from: context.emailAccount.email,
-						fromName: context.emailAccount.inboxOwnerName,
-						subject,
-						body: context.body,
-						inReplyTo: replyHeaders.messageId,
-						references: replyHeaders.references,
-						attachments: loadedAttachments.map<BuildRfc2822ReplyAttachment>(a => ({
-							filename: a.filename,
-							contentType: a.contentType,
-							data: a.data
-						}))
-					});
-					await this.gmail.sendMessage(accessToken, {
-						rawBase64Url,
-						threadId: context.rawMessage.threadId
-					});
-				} else {
-					await this.graph.sendMail(accessToken, {
-						toEmail: recipient,
-						toName: context.rawMessage.fromName,
-						subject,
-						body: context.body,
-						inReplyTo: replyHeaders.messageId,
-						references: replyHeaders.references,
-						attachments: loadedAttachments.map(a => ({
-							filename: a.filename,
-							contentType: a.contentType,
-							data: a.data
-						}))
-					});
+		// Atomic claim BEFORE the provider call — the conditional status flip is the
+		// mutual-exclusion lock. Two concurrent sends (double-click, two tabs) both
+		// pass the read-based check above; only one wins this UPDATE, the loser gets
+		// the same `alreadySent` 409 as a genuinely sent draft. Trade-off: a crash
+		// between this claim and `markSent` leaves `status = SENT` without `sentAt`
+		// (a stuck-locked draft) — acceptable next to the alternative of the customer
+		// receiving the same email twice.
+		const claimed = await this.repository.claimForSend(context.draftId);
+		if (!claimed) {
+			return { sent: false, alreadySent: true };
+		}
+
+		try {
+			await this.emailAccounts.withFreshAccessToken(
+				{
+					provider: context.emailAccount.provider,
+					organizationId: context.opportunity.organizationId,
+					userId: context.emailAccount.inboxOwnerUserId
+				},
+				async accessToken => {
+					if (context.emailAccount.provider === EmailProvider.GMAIL) {
+						const rawBase64Url = buildRfc2822Reply({
+							to: recipient,
+							from: context.emailAccount.email,
+							fromName: context.emailAccount.inboxOwnerName,
+							subject,
+							body: context.body,
+							inReplyTo: replyHeaders.messageId,
+							references: replyHeaders.references,
+							attachments: loadedAttachments.map<BuildRfc2822ReplyAttachment>(a => ({
+								filename: a.filename,
+								contentType: a.contentType,
+								data: a.data
+							}))
+						});
+						await this.gmail.sendMessage(accessToken, {
+							rawBase64Url,
+							threadId: context.rawMessage.threadId
+						});
+					} else {
+						await this.graph.sendMail(accessToken, {
+							toEmail: recipient,
+							toName: context.rawMessage.fromName,
+							subject,
+							body: context.body,
+							inReplyTo: replyHeaders.messageId,
+							references: replyHeaders.references,
+							attachments: loadedAttachments.map(a => ({
+								filename: a.filename,
+								contentType: a.contentType,
+								data: a.data
+							}))
+						});
+					}
 				}
-			}
-		);
+			);
+		} catch (error) {
+			await this.revertClaimAfterProviderFailure(context.draftId, context.status, opportunityId, error);
+			throw error;
+		}
 
 		const { draftSentAt } = await this.repository.markSent({ draftId: context.draftId, opportunityId });
 
@@ -626,6 +643,50 @@ export class ReplyDraftsService {
 				return { ...row, data };
 			})
 		);
+	}
+
+	/**
+	 * Best-effort compensation when the provider send fails after `claimForSend`:
+	 * put the draft back in its pre-claim status so the owner can retry. Never
+	 * throws — the provider error is the one the caller must surface, and a failed
+	 * revert only means the draft stays locked (recoverable, never a double email).
+	 */
+	private async revertClaimAfterProviderFailure(
+		draftId: string,
+		previousStatus: SendContext['status'],
+		opportunityId: string,
+		providerError: unknown
+	): Promise<void> {
+		try {
+			const reverted = await this.repository.revertSendClaim(draftId, previousStatus);
+			this.logService.logAction({
+				action: reverted ? 'reply_draft.send_claim_reverted' : 'reply_draft.send_claim_revert_noop',
+				message: reverted
+					? `Send claim reverted to ${previousStatus} after provider failure for opportunity ${opportunityId}`
+					: `Send claim revert was a no-op (draft already completed or reverted) for opportunity ${opportunityId}`,
+				metadata: {
+					opportunityId,
+					draftId,
+					previousStatus,
+					providerError: providerError instanceof Error ? providerError.message : String(providerError)
+				},
+				level: 'warn',
+				context: 'ReplyDraftsService'
+			});
+		} catch (revertError) {
+			this.logService.logAction({
+				action: 'reply_draft.send_claim_revert_failed',
+				message: `Failed to revert send claim for opportunity ${opportunityId} — draft stays locked as SENT without sentAt`,
+				metadata: {
+					opportunityId,
+					draftId,
+					previousStatus,
+					revertError: revertError instanceof Error ? revertError.message : String(revertError)
+				},
+				level: 'error',
+				context: 'ReplyDraftsService'
+			});
+		}
 	}
 
 	private toWireUrgency(urgency: OpportunityForReplyDraftUrgency): ReplyDraftInput['urgency'] {

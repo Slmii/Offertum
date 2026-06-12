@@ -15,7 +15,9 @@ describe('quoteNetEuros', () => {
 	});
 
 	it('sums net (ex-VAT) euros across lines', () => {
-		expect(quoteNetEuros([line({ quantity: '2', unitPriceEur: '50.00' }), line({ unitPriceEur: '100.00' })])).toBe(200);
+		expect(quoteNetEuros([line({ quantity: '2', unitPriceEur: '50.00' }), line({ unitPriceEur: '100.00' })])).toBe(
+			200
+		);
 	});
 
 	it('ignores unpriced lines', () => {

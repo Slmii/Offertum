@@ -102,21 +102,30 @@ export class InvitationsService {
 		}
 
 		await this.assertEmailNotTaken(email, input.organizationId);
-		await this.assertSeatBudget(input.organizationId);
 
 		const rawToken = randomBytes(INVITATION_TOKEN_BYTES).toString('hex');
 		const expiresAt = new Date(Date.now() + daysToMs(INVITATION_TTL_DAYS));
 
+		// Seat-budget check + insert run in ONE transaction under a per-org advisory
+		// lock: two owners inviting simultaneously could otherwise both pass the count
+		// (check-then-act race) and land a trial org one seat over the cap. The xact
+		// lock serializes concurrent creates for the SAME org only and auto-releases
+		// at commit/rollback.
 		// `Invitation.token` column stores the SHA-256 hash. The raw token ships in the
 		// magic-link URL only — never persisted, never logged.
-		const invitation = await this.prisma.invitation.create({
-			data: {
-				token: hashInvitationToken(rawToken),
-				email,
-				organizationId: input.organizationId,
-				role: input.role ?? MembershipRole.MEMBER,
-				expiresAt
-			}
+		const invitation = await this.prisma.$transaction(async tx => {
+			await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.organizationId}))`;
+			await this.assertSeatBudget(input.organizationId, tx);
+
+			return tx.invitation.create({
+				data: {
+					token: hashInvitationToken(rawToken),
+					email,
+					organizationId: input.organizationId,
+					role: input.role ?? MembershipRole.MEMBER,
+					expiresAt
+				}
+			});
 		});
 
 		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
@@ -383,16 +392,23 @@ export class InvitationsService {
 	 *
 	 * Skipped for paying orgs (`active | past_due | paused | incomplete`): they pay overage
 	 * for any seat beyond the included tier.
+	 *
+	 * `db` lets `create()` run the counts inside its advisory-locked transaction so the
+	 * count-then-insert is atomic (see the lock comment there); standalone callers get
+	 * the plain client.
 	 */
-	private async assertSeatBudget(organizationId: string): Promise<void> {
+	private async assertSeatBudget(
+		organizationId: string,
+		db: Pick<PrismaService, 'membership' | 'invitation'> = this.prisma
+	): Promise<void> {
 		const status = await this.billing.getStatus(organizationId);
 		if (!TRIAL_STATES.includes(status.state)) {
 			return;
 		}
 
 		const [memberCount, pendingInvites] = await Promise.all([
-			this.prisma.membership.count({ where: { organizationId } }),
-			this.prisma.invitation.count({
+			db.membership.count({ where: { organizationId } }),
+			db.invitation.count({
 				where: {
 					organizationId,
 					acceptedAt: null,

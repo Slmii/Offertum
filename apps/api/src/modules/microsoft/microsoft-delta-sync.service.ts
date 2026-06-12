@@ -94,6 +94,36 @@ export class MicrosoftDeltaSyncService {
 			userId: account.userId
 		};
 
+		if (!account.deltaLink) {
+			// No starting cursor — the backfill never captured one (or never completed).
+			// Starting a delta walk from scratch would return the CURRENT STATE of the
+			// entire mailbox, persisting thousands of historical messages into the LIVE
+			// pipeline (phantom drafts + a real OpenAI bill). Re-baseline instead: walk to
+			// a fresh deltaLink while discarding messages — same as the 410-recovery path.
+			this.logService.logAction({
+				action: 'email.delta_sync.no_cursor',
+				message: `EmailAccount ${emailAccountId} has no deltaLink — re-baselining without persisting historical messages`,
+				metadata: { provider: account.provider, emailAccountId },
+				level: 'warn',
+				context: 'MicrosoftDeltaSyncService'
+			});
+			const baseline = await this.acquireFreshDeltaLink(scope);
+			if (baseline) {
+				await this.prisma.emailAccount.update({
+					where: { id: emailAccountId },
+					data: { deltaLink: baseline }
+				});
+			}
+			return {
+				emailAccountId,
+				pagesFetched: 0,
+				messagesInserted: 0,
+				messagesSkipped: 0,
+				deltaLink: baseline,
+				deltaTokenExpired: false
+			};
+		}
+
 		// State declared in the outer scope so the post-loop log + recovery branch can read
 		// it. Reset at the top of `work` because `withFreshAccessToken` re-runs the whole
 		// callback on a mid-call 401 — without reset, counters compound across the failed
@@ -103,6 +133,7 @@ export class MicrosoftDeltaSyncService {
 		let messagesSkipped = 0;
 		let newDeltaLink: string | null = null;
 		let deltaTokenExpired = false;
+		let pendingNextLink: string | null = null;
 
 		const work = async (accessToken: string): Promise<void> => {
 			pagesFetched = 0;
@@ -110,6 +141,7 @@ export class MicrosoftDeltaSyncService {
 			messagesSkipped = 0;
 			newDeltaLink = null;
 			deltaTokenExpired = false;
+			pendingNextLink = null;
 			let cursor: string | null = account.deltaLink;
 
 			while (pagesFetched < MAX_PAGES) {
@@ -144,6 +176,11 @@ export class MicrosoftDeltaSyncService {
 				}
 				if (page.nextLink) {
 					cursor = page.nextLink;
+					// If the cap trips before this nextLink is consumed, persist IT as the
+					// cursor: `getDelta` accepts a nextLink URL, so the next run resumes
+					// mid-walk instead of re-walking (and stalling on) the same 50 pages
+					// forever.
+					pendingNextLink = page.nextLink;
 					continue;
 				}
 				// Neither deltaLink nor nextLink — shouldn't happen per Graph spec, but
@@ -153,6 +190,17 @@ export class MicrosoftDeltaSyncService {
 		};
 
 		await this.accounts.withFreshAccessToken(scope, work);
+
+		if (!newDeltaLink && !deltaTokenExpired && pendingNextLink) {
+			newDeltaLink = pendingNextLink;
+			this.logService.logAction({
+				action: 'email.delta_sync.page_cap_reached',
+				message: `Microsoft delta sync for ${account.email} hit the ${MAX_PAGES}-page cap — persisting pending nextLink so the next run resumes mid-walk`,
+				metadata: { provider: account.provider, emailAccountId, pagesFetched },
+				level: 'warn',
+				context: 'MicrosoftDeltaSyncService'
+			});
+		}
 
 		if (deltaTokenExpired) {
 			// Re-acquire a fresh deltaLink by starting a clean walk from null. Don't
@@ -169,27 +217,7 @@ export class MicrosoftDeltaSyncService {
 				level: 'warn',
 				context: 'MicrosoftDeltaSyncService'
 			});
-			const recoveredLink = await this.accounts.withFreshAccessToken(scope, async accessToken => {
-				// Walk a fresh delta to its end to capture the new deltaLink. Discard the
-				// messages — they're current-state, not deltas, and we don't want to flood
-				// RawMessage with everything in the inbox.
-				// Capped at MAX_PAGES so a misbehaving Graph response (deltaLink never
-				// returned, nextLink loops) can't spin forever.
-				let cursor: string | null = null;
-				for (let i = 0; i < MAX_PAGES; i += 1) {
-					const page = await this.api.getDelta(accessToken, cursor);
-					if (page.deltaLink) {
-						return page.deltaLink;
-					}
-					if (page.nextLink) {
-						cursor = page.nextLink;
-						continue;
-					}
-					return null;
-				}
-				return null;
-			});
-			newDeltaLink = recoveredLink;
+			newDeltaLink = await this.acquireFreshDeltaLink(scope);
 		}
 
 		// Advance the cursor — even on token-expired we move forward so the next push
@@ -223,6 +251,36 @@ export class MicrosoftDeltaSyncService {
 			deltaLink: newDeltaLink,
 			deltaTokenExpired
 		};
+	}
+
+	/**
+	 * Walk a fresh delta from scratch to its end and return the new deltaLink, DISCARDING
+	 * every message along the way — they're the mailbox's current state, not deltas, and
+	 * must never flood RawMessage (or the AI pipeline) with historical email. Shared by
+	 * the no-cursor branch and the 410-recovery branch. Capped at MAX_PAGES so a
+	 * misbehaving Graph response (deltaLink never returned, nextLink loops) can't spin
+	 * forever.
+	 */
+	private async acquireFreshDeltaLink(scope: {
+		provider: EmailProvider;
+		organizationId: string;
+		userId: string;
+	}): Promise<string | null> {
+		return this.accounts.withFreshAccessToken(scope, async accessToken => {
+			let cursor: string | null = null;
+			for (let i = 0; i < MAX_PAGES; i += 1) {
+				const page = await this.api.getDelta(accessToken, cursor);
+				if (page.deltaLink) {
+					return page.deltaLink;
+				}
+				if (page.nextLink) {
+					cursor = page.nextLink;
+					continue;
+				}
+				return null;
+			}
+			return null;
+		});
 	}
 
 	/**

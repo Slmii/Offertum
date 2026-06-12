@@ -3,7 +3,6 @@ import { EmailProvider } from '@/generated/prisma/enums';
 import {
 	GMAIL_WEBHOOK_AUTH_HEADER_MISSING,
 	GMAIL_WEBHOOK_DATA_INVALID,
-	GMAIL_WEBHOOK_DATA_MISSING,
 	GMAIL_WEBHOOK_JWT_INVALID,
 	GMAIL_WEBHOOK_NOT_CONFIGURED
 } from '@/lib/errors';
@@ -130,7 +129,16 @@ export class GmailWebhookController {
 
 		const body = request.body as PubSubPushBody | undefined;
 		if (!body?.message?.data) {
-			throw new BadRequestException(GMAIL_WEBHOOK_DATA_MISSING);
+			// Gmail occasionally fires heartbeat-style pushes with no data. A 400 here
+			// makes Pub/Sub retry the same empty push repeatedly — acknowledge-and-drop
+			// instead (console-only log; this is routine noise, not an incident).
+			this.logService.logAction({
+				action: 'gmail.webhook.empty_data',
+				message: 'Gmail push with empty message.data — acknowledging + skipping (heartbeat)',
+				metadata: { messageId: body?.message?.messageId ?? null },
+				context: 'GmailWebhookController'
+			});
+			return;
 		}
 
 		const payload = decodeNotification(body.message.data);

@@ -54,6 +54,8 @@ const TRACKED_EVENTS: ReadonlyArray<string> = [
 @Injectable()
 export class BillingService {
 	private readonly stripe: InstanceType<typeof Stripe>;
+	/** Per-customer promise chain serializing `syncFromStripe` — see its docstring. */
+	private readonly syncChains = new Map<string, Promise<{ status: string | null; isPaymentProcessing: boolean }>>();
 
 	constructor(
 		private readonly prisma: PrismaService,
@@ -198,6 +200,45 @@ export class BillingService {
 		}
 
 		const customerId = await this.getOrCreateCustomer(organizationId);
+
+		// Second guard against STRIPE, not just the local row: a missed/late webhook can
+		// leave the local Subscription stale or empty, and completing a second Checkout
+		// then creates a SECOND live Stripe subscription — which `syncFromStripe`'s
+		// newest-first `limit: 1` read would silently hide forever (double billing).
+		const liveAtStripe = await this.stripe.subscriptions.list({
+			customer: customerId,
+			status: 'all',
+			limit: 100
+		});
+		const liveSub = liveAtStripe.data.find(sub => LIVE_SUBSCRIPTION_STATUSES.includes(sub.status));
+		if (liveSub) {
+			// Self-heal the stale local row so the UI reflects reality on the next read.
+			try {
+				await this.syncFromStripe(customerId);
+			} catch (error) {
+				this.logService.logAction({
+					action: 'billing.checkout.self_heal_failed',
+					message: `Failed to self-heal local subscription for customer ${customerId} during checkout rejection`,
+					metadata: { organizationId, customerId },
+					level: 'warn',
+					stack: error instanceof Error ? error.stack : undefined,
+					context: 'BillingService'
+				});
+			}
+			this.logService.logAction({
+				action: 'billing.checkout.rejected',
+				message: `Checkout rejected — Stripe reports a ${liveSub.status} subscription for org ${organizationId} (local row was stale)`,
+				metadata: {
+					organizationId,
+					customerId,
+					currentStatus: liveSub.status,
+					reason: 'stripe_live_sub_guard'
+				},
+				level: 'warn',
+				context: 'BillingService'
+			});
+			throw new ConflictException(subscriptionAlreadyActive(liveSub.status));
+		}
 		const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
 		// Initial seat count = current active memberships. The Stripe Price is tiered, so
 		// passing `quantity: N` lets Stripe compute base + overage automatically. A subsequent
@@ -369,8 +410,32 @@ export class BillingService {
 	 * Fetch the current state of the customer's subscription from Stripe and persist it
 	 * to our local DB. Single source-of-truth function — called from the success
 	 * endpoint AND every webhook. Never trust webhook payloads directly.
+	 *
+	 * Serialized per customer via an in-process keyed promise chain: a webhook burst
+	 * fires several concurrent syncs for the same customer, and without ordering the
+	 * OLDER Stripe snapshot can be persisted last (read-from-Stripe and write-to-DB
+	 * interleave). Sufficient for the current single-instance deploy; a horizontally
+	 * scaled deployment would need a distributed lock (e.g. Postgres advisory lock).
 	 */
 	async syncFromStripe(customerId: string): Promise<{ status: string | null; isPaymentProcessing: boolean }> {
+		const previous = this.syncChains.get(customerId) ?? Promise.resolve();
+		// Chain regardless of how the previous call settled — a failed sync must not
+		// block subsequent ones.
+		const run = previous.catch(() => undefined).then(() => this.performSyncFromStripe(customerId));
+		this.syncChains.set(customerId, run);
+		const cleanup = () => {
+			// Only delete the map entry if no newer call chained onto us meanwhile.
+			if (this.syncChains.get(customerId) === run) {
+				this.syncChains.delete(customerId);
+			}
+		};
+		run.then(cleanup, cleanup);
+		return run;
+	}
+
+	private async performSyncFromStripe(
+		customerId: string
+	): Promise<{ status: string | null; isPaymentProcessing: boolean }> {
 		// Stripe returns subscriptions in reverse chronological order by default
 		// (newest `created` first) — documented behavior, no `order_by` param exists
 		// on this endpoint. So `data[0]` is reliably the most recent subscription
@@ -822,7 +887,30 @@ export class BillingService {
 			return;
 		}
 
-		await this.syncFromStripe(customerId);
+		try {
+			await this.syncFromStripe(customerId);
+		} catch (error) {
+			// Release the dedup row so a redelivery of this event actually reprocesses.
+			// Without this, a transiently-failed sync is permanently marked processed —
+			// for a terminal event like `customer.subscription.deleted` that means a
+			// canceled org keeps entitlement until some other event happens to land.
+			// (The endpoint 200s immediately, so this mainly covers Dashboard replays
+			// and out-of-band redeliveries.) Best-effort: a failed delete only costs a
+			// duplicate-skip on replay, never the original error.
+			try {
+				await this.prisma.stripeWebhookEvent.deleteMany({ where: { eventId: event.id } });
+			} catch (releaseError) {
+				this.logService.logAction({
+					action: 'billing.webhook.dedup_release_failed',
+					message: `Failed to release dedup row for event ${event.id} after sync failure`,
+					metadata: { eventId: event.id, eventType: event.type },
+					level: 'error',
+					stack: releaseError instanceof Error ? releaseError.stack : undefined,
+					context: 'BillingService'
+				});
+			}
+			throw error;
+		}
 	}
 }
 

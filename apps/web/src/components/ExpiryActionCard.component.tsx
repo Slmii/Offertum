@@ -26,7 +26,7 @@ const EXPIRY_ACTION_LABELS_NL: Record<ExpiryActionKindValue, string> = {
  * compute "over N dagen" from `new Date()` in render, which would hydration-mismatch under
  * SSR. The recommended action's button is `contained`; the other two are `outlined`.
  */
-export function ExpiryActionCard({ opportunityId }: { opportunityId: string }) {
+export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: string; isOwner: boolean }) {
 	const { data: expiryAction } = useSuspenseQuery(opportunityExpiryActionQueryOptions(opportunityId));
 	const takeAction = useTakeExpiryAction(opportunityId);
 	const dismiss = useDismissExpiryAction(opportunityId);
@@ -36,48 +36,64 @@ export function ExpiryActionCard({ opportunityId }: { opportunityId: string }) {
 	}
 
 	const isPending = takeAction.isPending || dismiss.isPending;
+	const mutationError = takeAction.error ?? dismiss.error;
 
 	return (
 		<Alert
 			severity='warning'
 			sx={{ mb: 3 }}
 			action={
-				<Button
-					color='inherit'
-					size='small'
-					onClick={() => dismiss.mutate({ id: expiryAction.id })}
-					disabled={isPending}
-				>
-					Negeren
-				</Button>
+				// Take/dismiss are @OwnerWrite on the API — rendering the buttons for members
+				// would only produce a silent 403.
+				isOwner ? (
+					<Button
+						color='inherit'
+						size='small'
+						onClick={() => dismiss.mutate({ id: expiryAction.id })}
+						disabled={isPending}
+					>
+						Negeren
+					</Button>
+				) : undefined
 			}
 		>
 			<AlertTitle>Verloopt op {toReadableDate(expiryAction.validUntil)}</AlertTitle>
 			<Typography variant='body2' sx={{ mb: 1.5 }}>
 				{expiryAction.suggestedCopy}
 			</Typography>
-			<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-				{EXPIRY_ACTION_KINDS.map(kind => {
-					const isRecommended = kind === expiryAction.recommendedAction;
-					return (
-						<Button
-							key={kind}
-							size='small'
-							color='inherit'
-							variant={isRecommended ? 'contained' : 'outlined'}
-							onClick={() => takeAction.mutate({ id: expiryAction.id, kind })}
-							disabled={isPending}
-							startIcon={
-								takeAction.isPending && takeAction.variables?.kind === kind ? (
-									<CircularProgress size={14} />
-								) : null
-							}
-						>
-							{EXPIRY_ACTION_LABELS_NL[kind]}
-						</Button>
-					);
-				})}
-			</Stack>
+			{isOwner ? (
+				<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+					{EXPIRY_ACTION_KINDS.map(kind => {
+						const isRecommended = kind === expiryAction.recommendedAction;
+						return (
+							<Button
+								key={kind}
+								size='small'
+								color='inherit'
+								variant={isRecommended ? 'contained' : 'outlined'}
+								onClick={() => takeAction.mutate({ id: expiryAction.id, kind })}
+								disabled={isPending}
+								startIcon={
+									takeAction.isPending && takeAction.variables?.kind === kind ? (
+										<CircularProgress size={14} />
+									) : null
+								}
+							>
+								{EXPIRY_ACTION_LABELS_NL[kind]}
+							</Button>
+						);
+					})}
+				</Stack>
+			) : (
+				<Typography variant='caption' color='text.secondary'>
+					Alleen de eigenaar kan deze acties uitvoeren.
+				</Typography>
+			)}
+			{mutationError && (
+				<Typography variant='body2' color='error' sx={{ mt: 1 }}>
+					Actie mislukt: {mutationError instanceof Error ? mutationError.message : 'probeer het opnieuw.'}
+				</Typography>
+			)}
 		</Alert>
 	);
 }

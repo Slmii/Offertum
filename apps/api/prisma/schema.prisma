@@ -647,6 +647,13 @@ model RawMessage {
   // Classifier/extractor fields. Nullable until the pipeline runs.
   isQuoteRequest      Boolean?
   classifiedAt        DateTime?
+  // Number of failed pipeline attempts (classifier/extractor threw). Incremented in
+  // `OpportunitiesService.processOneRawMessage`'s catch; the unclassified scan skips
+  // rows at/over the cap so a poison message (malformed payload, prompt that always
+  // schema-fails) can't retry forever and burn unbounded OpenAI credit. Capped rows
+  // stay unclassified (classifiedAt NULL) so a future pipeline fix can sweep them up
+  // by lowering/resetting the counter.
+  classifyAttempts    Int       @default(0)
   // Set when the should-reply classifier flagged this message as a conversation
   // closer ("Bedankt, tot dan!" etc.) and the pipeline deliberately skipped draft
   // generation. Surfaced on the detail view's customer-replies chip.
@@ -1079,6 +1086,10 @@ model QuoteDraft {
   @@index([opportunityId, createdAt(sort: Desc)])
   @@index([organizationId, status, createdAt(sort: Desc)])
   @@index([aiCallId])
+  // W13 expiry-watcher candidate scan: range-filters on validUntil (and orders by it)
+  // across ALL orgs every cron tick — without this it's a full-table scan as quote
+  // volume grows.
+  @@index([validUntil])
 }
 
 // W13 — a smart-expiry suggestion produced by the expiry-watcher cron ~5 days before a

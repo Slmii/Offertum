@@ -42,6 +42,7 @@ interface Deps {
 		findForAuthorization: jest.Mock;
 		claimAsTaken: jest.Mock;
 		claimAsDismissed: jest.Mock;
+		revertTakenClaim: jest.Mock;
 		extendValidUntil: jest.Mock;
 		markSupersededForOpportunity: jest.Mock;
 	};
@@ -62,6 +63,7 @@ function makeService(): { service: ExpiryService; deps: Deps } {
 			findForAuthorization: jest.fn(),
 			claimAsTaken: jest.fn(() => Promise.resolve(true)),
 			claimAsDismissed: jest.fn(() => Promise.resolve(true)),
+			revertTakenClaim: jest.fn(() => Promise.resolve(true)),
 			extendValidUntil: jest.fn(() => Promise.resolve()),
 			markSupersededForOpportunity: jest.fn(() => Promise.resolve())
 		},
@@ -122,6 +124,30 @@ describe('ExpiryService', () => {
 			);
 		});
 
+		it('processes candidates in parallel batches capped at 5 in-flight AI calls', async () => {
+			const { service, deps } = makeService();
+			const candidates = Array.from({ length: 7 }, (_, i) =>
+				makeCandidate({ opportunityId: `opp-${i}`, quoteDraftId: `qd-${i}` })
+			);
+			deps.repository.findExpiryCandidates.mockReturnValue(Promise.resolve(candidates));
+
+			let inFlight = 0;
+			let maxInFlight = 0;
+			deps.ai.generate.mockImplementation(async () => {
+				inFlight += 1;
+				maxInFlight = Math.max(maxInFlight, inFlight);
+				await new Promise(resolve => setImmediate(resolve));
+				inFlight -= 1;
+				return makeAiResult({ recommendedAction: 'LAST_FOLLOWUP', suggestedCopy: 'x' }, null);
+			});
+
+			const result = await service.runWatcher(NOW);
+
+			expect(result).toEqual({ scanned: 7, inserted: 7 });
+			expect(maxInFlight).toBeLessThanOrEqual(5);
+			expect(maxInFlight).toBeGreaterThan(1);
+		});
+
 		it('inserts nothing when the repository candidate gate returns no rows (idempotency)', async () => {
 			const { service, deps } = makeService();
 			deps.repository.findExpiryCandidates.mockReturnValue(Promise.resolve([]));
@@ -136,10 +162,8 @@ describe('ExpiryService', () => {
 
 	describe('takeAction', () => {
 		const action: ExpiryActionForAuthorization = {
-			id: 'ea-1',
 			opportunityId: 'opp-1',
-			quoteDraftId: 'qd-1',
-			status: 'SUGGESTED'
+			quoteDraftId: 'qd-1'
 		};
 
 		it('EXTEND_14D claims the action, extends validity atomically, supersedes siblings', async () => {
@@ -193,14 +217,42 @@ describe('ExpiryService', () => {
 			expect(deps.repository.extendValidUntil).not.toHaveBeenCalled();
 			expect(deps.repository.markSupersededForOpportunity).not.toHaveBeenCalled();
 		});
+
+		it('reverts the claim and rethrows when the side-effect fails, so the owner can retry', async () => {
+			const { service, deps } = makeService();
+			deps.repository.findForAuthorization.mockReturnValue(Promise.resolve(action));
+			deps.replyDrafts.generateFollowupDraft.mockReturnValue(Promise.reject(new Error('openai down')));
+
+			await expect(service.takeAction('ea-1', 'org-1', 'user-1', ExpiryActionKind.LAST_FOLLOWUP)).rejects.toThrow(
+				'openai down'
+			);
+			expect(deps.repository.revertTakenClaim).toHaveBeenCalledWith('ea-1');
+			// The window is not resolved — siblings must stay live.
+			expect(deps.repository.markSupersededForOpportunity).not.toHaveBeenCalled();
+			expect(deps.logService.logAction).toHaveBeenCalledWith(
+				expect.objectContaining({ action: 'expiry.action.claim_reverted', level: 'warn' })
+			);
+		});
+
+		it('still rethrows the side-effect error when the revert itself fails (draft stays locked)', async () => {
+			const { service, deps } = makeService();
+			deps.repository.findForAuthorization.mockReturnValue(Promise.resolve(action));
+			deps.repository.extendValidUntil.mockReturnValue(Promise.reject(new Error('db down')));
+			deps.repository.revertTakenClaim.mockReturnValue(Promise.reject(new Error('still down')));
+
+			await expect(service.takeAction('ea-1', 'org-1', 'user-1', ExpiryActionKind.EXTEND_14D)).rejects.toThrow(
+				'db down'
+			);
+			expect(deps.logService.logAction).toHaveBeenCalledWith(
+				expect.objectContaining({ action: 'expiry.action.claim_revert_failed', level: 'error' })
+			);
+		});
 	});
 
 	describe('dismiss', () => {
 		const action: ExpiryActionForAuthorization = {
-			id: 'ea-1',
 			opportunityId: 'opp-1',
-			quoteDraftId: 'qd-1',
-			status: 'SUGGESTED'
+			quoteDraftId: 'qd-1'
 		};
 
 		it('claims the action as dismissed and logs', async () => {

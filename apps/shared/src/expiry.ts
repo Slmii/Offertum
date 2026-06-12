@@ -16,7 +16,3 @@ export interface ExpiryActionResponse {
 	recommendedAction: ExpiryActionKindValue;
 	takenAction: ExpiryActionKindValue | null;
 }
-
-export interface TakeExpiryActionInput {
-	kind: ExpiryActionKindValue;
-}

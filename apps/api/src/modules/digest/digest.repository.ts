@@ -1,5 +1,6 @@
 import { Vertical } from '@/generated/prisma/enums';
 import { MS_PER_HOUR } from '@/lib/time/duration';
+import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import type { RankableOpportunity } from './ranking';
@@ -20,7 +21,7 @@ export class DigestRepository {
 			SELECT o."id", o."vertical", o."followUpCadenceDays"
 			FROM "Organization" o
 			JOIN "Subscription" s ON s."organizationId" = o."id"
-			WHERE s."status" IN ('trialing', 'active', 'past_due')
+			WHERE s."status" = ANY(${ENTITLED_STRIPE_STATUSES as string[]}::text[])
 		`;
 	}
 

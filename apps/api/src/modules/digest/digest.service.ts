@@ -54,71 +54,77 @@ export class DigestService {
 			// Per-org AsyncLocalStorage re-entry (CLAUDE.md #8): the Log rows + notifyUsers
 			// internals written inside this loop must carry the org's `organizationId` —
 			// without it they'd land with the cron's request-context defaults (NULL org).
-			const orgRecipientsAdded = await requestContext.run(
-				{ requestId, organizationId: org.id },
-				async () => {
-					const opps = await this.digestRepository.findRankableOpportunities(org.id);
-					const { wonCount, lostCount } = await this.digestRepository.countClosedOutcomes(org.id);
-					const winBaseline = resolveWinBaseline({
-						wonCount,
-						lostCount,
-						tradePrior: VERTICAL_WIN_BASELINE[org.vertical]
-					});
-					const ranked = rankOpportunities(opps, { winBaseline, followUpCadenceDays: org.followUpCadenceDays }, now);
-					const topItems = ranked.slice(0, TOP_ITEM_COUNT);
-					const totalOpenValueEuros = ranked.reduce((sum, o) => sum + o.quoteNetEuros, 0);
-					const callouts = await this.expiryRepository.findExpiringCallouts(org.id, now);
-					const expiringItems = callouts.map(c => ({
-						customerName: c.customerName,
-						daysUntilExpiry: c.daysUntilExpiry,
-						opportunityUrl: `${this.notifications.webOrigin()}/opportunities/${c.opportunityId}`
-					}));
-
-					const users = await this.notificationsRepository.findOrganizationUsers(org.id);
-					if (users.length === 0) {
-						return 0;
-					}
-
-					const userIds = users.map(u => u.id);
-					const alreadyNotified = await this.notificationsRepository.findUserIdsWithRecentDigest(
-						userIds,
-						org.id,
-						PrismaNotificationEventType.DAILY_DIGEST,
-						idempotencyWindowMs
-					);
-					const orgRecipients = userIds.filter(id => !alreadyNotified.has(id));
-					skippedDuplicate += alreadyNotified.size;
-
-					if (orgRecipients.length === 0) {
-						return 0;
-					}
-
-					const dashboardUrl = `${this.notifications.webOrigin()}/`;
-					const email = buildDailyDigestEmail({
-						rankedItems: topItems.map(item => ({
-							customerName: item.customerName,
-							requestType: item.requestType,
-							valueEuros: item.quoteNetEuros,
-							rankReason: rankReasonFor(item)
-						})),
-						expiringItems,
-						totalOpenValueEuros,
-						dashboardUrl
-					});
-
-					await this.notifications.notifyUsers({
-						userIds: orgRecipients,
-						organizationId: org.id,
-						eventType: PrismaNotificationEventType.DAILY_DIGEST,
-						title: `Vandaag belangrijk: ${topItems.length} offerteaanvragen`,
-						body: `${topItems.length} aanvragen vragen vandaag aandacht`,
-						link: '/',
-						metadata: { ranked: topItems.length, totalOpenValueEuros },
-						email
-					});
-					return orgRecipients.length;
+			const orgRecipientsAdded = await requestContext.run({ requestId, organizationId: org.id }, async () => {
+				// Cheap recipient checks first: an org with no users or whose members were
+				// all notified within the idempotency window skips the ranking + expiry
+				// queries entirely.
+				const users = await this.notificationsRepository.findOrganizationUsers(org.id);
+				if (users.length === 0) {
+					return 0;
 				}
-			);
+
+				const userIds = users.map(u => u.id);
+				const alreadyNotified = await this.notificationsRepository.findUserIdsWithRecentDigest(
+					userIds,
+					org.id,
+					PrismaNotificationEventType.DAILY_DIGEST,
+					idempotencyWindowMs
+				);
+				const orgRecipients = userIds.filter(id => !alreadyNotified.has(id));
+				skippedDuplicate += alreadyNotified.size;
+
+				if (orgRecipients.length === 0) {
+					return 0;
+				}
+
+				const [opps, { wonCount, lostCount }, callouts] = await Promise.all([
+					this.digestRepository.findRankableOpportunities(org.id),
+					this.digestRepository.countClosedOutcomes(org.id),
+					this.expiryRepository.findExpiringCallouts(org.id, now)
+				]);
+				const winBaseline = resolveWinBaseline({
+					wonCount,
+					lostCount,
+					tradePrior: VERTICAL_WIN_BASELINE[org.vertical]
+				});
+				const ranked = rankOpportunities(
+					opps,
+					{ winBaseline, followUpCadenceDays: org.followUpCadenceDays },
+					now
+				);
+				const topItems = ranked.slice(0, TOP_ITEM_COUNT);
+				const totalOpenValueEuros = ranked.reduce((sum, o) => sum + o.quoteNetEuros, 0);
+				const expiringItems = callouts.map(c => ({
+					customerName: c.customerName,
+					daysUntilExpiry: c.daysUntilExpiry,
+					opportunityUrl: `${this.notifications.webOrigin()}/opportunities/${c.opportunityId}`
+				}));
+
+				const dashboardUrl = `${this.notifications.webOrigin()}/`;
+				const email = buildDailyDigestEmail({
+					rankedItems: topItems.map(item => ({
+						customerName: item.customerName,
+						requestType: item.requestType,
+						valueEuros: item.quoteNetEuros,
+						rankReason: rankReasonFor(item)
+					})),
+					expiringItems,
+					totalOpenValueEuros,
+					dashboardUrl
+				});
+
+				await this.notifications.notifyUsers({
+					userIds: orgRecipients,
+					organizationId: org.id,
+					eventType: PrismaNotificationEventType.DAILY_DIGEST,
+					title: `Vandaag belangrijk: ${topItems.length} offerteaanvragen`,
+					body: `${topItems.length} aanvragen vragen vandaag aandacht`,
+					link: '/',
+					metadata: { ranked: topItems.length, totalOpenValueEuros },
+					email
+				});
+				return orgRecipients.length;
+			});
 			recipients += orgRecipientsAdded;
 		}
 

@@ -128,6 +128,8 @@ export class GmailDeltaSyncService {
 		let messagesSkipped = 0;
 		let newHistoryId: string | null = null;
 		let historyExpired = false;
+		let morePagesPending = false;
+		let maxProcessedRecordId: string | null = null;
 
 		const work = async (accessToken: string): Promise<void> => {
 			pagesFetched = 0;
@@ -135,7 +137,10 @@ export class GmailDeltaSyncService {
 			messagesSkipped = 0;
 			newHistoryId = null;
 			historyExpired = false;
+			morePagesPending = false;
+			maxProcessedRecordId = null;
 			let pageToken: string | undefined;
+			let lastPageHistoryId: string | null = null;
 
 			while (pagesFetched < MAX_PAGES) {
 				let page: GmailHistoryPage;
@@ -160,13 +165,19 @@ export class GmailDeltaSyncService {
 				}
 
 				pagesFetched += 1;
-				newHistoryId = page.historyId;
+				lastPageHistoryId = page.historyId;
 
 				// Flatten `messagesAdded` across all records on this page. A single history
 				// entry can contain multiple added messages (e.g. batch arrival); the same
-				// message id can also appear in multiple records — `Set` dedupes.
+				// message id can also appear in multiple records — `Set` dedupes. History
+				// record ids are monotonic uint64 decimal strings; track the max we actually
+				// processed so a page-cap bail can advance the cursor past PROCESSED work
+				// only, never past unwalked pages.
 				const stubIds: string[] = [];
 				for (const record of page.history) {
+					if (isNewerHistoryRecordId(record.id, maxProcessedRecordId)) {
+						maxProcessedRecordId = record.id;
+					}
 					for (const added of record.messagesAdded ?? []) {
 						stubIds.push(added.message.id);
 					}
@@ -190,10 +201,19 @@ export class GmailDeltaSyncService {
 				}
 
 				if (!page.nextPageToken) {
+					morePagesPending = false;
 					break;
 				}
 				pageToken = page.nextPageToken;
+				morePagesPending = true;
 			}
+
+			// Cursor choice: on a complete walk, `page.historyId` (the mailbox's CURRENT id)
+			// is correct. On a MAX_PAGES bail with pages still pending it is NOT — jumping
+			// the cursor to "current" would silently skip every message in the unwalked
+			// pages. Advance only to the last history record we actually processed; the
+			// next push (or any later sync) resumes from there.
+			newHistoryId = morePagesPending ? maxProcessedRecordId : lastPageHistoryId;
 		};
 
 		// `GmailHistoryExpiredException` cannot propagate out of `work` — the inner try/catch
@@ -201,6 +221,21 @@ export class GmailDeltaSyncService {
 		// the no-pages-yet case) and sets `historyExpired = true; break;`. Other exceptions
 		// (5xx, network errors) still propagate up to Inngest which retries the function.
 		await this.accounts.withFreshAccessToken(scope, work);
+
+		if (morePagesPending) {
+			this.logService.logAction({
+				action: 'email.delta_sync.page_cap_reached',
+				message: `Delta sync for ${account.email} hit the ${MAX_PAGES}-page cap with pages pending — cursor advanced to last processed record only`,
+				metadata: {
+					provider: account.provider,
+					emailAccountId,
+					pagesFetched,
+					lastProcessedRecordId: maxProcessedRecordId
+				},
+				level: 'warn',
+				context: 'GmailDeltaSyncService'
+			});
+		}
 
 		if (historyExpired) {
 			// Re-acquire a fresh cursor via getProfile so the next push has a valid
@@ -318,6 +353,23 @@ export class GmailDeltaSyncService {
 
 function isGmailDraft(message: { labelIds?: string[] | null }): boolean {
 	return Array.isArray(message.labelIds) && message.labelIds.includes('DRAFT');
+}
+
+/**
+ * History record ids are monotonic uint64 decimal strings; compare numerically via
+ * BigInt. Tolerant fallback: a non-numeric id (never observed from Gmail, but a crash
+ * here would kill the whole sync) is treated as newer — records arrive in ascending
+ * order, so last-seen-wins matches the stream's own ordering.
+ */
+function isNewerHistoryRecordId(candidate: string, current: string | null): boolean {
+	if (current === null) {
+		return true;
+	}
+	try {
+		return BigInt(candidate) > BigInt(current);
+	} catch {
+		return true;
+	}
 }
 
 function findHeader(headers: ReadonlyArray<{ name: string; value: string }>, name: string): string | null {

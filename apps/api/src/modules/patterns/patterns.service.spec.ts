@@ -108,6 +108,39 @@ describe('PatternsService.getPatterns', () => {
 		expect(winRate?.detail).toContain('10%');
 	});
 
+	it('uses singular "dag" when the average rounds to exactly 1', async () => {
+		const repository = createRepository({
+			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
+			getFollowUpCadenceDays: jest.fn<PatternsRepository['getFollowUpCadenceDays']>(async () => 1),
+			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
+				avgCustomerReplyDays: 1.04
+			}))
+		});
+		const service = new PatternsService(repository);
+
+		const banners = await service.getPatterns('org-1', 'user-1', NOW);
+		const replySpeed = banners.find(b => b.patternKey === 'reply_speed');
+
+		expect(replySpeed?.headline).toBe('Klanten reageren gemiddeld binnen 1 dag');
+		expect(replySpeed?.detail).toContain('1 dag ');
+		expect(replySpeed?.detail).not.toContain('1 dagen');
+	});
+
+	it('renders a one-decimal Dutch average without double rounding', async () => {
+		const repository = createRepository({
+			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
+			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
+				avgCustomerReplyDays: 2.349
+			}))
+		});
+		const service = new PatternsService(repository);
+
+		const banners = await service.getPatterns('org-1', 'user-1', NOW);
+		const replySpeed = banners.find(b => b.patternKey === 'reply_speed');
+
+		expect(replySpeed?.headline).toBe('Klanten reageren gemiddeld binnen 2,3 dagen');
+	});
+
 	it('hides a banner the user dismissed within the re-show window', async () => {
 		const recent = new Date(NOW.getTime() - 86_400_000); // 1 day ago
 		const repository = createRepository({

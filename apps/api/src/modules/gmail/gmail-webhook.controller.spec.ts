@@ -57,10 +57,9 @@ describe('GmailWebhookController.receive', () => {
 			logAction: jest.fn()
 		} as unknown as LogService);
 		// Stub JWT verification (instance-method seam — see GmailWebhookController.verifyToken).
-		jest.spyOn(
-			controller as unknown as { verifyToken: () => Promise<void> },
-			'verifyToken'
-		).mockResolvedValue(undefined);
+		jest.spyOn(controller as unknown as { verifyToken: () => Promise<void> }, 'verifyToken').mockResolvedValue(
+			undefined
+		);
 
 		await controller.receive(
 			makeRequest({ emailAddress: 'Owner@Example.COM', historyId: '123' }),

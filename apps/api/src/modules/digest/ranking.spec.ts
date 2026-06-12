@@ -49,22 +49,14 @@ describe('rankOpportunities', () => {
 	it('clamps winProbability up to the 0.02 floor', () => {
 		// winBaseline: 0.01 × responseTimeModifier(24h → 1.0) × followUpCountModifier(0 → 1.0) = 0.01 < 0.02 → clamps up.
 		const cfg: RankingConfig = { winBaseline: 0.01, followUpCadenceDays: 4 };
-		const ranked = rankOpportunities(
-			[opp({ firstResponseHours: 24, priorCheckInCount: 0 })],
-			cfg,
-			NOW
-		);
+		const ranked = rankOpportunities([opp({ firstResponseHours: 24, priorCheckInCount: 0 })], cfg, NOW);
 		expect(ranked[0]?.winProbability).toBe(0.02);
 	});
 
 	it('clamps winProbability down to the 0.95 ceiling', () => {
 		// winBaseline: 5 × 1.0 × 1.0 = 5 → clamps down to 0.95.
 		const cfg: RankingConfig = { winBaseline: 5, followUpCadenceDays: 4 };
-		const ranked = rankOpportunities(
-			[opp({ firstResponseHours: 24, priorCheckInCount: 0 })],
-			cfg,
-			NOW
-		);
+		const ranked = rankOpportunities([opp({ firstResponseHours: 24, priorCheckInCount: 0 })], cfg, NOW);
 		expect(ranked[0]?.winProbability).toBe(0.95);
 	});
 

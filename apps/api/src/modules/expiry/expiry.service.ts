@@ -7,9 +7,12 @@ import { OpportunitiesService } from '@/modules/opportunities/opportunities.serv
 import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { ExpiryRepository, type ExpiryActionRecord } from '@/modules/expiry/expiry.repository';
+import { ExpiryRepository, type ExpiryActionRecord, type ExpiryCandidate } from '@/modules/expiry/expiry.repository';
 import { buildExpirySuggestionPromptNL } from '@/modules/expiry/expiry-suggestion.prompt';
 import { expirySuggestionSchema } from '@/modules/expiry/expiry-suggestion.types';
+
+// Max in-flight AI calls per watcher run.
+const WATCHER_CONCURRENCY = 5;
 
 /**
  * Smart-expiry orchestration. The watcher (`runWatcher`) is driven by the W13 cron:
@@ -52,52 +55,63 @@ export class ExpiryService {
 		// caller (cron / test) didn't supply one so the per-candidate rows stay correlatable.
 		const requestId = correlation.requestId ?? randomUUID();
 
-		for (const candidate of candidates) {
-			const context = { requestId, organizationId: candidate.organizationId };
-
-			const didInsert = await requestContext.run(context, async () => {
-				try {
-					const result = await this.ai.generate({
-						purpose: 'expiry-suggestion',
-						prompt: buildExpirySuggestionPromptNL({
-							customerName: candidate.customerName,
-							requestType: candidate.requestType,
-							daysUntilExpiry: candidate.daysUntilExpiry,
-							lastCustomerMessage: candidate.lastCustomerMessage
-						}),
-						schema: expirySuggestionSchema
-					});
-
-					await this.repository.insertSuggestion({
-						organizationId: candidate.organizationId,
-						opportunityId: candidate.opportunityId,
-						quoteDraftId: candidate.quoteDraftId,
-						validUntil: candidate.validUntil,
-						recommendedAction: result.value.recommendedAction,
-						suggestedCopy: result.value.suggestedCopy,
-						aiCallId: result.callId
-					});
-					return true;
-				} catch (error) {
-					this.logService.logAction({
-						action: 'expiry.watcher.suggestion_failed',
-						message: `Failed to generate expiry suggestion for opportunity ${candidate.opportunityId}: ${
-							error instanceof Error ? error.message : String(error)
-						}`,
-						metadata: { opportunityId: candidate.opportunityId, quoteDraftId: candidate.quoteDraftId },
-						level: 'warn',
-						context: 'ExpiryService'
-					});
-					return false;
-				}
-			});
-
-			if (didInsert) {
-				inserted += 1;
-			}
+		// Parallel batches: up to 500 sequential AI calls in one Inngest step would risk
+		// the 5-minute step timeout. Five in flight bounds both wall-clock and the OpenAI
+		// rate-limit pressure.
+		for (let offset = 0; offset < candidates.length; offset += WATCHER_CONCURRENCY) {
+			const batch = candidates.slice(offset, offset + WATCHER_CONCURRENCY);
+			const results = await Promise.all(batch.map(candidate => this.suggestForCandidate(candidate, requestId)));
+			inserted += results.filter(Boolean).length;
 		}
 
 		return { scanned: candidates.length, inserted };
+	}
+
+	/**
+	 * Generate + persist one suggestion. Per-candidate AsyncLocalStorage re-entry
+	 * (CLAUDE.md #8) so the AICall + Log rows carry the candidate's `organizationId`;
+	 * per-candidate try/catch so one failure skips that row without aborting the run —
+	 * the row re-qualifies on the next tick because no suggestion was inserted.
+	 */
+	private async suggestForCandidate(candidate: ExpiryCandidate, requestId: string): Promise<boolean> {
+		const context = { requestId, organizationId: candidate.organizationId };
+
+		return requestContext.run(context, async () => {
+			try {
+				const result = await this.ai.generate({
+					purpose: 'expiry-suggestion',
+					prompt: buildExpirySuggestionPromptNL({
+						customerName: candidate.customerName,
+						requestType: candidate.requestType,
+						daysUntilExpiry: candidate.daysUntilExpiry,
+						lastCustomerMessage: candidate.lastCustomerMessage
+					}),
+					schema: expirySuggestionSchema
+				});
+
+				await this.repository.insertSuggestion({
+					organizationId: candidate.organizationId,
+					opportunityId: candidate.opportunityId,
+					quoteDraftId: candidate.quoteDraftId,
+					validUntil: candidate.validUntil,
+					recommendedAction: result.value.recommendedAction,
+					suggestedCopy: result.value.suggestedCopy,
+					aiCallId: result.callId
+				});
+				return true;
+			} catch (error) {
+				this.logService.logAction({
+					action: 'expiry.watcher.suggestion_failed',
+					message: `Failed to generate expiry suggestion for opportunity ${candidate.opportunityId}: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+					metadata: { opportunityId: candidate.opportunityId, quoteDraftId: candidate.quoteDraftId },
+					level: 'warn',
+					context: 'ExpiryService'
+				});
+				return false;
+			}
+		});
 	}
 
 	/** The live (SUGGESTED) suggestion for an opportunity in this org, or `null`. */
@@ -119,12 +133,7 @@ export class ExpiryService {
 	 * twice). A lost claim means the row was already resolved → 400. After the side-effect
 	 * succeeds, all sibling suggestions for the opp are superseded for EVERY kind.
 	 */
-	async takeAction(
-		actionId: string,
-		organizationId: string,
-		userId: string,
-		kind: ExpiryActionKind
-	): Promise<void> {
+	async takeAction(actionId: string, organizationId: string, userId: string, kind: ExpiryActionKind): Promise<void> {
 		const action = await this.repository.findForAuthorization(actionId, organizationId);
 		if (!action) {
 			throw new NotFoundException(EXPIRY_ACTION_NOT_FOUND);
@@ -135,37 +144,57 @@ export class ExpiryService {
 			throw new BadRequestException(EXPIRY_ACTION_ALREADY_RESOLVED);
 		}
 
-		switch (kind) {
-			case ExpiryActionKind.EXTEND_14D: {
-				await this.repository.extendValidUntil(action.quoteDraftId);
-				this.logService.logAction({
-					action: 'expiry.action.extended',
-					message: `Extended quote validity 14 days for opportunity ${action.opportunityId} by user ${userId}`,
-					metadata: { opportunityId: action.opportunityId, expiryActionId: actionId, actorUserId: userId },
-					context: 'ExpiryService'
-				});
-				break;
+		// Compensate on side-effect failure: a transient error (AI outage, provider
+		// hiccup) must not brick the suggestion — without the revert, the claim above
+		// leaves the row TAKEN forever and every retry 400s as ALREADY_RESOLVED.
+		try {
+			switch (kind) {
+				case ExpiryActionKind.EXTEND_14D: {
+					await this.repository.extendValidUntil(action.quoteDraftId);
+					this.logService.logAction({
+						action: 'expiry.action.extended',
+						message: `Extended quote validity 14 days for opportunity ${action.opportunityId} by user ${userId}`,
+						metadata: {
+							opportunityId: action.opportunityId,
+							expiryActionId: actionId,
+							actorUserId: userId
+						},
+						context: 'ExpiryService'
+					});
+					break;
+				}
+				case ExpiryActionKind.LAST_FOLLOWUP: {
+					await this.replyDrafts.generateFollowupDraft(action.opportunityId, userId, 'owner_compose');
+					this.logService.logAction({
+						action: 'expiry.action.last_followup',
+						message: `Composed a last follow-up draft for opportunity ${action.opportunityId} by user ${userId}`,
+						metadata: {
+							opportunityId: action.opportunityId,
+							expiryActionId: actionId,
+							actorUserId: userId
+						},
+						context: 'ExpiryService'
+					});
+					break;
+				}
+				case ExpiryActionKind.MARK_LOST: {
+					await this.opportunities.updateStatus(organizationId, action.opportunityId, 'lost', userId);
+					this.logService.logAction({
+						action: 'expiry.action.mark_lost',
+						message: `Marked opportunity ${action.opportunityId} as lost via expiry action by user ${userId}`,
+						metadata: {
+							opportunityId: action.opportunityId,
+							expiryActionId: actionId,
+							actorUserId: userId
+						},
+						context: 'ExpiryService'
+					});
+					break;
+				}
 			}
-			case ExpiryActionKind.LAST_FOLLOWUP: {
-				await this.replyDrafts.generateFollowupDraft(action.opportunityId, userId, 'owner_compose');
-				this.logService.logAction({
-					action: 'expiry.action.last_followup',
-					message: `Composed a last follow-up draft for opportunity ${action.opportunityId} by user ${userId}`,
-					metadata: { opportunityId: action.opportunityId, expiryActionId: actionId, actorUserId: userId },
-					context: 'ExpiryService'
-				});
-				break;
-			}
-			case ExpiryActionKind.MARK_LOST: {
-				await this.opportunities.updateStatus(organizationId, action.opportunityId, 'lost', userId);
-				this.logService.logAction({
-					action: 'expiry.action.mark_lost',
-					message: `Marked opportunity ${action.opportunityId} as lost via expiry action by user ${userId}`,
-					metadata: { opportunityId: action.opportunityId, expiryActionId: actionId, actorUserId: userId },
-					context: 'ExpiryService'
-				});
-				break;
-			}
+		} catch (error) {
+			await this.revertTakenClaimAfterFailure(actionId, action.opportunityId, kind, error);
+			throw error;
 		}
 
 		// Clear sibling suggestions for this opp regardless of kind — the action we just
@@ -195,5 +224,49 @@ export class ExpiryService {
 			metadata: { opportunityId: action.opportunityId, expiryActionId: actionId, actorUserId: userId },
 			context: 'ExpiryService'
 		});
+	}
+
+	/**
+	 * Best-effort compensation: put a claimed row back to SUGGESTED so the owner can
+	 * retry. Never throws — the side-effect error is the one the caller must surface;
+	 * a failed revert only means the row stays TAKEN (visible in the audit trail).
+	 */
+	private async revertTakenClaimAfterFailure(
+		actionId: string,
+		opportunityId: string,
+		kind: ExpiryActionKind,
+		sideEffectError: unknown
+	): Promise<void> {
+		try {
+			const reverted = await this.repository.revertTakenClaim(actionId);
+			this.logService.logAction({
+				action: reverted ? 'expiry.action.claim_reverted' : 'expiry.action.claim_revert_noop',
+				message: `Expiry action ${kind} failed for opportunity ${opportunityId}; claim ${
+					reverted ? 'reverted to SUGGESTED' : 'revert was a no-op'
+				}`,
+				metadata: {
+					opportunityId,
+					expiryActionId: actionId,
+					kind,
+					sideEffectError:
+						sideEffectError instanceof Error ? sideEffectError.message : String(sideEffectError)
+				},
+				level: 'warn',
+				context: 'ExpiryService'
+			});
+		} catch (revertError) {
+			this.logService.logAction({
+				action: 'expiry.action.claim_revert_failed',
+				message: `Failed to revert expiry-action claim ${actionId} for opportunity ${opportunityId}`,
+				metadata: {
+					opportunityId,
+					expiryActionId: actionId,
+					kind,
+					revertError: revertError instanceof Error ? revertError.message : String(revertError)
+				},
+				level: 'error',
+				context: 'ExpiryService'
+			});
+		}
 	}
 }

@@ -34,6 +34,7 @@ import { OpportunityListResponseDto } from '@/modules/opportunities/dto/opportun
 import { OpportunityResponseDto } from '@/modules/opportunities/dto/opportunity.response.dto';
 import type { UpdateOpportunityFieldsDto } from '@/modules/opportunities/dto/update-opportunity-fields.dto';
 import {
+	MAX_CLASSIFY_ATTEMPTS,
 	OpportunitiesRepository,
 	type OpportunityDetailRecord,
 	type OpportunityDismissedFilter,
@@ -1724,6 +1725,29 @@ export class OpportunitiesService {
 				stack: error instanceof Error ? error.stack : undefined,
 				context: 'OpportunitiesService'
 			});
+
+			// Poison-message cap: count the failure so a row that fails every run stops
+			// being scanned after MAX_CLASSIFY_ATTEMPTS instead of burning an OpenAI call
+			// per tick forever. Best-effort — a failed increment only means one extra retry.
+			try {
+				const attempts = await this.repository.incrementClassifyAttempts(rawMessage.id);
+				if (attempts >= MAX_CLASSIFY_ATTEMPTS) {
+					this.logService.logAction({
+						action: 'opportunity.pipeline.raw_message_poisoned',
+						message: `RawMessage ${rawMessage.id} failed ${attempts}x — excluded from further pipeline scans (reset classifyAttempts to retry)`,
+						metadata: {
+							rawMessageId: rawMessage.id,
+							emailAccountId: rawMessage.emailAccountId,
+							organizationId: rawMessage.organizationId,
+							attempts
+						},
+						level: 'warn',
+						context: 'OpportunitiesService'
+					});
+				}
+			} catch {
+				// Swallow — the failure above is the signal that matters.
+			}
 
 			return !(error instanceof AINotConfiguredError);
 		}

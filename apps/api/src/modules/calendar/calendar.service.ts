@@ -59,6 +59,11 @@ export class CalendarService {
 		if (!user.currentOrganizationId) {
 			throw new NotFoundException(ICAL_FEED_NO_ORGANIZATION);
 		}
+		// Re-verify actual membership — `currentOrganizationId` is a stale-able pointer, and
+		// this session-less path has no OrganizationGuard to do the check for it.
+		if (!(await this.repository.isUserMemberOfOrganization(user.id, user.currentOrganizationId))) {
+			throw new NotFoundException(ICAL_FEED_NO_ORGANIZATION);
+		}
 		const now = new Date();
 		// Gate the persistent public feed behind subscription entitlement (same predicate as
 		// EntitlementGuard: trialing/active/past_due). In-app reads stay open to any member, but

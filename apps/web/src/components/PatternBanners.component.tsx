@@ -23,6 +23,7 @@ export function PatternBanners() {
 
 	return (
 		<Stack useFlexGap spacing={1} sx={{ mb: 3 }}>
+			{dismiss.isError && <Alert severity='error'>Verbergen is niet gelukt. Probeer het opnieuw.</Alert>}
 			{patterns.map(pattern => (
 				<Alert
 					key={pattern.patternKey}

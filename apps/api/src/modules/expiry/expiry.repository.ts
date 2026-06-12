@@ -6,6 +6,7 @@ import {
 	OpportunityStatus as PrismaOpportunityStatus
 } from '@/generated/prisma/enums';
 import { isOrganizationEntitled as isOrgEntitled } from '@/lib/billing/entitlement-check';
+import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import { MS_PER_DAY } from '@/lib/time/duration';
 import { PrismaService } from '@/modules/prisma/prisma.service';
@@ -35,10 +36,8 @@ export type ExpiryActionRecord = Prisma.ExpiryActionGetPayload<object>;
 
 /** Cross-tenant authorization lookup result — minimal columns the guard + service need. */
 export interface ExpiryActionForAuthorization {
-	id: string;
 	opportunityId: string;
 	quoteDraftId: string;
-	status: ExpiryActionStatus;
 }
 
 /** Digest row — one per live suggestion in an org, with the days-left countdown. */
@@ -134,7 +133,7 @@ export class ExpiryRepository {
 				  ${PrismaOpportunityStatus.WON}::"OpportunityStatus",
 				  ${PrismaOpportunityStatus.LOST}::"OpportunityStatus"
 			  )
-			  AND s."status" IN ('trialing', 'active', 'past_due')
+			  AND s."status" = ANY(${ENTITLED_STRIPE_STATUSES as string[]}::text[])
 			  AND (rm."internalDate" IS NULL OR rm."internalDate" <= qd."sentAt")
 			  AND NOT EXISTS (
 				  SELECT 1 FROM "ExpiryAction" ea
@@ -191,10 +190,22 @@ export class ExpiryRepository {
 		}
 	}
 
-	/** The most recent live (SUGGESTED) suggestion for an opportunity in this org, or `null`. */
+	/**
+	 * The most recent live (SUGGESTED) suggestion for an opportunity in this org, or `null`.
+	 * Filters on the opportunity too: a suggestion on a deal the owner already resolved
+	 * (WON/LOST) or dismissed must not render a card proposing MARK_LOST on a won deal.
+	 */
 	async findLiveForOpportunity(opportunityId: string, organizationId: string): Promise<ExpiryActionRecord | null> {
 		return this.prisma.expiryAction.findFirst({
-			where: { opportunityId, organizationId, status: ExpiryActionStatus.SUGGESTED },
+			where: {
+				opportunityId,
+				organizationId,
+				status: ExpiryActionStatus.SUGGESTED,
+				opportunity: {
+					dismissedAt: null,
+					status: { notIn: [PrismaOpportunityStatus.WON, PrismaOpportunityStatus.LOST] }
+				}
+			},
 			orderBy: { createdAt: 'desc' }
 		});
 	}
@@ -207,7 +218,7 @@ export class ExpiryRepository {
 	async findForAuthorization(id: string, organizationId: string): Promise<ExpiryActionForAuthorization | null> {
 		const row = await this.prisma.expiryAction.findFirst({
 			where: { id, organizationId },
-			select: { id: true, opportunityId: true, quoteDraftId: true, status: true }
+			select: { opportunityId: true, quoteDraftId: true }
 		});
 		return row;
 	}
@@ -238,14 +249,30 @@ export class ExpiryRepository {
 	}
 
 	/**
-	 * Atomically bump a quote draft's validity by 14 days. Reads + writes in one
-	 * statement (`COALESCE(validUntil, NOW()) + INTERVAL '14 days'`) so even the single
-	 * race winner's update can't drift between a read and a write.
+	 * Compensating revert for a failed side-effect after `claimAsTaken` won the
+	 * transition: put the row back to SUGGESTED so the owner can retry. Conditional on
+	 * `status = TAKEN` so a late/duplicate revert can never clobber a row that has since
+	 * been resolved through another path.
+	 */
+	async revertTakenClaim(id: string): Promise<boolean> {
+		const { count } = await this.prisma.expiryAction.updateMany({
+			where: { id, status: ExpiryActionStatus.TAKEN },
+			data: { status: ExpiryActionStatus.SUGGESTED, takenAction: null, takenById: null }
+		});
+		return count === 1;
+	}
+
+	/**
+	 * Atomically bump a quote draft's validity to 14 days out. Anchors on
+	 * `GREATEST("validUntil", NOW())` so an already-expired quote becomes valid 14 days
+	 * from TODAY instead of e.g. 12 days from yesterday's stale date (Postgres GREATEST
+	 * ignores NULLs, so a missing validUntil also anchors on NOW()). Single statement so
+	 * even the race winner's update can't drift between a read and a write.
 	 */
 	async extendValidUntil(quoteDraftId: string): Promise<void> {
 		await this.prisma.$executeRaw(Prisma.sql`
 			UPDATE "QuoteDraft"
-			SET "validUntil" = COALESCE("validUntil", NOW()) + INTERVAL '14 days'
+			SET "validUntil" = GREATEST("validUntil", NOW()) + INTERVAL '14 days'
 			WHERE "id" = ${quoteDraftId}::uuid
 		`);
 	}
@@ -265,10 +292,22 @@ export class ExpiryRepository {
 		});
 	}
 
-	/** All live suggestions for an org, shaped for the digest's expiry callout. */
+	/**
+	 * Live suggestions for an org, shaped for the digest's expiry callout. Filters out
+	 * already-expired windows (`validUntil >= now` — a stale suggestion must never render
+	 * "verloopt over -2 dagen" in a digest) and resolved/dismissed opportunities.
+	 */
 	async findExpiringCallouts(organizationId: string, now: Date): Promise<ExpiringCallout[]> {
 		const rows = await this.prisma.expiryAction.findMany({
-			where: { organizationId, status: ExpiryActionStatus.SUGGESTED },
+			where: {
+				organizationId,
+				status: ExpiryActionStatus.SUGGESTED,
+				validUntil: { gte: now },
+				opportunity: {
+					dismissedAt: null,
+					status: { notIn: [PrismaOpportunityStatus.WON, PrismaOpportunityStatus.LOST] }
+				}
+			},
 			orderBy: { validUntil: 'asc' },
 			select: {
 				opportunityId: true,

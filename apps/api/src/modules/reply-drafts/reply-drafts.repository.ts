@@ -757,16 +757,49 @@ export class ReplyDraftsRepository {
 	}
 
 	/**
-	 * Mark the draft as `SENT` + the opportunity as `REPLIED` in one transaction.
-	 * Wraps both because the customer-visible-effect (the email actually went out) is
-	 * already irrevocable when this runs — leaving the DB half-updated would create the
-	 * worst kind of split-brain (status says "still drafting" but the customer has the
-	 * email). Either both transitions persist or neither does.
+	 * Race-narrowing claim (same pattern as `ExpiryRepository.claimAsTaken`): flip the
+	 * draft to `SENT` only if it isn't already. Returns `true` for the single race
+	 * winner — two concurrent send requests (double-click, two tabs) both pass the
+	 * read-based status check in the service, but only one wins this conditional
+	 * UPDATE. The status flip IS the mutual-exclusion lock for the provider send;
+	 * `sentAt` stays `null` until `markSent` completes the bookkeeping, which is what
+	 * lets `revertSendClaim` distinguish a claimed-but-unsent draft from a real send.
 	 */
+	async claimForSend(draftId: string): Promise<boolean> {
+		const { count } = await this.prisma.replyDraft.updateMany({
+			where: { id: draftId, status: { not: PrismaReplyDraftStatus.SENT } },
+			data: { status: PrismaReplyDraftStatus.SENT }
+		});
+		return count === 1;
+	}
+
 	/**
-	 * Mark a *specific* draft as SENT. Takes `draftId` (not `opportunityId`)
-	 * because an opp can have multiple drafts and the caller (`ReplyDraftsService.send`)
-	 * has already resolved the right one via `findSendContext`.
+	 * Revert a send claim after a provider failure so the draft becomes retryable.
+	 * Conditional on `sentAt IS NULL` — a completed send (where `markSent` already
+	 * ran) can never be reverted back to editable, even if a stale failure path calls
+	 * this late. `toStatus` is the status the caller read just before claiming
+	 * (`PENDING_APPROVAL` or `EDITED`).
+	 */
+	async revertSendClaim(draftId: string, toStatus: PrismaReplyDraftStatus): Promise<boolean> {
+		const { count } = await this.prisma.replyDraft.updateMany({
+			where: { id: draftId, status: PrismaReplyDraftStatus.SENT, sentAt: null },
+			data: { status: toStatus }
+		});
+		return count === 1;
+	}
+
+	/**
+	 * Record the completed send: `sentAt` on the draft + the opportunity transition,
+	 * in one transaction. The `status = SENT` flip itself already happened in
+	 * `claimForSend` (the pre-provider mutual-exclusion lock); re-asserting it here is
+	 * an idempotent no-op that keeps this method correct if ever called standalone.
+	 * Wraps both writes because the customer-visible effect (the email actually went
+	 * out) is already irrevocable when this runs — leaving the DB half-updated would
+	 * create the worst kind of split-brain (status says "still drafting" but the
+	 * customer has the email). Either both transitions persist or neither does.
+	 * Takes `draftId` (not `opportunityId`) because an opp can have multiple drafts
+	 * and the caller (`ReplyDraftsService.send`) has already resolved the right one
+	 * via `findSendContext`.
 	 * **:** Opp status transition is now CONDITIONAL. Skipped for terminal
 	 * funnel states (`WON` / `LOST`) so a courtesy follow-up on a won deal doesn't
 	 * silently flip it back to `REPLIED`. The customer-visible state of the deal stays

@@ -51,6 +51,9 @@ export interface MailboxScope {
  */
 @Injectable()
 export class EmailAccountsService {
+	/** Per-mailbox promise chain serializing `getAccessToken` — see its docstring. */
+	private readonly tokenChains = new Map<string, Promise<string>>();
+
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly google: GoogleOAuthService,
@@ -256,10 +259,36 @@ export class EmailAccountsService {
 	 * Pass `{ forceRefresh: true }` to bypass the freshness check — required when the
 	 * cached token already failed at the provider.
 	 *
-	 * **Self-healing on revoke:** `invalid_grant` from refresh → delete row + throw
+	 * **Self-healing on revoke:** `invalid_grant` from refresh → soft-disconnect + throw
 	 * `NotFoundException`. Same shape regardless of provider.
+	 *
+	 * **Serialized per mailbox** via an in-process keyed promise chain: Microsoft
+	 * ROTATES the refresh token on every refresh, so two concurrent refreshes (e.g. a
+	 * delta-sync racing a user-triggered send) each get a different new refresh token
+	 * and last-write-wins can persist the one Microsoft just invalidated → the next
+	 * refresh hits `invalid_grant` → a healthy mailbox gets falsely soft-disconnected.
+	 * Queued callers re-check freshness inside the chain, so the second caller reuses
+	 * the token the first one just wrote instead of refreshing again. Sufficient for
+	 * the current single-instance deploy; horizontal scaling would need a distributed
+	 * lock (e.g. Postgres advisory lock on the row id).
 	 */
 	async getAccessToken(scope: MailboxScope, opts: { forceRefresh?: boolean } = {}): Promise<string> {
+		const key = `${scope.organizationId}:${scope.userId}:${scope.provider}`;
+		const previous = this.tokenChains.get(key) ?? Promise.resolve();
+		// Chain regardless of how the previous call settled — a failed refresh must not
+		// block subsequent attempts.
+		const run = previous.catch(() => undefined).then(() => this.performGetAccessToken(scope, opts));
+		this.tokenChains.set(key, run);
+		const cleanup = () => {
+			if (this.tokenChains.get(key) === run) {
+				this.tokenChains.delete(key);
+			}
+		};
+		run.then(cleanup, cleanup);
+		return run;
+	}
+
+	private async performGetAccessToken(scope: MailboxScope, opts: { forceRefresh?: boolean } = {}): Promise<string> {
 		const row = await this.prisma.emailAccount.findFirst({
 			where: {
 				organizationId: scope.organizationId,

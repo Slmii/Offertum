@@ -7,6 +7,8 @@ import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { QuotePanel } from '@/components/QuotePanel.component';
 import { QuotePdfAttachSelect } from '@/components/QuotePdfAttachSelect.component';
 import { SectionError } from '@/components/SectionError.component';
+import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { LockGlyph } from '@/components/UpsellTeaser.component';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
@@ -81,6 +83,8 @@ const AUTOSAVE_DEBOUNCE_MS = 1000;
  */
 export const Route = createFileRoute('/(app)/opportunities/$id')({
 	loader: async ({ context, params }) => {
+		// W13 — billing entitlement: gates the reply/send panel + the expiry-card fetch.
+		const billing = await context.queryClient.ensureQueryData(billingStatusQueryOptions);
 		await Promise.all([
 			context.queryClient.ensureQueryData(opportunityDetailQueryOptions(params.id)),
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
@@ -89,10 +93,11 @@ export const Route = createFileRoute('/(app)/opportunities/$id')({
 			context.queryClient.ensureQueryData(membershipsQueryOptions),
 			// Persisted quote drafts for the W10.3 quote panel.
 			context.queryClient.ensureQueryData(quoteDraftsQueryOptions(params.id)),
-			// W13 — live smart-expiry suggestion (or null) for the action card.
-			context.queryClient.ensureQueryData(opportunityExpiryActionQueryOptions(params.id)),
-			// W13 — billing entitlement: gates the reply/send panel for non-subscribed orgs.
-			context.queryClient.ensureQueryData(billingStatusQueryOptions)
+			// W13 — live smart-expiry suggestion (or null) for the action card. Skipped for
+			// non-entitled orgs: the endpoint always returns null for them.
+			...(isBillingEntitled(billing.state)
+				? [context.queryClient.ensureQueryData(opportunityExpiryActionQueryOptions(params.id))]
+				: [])
 		]);
 	},
 	component: OpportunityDetailPage,
@@ -130,15 +135,24 @@ function OpportunityDetailPage() {
 	// text). Initialised to the server-side value so the first autosave only fires
 	// after the user types something new.
 	const lastSavedRef = useRef<string>(replyDraft?.body ?? '');
+	// The draft id the editor's local state currently belongs to. When a NEW draft
+	// arrives (compose-followup, customer-reply regeneration), the editor must swap to
+	// its body — the old `body === ''` guard alone never replaced displayed text, so the
+	// first keystroke autosaved the STALE old text over the fresh AI draft.
+	const editorDraftIdRef = useRef<string | null>(replyDraft?.id ?? null);
 
 	useEffect(() => {
-		// Server-side draft arrived later ( was still generating when the page
-		// loaded). Hydrate the editor with it; the lastSavedRef sync prevents the
-		// hydration from looking like a user edit. This IS a legitimate "external →
-		// local state" mirror (the buffered-input pattern from CLAUDE.md #12), so the
+		if (!replyDraft) {
+			return;
+		}
+		const isNewDraft = replyDraft.id !== editorDraftIdRef.current;
+		// Late hydration: same draft id but the editor started empty ( was still
+		// generating when the page loaded). The lastSavedRef sync prevents the adopt
+		// from looking like a user edit. This IS a legitimate "external → local state"
+		// mirror (the buffered-input pattern from CLAUDE.md #12), so the
 		// `set-state-in-effect` disable is intentional.
-		if (replyDraft && body === '' && replyDraft.body !== '') {
-			// eslint-disable-next-line react-hooks/set-state-in-effect
+		if (isNewDraft || (body === '' && replyDraft.body !== '')) {
+			editorDraftIdRef.current = replyDraft.id;
 			setBody(replyDraft.body);
 			lastSavedRef.current = replyDraft.body;
 		}
@@ -147,6 +161,11 @@ function OpportunityDetailPage() {
 
 	useEffect(() => {
 		if (!replyDraft) {
+			return;
+		}
+		if (debouncedBody !== body) {
+			// A lagging debounce tick from BEFORE a draft swap — saving it would write
+			// the pre-swap text onto the newly adopted draft.
 			return;
 		}
 		if (debouncedBody === lastSavedRef.current) {
@@ -220,7 +239,7 @@ function OpportunityDetailPage() {
 				</Typography>
 			</Stack>
 
-			<ExpiryActionCard opportunityId={id} />
+			{isEntitled && <ExpiryActionCard opportunityId={id} isOwner={isOwner} />}
 
 			{me.user.hasTonePlaybook === false && (
 				<Alert
@@ -358,7 +377,9 @@ function OpportunityDetailPage() {
 												size='large'
 												onClick={() => composeFollowup.mutate()}
 												disabled={composeFollowup.isPending}
-												startIcon={composeFollowup.isPending ? <CircularProgress size={14} /> : null}
+												startIcon={
+													composeFollowup.isPending ? <CircularProgress size={14} /> : null
+												}
 											>
 												{composeFollowup.isPending ? 'Bezig…' : 'Concept-vervolg opstellen'}
 											</Button>
@@ -405,8 +426,8 @@ function OpportunityDetailPage() {
 								<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 									<CircularProgress size={20} sx={{ mb: 1 }} />
 									<Typography variant='body2' color='text.secondary'>
-										Concept-antwoord wordt opgesteld… Dit duurt meestal een paar seconden. Ververs de
-										pagina als het langer duurt dan een minuut.
+										Concept-antwoord wordt opgesteld… Dit duurt meestal een paar seconden. Ververs
+										de pagina als het langer duurt dan een minuut.
 									</Typography>
 								</Paper>
 							)}
@@ -451,13 +472,28 @@ function OpportunityDetailPage() {
 				subject={opportunity.subject}
 				bodyPreview={body}
 				attachments={replyDraft?.attachments ?? []}
-				isSending={sendDraft.isPending}
+				isSending={sendDraft.isPending || updateDraft.isPending}
 				onClose={() => setSendConfirmOpen(false)}
-				onConfirm={() =>
+				onConfirm={async () => {
+					// Flush un-debounced edits BEFORE sending — the 1s autosave may not have
+					// fired yet, and the send endpoint reads the server-side body. Marking
+					// lastSavedRef also neutralizes the pending debounce tick (it becomes a
+					// no-op), so it can't fire after the send.
+					if (isDraftEditable && body !== lastSavedRef.current) {
+						try {
+							await updateDraft.mutateAsync({ body });
+							lastSavedRef.current = body;
+						} catch {
+							// Flush failed — abort the send so the customer never receives an
+							// older body. The editor's existing error alert shows the failure.
+							setSendConfirmOpen(false);
+							return;
+						}
+					}
 					sendDraft.mutate(undefined, {
 						onSettled: () => setSendConfirmOpen(false)
-					})
-				}
+					});
+				}}
 			/>
 		</Container>
 	);
@@ -474,7 +510,7 @@ function MuiBackToList() {
 /**
  * Shown in the reply-draft area when the org has no active subscription.
  * Owners get a direct "Abonneren" CTA; non-owners see a muted ask-the-owner line.
- * Mirrors the LockGlyph + copy + CTA pattern from W13UpsellTeaser.
+ * Mirrors the LockGlyph + copy + CTA pattern from the UpsellTeaser.
  */
 function LockedReplyPanel({ isOwner }: { isOwner: boolean }) {
 	return (
@@ -483,17 +519,7 @@ function LockedReplyPanel({ isOwner }: { isOwner: boolean }) {
 			sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'flex-start' }}
 		>
 			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
-				<svg
-					xmlns='http://www.w3.org/2000/svg'
-					width='18'
-					height='18'
-					viewBox='0 0 24 24'
-					fill='currentColor'
-					aria-hidden='true'
-					style={{ opacity: 0.54, flexShrink: 0 }}
-				>
-					<path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' />
-				</svg>
+				<LockGlyph />
 				<Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
 					Abonneer om te versturen
 				</Typography>
@@ -501,15 +527,7 @@ function LockedReplyPanel({ isOwner }: { isOwner: boolean }) {
 			<Typography variant='body2' color='text.secondary'>
 				Abonneer om AI-antwoorden te versturen en deze aanvraag op te volgen.
 			</Typography>
-			{isOwner ? (
-				<Button component={Link} to='/billing' variant='contained' size='small'>
-					Abonneren
-				</Button>
-			) : (
-				<Typography variant='body2' color='text.secondary'>
-					Vraag de eigenaar om een abonnement.
-				</Typography>
-			)}
+			<SubscribeCta isOwner={isOwner} />
 		</Paper>
 	);
 }

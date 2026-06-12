@@ -15,7 +15,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 
 interface FakeTx {
 	membership: { delete: jest.Mock; findFirst: jest.Mock };
-	emailAccount: { deleteMany: jest.Mock };
+	emailAccount: { updateMany: jest.Mock };
 	organization: { delete: jest.Mock; findUniqueOrThrow: jest.Mock };
 	user: { update: jest.Mock };
 }
@@ -39,7 +39,7 @@ function makePrisma(target: TargetRow | null, fallback: { organizationId: string
 			delete: jest.fn().mockReturnValue(Promise.resolve({})),
 			findFirst: jest.fn().mockReturnValue(Promise.resolve(fallback))
 		},
-		emailAccount: { deleteMany: jest.fn().mockReturnValue(Promise.resolve({ count: 0 })) },
+		emailAccount: { updateMany: jest.fn().mockReturnValue(Promise.resolve({ count: 0 })) },
 		organization: {
 			delete: jest.fn().mockReturnValue(Promise.resolve({})),
 			findUniqueOrThrow: jest.fn().mockReturnValue(Promise.resolve({ name: 'Offertum Demo BV', memberships: [] }))
@@ -128,15 +128,24 @@ describe('MeService.removeMember', () => {
 		expect(billingStub.cancelSubscriptionForOrgDelete).not.toHaveBeenCalled();
 	});
 
-	it('happy path: deletes membership + email accounts, repoints currentOrgId, syncs seats, logs action', async () => {
+	it('happy path: deletes membership, SOFT-disconnects email accounts (never deletes — a delete would cascade-wipe the inbox’s opportunities), repoints currentOrgId, syncs seats, logs action', async () => {
 		const prisma = makePrisma(memberTarget);
 		const service = buildService(prisma);
 
 		await service.removeMember(OWNER_ID, ORG, TARGET_ID);
 
 		expect(prisma.tx.membership.delete).toHaveBeenCalledWith({ where: { id: 'm-1' } });
-		expect(prisma.tx.emailAccount.deleteMany).toHaveBeenCalledWith({
-			where: { userId: TARGET_ID, organizationId: ORG }
+		expect(prisma.tx.emailAccount.updateMany).toHaveBeenCalledWith({
+			where: { userId: TARGET_ID, organizationId: ORG },
+			data: {
+				userId: null,
+				disconnectedAt: expect.any(Date),
+				deltaLink: null,
+				historyId: null,
+				subscriptionId: null,
+				subscriptionClientState: null,
+				watchExpiresAt: null
+			}
 		});
 		// `currentOrganizationId` pointed at this org → re-point to null (no fallback).
 		expect(prisma.tx.user.update).toHaveBeenCalledWith({

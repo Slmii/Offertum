@@ -4,6 +4,8 @@ import { Form } from '@/components/Form/Form.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { SectionError } from '@/components/SectionError.component';
+import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { LockGlyph } from '@/components/UpsellTeaser.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
@@ -71,23 +73,25 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { z } from 'zod';
 
+// Every field carries `.catch(undefined)` so a malformed/hand-edited URL param degrades
+// to its default instead of throwing in `validateSearch` (which renders the error page).
 const SearchSchema = z.object({
-	status: z.enum(OPPORTUNITY_STATUSES).optional(),
+	status: z.enum(OPPORTUNITY_STATUSES).optional().catch(undefined),
 	// `search` capped to 80 chars matches the API DTO; over-long input is truncated
 	// at the form layer so a paste of an email body doesn't end up in the URL.
-	search: z.string().trim().max(80).optional(),
-	sort: z.enum(OPPORTUNITY_SORT_OPTIONS).optional(),
+	search: z.string().trim().max(80).optional().catch(undefined),
+	sort: z.enum(OPPORTUNITY_SORT_OPTIONS).optional().catch(undefined),
 	// `showDismissed=true` flips the list into the dismissed-only view. Default
 	// (undefined) shows the active list. Kept as a boolean toggle in the URL rather than
 	// exposing the full `active | dismissed | all` enum because the UI only offers a
 	// binary switch — the `all` mode is for admin tooling, not the owner inbox.
-	showDismissed: z.boolean().optional(),
+	showDismissed: z.boolean().optional().catch(undefined),
 	// Mailbox-owner filter. `mine` shows only opps from inboxes the current user owns.
 	// Default (omitted) = `all`.
-	owner: z.enum(OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS).optional(),
+	owner: z.enum(OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS).optional().catch(undefined),
 	// Assignment filter. `me` shows opps assigned to the current user; `unassigned`
 	// shows opps with no assignee. Default (omitted) = `all`.
-	assignee: z.enum(OPPORTUNITY_ASSIGNEE_FILTERS).optional()
+	assignee: z.enum(OPPORTUNITY_ASSIGNEE_FILTERS).optional().catch(undefined)
 });
 
 export const Route = createFileRoute('/(app)/opportunities/')({
@@ -299,9 +303,14 @@ function OpportunitiesIndexPage() {
 			</Stack>
 
 			{/* `Load more` only makes sense for the un-searched, default-sort list — narrowing
-			    by search or non-default sort applies only to the already-loaded page. */}
+			    by search or non-default sort applies only to the already-loaded page.
+			    `key` on the active filters resets the component's cursor + accumulated rows
+			    when ANY filter changes — without it React reconciles in place and a click
+			    after a filter switch writes the old filter's rows into the new filter's
+			    query cache. */}
 			{data.nextCursor && debouncedSearch.length === 0 && sort === 'newest_first' && (
 				<LoadMoreButton
+					key={`${activeStatus ?? 'all'}:${dismissedFilter}:${ownerFilter ?? 'all'}:${assigneeFilter ?? 'all'}`}
 					initialCursor={data.nextCursor}
 					status={activeStatus}
 					dismissed={dismissedFilter}
@@ -675,32 +684,14 @@ function EmptyState({
 		return (
 			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 				<Stack useFlexGap spacing={1.5} sx={{ alignItems: 'center' }}>
-					<svg
-						xmlns='http://www.w3.org/2000/svg'
-						width='24'
-						height='24'
-						viewBox='0 0 24 24'
-						fill='currentColor'
-						aria-hidden='true'
-						style={{ opacity: 0.54 }}
-					>
-						<path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' />
-					</svg>
+					<LockGlyph size={24} />
 					<Typography variant='body1' sx={{ fontWeight: 500 }}>
 						Nog geen offerteaanvragen.
 					</Typography>
 					<Typography variant='body2' color='text.secondary'>
 						Abonneer en verbind je mailbox om offerteaanvragen automatisch binnen te halen.
 					</Typography>
-					{isOwner ? (
-						<Button component={Link} to='/billing' variant='contained' size='small'>
-							Abonneren
-						</Button>
-					) : (
-						<Typography variant='body2' color='text.secondary'>
-							Vraag de eigenaar om een abonnement.
-						</Typography>
-					)}
+					<SubscribeCta isOwner={isOwner} />
 				</Stack>
 			</Paper>
 		);

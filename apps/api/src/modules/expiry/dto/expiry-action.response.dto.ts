@@ -1,3 +1,4 @@
+import { EXPIRY_ACTION_KINDS, EXPIRY_ACTION_STATUSES } from '@offertum/shared';
 import type { ExpiryActionKind, ExpiryActionStatus } from '@/generated/prisma/enums';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -12,8 +13,8 @@ export class ExpiryActionResponseDto {
 	@ApiProperty() quoteDraftId!: string;
 	@ApiProperty() validUntil!: string;
 	@ApiProperty() suggestedCopy!: string;
-	@ApiProperty({ enum: ['SUGGESTED', 'TAKEN', 'DISMISSED', 'SUPERSEDED'] }) status!: ExpiryActionStatus;
-	@ApiProperty({ enum: ['EXTEND_14D', 'LAST_FOLLOWUP', 'MARK_LOST'] }) recommendedAction!: ExpiryActionKind;
-	@ApiProperty({ enum: ['EXTEND_14D', 'LAST_FOLLOWUP', 'MARK_LOST'], nullable: true })
+	@ApiProperty({ enum: EXPIRY_ACTION_STATUSES }) status!: ExpiryActionStatus;
+	@ApiProperty({ enum: EXPIRY_ACTION_KINDS }) recommendedAction!: ExpiryActionKind;
+	@ApiProperty({ enum: EXPIRY_ACTION_KINDS, nullable: true })
 	takenAction!: ExpiryActionKind | null;
 }

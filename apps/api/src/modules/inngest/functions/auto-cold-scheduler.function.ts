@@ -45,68 +45,107 @@ export class AutoColdSchedulerFunction {
 				retries: 1
 			},
 			async ({ runId, step }) => {
+				// Flip + notify are SEPARATE steps. They used to share one step.run, which
+				// meant a mid-loop notification failure retried the whole step — but the
+				// race-narrowing flip returns [] on the retry (rows already COLD), so every
+				// remaining notification was lost permanently. Step memoization now preserves
+				// the flip result; each notification retries independently.
 				const result = await step.run(InngestSteps.AutoColdScheduler.FlipColdCandidates, async () => {
 					const now = new Date();
 					const candidates = await repository.findColdCandidates(now, AUTO_COLD_BATCH_CAP);
 					if (candidates.length === 0) {
-						return { scanned: 0, flipped: 0 };
+						return { scanned: 0, flipped: 0, notifyTargets: [] };
 					}
 
 					const flippedIds = await repository.markOpportunitiesCold(candidates.map(c => c.opportunityId));
 					const flippedSet = new Set(flippedIds);
-					const webOrigin = notifications.webOrigin();
 
 					// Iterate only candidates that ACTUALLY flipped. The race-narrowing UPDATE
 					// (`WHERE status = REPLIED`) may have skipped some — typically because the
 					// owner manually transitioned the opp between the candidate fetch and the
 					// write. Side-effects (notification + audit log) MUST mirror the DB truth.
-					for (const c of candidates.filter(x => flippedSet.has(x.opportunityId))) {
-						const daysSinceSent = Math.max(
-							1,
-							Math.round((now.getTime() - c.latestSentAt.getTime()) / MS_PER_DAY)
-						);
-						// Re-establish AsyncLocalStorage per-candidate so the Log + Notification
-						// rows produced inside carry `organizationId` on the table column (not just
-						// in metadata) — otherwise org-scoped log queries (the opportunity-detail
-						// timeline included) silently exclude them. See CLAUDE.md #8.
-						await requestContext.run({ requestId: runId, organizationId: c.organizationId }, async () => {
-							logService.logAction({
-								action: 'opportunity.auto_cold.flipped',
-								message: `Opportunity ${c.opportunityId} auto-flipped REPLIED → COLD after ${daysSinceSent} day(s) of silence (threshold=${c.coldAfterDays})`,
-								metadata: {
-									opportunityId: c.opportunityId,
-									organizationId: c.organizationId,
-									daysSinceSent,
-									coldAfterDays: c.coldAfterDays
-								},
-								context: 'InngestFn:auto-cold-scheduler'
-							});
+					const notifyTargets = candidates
+						.filter(x => flippedSet.has(x.opportunityId))
+						.map(c => ({
+							opportunityId: c.opportunityId,
+							organizationId: c.organizationId,
+							coldAfterDays: c.coldAfterDays,
+							customerName: c.customerName,
+							requestType: c.requestType,
+							mailboxUserId: c.mailboxUserId,
+							// Precomputed here — step results are JSON-serialized, so Dates
+							// wouldn't survive the step boundary anyway.
+							daysSinceSent: Math.max(
+								1,
+								Math.round((now.getTime() - c.latestSentAt.getTime()) / MS_PER_DAY)
+							)
+						}));
 
-							if (c.mailboxUserId) {
-								const opportunityUrl = `${webOrigin}/opportunities/${c.opportunityId}`;
-								const customer = c.customerName ?? 'klant';
-								const email = buildAutoColdEmail({
-									customerName: c.customerName,
-									requestType: c.requestType,
-									daysSinceSent,
-									opportunityUrl
-								});
-								await notifications.notifyUsers({
-									userIds: [c.mailboxUserId],
-									organizationId: c.organizationId,
-									eventType: PrismaNotificationEventType.OPPORTUNITY_AUTO_COLD,
-									title: `Aanvraag van ${customer} op koud`,
-									body: `${c.requestType} — ${daysSinceSent} dag${daysSinceSent === 1 ? '' : 'en'} geen reactie`,
-									link: `/opportunities/${c.opportunityId}`,
-									metadata: { daysSinceSent, coldAfterDays: c.coldAfterDays },
-									email
+					for (const target of notifyTargets) {
+						// Audit log stays in the flip step: it must fire exactly once per flip,
+						// alongside the write it records. Re-establish AsyncLocalStorage
+						// per-candidate so the Log row carries `organizationId` on the table
+						// column (not just in metadata) — see CLAUDE.md #8.
+						await requestContext.run(
+							{ requestId: runId, organizationId: target.organizationId },
+							async () => {
+								logService.logAction({
+									action: 'opportunity.auto_cold.flipped',
+									message: `Opportunity ${target.opportunityId} auto-flipped REPLIED → COLD after ${target.daysSinceSent} day(s) of silence (threshold=${target.coldAfterDays})`,
+									metadata: {
+										opportunityId: target.opportunityId,
+										organizationId: target.organizationId,
+										daysSinceSent: target.daysSinceSent,
+										coldAfterDays: target.coldAfterDays
+									},
+									context: 'InngestFn:auto-cold-scheduler'
 								});
 							}
-						});
+						);
 					}
 
-					return { scanned: candidates.length, flipped: flippedIds.length };
+					return { scanned: candidates.length, flipped: flippedIds.length, notifyTargets };
 				});
+
+				const webOrigin = notifications.webOrigin();
+				for (const target of result.notifyTargets) {
+					if (!target.mailboxUserId) {
+						continue;
+					}
+					const mailboxUserId = target.mailboxUserId;
+					await step.run(
+						`${InngestSteps.AutoColdScheduler.NotifyPrefix}-${target.opportunityId}`,
+						async () => {
+							// Re-establish AsyncLocalStorage inside the step callback (CLAUDE.md #8).
+							await requestContext.run(
+								{ requestId: runId, organizationId: target.organizationId },
+								async () => {
+									const opportunityUrl = `${webOrigin}/opportunities/${target.opportunityId}`;
+									const customer = target.customerName ?? 'klant';
+									const email = buildAutoColdEmail({
+										customerName: target.customerName,
+										requestType: target.requestType,
+										daysSinceSent: target.daysSinceSent,
+										opportunityUrl
+									});
+									await notifications.notifyUsers({
+										userIds: [mailboxUserId],
+										organizationId: target.organizationId,
+										eventType: PrismaNotificationEventType.OPPORTUNITY_AUTO_COLD,
+										title: `Aanvraag van ${customer} op koud`,
+										body: `${target.requestType} — ${target.daysSinceSent} dag${target.daysSinceSent === 1 ? '' : 'en'} geen reactie`,
+										link: `/opportunities/${target.opportunityId}`,
+										metadata: {
+											daysSinceSent: target.daysSinceSent,
+											coldAfterDays: target.coldAfterDays
+										},
+										email
+									});
+								}
+							);
+						}
+					);
+				}
 
 				// Tick log has no org (cross-org enumeration) — just correlate by runId
 				// so it can be cross-referenced with the per-candidate rows.

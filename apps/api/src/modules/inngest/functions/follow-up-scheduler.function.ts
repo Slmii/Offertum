@@ -62,7 +62,12 @@ export class FollowUpSchedulerFunction {
 						return { fanOut: 0 };
 					}
 
-					await inngest.send(
+					// `step.sendEvent` (NOT a bare `inngest.send`): with retries=2, a failure
+					// anywhere after a bare send would re-emit the entire batch on retry —
+					// duplicate check-in drafts per candidate. The step is memoized, so a
+					// retried run skips the already-sent events.
+					await step.sendEvent(
+						InngestSteps.FollowUpScheduler.Send,
 						candidates.map(c => ({
 							name: InngestEvents.OpportunitySilenceFollowupDue,
 							data: { opportunityId: c.opportunityId, organizationId: c.organizationId }

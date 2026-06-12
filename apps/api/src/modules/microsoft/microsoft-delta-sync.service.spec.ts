@@ -261,4 +261,53 @@ describe('MicrosoftDeltaSyncService.run', () => {
 		expect(result.deltaLink).toBeNull();
 		expect(prisma.emailAccount.update).not.toHaveBeenCalled();
 	});
+
+	it('re-baselines WITHOUT persisting messages when the stored deltaLink is null', async () => {
+		// A null cursor means a fresh delta walk would return the ENTIRE mailbox's current
+		// state — none of it may reach RawMessage (live-pipeline flood). The walk only
+		// captures a fresh deltaLink.
+		const prisma = makePrisma({ ...SCOPE_ROW, deltaLink: null });
+		const service = new MicrosoftDeltaSyncService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			makeApi({ pages: [{ messages: [{ id: 'hist-1' }, { id: 'hist-2' }], deltaLink: 'delta-fresh' }] }),
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		expect(prisma.rawMessage.createMany).not.toHaveBeenCalled();
+		expect(result.messagesInserted).toBe(0);
+		expect(result.deltaLink).toBe('delta-fresh');
+		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
+			where: { id: 'ea-1' },
+			data: { deltaLink: 'delta-fresh' }
+		});
+	});
+
+	it('persists the pending nextLink as the cursor when the page cap is hit', async () => {
+		// 51 nextLink-chained pages with the cap at 50: the cursor must advance to the
+		// UNCONSUMED nextLink so the next run resumes mid-walk instead of re-walking the
+		// same 50 pages forever.
+		const pages = Array.from({ length: 51 }, (_, i) => ({
+			messages: [] as Array<{ id: string }>,
+			nextLink: `next-${i}`
+		}));
+		const prisma = makePrisma(SCOPE_ROW);
+		const service = new MicrosoftDeltaSyncService(
+			prisma as unknown as PrismaService,
+			makeAccounts(),
+			makeApi({ pages }),
+			logServiceStub
+		);
+
+		const result = await service.run('ea-1');
+
+		expect(result.pagesFetched).toBe(50);
+		expect(result.deltaLink).toBe('next-49');
+		expect(prisma.emailAccount.update).toHaveBeenCalledWith({
+			where: { id: 'ea-1' },
+			data: { deltaLink: 'next-49' }
+		});
+	});
 });

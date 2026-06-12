@@ -1,5 +1,7 @@
 // apps/web/src/routes/(app)/settings/calendar.tsx
 import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { LockGlyph } from '@/components/UpsellTeaser.component';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
 	calendarFeedQueryOptions,
@@ -8,7 +10,6 @@ import {
 } from '@/lib/queries/calendar.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
@@ -17,7 +18,6 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
 export const Route = createFileRoute('/(app)/settings/calendar')({
@@ -53,11 +53,7 @@ function CalendarSettingsPage() {
 				Agenda-synchronisatie
 			</Typography>
 
-			{isEntitled ? (
-				<CalendarFeedManager />
-			) : (
-				<CalendarUpsell isOwner={isOwner} />
-			)}
+			{isEntitled ? <CalendarFeedManager /> : <CalendarUpsell isOwner={isOwner} />}
 		</Container>
 	);
 }
@@ -76,21 +72,11 @@ function CalendarUpsell({ isOwner }: { isOwner: boolean }) {
 				</Stack>
 
 				<Typography variant='body2' color='text.secondary'>
-					Met een abonnement synchroniseer je je offerte-deadlines, afspraken en verloopdatums automatisch
-					met de agenda op je telefoon (Apple/Google Agenda).
+					Met een abonnement synchroniseer je je offerte-deadlines, afspraken en verloopdatums automatisch met
+					de agenda op je telefoon (Apple/Google Agenda).
 				</Typography>
 
-				{isOwner ? (
-					<Box>
-						<Button component={Link} to='/billing' variant='contained' size='small'>
-							Abonneren
-						</Button>
-					</Box>
-				) : (
-					<Typography variant='body2' color='text.secondary'>
-						Vraag de eigenaar om een abonnement.
-					</Typography>
-				)}
+				<SubscribeCta isOwner={isOwner} />
 			</Stack>
 		</Paper>
 	);
@@ -159,21 +145,5 @@ function CalendarFeedManager() {
 				</Button>
 			)}
 		</>
-	);
-}
-
-function LockGlyph() {
-	return (
-		<svg
-			xmlns='http://www.w3.org/2000/svg'
-			width='18'
-			height='18'
-			viewBox='0 0 24 24'
-			fill='currentColor'
-			aria-hidden='true'
-			style={{ color: 'inherit', opacity: 0.54, flexShrink: 0 }}
-		>
-			<path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' />
-		</svg>
 	);
 }

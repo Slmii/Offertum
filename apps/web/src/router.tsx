@@ -26,8 +26,26 @@ function handleQueryError(error: unknown): void {
 	});
 }
 
+/**
+ * Retry policy: never retry 4xx — a 401/403/404 won't get better on attempt three,
+ * it just delays the error UI by several seconds. Two error shapes to detect:
+ * `WrapperApiError` (browser `api()` client, carries a numeric `code`) and plain
+ * `Error`s from serverFn fetchers, which suffix the status as `(404)` in the message.
+ * Everything else (network flake, 5xx) keeps TanStack's default of 3 attempts.
+ */
+function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+	if (error instanceof WrapperApiError && error.code >= 400 && error.code < 500) {
+		return false;
+	}
+	if (error instanceof Error && /\(4\d\d\)/.test(error.message)) {
+		return false;
+	}
+	return failureCount < 3;
+}
+
 export function getRouter() {
 	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: shouldRetryQuery } },
 		queryCache: new QueryCache({ onError: handleQueryError }),
 		mutationCache: new MutationCache({
 			/**
