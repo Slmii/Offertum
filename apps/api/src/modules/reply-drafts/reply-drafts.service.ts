@@ -599,7 +599,17 @@ export class ReplyDraftsService {
 			throw error;
 		}
 
-		const { draftSentAt } = await this.repository.markSent({ draftId: context.draftId, opportunityId });
+		// Stamp any quote PDF carried by this reply as sent (first-send-wins in the repo).
+		// Dedupe — the "one quote PDF per draft" rule means this is normally 0 or 1 id.
+		const sentQuoteDraftIds = [
+			...new Set(context.attachments.map(a => a.quoteDraftId).filter((id): id is string => id !== null))
+		];
+
+		const { draftSentAt } = await this.repository.markSent({
+			draftId: context.draftId,
+			opportunityId,
+			quoteDraftIds: sentQuoteDraftIds
+		});
 
 		this.logService.logAction({
 			action: 'reply_draft.sent',

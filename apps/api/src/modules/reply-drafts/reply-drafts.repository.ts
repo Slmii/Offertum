@@ -212,6 +212,10 @@ export interface SendContextAttachment {
 	contentType: string;
 	sizeBytes: number;
 	storageKey: string;
+	// The QuoteDraft this attachment is a copy of (W10.4 quote PDF), or null for
+	// owner-uploaded files. Sending a reply that carries this stamps the quote's
+	// `sentAt` so smart-expiry (W13) + the calendar `sent`/`expiry` events fire.
+	quoteDraftId: string | null;
 }
 
 @Injectable()
@@ -710,7 +714,10 @@ export class ReplyDraftsRepository {
 						filename: true,
 						contentType: true,
 						sizeBytes: true,
-						storageKey: true
+						storageKey: true,
+						// Walk attachment → quote PDF → quote draft so the send path can stamp
+						// `QuoteDraft.sentAt`. NULL for owner-uploaded (non-quote) attachments.
+						quotePdf: { select: { quoteDraftId: true } }
 					}
 				}
 			}
@@ -751,7 +758,8 @@ export class ReplyDraftsRepository {
 				filename: a.filename,
 				contentType: a.contentType,
 				sizeBytes: a.sizeBytes,
-				storageKey: a.storageKey
+				storageKey: a.storageKey,
+				quoteDraftId: a.quotePdf?.quoteDraftId ?? null
 			}))
 		};
 	}
@@ -806,7 +814,11 @@ export class ReplyDraftsRepository {
 	 * what the owner said it was; only progression-relevant states get advanced to
 	 * `REPLIED` to reflect "we just sent a reply on this active row."
 	 */
-	async markSent(input: { draftId: string; opportunityId: string }): Promise<MarkSentResult> {
+	async markSent(input: {
+		draftId: string;
+		opportunityId: string;
+		quoteDraftIds?: string[];
+	}): Promise<MarkSentResult> {
 		const now = new Date();
 
 		const current = await this.prisma.opportunity.findUnique({
@@ -819,6 +831,12 @@ export class ReplyDraftsRepository {
 			current.status !== 'LOST' &&
 			current.status !== 'REPLIED';
 
+		// Stamp the sent quote(s) so smart-expiry (W13) + the calendar `sent`/`expiry`
+		// events have an anchor. First-send-wins: the `sentAt: null` guard means a
+		// courtesy re-send of the same quote on a later follow-up never resets the
+		// expiry clock — `sentAt` records when the quote first reached the customer.
+		const quoteDraftIds = input.quoteDraftIds ?? [];
+
 		await this.prisma.$transaction([
 			this.prisma.replyDraft.update({
 				where: { id: input.draftId },
@@ -829,6 +847,14 @@ export class ReplyDraftsRepository {
 						this.prisma.opportunity.update({
 							where: { id: input.opportunityId },
 							data: { status: 'REPLIED' }
+						})
+					]
+				: []),
+			...(quoteDraftIds.length > 0
+				? [
+						this.prisma.quoteDraft.updateMany({
+							where: { id: { in: quoteDraftIds }, sentAt: null },
+							data: { sentAt: now }
 						})
 					]
 				: [])

@@ -106,6 +106,11 @@ export class ExpiryRepository {
 	 * mirroring why `findCheckInCandidates` is raw. Ordered soonest-expiry first.
 	 */
 	async findExpiryCandidates(now: Date, windowDays = 5, cap = 500): Promise<ExpiryCandidate[]> {
+		// Compute the window upper bound in JS rather than `${now} + make_interval(...)` in SQL:
+		// a bound JS Date param next to `+ interval` leaves Postgres unable to type the param
+		// (it resolves the untyped operand to `interval`, then `timestamp <= interval` fails with
+		// 42883). Passing a precomputed timestamp keeps both bounds plain timestamp comparisons.
+		const windowEnd = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000);
 		const rows = await this.prisma.$queryRaw<ExpiryCandidateRow[]>(Prisma.sql`
 			SELECT
 				qd."organizationId"   AS "organizationId",
@@ -127,7 +132,7 @@ export class ExpiryRepository {
 			WHERE qd."sentAt" IS NOT NULL
 			  AND qd."validUntil" IS NOT NULL
 			  AND qd."validUntil" >= ${now}
-			  AND qd."validUntil" <= ${now} + make_interval(days => ${windowDays})
+			  AND qd."validUntil" <= ${windowEnd}
 			  AND o."dismissedAt" IS NULL
 			  AND o."status" NOT IN (
 				  ${PrismaOpportunityStatus.WON}::"OpportunityStatus",
