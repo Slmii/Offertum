@@ -626,7 +626,15 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							color: 'inherit'
 						},
 						'& .MuiAlert-message': { padding: 0, fontSize: 13, lineHeight: 1.5, minWidth: 0 },
-						'& .MuiAlert-action': { padding: 0, marginRight: 0, marginLeft: 8, alignItems: 'flex-start' },
+						// marginLeft:auto keeps the action (close/CTA) pinned to the right edge regardless
+						// of message length; paddingLeft gives it breathing room from the text.
+						'& .MuiAlert-action': {
+							padding: 0,
+							marginRight: 0,
+							marginLeft: 'auto',
+							paddingLeft: 12,
+							alignItems: 'flex-start'
+						},
 						// Tone colors (this MUI version splits variant + color classes). info = Investment-Indigo
 						// accent; success/warning/error = the DS's vibrant banner hues.
 						'&.MuiAlert-colorInfo': {

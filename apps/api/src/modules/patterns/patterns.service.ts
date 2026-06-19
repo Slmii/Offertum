@@ -5,6 +5,10 @@ import { isPatternVisible } from './pattern-visibility';
 import { PatternsRepository } from './patterns.repository';
 import type { BucketStat } from './patterns.types';
 
+// Minimum number of customer-reply rounds before the reply-speed insight is meaningful.
+// Below this, one fast reply skews the average (and rounds to "0 dagen").
+const MIN_REPLY_SPEED_SAMPLES = 5;
+
 @Injectable()
 export class PatternsService {
 	constructor(private readonly repository: PatternsRepository) {}
@@ -56,23 +60,24 @@ export class PatternsService {
 			return null;
 		}
 
-		const [{ avgCustomerReplyDays }, cadence] = await Promise.all([
+		const [{ avgCustomerReplyDays, sampleSize }, cadence] = await Promise.all([
 			this.repository.replySpeedStats(organizationId),
 			this.repository.getFollowUpCadenceDays(organizationId)
 		]);
-		// Data-sufficiency gate: need a real average to say anything.
-		if (avgCustomerReplyDays === null) {
+		// Data-sufficiency gate: need a real average AND enough reply rounds. A single fast
+		// reply would otherwise round to "0 dagen" and fire a misleading insight.
+		if (avgCustomerReplyDays === null || sampleSize < MIN_REPLY_SPEED_SAMPLES) {
 			return null;
 		}
 
-		const avg = Math.round(avgCustomerReplyDays * 10) / 10;
-		const headline = `Klanten reageren gemiddeld binnen ${this.formatDaysWithUnit(avg)}`;
+		const avg = avgCustomerReplyDays;
+		const headline = `Klanten reageren gemiddeld binnen ${this.formatReplySpeed(avg)}`;
 
 		let detail: string;
 		if (cadence === null) {
 			detail = 'Stel een automatische follow-up-cadans in om sneller op te volgen.';
 		} else if (avg < cadence) {
-			detail = `Je automatische follow-up staat op ${this.formatDaysWithUnit(cadence)} — je zou eerder kunnen opvolgen.`;
+			detail = `Je automatische follow-up staat op ${this.formatDaysWithUnit(cadence)}, je zou eerder kunnen opvolgen.`;
 		} else {
 			detail = `Je follow-up cadans van ${this.formatDaysWithUnit(cadence)} sluit hier goed op aan.`;
 		}
@@ -142,7 +147,21 @@ export class PatternsService {
 	// 1-decimal Dutch number + unit, e.g. "1 dag", "2,5 dagen". Callers pre-round to one
 	// decimal; the formatter only handles rendering (no second rounding pass).
 	private formatDaysWithUnit(value: number): string {
-		const formatted = Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',');
-		return `${formatted} ${value === 1 ? 'dag' : 'dagen'}`;
+		const rounded = Math.round(value * 10) / 10;
+		const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
+		return `${formatted} ${rounded === 1 ? 'dag' : 'dagen'}`;
+	}
+
+	// Reply speed in human units: sub-day averages render in hours so we never show
+	// "0 dagen" (a fast reply is "binnen 4 uur", not "binnen 0 dagen").
+	private formatReplySpeed(days: number): string {
+		if (days >= 1) {
+			return this.formatDaysWithUnit(days);
+		}
+		const hours = Math.round(days * 24);
+		if (hours <= 0) {
+			return 'minder dan een uur';
+		}
+		return `${hours} uur`;
 	}
 }

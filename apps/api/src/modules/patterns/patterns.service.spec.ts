@@ -26,7 +26,10 @@ function createRepository(overrides: Partial<RepositoryMock> = {}): PatternsRepo
 		isOrganizationEntitled: jest.fn<PatternsRepository['isOrganizationEntitled']>(async () => true),
 		countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 0),
 		getFollowUpCadenceDays: jest.fn<PatternsRepository['getFollowUpCadenceDays']>(async () => 5),
-		replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({ avgCustomerReplyDays: null })),
+		replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
+			avgCustomerReplyDays: null,
+			sampleSize: 0
+		})),
 		winRateByResponseBucket: jest.fn<PatternsRepository['winRateByResponseBucket']>(async () => ({
 			fast: { wonCount: 0, lostCount: 0 },
 			medium: { wonCount: 0, lostCount: 0 },
@@ -46,7 +49,8 @@ describe('PatternsService.getPatterns', () => {
 	it('returns no banners for a non-entitled org and skips the metric reads', async () => {
 		const countOpportunities = jest.fn<PatternsRepository['countOpportunities']>(async () => 25);
 		const replySpeedStats = jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
-			avgCustomerReplyDays: 2.3
+			avgCustomerReplyDays: 2.3,
+			sampleSize: 10
 		}));
 		const repository = createRepository({
 			isOrganizationEntitled: jest.fn<PatternsRepository['isOrganizationEntitled']>(async () => false),
@@ -68,7 +72,10 @@ describe('PatternsService.getPatterns', () => {
 			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(
 				async () => MIN_OPPORTUNITIES_FOR_PATTERNS - 1
 			),
-			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({ avgCustomerReplyDays: 2 })),
+			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
+				avgCustomerReplyDays: 2,
+				sampleSize: 10
+			})),
 			winRateByResponseBucket: jest.fn<PatternsRepository['winRateByResponseBucket']>(async () => ({
 				fast: { wonCount: 8, lostCount: 2 },
 				medium: { wonCount: 0, lostCount: 0 },
@@ -87,7 +94,8 @@ describe('PatternsService.getPatterns', () => {
 			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
 			getFollowUpCadenceDays: jest.fn<PatternsRepository['getFollowUpCadenceDays']>(async () => 7),
 			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
-				avgCustomerReplyDays: 2.3
+				avgCustomerReplyDays: 2.3,
+				sampleSize: 10
 			})),
 			winRateByResponseBucket: jest.fn<PatternsRepository['winRateByResponseBucket']>(async () => ({
 				fast: { wonCount: 8, lostCount: 2 },
@@ -113,7 +121,8 @@ describe('PatternsService.getPatterns', () => {
 			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
 			getFollowUpCadenceDays: jest.fn<PatternsRepository['getFollowUpCadenceDays']>(async () => 1),
 			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
-				avgCustomerReplyDays: 1.04
+				avgCustomerReplyDays: 1.04,
+				sampleSize: 10
 			}))
 		});
 		const service = new PatternsService(repository);
@@ -130,7 +139,8 @@ describe('PatternsService.getPatterns', () => {
 		const repository = createRepository({
 			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
 			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
-				avgCustomerReplyDays: 2.349
+				avgCustomerReplyDays: 2.349,
+				sampleSize: 10
 			}))
 		});
 		const service = new PatternsService(repository);
@@ -141,12 +151,46 @@ describe('PatternsService.getPatterns', () => {
 		expect(replySpeed?.headline).toBe('Klanten reageren gemiddeld binnen 2,3 dagen');
 	});
 
+	it('hides the reply-speed banner below the minimum sample size', async () => {
+		const repository = createRepository({
+			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
+			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
+				avgCustomerReplyDays: 0.04,
+				sampleSize: 1
+			}))
+		});
+		const service = new PatternsService(repository);
+
+		const banners = await service.getPatterns('org-1', 'user-1', NOW);
+
+		expect(banners.map(b => b.patternKey)).not.toContain('reply_speed');
+	});
+
+	it('renders a sub-day reply speed in hours, never "0 dagen"', async () => {
+		const repository = createRepository({
+			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
+			getFollowUpCadenceDays: jest.fn<PatternsRepository['getFollowUpCadenceDays']>(async () => 4),
+			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
+				avgCustomerReplyDays: 0.1667, // ~4 hours
+				sampleSize: 8
+			}))
+		});
+		const service = new PatternsService(repository);
+
+		const banners = await service.getPatterns('org-1', 'user-1', NOW);
+		const replySpeed = banners.find(b => b.patternKey === 'reply_speed');
+
+		expect(replySpeed?.headline).toBe('Klanten reageren gemiddeld binnen 4 uur');
+		expect(replySpeed?.headline).not.toContain('0 dagen');
+	});
+
 	it('hides a banner the user dismissed within the re-show window', async () => {
 		const recent = new Date(NOW.getTime() - 86_400_000); // 1 day ago
 		const repository = createRepository({
 			countOpportunities: jest.fn<PatternsRepository['countOpportunities']>(async () => 25),
 			replySpeedStats: jest.fn<PatternsRepository['replySpeedStats']>(async () => ({
-				avgCustomerReplyDays: 2.3
+				avgCustomerReplyDays: 2.3,
+				sampleSize: 10
 			})),
 			findDismissals: jest.fn<PatternsRepository['findDismissals']>(
 				async () => new Map([['reply_speed', recent]])

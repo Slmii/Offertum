@@ -65,8 +65,12 @@ export class PatternsRepository {
 	 * Scoped to non-dismissed opportunities. Raw, parameterized SQL — the per-message
 	 * correlated MAX + the date arithmetic are cleaner in SQL than reducing in Node.
 	 */
-	async replySpeedStats(organizationId: string): Promise<{ avgCustomerReplyDays: number | null }> {
-		const [row] = await this.prisma.$queryRaw<Array<{ avgDays: number | null }>>(Prisma.sql`
+	async replySpeedStats(
+		organizationId: string
+	): Promise<{ avgCustomerReplyDays: number | null; sampleSize: number }> {
+		const [row] = await this.prisma.$queryRaw<
+			Array<{ avgDays: number | null; sampleCount: number | bigint }>
+		>(Prisma.sql`
 			WITH own_addresses AS (
 				SELECT LOWER(ea."email") AS "email"
 				FROM "EmailAccount" ea
@@ -98,14 +102,19 @@ export class PatternsRepository {
 					) AS "priorSentAt"
 				FROM customer_messages cm
 			)
-			SELECT AVG(
-				EXTRACT(EPOCH FROM ("customerAt" - "priorSentAt")) / 86400.0
-			) AS "avgDays"
+			SELECT
+				AVG(
+					EXTRACT(EPOCH FROM ("customerAt" - "priorSentAt")) / 86400.0
+				) AS "avgDays",
+				COUNT(*) AS "sampleCount"
 			FROM rounds
 			WHERE "priorSentAt" IS NOT NULL
 		`);
 		const avg = row?.avgDays;
-		return { avgCustomerReplyDays: avg === null || avg === undefined ? null : Number(avg) };
+		return {
+			avgCustomerReplyDays: avg === null || avg === undefined ? null : Number(avg),
+			sampleSize: row?.sampleCount === undefined ? 0 : Number(row.sampleCount)
+		};
 	}
 
 	/**
