@@ -1,3 +1,4 @@
+import type { PillTone } from '@/components/Pill.component';
 import type { Opportunity, OpportunityDismissReason, OpportunityStatus, OpportunityUrgency } from '@offertum/shared';
 
 /**
@@ -80,6 +81,16 @@ export const OPPORTUNITY_STATUS_CHIP_COLORS: Record<OpportunityStatus, { bg: str
 	cold: { bg: '#E3E1DC', fg: '#5C6B73' },
 	won: { bg: '#CDE3D2', fg: '#1F4D3A' },
 	lost: { bg: '#EBD9D9', fg: '#8B3A3A' }
+};
+
+/** Status → design-system Pill tone, for the `PillSelect` status picker + standalone pills. */
+export const OPPORTUNITY_STATUS_PILL_TONES: Record<OpportunityStatus, PillTone> = {
+	new: 'info',
+	replied: 'accent',
+	waiting: 'pending',
+	cold: 'cold',
+	won: 'won',
+	lost: 'lost'
 };
 
 /**

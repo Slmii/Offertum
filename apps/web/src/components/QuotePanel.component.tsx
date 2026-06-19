@@ -13,7 +13,6 @@ import {
 } from '@/lib/queries/quote-drafts.queries';
 import { toReadableDate, toReadableDateTime } from '@/lib/utils/date.utils';
 import { toReadableEuro } from '@/lib/utils/number.utils';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
@@ -33,7 +32,8 @@ import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Typography from '@mui/material/Typography';
+import { Banner } from '@/components/Banner.component';
+import { BodySmall, H3, Label } from '@/components/Text.component';
 import {
 	computeQuoteTotals,
 	lineNetCents,
@@ -92,9 +92,7 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 				spacing={1}
 				sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
 			>
-				<Typography variant='h2' sx={{ fontSize: 18 }}>
-					Offerte
-				</Typography>
+				<H3>Offerte</H3>
 				{latest && (
 					<Button
 						size='small'
@@ -109,26 +107,26 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 			</Stack>
 
 			{latest?.validUntil && (
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 1 }}>
+				<BodySmall color='text.secondary' sx={{ mb: 1 }}>
 					Geldig tot {toReadableDate(latest.validUntil)}
-				</Typography>
+				</BodySmall>
 			)}
 
 			{generate.isError && (
-				<Alert severity='error' sx={{ mb: 1 }}>
+				<Banner tone='error' sx={{ mb: 1 }}>
 					Offerte opstellen mislukt:{' '}
 					{generate.error instanceof Error ? generate.error.message : 'Onbekende fout'}
-				</Alert>
+				</Banner>
 			)}
 			{preview.isError && (
-				<Alert severity='error' sx={{ mb: 1 }}>
+				<Banner tone='error' sx={{ mb: 1 }}>
 					Nieuw voorstel maken mislukt:{' '}
 					{preview.error instanceof Error ? preview.error.message : 'Onbekende fout'}
-				</Alert>
+				</Banner>
 			)}
 			{pricingStale && (
-				<Alert
-					severity='info'
+				<Banner
+					tone='info'
 					sx={{ mb: 1 }}
 					action={
 						<Button color='inherit' size='small' onClick={openRegenerate} disabled={preview.isPending}>
@@ -138,17 +136,17 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 				>
 					Je prijsregels zijn bijgewerkt sinds deze offerte werd opgesteld. Wil je de offerte opnieuw laten
 					genereren met de nieuwe prijzen?
-				</Alert>
+				</Banner>
 			)}
 
 			{latest ? (
 				<QuoteDraftEditor draft={latest} opportunityId={opportunityId} />
 			) : (
 				<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-					<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+					<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 						Nog geen offerte opgesteld. Stel automatisch regels voor op basis van de aanvraag, je catalogus
 						en je prijsregels.
-					</Typography>
+					</BodySmall>
 					<Button
 						variant='contained'
 						onClick={() => generate.mutate()}
@@ -181,9 +179,7 @@ function QuotePdfHistory({ pdfs }: { pdfs: QuotePdf[] }) {
 	}
 	return (
 		<Box sx={{ mt: 3 }}>
-			<Typography variant='subtitle2' sx={{ mb: 1 }}>
-				PDF-versies ({pdfs.length})
-			</Typography>
+			<Label sx={{ display: 'block', mb: 1 }}>PDF-versies ({pdfs.length})</Label>
 			<Paper variant='outlined' sx={{ p: 1.5 }}>
 				<Stack useFlexGap spacing={0.5}>
 					{pdfs.map((pdf, index) => (
@@ -194,15 +190,11 @@ function QuotePdfHistory({ pdfs }: { pdfs: QuotePdf[] }) {
 							spacing={1}
 							sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
 						>
-							<Typography variant='body2' color='text.secondary'>
-								v{pdfs.length - index}
-							</Typography>
+							<BodySmall color='text.secondary'>v{pdfs.length - index}</BodySmall>
 							<Link href={quotePdfDownloadUrl(pdf.id)} target='_blank' rel='noopener' underline='hover'>
 								{pdf.filename}
 							</Link>
-							<Typography variant='caption' color='text.secondary'>
-								{toReadableDateTime(pdf.createdAt)}
-							</Typography>
+							<BodySmall color='text.secondary'>{toReadableDateTime(pdf.createdAt)}</BodySmall>
 						</Stack>
 					))}
 				</Stack>
@@ -258,19 +250,15 @@ function QuoteRegenerateModal({
 		<Dialog open onClose={onClose} maxWidth='md' fullWidth>
 			<DialogTitle>Offerte opnieuw genereren</DialogTitle>
 			<DialogContent dividers>
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 					Vergelijk je huidige offerte met het nieuwe voorstel en kies per regel wat er gebeurt. Toeslagen en
 					voorrijkosten worden automatisch opnieuw berekend.
-				</Typography>
+				</BodySmall>
 
-				<Typography variant='subtitle2' sx={{ mb: 1 }}>
-					Werk &amp; materialen
-				</Typography>
+				<Label sx={{ display: 'block', mb: 1 }}>Werk &amp; materialen</Label>
 				<Stack useFlexGap spacing={1}>
 					{lineEntries.length === 0 && (
-						<Typography variant='body2' color='text.secondary'>
-							Geen werk- of materiaalregels.
-						</Typography>
+						<BodySmall color='text.secondary'>Geen werk- of materiaalregels.</BodySmall>
 					)}
 					{lineEntries.map(entry => (
 						<QuoteDiffRow
@@ -285,9 +273,7 @@ function QuoteRegenerateModal({
 				{ruleEntries.length > 0 && (
 					<>
 						<Divider sx={{ my: 2 }} />
-						<Typography variant='subtitle2' sx={{ mb: 1 }}>
-							Automatisch herberekend (prijsregels)
-						</Typography>
+						<Label sx={{ display: 'block', mb: 1 }}>Automatisch herberekend (prijsregels)</Label>
 						<Stack useFlexGap spacing={0.5}>
 							{ruleEntries.map(entry => (
 								<RuleDiffRow key={entry.key} entry={entry} />
@@ -297,9 +283,9 @@ function QuoteRegenerateModal({
 				)}
 
 				{replace.isError && (
-					<Alert severity='error' sx={{ mt: 2 }}>
+					<Banner tone='error' sx={{ mt: 2 }}>
 						Toepassen mislukt: {replace.error instanceof Error ? replace.error.message : 'Onbekende fout'}
-					</Alert>
+					</Banner>
 				)}
 			</DialogContent>
 			<DialogActions>
@@ -363,15 +349,15 @@ function QuoteDiffRow({
 					label={
 						<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 							{chip}
-							<Typography variant='body2'>{entry.proposed.description}</Typography>
+							<BodySmall>{entry.proposed.description}</BodySmall>
 						</Stack>
 					}
 				/>
-				<Typography variant='caption' color='text.secondary' sx={{ display: 'block', pl: '30px' }}>
+				<BodySmall color='text.secondary' sx={{ display: 'block', pl: '30px' }}>
 					huidig: {summarize(entry.current.quantity, entry.current.unitPriceEur)} → nieuw:{' '}
 					{summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)} ·{' '}
 					{checked ? 'nieuwe regel gebruiken' : 'huidige regel behouden'}
-				</Typography>
+				</BodySmall>
 			</Box>
 		);
 	}
@@ -398,9 +384,7 @@ function QuoteDiffRow({
 					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 						{chip}
 						<LineSummary line={entry.current} />
-						<Typography variant='caption' color='text.secondary'>
-							(behouden?)
-						</Typography>
+						<BodySmall color='text.secondary'>(behouden?)</BodySmall>
 					</Stack>
 				}
 			/>
@@ -412,34 +396,30 @@ function QuoteDiffRow({
 
 function RuleDiffRow({ entry }: { entry: QuoteLineDiffEntry }) {
 	if (!entry.proposed) {
-		return (
-			<Typography variant='body2' color='text.secondary'>
-				{entry.current?.description} — vervalt
-			</Typography>
-		);
+		return <BodySmall color='text.secondary'>{entry.current?.description} — vervalt</BodySmall>;
 	}
 	const changed = entry.current !== null && !sameLine(entry.current, entry.proposed);
 	return (
-		<Typography variant='body2'>
+		<BodySmall>
 			{entry.proposed.description} · {summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)}
 			{changed && entry.current && (
-				<Typography component='span' variant='caption' color='text.secondary'>
+				<BodySmall component='span' color='text.secondary'>
 					{' '}
 					(was {formatLinePrice(entry.current.unitPriceEur)})
-				</Typography>
+				</BodySmall>
 			)}
-		</Typography>
+		</BodySmall>
 	);
 }
 
 function LineSummary({ line }: { line: QuoteLineItem | ProposedQuoteLine }) {
 	return (
-		<Typography variant='body2'>
+		<BodySmall>
 			{line.description}{' '}
-			<Typography component='span' variant='caption' color='text.secondary'>
+			<BodySmall component='span' color='text.secondary'>
 				· {summarize(String(line.quantity), line.unitPriceEur)}
-			</Typography>
-		</Typography>
+			</BodySmall>
+		</BodySmall>
 	);
 }
 
@@ -670,22 +650,22 @@ function QuoteDraftEditor({ draft, opportunityId }: { draft: QuoteDraft; opportu
 			</Stack>
 
 			{totals.unpricedLineCount > 0 && (
-				<Alert severity='warning' sx={{ mt: 2 }}>
+				<Banner tone='warning' sx={{ mt: 2 }}>
 					{totals.unpricedLineCount === 1
 						? 'Eén regel heeft nog geen prijs en telt niet mee in het totaal.'
 						: `${totals.unpricedLineCount} regels hebben nog geen prijs en tellen niet mee in het totaal.`}
-				</Alert>
+				</Banner>
 			)}
 			{generatePdf.isError && (
-				<Alert severity='error' sx={{ mt: 2 }}>
+				<Banner tone='error' sx={{ mt: 2 }}>
 					PDF genereren mislukt:{' '}
 					{generatePdf.error instanceof Error ? generatePdf.error.message : 'Onbekende fout'}
-				</Alert>
+				</Banner>
 			)}
 			{generatePdf.isSuccess && !generatePdf.isPending && (
-				<Alert severity='success' sx={{ mt: 2 }}>
+				<Banner tone='success' sx={{ mt: 2 }}>
 					PDF-versie aangemaakt. Kies hem onder "Bijlagen" om mee te sturen met het concept-antwoord.
-				</Alert>
+				</Banner>
 			)}
 
 			<Divider sx={{ my: 2 }} />
@@ -698,38 +678,32 @@ function QuoteTotals({ totals }: { totals: ReturnType<typeof computeQuoteTotals>
 	return (
 		<Stack useFlexGap spacing={0.5} sx={{ ml: 'auto', maxWidth: 360 }}>
 			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
-				<Typography variant='body2' color='text.secondary'>
-					Subtotaal (excl. btw)
-				</Typography>
-				<Typography variant='body2'>{toReadableEuro(totals.netCents / 100)}</Typography>
+				<BodySmall color='text.secondary'>Subtotaal (excl. btw)</BodySmall>
+				<BodySmall>{toReadableEuro(totals.netCents / 100)}</BodySmall>
 			</Stack>
 
 			{totals.brackets.map(bracket => (
 				<Stack key={bracket.key} useFlexGap spacing={0}>
 					<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
-						<Typography variant='body2' color='text.secondary'>
+						<BodySmall color='text.secondary'>
 							{bracketVatLabel(bracket)}{' '}
-							<Typography component='span' variant='caption' color='text.secondary'>
+							<BodySmall component='span' color='text.secondary'>
 								over {toReadableEuro(bracket.netCents / 100)}
-							</Typography>
-						</Typography>
-						<Typography variant='body2'>{toReadableEuro(bracket.vatCents / 100)}</Typography>
+							</BodySmall>
+						</BodySmall>
+						<BodySmall>{toReadableEuro(bracket.vatCents / 100)}</BodySmall>
 					</Stack>
 					{/* Reverse charge isn't a discount — the net still counts; only the VAT
 					    (€0 here) shifts to the customer. Spell that out so €0 doesn't read as a
 					    mistake. */}
-					{bracket.reverseCharged && (
-						<Typography variant='caption' color='text.secondary'>
-							verlegd naar afnemer
-						</Typography>
-					)}
+					{bracket.reverseCharged && <BodySmall color='text.secondary'>verlegd naar afnemer</BodySmall>}
 				</Stack>
 			))}
 
 			<Divider sx={{ my: 0.5 }} />
 			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
-				<Typography variant='subtitle2'>Totaal</Typography>
-				<Typography variant='subtitle2'>{toReadableEuro(totals.grossCents / 100)}</Typography>
+				<Label>Totaal</Label>
+				<Label>{toReadableEuro(totals.grossCents / 100)}</Label>
 			</Stack>
 		</Stack>
 	);
@@ -787,11 +761,7 @@ function QuoteLineRow({
 					{line.vatReverseCharged && (
 						<Chip size='small' variant='outlined' color='info' label='BTW verlegd' />
 					)}
-					{line.note && (
-						<Typography variant='caption' color='text.secondary'>
-							{line.note}
-						</Typography>
-					)}
+					{line.note && <BodySmall color='text.secondary'>{line.note}</BodySmall>}
 				</Stack>
 			</TableCell>
 			<TableCell align='right'>
@@ -845,9 +815,7 @@ function QuoteLineRow({
 				/>
 			</TableCell>
 			<TableCell align='right'>
-				<Typography variant='body2'>
-					{line.unitPriceEur === null ? '—' : toReadableEuro(lineNetCents(line) / 100)}
-				</Typography>
+				<BodySmall>{line.unitPriceEur === null ? '—' : toReadableEuro(lineNetCents(line) / 100)}</BodySmall>
 			</TableCell>
 			<TableCell align='right'>
 				<Button

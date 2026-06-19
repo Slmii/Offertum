@@ -1,8 +1,11 @@
-import { apiBlob } from '@/lib/api/client';
+import { Banner } from '@/components/Banner.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
+import { BodySmall, H3, Label } from '@/components/Text.component';
+import { apiBlob } from '@/lib/api/client';
 import {
 	businessDetailsQueryOptions,
 	useDeleteBusinessAsset,
@@ -12,16 +15,13 @@ import {
 } from '@/lib/queries/business-details.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { BusinessDetailsSchema, type BusinessDetailsForm } from '@/lib/schemas/business-details.schema';
-import { type VerticalValue } from '@offertum/shared';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
+import { type VerticalValue } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -153,16 +153,11 @@ function BusinessDetailsSettingsPage() {
 	};
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 6 }}>
-			<Box sx={{ mb: 6 }}>
-				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
-					Bedrijfsgegevens
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
-					De klantgerichte gegevens die op je offertes en facturen verschijnen. Bewaar je officiële
-					bedrijfsnaam, adres, contactgegevens, merkbestanden en standaard betalingstermijn hier.
-				</Typography>
-			</Box>
+		<Stack>
+			<PageHeader
+				title='Bedrijfsgegevens'
+				caption='De klantgerichte gegevens die op je offertes en facturen verschijnen. Bewaar je officiële bedrijfsnaam, adres, contactgegevens, merkbestanden en standaard betalingstermijn hier.'
+			/>
 
 			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2 }}>
 				<Form<BusinessDetailsForm>
@@ -183,9 +178,9 @@ function BusinessDetailsSettingsPage() {
 				>
 					<Stack useFlexGap spacing={4}>
 						{!isOwner && (
-							<Alert severity='info'>
+							<Banner tone='info'>
 								Alleen eigenaren kunnen bedrijfsgegevens, logo en briefpapier aanpassen.
-							</Alert>
+							</Banner>
 						)}
 
 						<Field name='name' label='Bedrijfsnaam' fullWidth disabled={!isOwner} />
@@ -229,11 +224,11 @@ function BusinessDetailsSettingsPage() {
 						/>
 
 						{isOwner && update.error && (
-							<Alert severity='error'>
+							<Banner tone='error'>
 								{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
-							</Alert>
+							</Banner>
 						)}
-						{isOwner && savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
+						{isOwner && savedFlash && <Banner tone='success'>Opgeslagen.</Banner>}
 
 						{isOwner && (
 							<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
@@ -249,12 +244,10 @@ function BusinessDetailsSettingsPage() {
 			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4 }}>
 				<Stack useFlexGap spacing={4}>
 					<Box>
-						<Typography variant='h6' component='h2' sx={{ mb: 1 }}>
+						<H3 component='h2' sx={{ mb: 1 }}>
 							Logo en briefpapier
-						</Typography>
-						<Typography variant='body2' sx={{ color: 'text.secondary' }}>
-							Deze bestanden worden gebruikt op offerte-PDF's.
-						</Typography>
+						</H3>
+						<BodySmall color='text.secondary'>Deze bestanden worden gebruikt op offerte-PDF's.</BodySmall>
 					</Box>
 
 					<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={2}>
@@ -284,22 +277,22 @@ function BusinessDetailsSettingsPage() {
 
 					{isOwner &&
 						(uploadLogo.error || uploadLetterhead.error || deleteLogo.error || deleteLetterhead.error) && (
-							<Alert severity='error'>Bestand bijwerken mislukt.</Alert>
+							<Banner tone='error'>Bestand bijwerken mislukt.</Banner>
 						)}
 
 					<Divider />
 
 					<Box>
-						<Typography variant='body2' sx={{ color: 'text.secondary', mb: 2 }}>
+						<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 							Bekijk hoe je gegevens op een offerte-PDF verschijnen (met voorbeeldregels).
-						</Typography>
+						</BodySmall>
 						<Button variant='outlined' onClick={handlePdfPreview} disabled={pdfPreviewPending}>
 							{pdfPreviewPending ? 'Bezig…' : 'Bekijk voorbeeld-offerte'}
 						</Button>
 						{pdfPreviewError && (
-							<Alert severity='error' sx={{ mt: 2 }}>
+							<Banner tone='error' sx={{ mt: 2 }}>
 								{pdfPreviewError}
-							</Alert>
+							</Banner>
 						)}
 					</Box>
 				</Stack>
@@ -309,15 +302,48 @@ function BusinessDetailsSettingsPage() {
 				<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4, borderColor: 'error.light' }}>
 					<Stack useFlexGap spacing={3}>
 						<Box>
-							<Typography variant='h6' component='h2' sx={{ color: 'error.main', mb: 1 }}>
-								Danger zone
-							</Typography>
-							<Typography variant='body2' sx={{ color: 'text.secondary' }}>
-								Verwijder deze organisatie permanent. Alle leden worden losgekoppeld van deze
-								organisatie en organisatiegegevens worden verwijderd.
-							</Typography>
+							<H3 component='h2' sx={{ color: 'error.main', mb: 1 }}>
+								Gevarenzone
+							</H3>
+							<BodySmall color='text.secondary'>
+								Acties die niet ongedaan gemaakt kunnen worden.
+							</BodySmall>
 						</Box>
 						<Divider />
+
+						<Stack
+							direction={{ xs: 'column', sm: 'row' }}
+							useFlexGap
+							spacing={2}
+							sx={{ alignItems: { sm: 'center' } }}
+						>
+							<Box sx={{ flex: 1 }}>
+								<Label component='p' sx={{ mb: 0.5 }}>
+									Verwijder alle ingelezen e-mails uit Offertum
+								</Label>
+								<BodySmall color='text.secondary'>
+									Klantgegevens, concepten en geschiedenis worden gewist. Je mailbox-koppelingen
+									blijven actief — nieuwe e-mails worden opnieuw ingelezen.
+								</BodySmall>
+							</Box>
+							{/* MOCK — no data-purge endpoint exists yet (only full-org delete). Disabled
+							    until the backend lands; see organization-locale.mock.ts. */}
+							<Button variant='outlined' color='error' disabled sx={{ flexShrink: 0 }}>
+								Verwijder data
+							</Button>
+						</Stack>
+
+						<Divider />
+
+						<Box>
+							<Label component='p' sx={{ mb: 0.5 }}>
+								Verwijder organisatie permanent
+							</Label>
+							<BodySmall color='text.secondary'>
+								Alle leden worden losgekoppeld en alle organisatiegegevens worden gewist. Een
+								geannuleerd abonnement loopt door tot het einde van de periode.
+							</BodySmall>
+						</Box>
 						<TextField
 							label='Typ de bedrijfsnaam om te bevestigen'
 							value={deleteConfirm}
@@ -325,11 +351,11 @@ function BusinessDetailsSettingsPage() {
 							fullWidth
 						/>
 						{deleteOrganization.error && (
-							<Alert severity='error'>
+							<Banner tone='error'>
 								{deleteOrganization.error instanceof Error
 									? deleteOrganization.error.message
 									: 'Verwijderen mislukt.'}
-							</Alert>
+							</Banner>
 						)}
 						<Stack direction='row' sx={{ justifyContent: 'flex-end' }}>
 							<Button
@@ -344,7 +370,7 @@ function BusinessDetailsSettingsPage() {
 					</Stack>
 				</Paper>
 			)}
-		</Container>
+		</Stack>
 	);
 }
 
@@ -374,7 +400,7 @@ function BusinessAssetControl({
 	return (
 		<Box sx={{ p: 3, flex: 1, border: 1, borderColor: 'divider', borderRadius: 1 }}>
 			<Stack useFlexGap spacing={2}>
-				<Typography variant='subtitle2'>{label}</Typography>
+				<Label>{label}</Label>
 				{hasAsset ? (
 					<Box
 						sx={{
@@ -403,9 +429,7 @@ function BusinessAssetControl({
 						/>
 					</Box>
 				) : (
-					<Typography variant='body2' sx={{ color: 'text.secondary' }}>
-						Geen bestand ingesteld.
-					</Typography>
+					<BodySmall color='text.secondary'>Geen bestand ingesteld.</BodySmall>
 				)}
 				{canEdit && (
 					<Stack direction='row' useFlexGap spacing={1}>

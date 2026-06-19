@@ -1,11 +1,19 @@
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { AppIcon } from '@/components/AppIcon.component';
+import { Banner } from '@/components/Banner.component';
 import { Field, StandaloneField } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
+import { RadioGroup as FormRadioGroup } from '@/components/Form/Radio/Radio.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
+import { PageHeader } from '@/components/PageContainer.component';
+import { PatternBanners } from '@/components/PatternBanners.component';
+import { Pill } from '@/components/Pill.component';
+import { PillSelect } from '@/components/PillSelect.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
-import { LockGlyph } from '@/components/UpsellTeaser.component';
+import { Tabs, type TabItem } from '@/components/Tabs.component';
+import { Body, BodySmall } from '@/components/Text.component';
+import { LockGlyph, UpsellTeaser } from '@/components/UpsellTeaser.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
@@ -24,39 +32,29 @@ import {
 	OPPORTUNITY_DISMISS_REASON_LABELS_NL,
 	OPPORTUNITY_SORT_LABELS_NL,
 	OPPORTUNITY_SORT_OPTIONS,
-	OPPORTUNITY_STATUS_CHIP_COLORS,
 	OPPORTUNITY_STATUS_LABELS_NL,
+	OPPORTUNITY_STATUS_PILL_TONES,
 	OPPORTUNITY_URGENCY_COLORS,
 	opportunityCustomerLabel,
 	sortOpportunities,
 	type OpportunitySortOption
 } from '@/lib/utils/opportunity.utils';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
-import Container from '@mui/material/Container';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import FormControl from '@mui/material/FormControl';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormLabel from '@mui/material/FormLabel';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Radio from '@mui/material/Radio';
-import RadioGroup from '@mui/material/RadioGroup';
 import Stack from '@mui/material/Stack';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
-import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import type {
 	Opportunity,
 	OpportunityAssigneeFilter,
-	OpportunityDismissReason,
 	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus,
 	OpportunityStatusCounts
@@ -68,9 +66,8 @@ import {
 	OPPORTUNITY_STATUSES
 } from '@offertum/shared';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Controller } from 'react-hook-form';
 import { z } from 'zod';
 
 // Every field carries `.catch(undefined)` so a malformed/hand-edited URL param degrades
@@ -173,17 +170,14 @@ function OpportunitiesIndexPage() {
 	const visibleOpportunities = useMemo(() => sortOpportunities(data.opportunities, sort), [data.opportunities, sort]);
 
 	return (
-		<Container maxWidth='md' sx={{ py: 6 }}>
-			<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
-				<Typography variant='h1' sx={{ fontSize: 28 }}>
-					Offerteaanvragen
-				</Typography>
-				<BackToHomeButton />
-			</Box>
-			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar
-				seconden nadat ze binnenkomen.
-			</Typography>
+		<Stack>
+			<PageHeader
+				title='Offerteaanvragen'
+				caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar seconden nadat ze binnenkomen.'
+			/>
+
+			{/* Smart-prioritization slot: entitled orgs see AI pattern insights, others the upsell. */}
+			{isEntitled ? <PatternBanners /> : <UpsellTeaser isOwner={isOwner} />}
 
 			<StatusFilterTabs
 				active={activeStatus}
@@ -197,11 +191,37 @@ function OpportunitiesIndexPage() {
 				}
 			/>
 
+			<FilterChipRow
+				owner={ownerFilter}
+				assignee={assigneeFilter}
+				onOwnerChange={next =>
+					navigate({
+						to: '/opportunities',
+						search: { ...urlSearch, owner: next ?? undefined },
+						replace: true
+					})
+				}
+				onAssigneeChange={next =>
+					navigate({
+						to: '/opportunities',
+						search: { ...urlSearch, assignee: next ?? undefined },
+						replace: true
+					})
+				}
+				onClear={() =>
+					navigate({
+						to: '/opportunities',
+						search: { ...urlSearch, owner: undefined, assignee: undefined },
+						replace: true
+					})
+				}
+			/>
+
 			<Stack
 				direction={{ xs: 'column', sm: 'row' }}
 				useFlexGap
 				spacing={2}
-				sx={{ mt: 2, mb: 2, alignItems: 'center' }}
+				sx={{ mt: 1, mb: 2, alignItems: 'center' }}
 			>
 				<StandaloneField
 					name='search'
@@ -247,49 +267,7 @@ function OpportunitiesIndexPage() {
 				/>
 			</Stack>
 
-			<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={2} sx={{ mb: 2 }}>
-				<StandaloneSelect
-					name='owner'
-					label='Mailbox'
-					value={ownerFilter ?? 'all'}
-					size='small'
-					sx={{ minWidth: { xs: '100%', sm: 200 } }}
-					onChange={e => {
-						const next = e.target.value as OpportunityMailboxOwnershipFilter;
-						void navigate({
-							to: '/opportunities',
-							search: { ...urlSearch, owner: next === 'all' ? undefined : next },
-							replace: true
-						});
-					}}
-					options={[
-						{ id: 'all', label: 'Alle mailboxen' },
-						{ id: 'mine', label: 'Mijn mailbox' }
-					]}
-				/>
-				<StandaloneSelect
-					name='assignee'
-					label='Toegewezen'
-					value={assigneeFilter ?? 'all'}
-					size='small'
-					sx={{ minWidth: { xs: '100%', sm: 220 } }}
-					onChange={e => {
-						const next = e.target.value as OpportunityAssigneeFilter;
-						void navigate({
-							to: '/opportunities',
-							search: { ...urlSearch, assignee: next === 'all' ? undefined : next },
-							replace: true
-						});
-					}}
-					options={[
-						{ id: 'all', label: 'Iedereen' },
-						{ id: 'me', label: 'Aan mij toegewezen' },
-						{ id: 'unassigned', label: 'Niet toegewezen' }
-					]}
-				/>
-			</Stack>
-
-			<Stack useFlexGap spacing={1.5}>
+			<Stack useFlexGap spacing={1}>
 				{visibleOpportunities.length === 0 ? (
 					<EmptyState
 						filtered={activeStatus !== null || debouncedSearch.length > 0}
@@ -319,7 +297,7 @@ function OpportunitiesIndexPage() {
 					initialList={data.opportunities}
 				/>
 			)}
-		</Container>
+		</Stack>
 	);
 }
 
@@ -334,207 +312,336 @@ function StatusFilterTabs({
 }) {
 	const total = counts.new + counts.replied + counts.waiting + counts.cold + counts.won + counts.lost;
 
+	const items: TabItem<'all' | OpportunityStatus>[] = [
+		{ id: 'all', label: 'Alle', count: total },
+		...OPPORTUNITY_STATUSES.map(s => ({ id: s, label: OPPORTUNITY_STATUS_LABELS_NL[s], count: counts[s] }))
+	];
+
 	return (
 		<Tabs
+			items={items}
 			value={active ?? 'all'}
-			onChange={(_, next) => onChange(next === 'all' ? null : (next as OpportunityStatus))}
-			variant='scrollable'
-			scrollButtons='auto'
-			sx={{ borderBottom: '1px solid #E8E1D4', minHeight: 40 }}
-		>
-			<Tab value='all' label={`Alles · ${total}`} sx={{ minHeight: 40 }} />
-			{OPPORTUNITY_STATUSES.map(s => (
-				<Tab
-					key={s}
-					value={s}
-					label={`${OPPORTUNITY_STATUS_LABELS_NL[s]} · ${counts[s]}`}
-					sx={{ minHeight: 40 }}
-				/>
-			))}
-		</Tabs>
+			variant='underline'
+			onChange={id => onChange(id === 'all' ? null : (id as OpportunityStatus))}
+		/>
 	);
 }
 
 function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
-	const urgency = opportunity.urgency;
+	const { tokens } = useTheme();
+	const navigate = useNavigate();
 	const status = opportunity.status;
-	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[status];
 	const isDismissed = opportunity.dismissedAt !== null;
-	const deadlineLabel = opportunity.customerDeadline
-		? `Deadline ${toReadableDate(opportunity.customerDeadline)}`
-		: null;
-	const subtitle = [opportunity.address ?? null, deadlineLabel].filter(Boolean).join(' · ');
+	const pendingCheckIn = opportunity.hasPendingCheckIn && !isDismissed;
+	const isNew = (status === 'new' || pendingCheckIn) && !isDismissed;
+	const affordance = isNew ? (pendingCheckIn ? 'Beoordeel follow-up' : 'Bekijk concept') : 'Open';
+	const deadlineLabel = opportunity.customerDeadline ? toReadableDate(opportunity.customerDeadline) : null;
 	const arrivedLabel = toReadableTimestamp(opportunity.internalDate);
 	const customerLabel = opportunityCustomerLabel(opportunity);
 	const updateStatus = useUpdateOpportunityStatus();
 	const undismiss = useUndismissOpportunity();
 	const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 	const [dismissOpen, setDismissOpen] = useState(false);
+	const c = tokens.color;
+	const dur = `${tokens.motion.durBase}ms`;
 
-	const openMenu = (e: React.MouseEvent<HTMLElement>) => setMenuAnchor(e.currentTarget);
+	const openMenu = (e: React.MouseEvent<HTMLElement>) => {
+		e.stopPropagation();
+		setMenuAnchor(e.currentTarget);
+	};
 	const closeMenu = () => setMenuAnchor(null);
+	const goToDetail = () => navigate({ to: '/opportunities/$id', params: { id: opportunity.id } });
 
 	return (
 		<>
-			<Paper
-				variant='outlined'
+			<Box
+				role='button'
+				tabIndex={0}
+				aria-label={`Open ${customerLabel}`}
+				onClick={goToDetail}
+				onKeyDown={e => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						goToDetail();
+					}
+				}}
 				sx={{
-					p: 2,
+					position: 'relative',
+					overflow: 'hidden',
 					display: 'flex',
 					alignItems: 'center',
 					gap: 2,
-					opacity: isDismissed ? 0.55 : 1,
-					backgroundColor: isDismissed ? '#F5F1E8' : 'background.paper'
+					p: '14px 18px 14px 20px',
+					borderRadius: `${tokens.radius.md}px`,
+					backgroundColor: isDismissed ? c.paper2 : pendingCheckIn ? c.accent[50] : c.surface,
+					border: `1px solid ${isDismissed ? c.line : pendingCheckIn ? c.accent[300] : c.line}`,
+					opacity: isDismissed ? 0.6 : 1,
+					cursor: 'pointer',
+					transition: `background ${dur}, border-color ${dur}, transform ${dur}`,
+					...(!isDismissed && {
+						'&:hover': {
+							backgroundColor: pendingCheckIn ? c.accent[100] : c.paper2,
+							borderColor: pendingCheckIn ? c.accent[500] : c.lineStrong,
+							transform: 'translateX(2px)'
+						},
+						'&:hover .opp-accent': { opacity: 1, transform: 'translateX(0)' },
+						'&:hover .opp-arrived': { opacity: 0 },
+						'&:hover .opp-affordance': { opacity: 1, transform: 'translateY(-50%) translateX(0)' },
+						'&:hover .opp-kebab': { opacity: 1 }
+					})
 				}}
 			>
+				{!isDismissed && (
+					<Box
+						className='opp-accent'
+						aria-hidden='true'
+						sx={{
+							position: 'absolute',
+							left: 0,
+							top: 0,
+							bottom: 0,
+							width: pendingCheckIn ? 4 : 3,
+							backgroundColor: isNew ? c.accent[500] : c.accent[300],
+							opacity: isNew ? 1 : 0,
+							transform: isNew ? 'translateX(0)' : 'translateX(-4px)',
+							transition: `opacity ${dur}, transform ${dur}`
+						}}
+					/>
+				)}
+
 				<Box
+					aria-label={`Urgentie: ${opportunity.urgency}`}
 					sx={{
 						width: 10,
 						height: 10,
 						borderRadius: '50%',
-						backgroundColor: OPPORTUNITY_URGENCY_COLORS[urgency],
+						backgroundColor: OPPORTUNITY_URGENCY_COLORS[opportunity.urgency],
 						flexShrink: 0
 					}}
-					aria-label={`Urgentie: ${urgency}`}
 				/>
-				<Box sx={{ flex: 1, minWidth: 0 }}>
-					<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 0.25, alignItems: 'center' }}>
-						<StandaloneSelect
-							name={`status-${opportunity.id}`}
-							size='small'
+
+				<Box sx={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+					{isDismissed && opportunity.dismissReason ? (
+						<Pill tone='lost'>
+							Afgewezen · {OPPORTUNITY_DISMISS_REASON_LABELS_NL[opportunity.dismissReason]}
+						</Pill>
+					) : (
+						<PillSelect
 							value={status}
-							onChange={e =>
-								updateStatus.mutate({ id: opportunity.id, status: e.target.value as OpportunityStatus })
-							}
+							ariaLabel='Status wijzigen'
 							disabled={updateStatus.isPending || isDismissed}
-							variant='standard'
-							disableUnderline
-							naked
-							options={getStatusOptionsForCurrent(status).map(s => ({
-								id: s,
-								label: OPPORTUNITY_STATUS_LABELS_NL[s]
+							onChange={next => updateStatus.mutate({ id: opportunity.id, status: next })}
+							options={getStatusOptionsForCurrent(status).map(sx => ({
+								id: sx,
+								label: OPPORTUNITY_STATUS_LABELS_NL[sx],
+								tone: OPPORTUNITY_STATUS_PILL_TONES[sx]
 							}))}
-							renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
-							sx={{
-								'& .MuiSelect-select': {
-									backgroundColor: chip.bg,
-									color: chip.fg,
-									fontWeight: 500,
-									fontSize: '0.7rem',
-									padding: '2px 22px 2px 8px',
-									borderRadius: '999px',
-									minWidth: 0
-								}
-							}}
 						/>
-						{isDismissed && opportunity.dismissReason && (
-							<Box
-								component='span'
-								sx={{
-									fontSize: '0.65rem',
-									fontWeight: 500,
-									letterSpacing: '0.02em',
-									textTransform: 'uppercase',
-									color: '#8B3A3A',
-									backgroundColor: '#EBD9D9',
-									borderRadius: '999px',
-									padding: '2px 8px'
-								}}
-							>
-								Afgewezen · {OPPORTUNITY_DISMISS_REASON_LABELS_NL[opportunity.dismissReason]}
-							</Box>
-						)}
-						{opportunity.hasPendingCheckIn && (
-							<Box
-								component='span'
-								sx={{
-									fontSize: '0.65rem',
-									fontWeight: 500,
-									letterSpacing: '0.02em',
-									textTransform: 'uppercase',
-									color: '#1A237E',
-									backgroundColor: '#E8EAF6',
-									borderRadius: '999px',
-									padding: '2px 8px'
-								}}
-								title='Een automatische follow-up wacht op je beoordeling'
-							>
-								Auto follow-up
-							</Box>
-						)}
-						<Typography
-							variant='body2'
-							sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}
+					)}
+				</Box>
+
+				<Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+					<Box
+						sx={{
+							display: 'flex',
+							alignItems: 'baseline',
+							gap: 1,
+							whiteSpace: 'nowrap',
+							overflow: 'hidden'
+						}}
+					>
+						<Body fontWeight='medium' sx={{ flexShrink: 0 }}>
+							{customerLabel}
+						</Body>
+						<Box component='span' sx={{ color: c.ink4 }}>
+							·
+						</Box>
+						<BodySmall color='text.secondary' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+							{opportunity.requestType}
+						</BodySmall>
+					</Box>
+					{(opportunity.address || deadlineLabel) && (
+						<Box
+							sx={{
+								display: 'flex',
+								alignItems: 'center',
+								gap: 1.25,
+								color: c.ink3,
+								fontSize: 12,
+								whiteSpace: 'nowrap',
+								overflow: 'hidden'
+							}}
 						>
-							<Link
-								to='/opportunities/$id'
-								params={{ id: opportunity.id }}
-								style={{ color: 'inherit', textDecoration: 'none' }}
-							>
-								{customerLabel} · {opportunity.requestType}
-							</Link>
-						</Typography>
-					</Stack>
-					{subtitle && (
-						<Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-							{subtitle}
-						</Typography>
+							{opportunity.address && (
+								<Box
+									component='span'
+									sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}
+								>
+									<AppIcon name='map-pin' size='small' />
+									<Box component='span' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+										{opportunity.address}
+									</Box>
+								</Box>
+							)}
+							{opportunity.address && deadlineLabel && (
+								<Box component='span' sx={{ color: c.lineStrong }}>
+									·
+								</Box>
+							)}
+							{deadlineLabel && (
+								<Box
+									component='span'
+									sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}
+								>
+									<AppIcon name='calendar' size='small' />
+									<span>{deadlineLabel}</span>
+								</Box>
+							)}
+						</Box>
 					)}
 					{opportunity.subject && (
-						<Typography
-							variant='caption'
+						<Box
+							component='span'
 							sx={{
-								display: 'block',
-								color: 'text.disabled',
+								fontSize: 12,
+								color: c.ink4,
+								fontStyle: 'italic',
 								overflow: 'hidden',
 								textOverflow: 'ellipsis',
 								whiteSpace: 'nowrap'
 							}}
 						>
 							{opportunity.subject}
-						</Typography>
-					)}
-					{opportunity.lastEditedBy && (
-						<Typography variant='caption' sx={{ display: 'block', color: 'text.disabled' }}>
-							Bijgewerkt door {opportunity.lastEditedBy.name ?? 'onbekend'} ·{' '}
-							{toReadableTimestamp(opportunity.lastEditedBy.at)}
-						</Typography>
+						</Box>
 					)}
 				</Box>
-				<Typography variant='caption' color='text.secondary' sx={{ flexShrink: 0 }}>
-					{arrivedLabel}
-				</Typography>
-				<IconButton
-					size='small'
-					onClick={openMenu}
-					aria-label='Acties'
-					sx={{ flexShrink: 0, fontSize: '1.1rem', lineHeight: 1 }}
+
+				<LastActivityBadge lastActivity={opportunity.lastActivity} />
+
+				{opportunity.customerReplyCount > 0 && (
+					<Box
+						component='span'
+						sx={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 0.5,
+							flexShrink: 0,
+							px: '8px',
+							py: '3px',
+							backgroundColor: c.paper2,
+							border: `1px solid ${c.line}`,
+							color: c.ink2,
+							fontSize: 12,
+							fontWeight: 'medium',
+							borderRadius: `${tokens.radius.sm}px`,
+							whiteSpace: 'nowrap'
+						}}
+					>
+						<AppIcon name='corner-up-left' size='small' />
+						{opportunity.customerReplyCount}{' '}
+						{opportunity.customerReplyCount === 1 ? 'antwoord' : 'antwoorden'}
+					</Box>
+				)}
+
+				{pendingCheckIn && (
+					<Box
+						component='span'
+						onClick={e => e.stopPropagation()}
+						title='Een automatische follow-up wacht op je beoordeling'
+						sx={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 0.75,
+							flexShrink: 0,
+							px: '8px',
+							py: '4px',
+							backgroundColor: c.accent[500],
+							color: c.surface,
+							fontSize: 12,
+							fontWeight: 'bold',
+							borderRadius: `${tokens.radius.sm}px`,
+							whiteSpace: 'nowrap'
+						}}
+					>
+						<AppIcon name='sparkles' size='small' /> Follow-up wacht
+					</Box>
+				)}
+
+				<Box
+					sx={{
+						flexShrink: 0,
+						position: 'relative',
+						minWidth: 110,
+						textAlign: 'right',
+						fontSize: 12,
+						color: c.ink4
+					}}
 				>
-					⋮
-				</IconButton>
-				<Menu anchorEl={menuAnchor} open={menuAnchor !== null} onClose={closeMenu}>
-					{isDismissed ? (
-						<MenuItem
-							onClick={() => {
-								closeMenu();
-								undismiss.mutate({ id: opportunity.id });
-							}}
-							disabled={undismiss.isPending}
-						>
-							Niet afgewezen
-						</MenuItem>
-					) : (
-						<MenuItem
-							onClick={() => {
-								closeMenu();
-								setDismissOpen(true);
-							}}
-						>
-							Markeer als geen offerteaanvraag…
-						</MenuItem>
-					)}
-				</Menu>
-			</Paper>
+					<Box
+						component='span'
+						className='opp-arrived'
+						sx={{ display: 'inline-block', transition: `opacity ${dur}` }}
+					>
+						{arrivedLabel}
+					</Box>
+					<Box
+						component='span'
+						className='opp-affordance'
+						aria-hidden='true'
+						sx={{
+							position: 'absolute',
+							right: 0,
+							top: '50%',
+							transform: 'translateY(-50%) translateX(8px)',
+							opacity: 0,
+							pointerEvents: 'none',
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 0.5,
+							color: c.accent[700],
+							fontWeight: 'bold',
+							whiteSpace: 'nowrap',
+							transition: `opacity ${dur}, transform ${dur}`
+						}}
+					>
+						{affordance} <AppIcon name='arrow-right' size='small' />
+					</Box>
+				</Box>
+
+				<Box sx={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+					<IconButton
+						className='opp-kebab'
+						size='small'
+						onClick={openMenu}
+						aria-label='Acties'
+						sx={{ opacity: 0.6, transition: `opacity ${dur}` }}
+					>
+						<AppIcon name='dots-vertical' size='medium' />
+					</IconButton>
+					<Menu anchorEl={menuAnchor} open={menuAnchor !== null} onClose={closeMenu}>
+						{isDismissed ? (
+							<MenuItem
+								onClick={() => {
+									closeMenu();
+									undismiss.mutate({ id: opportunity.id });
+								}}
+								disabled={undismiss.isPending}
+							>
+								Niet afgewezen
+							</MenuItem>
+						) : (
+							<MenuItem
+								onClick={() => {
+									closeMenu();
+									setDismissOpen(true);
+								}}
+							>
+								Markeer als geen offerteaanvraag…
+							</MenuItem>
+						)}
+					</Menu>
+				</Box>
+			</Box>
 
 			{dismissOpen && (
 				<DismissDialog
@@ -543,6 +650,183 @@ function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					onClose={() => setDismissOpen(false)}
 				/>
 			)}
+		</>
+	);
+}
+
+function LastActivityBadge({ lastActivity }: { lastActivity: Opportunity['lastActivity'] }) {
+	const { tokens } = useTheme();
+	if (!lastActivity) {
+		return null;
+	}
+
+	const c = tokens.color;
+	// Icon + accent vary by actor kind: customer reply, Offertum/system, or owner edit.
+	const icon =
+		lastActivity.kind === 'customer' ? 'corner-up-left' : lastActivity.kind === 'system' ? 'sparkles' : 'user';
+	const iconColor = lastActivity.kind === 'system' ? c.accent[500] : c.ink4;
+	return (
+		<Box
+			component='span'
+			sx={{
+				display: 'inline-flex',
+				alignItems: 'center',
+				gap: 0.625,
+				flexShrink: 0,
+				px: '7px',
+				py: '2px',
+				backgroundColor: c.paper2,
+				border: `1px solid ${c.line}`,
+				color: c.ink3,
+				fontSize: 11,
+				fontWeight: 'medium',
+				borderRadius: `${tokens.radius.sm}px`,
+				whiteSpace: 'nowrap'
+			}}
+		>
+			<Box component='span' sx={{ display: 'inline-flex', color: iconColor }}>
+				<AppIcon name={icon} size='small' />
+			</Box>
+			<Box component='span' sx={{ color: c.ink2 }}>
+				{lastActivity.label}
+			</Box>
+			<Box component='span' sx={{ color: c.ink4 }}>
+				·
+			</Box>
+			<Box component='span' sx={{ fontVariantNumeric: 'tabular-nums' }}>
+				{toReadableTimestamp(lastActivity.at)}
+			</Box>
+		</Box>
+	);
+}
+
+function FilterChipRow({
+	owner,
+	assignee,
+	onOwnerChange,
+	onAssigneeChange,
+	onClear
+}: {
+	owner: OpportunityMailboxOwnershipFilter | null;
+	assignee: OpportunityAssigneeFilter | null;
+	onOwnerChange: (next: OpportunityMailboxOwnershipFilter | null) => void;
+	onAssigneeChange: (next: OpportunityAssigneeFilter | null) => void;
+	onClear: () => void;
+}) {
+	const { tokens } = useTheme();
+	const anyActive = owner !== null || assignee !== null;
+	return (
+		<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center', mt: 2 }}>
+			<FilterChip
+				label='Mailbox'
+				icon='mail'
+				value={owner ?? 'all'}
+				options={[
+					{ value: 'all', label: 'Alle mailboxen' },
+					{ value: 'mine', label: 'Mijn mailbox' }
+				]}
+				onChange={v => onOwnerChange(v === 'all' ? null : (v as OpportunityMailboxOwnershipFilter))}
+			/>
+			<FilterChip
+				label='Toegewezen'
+				icon='user'
+				value={assignee ?? 'all'}
+				options={[
+					{ value: 'all', label: 'Iedereen' },
+					{ value: 'me', label: 'Aan mij' },
+					{ value: 'unassigned', label: 'Niet toegewezen' }
+				]}
+				onChange={v => onAssigneeChange(v === 'all' ? null : (v as OpportunityAssigneeFilter))}
+			/>
+			{anyActive && (
+				<Button
+					variant='text'
+					size='small'
+					onClick={onClear}
+					startIcon={<AppIcon name='x' size='small' />}
+					sx={{ color: tokens.color.ink3 }}
+				>
+					Wis filters
+				</Button>
+			)}
+		</Stack>
+	);
+}
+
+function FilterChip({
+	label,
+	icon,
+	value,
+	options,
+	onChange
+}: {
+	label: string;
+	icon: 'mail' | 'user';
+	value: string;
+	options: { value: string; label: string }[];
+	onChange: (value: string) => void;
+}) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+	const selected = options.find(o => o.value === value);
+	const active = value !== 'all';
+	return (
+		<>
+			<Box
+				component='button'
+				type='button'
+				onClick={e => setAnchor(e.currentTarget)}
+				sx={{
+					display: 'inline-flex',
+					alignItems: 'center',
+					gap: 0.75,
+					height: 28,
+					px: 1.25,
+					backgroundColor: active ? c.accent[50] : c.surface,
+					border: `1px solid ${active ? c.accent[500] : c.lineStrong}`,
+					borderRadius: `${tokens.radius.sm}px`,
+					color: active ? c.accent[700] : c.ink2,
+					fontSize: 12,
+					fontWeight: 'medium',
+					fontFamily: tokens.font.sans,
+					cursor: 'pointer',
+					whiteSpace: 'nowrap',
+					transition: `background ${tokens.motion.durFast}ms, border-color ${tokens.motion.durFast}ms`
+				}}
+			>
+				<AppIcon name={icon} size='small' />
+				<Box component='span' sx={{ color: active ? c.accent[700] : c.ink4 }}>
+					{label}:
+				</Box>
+				<Box component='span' sx={{ fontWeight: 'bold' }}>
+					{selected?.label}
+				</Box>
+				<AppIcon name='chevron-down' size='small' />
+			</Box>
+			<Menu
+				anchorEl={anchor}
+				open={Boolean(anchor)}
+				onClose={() => setAnchor(null)}
+				anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+				transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+			>
+				{options.map(o => (
+					<MenuItem
+						key={o.value}
+						selected={o.value === value}
+						onClick={() => {
+							onChange(o.value);
+							setAnchor(null);
+						}}
+					>
+						<Box component='span' sx={{ width: 16, display: 'inline-flex', flexShrink: 0 }}>
+							{o.value === value && <AppIcon name='check' size='small' />}
+						</Box>
+						{o.label}
+					</MenuItem>
+				))}
+			</Menu>
 		</>
 	);
 }
@@ -577,40 +861,27 @@ function DismissDialog({
 			<DialogTitle>Waarom afwijzen?</DialogTitle>
 			<DialogContent>
 				{hasSentReply && (
-					<Alert severity='warning' sx={{ mb: 2 }}>
+					<Banner tone='warning' sx={{ mb: 2 }}>
 						Je hebt al een antwoord verstuurd, maar afwijzen markeert deze offerteaanvraag alleen intern als
 						geen offerte. Het verzonden e-mailbericht blijft staan.
-					</Alert>
+					</Banner>
 				)}
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+				<BodySmall color='text.secondary' sx={{ mb: 2 }}>
 					Je feedback helpt onze AI om in de toekomst beter te herkennen wat wél en geen offerteaanvraag is.
-				</Typography>
+				</BodySmall>
 				<Form<DismissOpportunityForm>
 					id={DISMISS_FORM_ID}
 					action={onSubmit}
 					schema={DismissOpportunitySchema}
 					defaultValues={{ reason: 'not_a_quote', notes: '' }}
 				>
-					<Controller<DismissOpportunityForm, 'reason'>
+					<FormRadioGroup
 						name='reason'
-						render={({ field }) => (
-							<FormControl>
-								<FormLabel>Reden</FormLabel>
-								<RadioGroup
-									value={field.value}
-									onChange={e => field.onChange(e.target.value as OpportunityDismissReason)}
-								>
-									{OPPORTUNITY_DISMISS_REASONS.map(r => (
-										<FormControlLabel
-											key={r}
-											value={r}
-											control={<Radio size='small' />}
-											label={OPPORTUNITY_DISMISS_REASON_LABELS_NL[r]}
-										/>
-									))}
-								</RadioGroup>
-							</FormControl>
-						)}
+						label='Reden'
+						options={OPPORTUNITY_DISMISS_REASONS.map(r => ({
+							value: r,
+							label: OPPORTUNITY_DISMISS_REASON_LABELS_NL[r]
+						}))}
 					/>
 					<Field
 						name='notes'
@@ -621,9 +892,9 @@ function DismissDialog({
 						size='small'
 					/>
 					{dismiss.isError && (
-						<Alert severity='error'>
+						<Banner tone='error'>
 							{dismiss.error instanceof Error ? dismiss.error.message : 'Afwijzen mislukt'}
-						</Alert>
+						</Banner>
 					)}
 				</Form>
 			</DialogContent>
@@ -659,9 +930,7 @@ function EmptyState({
 	if (showDismissed) {
 		return (
 			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-				<Typography variant='body2' color='text.secondary'>
-					Geen afgewezen offerteaanvragen.
-				</Typography>
+				<BodySmall color='text.secondary'>Geen afgewezen offerteaanvragen.</BodySmall>
 			</Paper>
 		);
 	}
@@ -671,9 +940,7 @@ function EmptyState({
 	if (filtered) {
 		return (
 			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-				<Typography variant='body2' color='text.secondary'>
-					Geen offerteaanvragen die hierop matchen.
-				</Typography>
+				<BodySmall color='text.secondary'>Geen offerteaanvragen die hierop matchen.</BodySmall>
 			</Paper>
 		);
 	}
@@ -685,12 +952,10 @@ function EmptyState({
 			<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 				<Stack useFlexGap spacing={1.5} sx={{ alignItems: 'center' }}>
 					<LockGlyph size={24} />
-					<Typography variant='body1' sx={{ fontWeight: 500 }}>
-						Nog geen offerteaanvragen.
-					</Typography>
-					<Typography variant='body2' color='text.secondary'>
+					<Body fontWeight='medium'>Nog geen offerteaanvragen.</Body>
+					<BodySmall color='text.secondary'>
 						Abonneer en verbind je mailbox om offerteaanvragen automatisch binnen te halen.
-					</Typography>
+					</BodySmall>
 					<SubscribeCta isOwner={isOwner} />
 				</Stack>
 			</Paper>
@@ -699,12 +964,12 @@ function EmptyState({
 	// Feature-empty + entitled: mailbox can be connected; the original copy is correct.
 	return (
 		<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-			<Typography variant='body1' sx={{ fontWeight: 500, mb: 1 }}>
+			<Body fontWeight='medium' sx={{ mb: 1 }}>
 				Nog geen offerteaanvragen.
-			</Typography>
-			<Typography variant='body2' color='text.secondary'>
+			</Body>
+			<BodySmall color='text.secondary'>
 				Zodra er een binnenkomt op je verbonden mailbox, zie je 'm hier, meestal binnen een paar seconden.
-			</Typography>
+			</BodySmall>
 		</Paper>
 	);
 }
@@ -772,9 +1037,9 @@ function LoadMoreButton({
 	return (
 		<Box sx={{ textAlign: 'center', mt: 3 }}>
 			{error && (
-				<Alert severity='error' sx={{ mb: 2 }}>
+				<Banner tone='error' sx={{ mb: 2 }}>
 					{error}
-				</Alert>
+				</Banner>
 			)}
 			<Button
 				variant='outlined'

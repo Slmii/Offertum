@@ -15,6 +15,18 @@ export type OpportunityUrgency = (typeof OPPORTUNITY_URGENCIES)[number];
 export const OPPORTUNITY_DISMISS_REASONS = ['not_a_quote', 'duplicate', 'spam', 'other'] as const;
 export type OpportunityDismissReason = (typeof OPPORTUNITY_DISMISS_REASONS)[number];
 
+/** Who/what produced an opportunity's most recent activity (drives the list-row badge). */
+export const OPPORTUNITY_ACTIVITY_KINDS = ['customer', 'system', 'user'] as const;
+export type OpportunityActivityKind = (typeof OPPORTUNITY_ACTIVITY_KINDS)[number];
+
+export interface OpportunityLastActivity {
+	kind: OpportunityActivityKind;
+	// Display label: "Naam (klant)" for customer, "Offertum" for system, member name for user.
+	label: string;
+	// ISO timestamp of the activity.
+	at: string;
+}
+
 export interface Opportunity {
 	id: string;
 	organizationId: string;
@@ -69,14 +81,20 @@ export interface Opportunity {
 	 */
 	hasPendingCheckIn: boolean;
 	/**
-	 * Most recent owner-driven change on this opportunity, with the actor's display
-	 * label + when it happened. Source: the same audit-log actions that compose the
-	 * timeline panel (status / dismiss / undismiss / fields). `null` when the opp has
-	 * no owner-driven edits yet (fresh from the pipeline) or the audit row lost its
-	 * actor (deleted user). Surfaces in the list row so multi-user orgs can spot "who
-	 * touched this last" without opening it.
+	 * Most recent activity on this opportunity, discriminated by actor kind so the list
+	 * row can show the right icon + label: a customer reply (`customer` — "Naam (klant)",
+	 * reply icon), an Offertum/system action (`system` — "Offertum", sparkles; e.g. a
+	 * scheduler-generated check-in), or an owner edit (`user` — member name, audit-log
+	 * sourced: status / dismiss / fields / assign). `null` when nothing has happened
+	 * beyond the original request. Whichever source is newest wins.
 	 */
-	lastEditedBy: { name: string | null; at: string } | null;
+	lastActivity: OpportunityLastActivity | null;
+	/**
+	 * Count of customer-side messages attached to this opp's thread *beyond* the
+	 * originating request (i.e. follow-up replies reconstituted onto the thread).
+	 * `0` for a fresh single-message request. Drives the "N antwoorden" list-row chip.
+	 */
+	customerReplyCount: number;
 }
 
 /**

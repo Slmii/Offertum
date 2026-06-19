@@ -1,6 +1,9 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
+import { Banner } from '@/components/Banner.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { BodySmall } from '@/components/Text.component';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { calendarEventsQueryOptions } from '@/lib/queries/calendar.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
@@ -9,13 +12,10 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import listPlugin from '@fullcalendar/list';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Container from '@mui/material/Container';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
-import Typography from '@mui/material/Typography';
 import { CALENDAR_EVENT_SCOPES, CALENDAR_EVENT_TYPES, type CalendarEventScope } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -102,33 +102,35 @@ function CalendarPage() {
 	}));
 
 	return (
-		<Container sx={{ py: 3 }}>
+		<Stack>
 			{!isEntitled && (
-				<Alert severity='info' sx={{ mb: 3 }}>
+				<Banner tone='info' sx={{ mb: 3 }}>
 					Wil je deze deadlines en afspraken op je telefoon? Met een abonnement synchroniseer je je agenda
 					automatisch met Apple/Google Agenda.
 					<SubscribeCta isOwner={isOwner} sx={{ mt: 1 }} />
-				</Alert>
+				</Banner>
 			)}
-			<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-				<Typography variant='h1' sx={{ fontSize: 28 }}>
-					Agenda
-				</Typography>
-				<FormControlLabel
-					control={
-						<Switch
-							checked={activeScope === 'mine'}
-							onChange={(_, checked) =>
-								navigate({
-									search: prev => ({ ...prev, scope: checked ? 'mine' : undefined }),
-									replace: true
-								})
-							}
-						/>
-					}
-					label='Aan mij toegewezen'
-				/>
-			</Box>
+			<PageHeader
+				title='Agenda'
+				caption='Bekijk alle deadlines en afspraken in één overzicht.'
+				actions={
+					<FormControlLabel
+						control={
+							<Switch
+								checked={activeScope === 'mine'}
+								onChange={(_, checked) =>
+									navigate({
+										search: prev => ({ ...prev, scope: checked ? 'mine' : undefined }),
+										replace: true
+									})
+								}
+							/>
+						}
+						label='Aan mij toegewezen'
+					/>
+				}
+			/>
+
 			<Stack direction='row' spacing={2} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
 				{CALENDAR_EVENT_TYPES.map(type => (
 					<Box key={type} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -140,9 +142,7 @@ function CalendarPage() {
 								backgroundColor: calendarEventColor(type)
 							}}
 						/>
-						<Typography variant='caption' color='text.secondary'>
-							{calendarEventLabel(type)}
-						</Typography>
+						<BodySmall color='text.secondary'>{calendarEventLabel(type)}</BodySmall>
 					</Box>
 				))}
 			</Stack>
@@ -165,6 +165,6 @@ function CalendarPage() {
 					}}
 				/>
 			) : null}
-		</Container>
+		</Stack>
 	);
 }

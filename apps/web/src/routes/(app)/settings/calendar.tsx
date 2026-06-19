@@ -1,6 +1,7 @@
-// apps/web/src/routes/(app)/settings/calendar.tsx
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { Banner } from '@/components/Banner.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { BodySmall, H3 } from '@/components/Text.component';
 import { LockGlyph } from '@/components/UpsellTeaser.component';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
@@ -9,13 +10,10 @@ import {
 	useRevokeCalendarFeed
 } from '@/lib/queries/calendar.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
-import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -47,14 +45,14 @@ function CalendarSettingsPage() {
 	const isOwner = me.role === 'OWNER';
 
 	return (
-		<Container sx={{ py: 3, maxWidth: 640 }}>
-			<BackToHomeButton />
-			<Typography variant='h1' sx={{ fontSize: 28, mt: 2, mb: 1 }}>
-				Agenda-synchronisatie
-			</Typography>
+		<Stack>
+			<PageHeader
+				title='Agenda-synchronisatie'
+				caption='Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om alle offertes, deadlines en afspraken van je organisatie automatisch te zien. Hoe vaak je agenda-app ververst bepaalt je telefoon zelf; bij Google Calendar kan het enkele uren duren voordat nieuwe items verschijnen.'
+			/>
 
 			{isEntitled ? <CalendarFeedManager /> : <CalendarUpsell isOwner={isOwner} />}
-		</Container>
+		</Stack>
 	);
 }
 
@@ -66,15 +64,15 @@ function CalendarUpsell({ isOwner }: { isOwner: boolean }) {
 			<Stack useFlexGap spacing={2}>
 				<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 					<LockGlyph />
-					<Typography variant='h6' component='h2' sx={{ fontWeight: 600 }}>
+					<H3 component='h2' fontWeight='bold'>
 						Agenda-synchronisatie
-					</Typography>
+					</H3>
 				</Stack>
 
-				<Typography variant='body2' color='text.secondary'>
+				<BodySmall color='text.secondary'>
 					Met een abonnement synchroniseer je je offerte-deadlines, afspraken en verloopdatums automatisch met
 					de agenda op je telefoon (Apple/Google Agenda).
-				</Typography>
+				</BodySmall>
 
 				<SubscribeCta isOwner={isOwner} />
 			</Stack>
@@ -102,16 +100,10 @@ function CalendarFeedManager() {
 
 	return (
 		<>
-			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om alle offertes, deadlines en
-				afspraken van je organisatie automatisch te zien. Hoe vaak je agenda-app ververst bepaalt je telefoon
-				zelf; bij Google Calendar kan het enkele uren duren voordat nieuwe items verschijnen.
-			</Typography>
-
-			<Alert severity='warning' sx={{ mb: 3 }}>
+			<Banner tone='warning' sx={{ mb: 3 }}>
 				Iedereen met deze link kan je agenda-items zien (klantnaam + type aanvraag). Deel hem niet en vernieuw
 				de link als je hem per ongeluk hebt gedeeld.
-			</Alert>
+			</Banner>
 
 			{feed.url ? (
 				<Stack spacing={2}>

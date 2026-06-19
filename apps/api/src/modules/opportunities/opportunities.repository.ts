@@ -79,7 +79,14 @@ const OPPORTUNITY_INCLUDE = {
 	// 1:N relation now (was 1:1). Fetch all drafts ordered by `createdAt DESC`
 	// so the mapper can pluck `[0]` for "latest" and `.find(d => d.sentAt)` for "any
 	// sent." Typical row has 1-3 drafts; payload cost is negligible.
-	replyDrafts: { orderBy: { createdAt: 'desc' }, select: { sentAt: true, status: true, kind: true } }
+	replyDrafts: { orderBy: { createdAt: 'desc' }, select: { sentAt: true, status: true, kind: true, createdAt: true } },
+	// Thread-message metadata (no bodies) — drives the "N antwoorden" reply chip + the
+	// customer-side "last activity" badge. `list()` filters out own-org outbound (self-emails)
+	// using the org's email set, so customer vs. own messages are distinguished there.
+	threadMessages: {
+		orderBy: { internalDate: 'desc' },
+		select: { fromName: true, fromEmail: true, internalDate: true }
+	}
 } as const satisfies Prisma.OpportunityInclude;
 
 /**

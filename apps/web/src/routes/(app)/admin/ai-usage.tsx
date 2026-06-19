@@ -1,14 +1,13 @@
+import { Banner } from '@/components/Banner.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
+import { BodySmall } from '@/components/Text.component';
 import { aiUsageQueryOptions } from '@/lib/queries/ai-usage.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import { toReadableNumber, toReadableUsd, toReadableUsdPrecise } from '@/lib/utils/number.utils';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -17,7 +16,6 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Typography from '@mui/material/Typography';
 import type { AIUsageRange } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -49,20 +47,18 @@ function AIUsagePage() {
 	const { data } = useSuspenseQuery(aiUsageQueryOptions(range));
 
 	return (
-		<Container maxWidth='lg' sx={{ py: 6 }}>
-			<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-				<Typography variant='h1' sx={{ fontSize: 28 }}>
-					AI usage
-				</Typography>
-				<Chip label='dev only' size='small' color='warning' />
-				<Box sx={{ flex: 1 }} />
-				<BackToHomeButton />
-			</Box>
-			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Aggregated <code>AICall</code> rows. Cost is in USD, computed from each row's prompt + completion tokens
-				against the model rates in <code>apps/api/src/modules/ai-usage/pricing.ts</code>. Estimate badge marks
-				rows whose model isn't in that table: add it there to get a real number.
-			</Typography>
+		<Stack>
+			<PageHeader
+				title='AI usage'
+				caption={
+					<>
+						Aggregated <code>AICall</code> rows. Cost is in USD, computed from each row's prompt +
+						completion tokens against the model rates in{' '}
+						<code>apps/api/src/modules/ai-usage/pricing.ts</code>. Estimate badge marks rows whose model
+						isn't in that table: add it there to get a real number.
+					</>
+				}
+			/>
 
 			<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3 }}>
 				{(Object.keys(RANGE_LABELS) as AIUsageRange[]).map(option => (
@@ -87,14 +83,14 @@ function AIUsagePage() {
 			</Stack>
 
 			{data.summary.unpricedModels.length > 0 && (
-				<Alert severity='warning' sx={{ mb: 3 }}>
+				<Banner tone='warning' sx={{ mb: 3 }}>
 					<strong>{data.summary.unpricedModels.length}</strong> model(s) aren't in the pricing table (costs
 					for those rows are conservative estimates). Add them to{' '}
 					<code>apps/api/src/modules/ai-usage/pricing.ts</code>:{' '}
 					{data.summary.unpricedModels.map(m => (
 						<Chip key={m} label={m} size='small' sx={{ ml: 0.5 }} />
 					))}
-				</Alert>
+				</Banner>
 			)}
 
 			<TableContainer component={Paper} variant='outlined'>
@@ -158,9 +154,9 @@ function AIUsagePage() {
 				</Table>
 			</TableContainer>
 
-			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
+			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 2 }}>
 				Window: {toReadableDateTime(data.rangeStart)} to {toReadableDateTime(data.rangeEnd)}
-			</Typography>
-		</Container>
+			</BodySmall>
+		</Stack>
 	);
 }

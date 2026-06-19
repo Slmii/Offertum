@@ -1,9 +1,8 @@
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { Body, H1 } from '@/components/Text.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/(app)/billing/cancel')({
@@ -15,16 +14,11 @@ function BillingCancelPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
-			<Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-				<BackToHomeButton />
-			</Box>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
-				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-					Checkout canceled
-				</Typography>
-				<Typography variant='body1' color='text.secondary' sx={{ mb: 4 }}>
+				<H1 sx={{ mb: 1 }}>Checkout canceled</H1>
+				<Body color='text.secondary' sx={{ mb: 4 }}>
 					No payment was processed. You can start your trial whenever you're ready.
-				</Typography>
+				</Body>
 				<Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 					<Button variant='contained' onClick={() => navigate({ to: '/billing' })}>
 						Try again

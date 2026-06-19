@@ -1,11 +1,11 @@
+import { Banner } from '@/components/Banner.component';
 import { useAcceptInvitation } from '@/lib/queries/invitation.queries';
 import { AcceptInviteSearchSchema } from '@/lib/schemas/auth.schema';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
+import { BodySmall } from '@/components/Text.component';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 
@@ -47,9 +47,7 @@ function AcceptInvitePage() {
 				{(accept.isPending || accept.isSuccess) && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
-						<Typography variant='body2' color='text.secondary'>
-							Accepting invitation…
-						</Typography>
+						<BodySmall color='text.secondary'>Accepting invitation…</BodySmall>
 					</Box>
 				)}
 
@@ -61,8 +59,8 @@ function AcceptInvitePage() {
 
 function InviteError({ error }: { error: string }) {
 	return (
-		<Alert severity='error' sx={{ mb: 2 }}>
+		<Banner tone='error' sx={{ mb: 2 }}>
 			{error}
-		</Alert>
+		</Banner>
 	);
 }

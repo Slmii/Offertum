@@ -4,12 +4,11 @@ import {
 	useTakeExpiryAction
 } from '@/lib/queries/expiry.queries';
 import { toReadableDate } from '@/lib/utils/date.utils';
-import Alert from '@mui/material/Alert';
-import AlertTitle from '@mui/material/AlertTitle';
+import { Banner } from '@/components/Banner.component';
+import { BodySmall } from '@/components/Text.component';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import { EXPIRY_ACTION_KINDS, type ExpiryActionKindValue } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
@@ -39,8 +38,9 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 	const mutationError = takeAction.error ?? dismiss.error;
 
 	return (
-		<Alert
-			severity='warning'
+		<Banner
+			tone='warning'
+			title={`Verloopt op ${toReadableDate(expiryAction.validUntil)}`}
 			sx={{ mb: 3 }}
 			action={
 				// Take/dismiss are @OwnerWrite on the API — rendering the buttons for members
@@ -57,10 +57,7 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 				) : undefined
 			}
 		>
-			<AlertTitle>Verloopt op {toReadableDate(expiryAction.validUntil)}</AlertTitle>
-			<Typography variant='body2' sx={{ mb: 1.5 }}>
-				{expiryAction.suggestedCopy}
-			</Typography>
+			<BodySmall sx={{ mb: 1.5 }}>{expiryAction.suggestedCopy}</BodySmall>
 			{isOwner ? (
 				<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
 					{EXPIRY_ACTION_KINDS.map(kind => {
@@ -85,15 +82,13 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 					})}
 				</Stack>
 			) : (
-				<Typography variant='caption' color='text.secondary'>
-					Alleen de eigenaar kan deze acties uitvoeren.
-				</Typography>
+				<BodySmall color='text.secondary'>Alleen de eigenaar kan deze acties uitvoeren.</BodySmall>
 			)}
 			{mutationError && (
-				<Typography variant='body2' color='error' sx={{ mt: 1 }}>
+				<BodySmall color='error' sx={{ mt: 1 }}>
 					Actie mislukt: {mutationError instanceof Error ? mutationError.message : 'probeer het opnieuw.'}
-				</Typography>
+				</BodySmall>
 			)}
-		</Alert>
+		</Banner>
 	);
 }

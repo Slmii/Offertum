@@ -2,7 +2,10 @@ name: CI
 
 on:
     push:
-        branches: [main]
+        # `workflow-audit/**` so AI-audit fix branches get an independent typecheck/
+        # lint/test/build gate (PRs opened by the default GITHUB_TOKEN don't trigger
+        # the pull_request job, so validate the branch push directly).
+        branches: [main, 'workflow-audit/**']
     pull_request:
 
 concurrency:

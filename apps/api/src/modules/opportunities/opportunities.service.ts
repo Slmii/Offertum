@@ -67,6 +67,7 @@ import { ReplyDraftsService } from '@/modules/reply-drafts/reply-drafts.service'
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+	OpportunityActivityKind,
 	OpportunityAssigneeFilter,
 	OpportunityFieldChange,
 	OpportunityMailboxOwnershipFilter,
@@ -203,13 +204,14 @@ export class OpportunitiesService {
 		const nextCursor =
 			hasMore && last ? encodeOpportunityListCursor({ createdAt: last.createdAt, id: last.id }) : null;
 
-		// Resolve the "last edited by X" badge for each row. Two batched queries
-		// (latest editor per opp + user labels) so the list endpoint stays O(1) DB
-		// round-trips regardless of page size.
-		const editorMap = await this.repository.findLatestEditorPerOpportunity(
-			organizationId,
-			page.map(r => r.id)
-		);
+		// Resolve the "last activity" badge for each row. Batched queries (latest editor per
+		// opp + user labels + org email set) so the list endpoint stays O(1) DB round-trips
+		// regardless of page size. The org email set distinguishes customer-side thread
+		// messages from own-org outbound (self-emails).
+		const [editorMap, orgEmailAddresses] = await Promise.all([
+			this.repository.findLatestEditorPerOpportunity(organizationId, page.map(r => r.id)),
+			this.repository.findOrganizationEmailAddresses(organizationId)
+		]);
 		const actorIds = new Set<string>();
 		for (const e of editorMap.values()) {
 			actorIds.add(e.actorUserId);
@@ -222,10 +224,38 @@ export class OpportunitiesService {
 		return {
 			opportunities: page.map(row => {
 				const dto = toOpportunityResponseDto(row);
+
+				// Customer-side thread messages = inbound (not from one of our own mailboxes).
+				// `threadMessages` is already `internalDate DESC`, so `[0]` is the newest reply.
+				const customerMessages = row.threadMessages.filter(
+					m => m.fromEmail === null || !orgEmailAddresses.has(m.fromEmail.toLowerCase())
+				);
+				dto.customerReplyCount = customerMessages.length;
+
+				// Pick the most recent of: owner edit (audit log), newest customer reply, and a
+				// pending Offertum check-in. Whichever timestamp is latest wins the badge.
+				const candidates: Array<{ kind: OpportunityActivityKind; label: string; at: Date }> = [];
 				const editor = editorMap.get(row.id);
-				dto.lastEditedBy = editor
-					? { name: actorLabels.get(editor.actorUserId) ?? null, at: editor.at.toISOString() }
-					: null;
+				if (editor) {
+					candidates.push({ kind: 'user', label: actorLabels.get(editor.actorUserId) ?? 'Onbekend', at: editor.at });
+				}
+				const newestCustomer = customerMessages[0];
+				if (newestCustomer) {
+					candidates.push({
+						kind: 'customer',
+						label: `${newestCustomer.fromName ?? 'Klant'} (klant)`,
+						at: newestCustomer.internalDate
+					});
+				}
+				if (dto.hasPendingCheckIn && row.replyDrafts[0]) {
+					candidates.push({ kind: 'system', label: 'Offertum', at: row.replyDrafts[0].createdAt });
+				}
+				const latest = candidates.reduce<(typeof candidates)[number] | null>(
+					(best, current) => (best === null || current.at > best.at ? current : best),
+					null
+				);
+				dto.lastActivity = latest ? { kind: latest.kind, label: latest.label, at: latest.at.toISOString() } : null;
+
 				return dto;
 			}),
 			nextCursor,
@@ -1901,10 +1931,11 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		// pill would be noise (and a stale CHECK_IN could exist from a race where the
 		// opp was dismissed between scheduler enumeration and processor run).
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
-		// Populated by `list()` from the `findLatestEditorPerOpportunity` batched query.
-		// Single-row endpoints (status update, dismiss, detail fetch) return `null` —
-		// the list view is the only surface that needs this badge.
-		lastEditedBy: null
+		// Both resolved by `list()` (it has the org email set needed to tell customer-side
+		// messages from own-org outbound). Single-row endpoints don't drive the list badge —
+		// the web invalidates + refetches the list after every mutation — so they default here.
+		lastActivity: null,
+		customerReplyCount: 0
 	};
 }
 
@@ -2046,7 +2077,10 @@ function toOpportunityDetailResponseDto(
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
 		// Detail view has its own timeline panel that surfaces the per-event actor —
 		// no need to duplicate the badge here.
-		lastEditedBy: null,
+		lastActivity: null,
+		customerReplyCount: opportunity.threadMessages.filter(
+			m => m.fromEmail === null || !orgEmailAddresses.has(m.fromEmail.toLowerCase())
+		).length,
 		originalEmailBody,
 		// Latest draft (`createdAt DESC` already applied in the include) — null when no
 		// draft exists yet (cold-start window between Opportunity insert and the

@@ -1,9 +1,9 @@
 import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { BodySmall, H3 } from '@/components/Text.component';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
 const VALUE_PROPS = [
@@ -29,18 +29,14 @@ export function UpsellTeaser({ isOwner }: { isOwner: boolean }) {
 	}
 
 	return (
-		<Paper variant='outlined' sx={{ p: 3, mb: 3 }}>
+		<Paper variant='outlined' sx={{ p: 3 }}>
 			<Stack useFlexGap spacing={2}>
 				<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 					<LockGlyph />
-					<Typography variant='h6' component='h2' sx={{ fontWeight: 600 }}>
-						Slimme prioritering
-					</Typography>
+					<H3 component='h2'>Slimme prioritering</H3>
 				</Stack>
 
-				<Typography variant='body2' color='text.secondary'>
-					Met een abonnement krijg je:
-				</Typography>
+				<BodySmall color='text.secondary'>Met een abonnement krijg je:</BodySmall>
 
 				<Stack useFlexGap spacing={0.5}>
 					{VALUE_PROPS.map(prop => (
@@ -52,7 +48,7 @@ export function UpsellTeaser({ isOwner }: { isOwner: boolean }) {
 							>
 								•
 							</Box>
-							<Typography variant='body2'>{prop}</Typography>
+							<BodySmall>{prop}</BodySmall>
 						</Stack>
 					))}
 				</Stack>

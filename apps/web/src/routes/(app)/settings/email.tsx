@@ -1,5 +1,8 @@
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { AppIcon } from '@/components/AppIcon.component';
+import { Banner } from '@/components/Banner.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
+import { Body, BodySmall, Label } from '@/components/Text.component';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
 	gmailStatusQueryOptions,
@@ -11,20 +14,21 @@ import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { EmailSettingsSearchSchema } from '@/lib/schemas/email.schema';
 import { toReadableDate } from '@/lib/utils/date.utils';
 import { getEmailConnectErrorCopy } from '@/lib/utils/email-connect-error';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
-import Divider from '@mui/material/Divider';
+import Card from '@mui/material/Card';
+import IconButton from '@mui/material/IconButton';
 import MuiLink from '@mui/material/Link';
-import Paper from '@mui/material/Paper';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import type { BillingState, MailboxStatus } from '@offertum/shared';
+import { useTheme } from '@mui/material/styles';
+import type { BillingState, EmailProvider, MailboxStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { toMailboxRows, type MailboxRowView } from './email.mock';
 
 export const Route = createFileRoute('/(app)/settings/email')({
 	validateSearch: EmailSettingsSearchSchema,
@@ -78,23 +82,17 @@ function EmailSettingsPage() {
 	const showSuccessAlert = Boolean(oauthFeedback.connected === '1' && (gmailStatus.connected || msStatus.connected));
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
-			<Paper variant='outlined' sx={{ p: 5 }}>
-				<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-					<Typography variant='h1' sx={{ fontSize: 28 }}>
-						Your mailbox
-					</Typography>
-					<BackToHomeButton />
-				</Box>
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					Connect your own inbox so Offertum can read incoming quote requests and send replies on your behalf.
-					Each teammate connects their own mailbox.
-				</Typography>
+		<Stack>
+			<PageHeader
+				title='E-mailaccounts'
+				caption='Verbind je Gmail- en Outlook-mailboxen zodat Offertum binnenkomende offerteaanvragen kan lezen en antwoorden namens jou kan versturen. Elke medewerker beheert zijn eigen koppelingen.'
+			/>
 
+			<Stack useFlexGap spacing={3}>
 				{showSuccessAlert && (
-					<Alert severity='success' sx={{ mb: 3 }}>
-						Mailbox connected. Offertum is importing your last 90 days in the background.
-					</Alert>
+					<Banner tone='success'>
+						Mailbox verbonden. Offertum importeert op de achtergrond je laatste 90 dagen.
+					</Banner>
 				)}
 
 				{oauthFeedback.error === 'microsoft_admin_consent_required' && oauthFeedback.adminConsentUrl ? (
@@ -107,157 +105,332 @@ function EmailSettingsPage() {
 						}
 
 						return (
-							<Alert severity='error' sx={{ mb: 3 }}>
-								<strong>{copy.title}</strong>
-								<Typography variant='body2' sx={{ mt: 0.5 }}>
-									{copy.description}
-								</Typography>
-							</Alert>
+							<Banner tone='error' title={copy.title}>
+								<BodySmall sx={{ mt: 0.5 }}>{copy.description}</BodySmall>
+							</Banner>
 						);
 					})()
 				)}
 
 				{!billingEntitled && (
-					<Alert
-						severity='warning'
-						sx={{ mb: 3 }}
+					<Banner
+						tone='warning'
 						action={
 							isOwner ? (
 								<Button color='inherit' size='small' onClick={() => navigate({ to: '/billing' })}>
-									Subscribe
+									Abonneren
 								</Button>
 							) : undefined
 						}
 					>
 						{billingBlockedCopy(billing.state, isOwner)}
-					</Alert>
+					</Banner>
 				)}
 
-				<Stack useFlexGap spacing={4}>
-					<ProviderPanel
-						providerLabel='Gmail'
-						connectUrl='/api/email/gmail/connect'
-						status={gmailStatus}
-						billingEntitled={billingEntitled}
-						useDisconnect={useDisconnectGmail}
-					/>
+				<ProviderSection
+					provider='GMAIL'
+					label='Gmail'
+					connectUrl='/api/email/gmail/connect'
+					status={gmailStatus}
+					billingEntitled={billingEntitled}
+					useDisconnect={useDisconnectGmail}
+				/>
 
-					<Divider />
+				<ProviderSection
+					provider='MICROSOFT'
+					label='Outlook'
+					connectUrl='/api/email/microsoft/connect'
+					status={msStatus}
+					billingEntitled={billingEntitled}
+					useDisconnect={useDisconnectMicrosoft}
+					disconnectNote={
+						<>
+							Gebruik <strong>Verbreken</strong> om onze toegang in te trekken — dat stopt Offertum met
+							het lezen van je mailbox. Wil je Offertum ook uit de app-lijst van je Microsoft-account
+							verwijderen, ga dan naar{' '}
+							<MuiLink
+								href='https://account.microsoft.com/privacy/app-access'
+								target='_blank'
+								rel='noopener noreferrer'
+							>
+								account.microsoft.com/privacy
+							</MuiLink>{' '}
+							— dit is optioneel en verbreekt de koppeling niet vanzelf.
+						</>
+					}
+				/>
+			</Stack>
 
-					<ProviderPanel
-						providerLabel='Microsoft (Outlook)'
-						connectUrl='/api/email/microsoft/connect'
-						status={msStatus}
-						billingEntitled={billingEntitled}
-						useDisconnect={useDisconnectMicrosoft}
-						disconnectNote={
-							<>
-								Use <strong>Disconnect</strong> above to revoke our access, that's what stops Offertum
-								from reading your mailbox. To also remove Offertum from your Microsoft account's app
-								list, visit{' '}
-								<MuiLink
-									href='https://account.microsoft.com/privacy/app-access'
-									target='_blank'
-									rel='noopener noreferrer'
-								>
-									account.microsoft.com/privacy
-								</MuiLink>{' '}
-								this is optional and doesn't disconnect us on its own.
-							</>
-						}
-					/>
-				</Stack>
-
-				<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 5 }}>
-					Offertum requests read + send scopes only. We never read messages outside your offerteaanvraag flow,
-					and the tokens are encrypted at rest.
-				</Typography>
-			</Paper>
-		</Container>
+			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 5 }}>
+				Offertum vraagt alleen lees- en verzendrechten aan. We lezen nooit berichten buiten je
+				offerteaanvraag-flow, en de tokens worden versleuteld opgeslagen.
+			</BodySmall>
+		</Stack>
 	);
 }
 
-interface ProviderPanelProps {
-	providerLabel: string;
+interface ProviderSectionProps {
+	provider: EmailProvider;
+	label: string;
 	connectUrl: string;
 	status: MailboxStatus;
 	billingEntitled: boolean;
 	useDisconnect: () => { mutate: () => void; isPending: boolean };
-	// Optional caption shown under the Disconnect/Reconnect buttons. Used by the Microsoft
-	// panel to nudge users at Entra's user-revoke page since Microsoft offers no
-	// programmatic revoke endpoint, clearing the local row removes our access, but the
-	// grant itself lingers in the user's Microsoft account until they delete it there.
+	// Optional caption shown under the section. Used by the Outlook section to nudge users at
+	// Entra's user-revoke page since Microsoft offers no programmatic revoke endpoint, clearing
+	// the local row removes our access, but the grant itself lingers in the user's Microsoft
+	// account until they delete it there.
 	disconnectNote?: React.ReactNode;
 }
 
 /**
- * One provider section. Owns its own connect/disconnect lifecycle. Same shape for
- * Gmail and Microsoft, the only differences are the labels, the connect URL, and
- * the disconnect mutation.
+ * One provider section — a Card with a header row (provider mark + label + add-account
+ * action) and the stacked mailbox rows beneath it. Owns its own connect/disconnect lifecycle.
+ *
+ * The backend models a single mailbox per provider, so `accounts` is 0 or 1 row today; the
+ * design's multi-account layout is preserved so a future API change is a data swap, not a
+ * rewrite (see `email.mock.ts`).
  */
-function ProviderPanel({
-	providerLabel,
+function ProviderSection({
+	provider,
+	label,
 	connectUrl,
 	status,
 	billingEntitled,
 	useDisconnect,
 	disconnectNote
-}: ProviderPanelProps) {
+}: ProviderSectionProps) {
+	const { tokens } = useTheme();
 	const disconnect = useDisconnect();
+	const accounts = toMailboxRows(provider, status);
+	const hasAccounts = accounts.length > 0;
 
 	const handleConnect = () => {
 		window.location.href = connectUrl;
 	};
 
 	return (
-		<Box>
-			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-				<Typography variant='overline' color='text.secondary'>
-					{providerLabel}
-				</Typography>
-				{status.connected ? (
-					<Chip size='small' color='success' label='Connected' />
-				) : (
-					<Chip size='small' color='default' label='Not connected' />
-				)}
+		<Card variant='outlined' sx={{ p: 0, overflow: 'hidden' }}>
+			<Box
+				sx={{
+					p: 3,
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'space-between',
+					gap: 2,
+					borderBottom: hasAccounts ? `1px solid ${tokens.color.line}` : 'none'
+				}}
+			>
+				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+					<ProviderMark provider={provider} />
+					<Label fontWeight='bold' sx={{ fontSize: 16 }}>
+						{label}
+					</Label>
+				</Box>
+				<Button
+					variant={hasAccounts ? 'outlined' : 'contained'}
+					startIcon={<AppIcon name='plus' size='medium' />}
+					onClick={handleConnect}
+					disabled={!billingEntitled}
+				>
+					{hasAccounts ? 'Voeg account toe' : `Verbind ${label}-account`}
+				</Button>
 			</Box>
 
-			{status.connected ? (
-				<>
-					<Typography variant='body1' sx={{ mb: 0.5 }}>
-						Connected as <strong>{status.email}</strong>
-					</Typography>
-					{status.connectedAt && (
-						<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-							Linked on {toReadableDate(status.connectedAt, 'D MMM YYYY')}
-						</Typography>
-					)}
-
-					<Button
-						variant='outlined'
-						color='error'
-						onClick={() => disconnect.mutate()}
-						disabled={disconnect.isPending || !billingEntitled}
-					>
-						{disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
-					</Button>
-
-					{disconnectNote && (
-						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1.5 }}>
-							{disconnectNote}
-						</Typography>
-					)}
-				</>
-			) : (
-				<>
-					<Typography variant='body1' sx={{ mb: 2 }}>
-						No {providerLabel} mailbox connected yet.
-					</Typography>
-					<Button variant='contained' size='large' onClick={handleConnect} disabled={!billingEntitled}>
-						Connect {providerLabel}
-					</Button>
-				</>
+			{hasAccounts && (
+				<Box>
+					{accounts.map((account, index) => (
+						<MailboxRow
+							key={account.id}
+							mailbox={account}
+							isLast={index === accounts.length - 1}
+							billingEntitled={billingEntitled}
+							isDisconnecting={disconnect.isPending}
+							onReconnect={handleConnect}
+							onDisconnect={() => disconnect.mutate()}
+						/>
+					))}
+				</Box>
 			)}
+
+			{disconnectNote && hasAccounts && (
+				<Box sx={{ px: 3, pb: 3 }}>
+					<BodySmall color='text.secondary'>{disconnectNote}</BodySmall>
+				</Box>
+			)}
+		</Card>
+	);
+}
+
+interface MailboxRowProps {
+	mailbox: MailboxRowView;
+	isLast: boolean;
+	billingEntitled: boolean;
+	isDisconnecting: boolean;
+	onReconnect: () => void;
+	onDisconnect: () => void;
+}
+
+/**
+ * One connected mailbox row: provider mark, address, status badge, sync metadata, and a kebab
+ * menu (Opnieuw verbinden / Verbreken). The degraded "Verbroken" badge + error Alert render
+ * when the row view-model carries `status: 'disconnected'` / `error`; the real API never
+ * produces that state today (see `email.mock.ts`).
+ */
+function MailboxRow({ mailbox, isLast, billingEntitled, isDisconnecting, onReconnect, onDisconnect }: MailboxRowProps) {
+	const { tokens } = useTheme();
+	const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+	const isMenuOpen = Boolean(menuAnchor);
+	const isConnected = mailbox.status === 'connected';
+
+	const closeMenu = () => setMenuAnchor(null);
+
+	return (
+		<Box
+			sx={{
+				p: 3,
+				borderBottom: isLast ? 'none' : `1px solid ${tokens.color.line}`,
+				display: 'flex',
+				flexDirection: 'column',
+				gap: 1.5
+			}}
+		>
+			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+				<ProviderMark provider={mailbox.provider} size={28} />
+				<Box sx={{ flex: 1, minWidth: 0 }}>
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+						<Body fontWeight='medium' sx={{ wordBreak: 'break-all' }}>
+							{mailbox.email}
+						</Body>
+						<StatusBadge connected={isConnected} />
+					</Box>
+					<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.25 }}>
+						{mailbox.connectedAt
+							? `Verbonden op ${toReadableDate(mailbox.connectedAt, 'D MMM YYYY')} · Laatste sync ${mailbox.lastSync}`
+							: `Laatste sync ${mailbox.lastSync}`}
+					</BodySmall>
+				</Box>
+				<IconButton
+					aria-label='Acties voor mailbox'
+					aria-haspopup='menu'
+					aria-expanded={isMenuOpen}
+					size='small'
+					onClick={event => setMenuAnchor(event.currentTarget)}
+				>
+					<AppIcon name='dots-vertical' size='medium' />
+				</IconButton>
+				<Menu anchorEl={menuAnchor} open={isMenuOpen} onClose={closeMenu}>
+					<MenuItem
+						disabled={!billingEntitled}
+						onClick={() => {
+							closeMenu();
+							onReconnect();
+						}}
+					>
+						<ListItemIcon>
+							<AppIcon name='refresh' size='medium' />
+						</ListItemIcon>
+						Opnieuw verbinden
+					</MenuItem>
+					<MenuItem
+						disabled={!billingEntitled || isDisconnecting}
+						sx={{ color: 'error.main' }}
+						onClick={() => {
+							closeMenu();
+							onDisconnect();
+						}}
+					>
+						<ListItemIcon>
+							<AppIcon name='unlink' size='medium' style={{ color: tokens.color.lost[500] }} />
+						</ListItemIcon>
+						{isDisconnecting ? 'Verbreken…' : 'Verbreken'}
+					</MenuItem>
+				</Menu>
+			</Box>
+
+			{mailbox.error && (
+				<Banner
+					tone='warning'
+					action={
+						<Button
+							size='small'
+							color='inherit'
+							startIcon={<AppIcon name='refresh' size='small' />}
+							onClick={onReconnect}
+						>
+							Opnieuw verbinden
+						</Button>
+					}
+				>
+					{mailbox.error}
+				</Banner>
+			)}
+		</Box>
+	);
+}
+
+/**
+ * Connected / disconnected pill. Mirrors the design's bordered dot-prefixed badge using theme
+ * tokens (accent for connected, neutral ink for the degraded "Verbroken" state).
+ */
+function StatusBadge({ connected }: { connected: boolean }) {
+	const { tokens } = useTheme();
+	const color = connected ? tokens.color.accent[700] : tokens.color.ink4;
+	const borderColor = connected ? tokens.color.accent[500] : tokens.color.lineStrong;
+	const dotColor = connected ? tokens.color.accent[500] : tokens.color.ink4;
+
+	return (
+		<Box
+			component='span'
+			sx={{
+				display: 'inline-flex',
+				alignItems: 'center',
+				gap: 0.625,
+				px: 1,
+				py: 0.25,
+				border: `1px solid ${borderColor}`,
+				borderRadius: `${tokens.radius.sm}px`,
+				color,
+				fontSize: 11,
+				fontWeight: 'medium',
+				lineHeight: 1.6
+			}}
+		>
+			<Box component='span' sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: dotColor }} />
+			{connected ? 'Verbonden' : 'Verbroken'}
+		</Box>
+	);
+}
+
+/**
+ * Provider logo placeholder block. The design uses simple wordmark blocks (a single letter),
+ * not the real Gmail/Outlook logos — kept as a placeholder until real brand marks are added.
+ */
+function ProviderMark({ provider, size = 36 }: { provider: EmailProvider; size?: number }) {
+	const { tokens } = useTheme();
+	const glyph = provider === 'GMAIL' ? 'G' : 'O';
+
+	return (
+		<Box
+			component='span'
+			aria-hidden='true'
+			sx={{
+				width: size,
+				height: size,
+				flexShrink: 0,
+				borderRadius: `${tokens.radius.md}px`,
+				bgcolor: tokens.color.paper2,
+				border: `1px solid ${tokens.color.line}`,
+				display: 'inline-flex',
+				alignItems: 'center',
+				justifyContent: 'center',
+				color: tokens.color.ink1,
+				fontFamily: tokens.font.sans,
+				fontWeight: 700,
+				fontSize: Math.round(size * 0.45)
+			}}
+		>
+			{glyph}
 		</Box>
 	);
 }
@@ -284,15 +457,15 @@ function AdminConsentAlert({ adminConsentUrl }: { adminConsentUrl: string }) {
 	};
 
 	return (
-		<Alert severity='warning' sx={{ mb: 3 }}>
-			<Typography variant='body2' sx={{ mb: 1, fontWeight: 600 }}>
-				Your IT admin needs to approve Offertum for your organization.
-			</Typography>
-			<Typography variant='body2' sx={{ mb: 2 }}>
-				Microsoft requires a one-time admin approval before anyone in your company can connect their mailbox.
-				Forward this link to your IT admin, once they approve, you and your colleagues can connect your Outlook
-				mailboxes normally.
-			</Typography>
+		<Banner tone='warning'>
+			<BodySmall fontWeight='bold' sx={{ mb: 1 }}>
+				Je IT-beheerder moet Offertum goedkeuren voor je organisatie.
+			</BodySmall>
+			<BodySmall sx={{ display: 'block', mb: 2 }}>
+				Microsoft vereist een eenmalige goedkeuring door een beheerder voordat iemand in je bedrijf zijn mailbox
+				kan verbinden. Stuur deze link door naar je IT-beheerder — zodra die goedkeurt, kunnen jij en je
+				collega's je Outlook-mailboxen normaal verbinden.
+			</BodySmall>
 			<Box
 				sx={{
 					p: 1.25,
@@ -309,28 +482,28 @@ function AdminConsentAlert({ adminConsentUrl }: { adminConsentUrl: string }) {
 				{adminConsentUrl}
 			</Box>
 			<Button size='small' variant='outlined' color='inherit' onClick={handleCopy}>
-				{copied ? 'Copied!' : 'Copy link'}
+				{copied ? 'Gekopieerd!' : 'Kopieer link'}
 			</Button>
-		</Alert>
+		</Banner>
 	);
 }
 
 function billingBlockedCopy(state: BillingState, isOwner: boolean): string {
-	const ownerSuffix = isOwner ? 'Subscribe to connect a mailbox.' : 'Ask your owner to subscribe.';
+	const ownerSuffix = isOwner ? 'Abonneer je om een mailbox te verbinden.' : 'Vraag je eigenaar om te abonneren.';
 	switch (state) {
 		case 'none':
-			return `You haven't started your trial yet. ${ownerSuffix}`;
+			return `Je hebt je proefperiode nog niet gestart. ${ownerSuffix}`;
 		case 'canceled':
-			return `Your subscription has been canceled. ${ownerSuffix}`;
+			return `Je abonnement is geannuleerd. ${ownerSuffix}`;
 		case 'unpaid':
-			return `Your subscription is unpaid, update your payment method first. ${ownerSuffix}`;
+			return `Je abonnement is onbetaald, werk eerst je betaalmethode bij. ${ownerSuffix}`;
 		case 'paused':
-			return `Your subscription is paused. ${isOwner ? 'Resume it to connect a mailbox.' : 'Ask your owner to resume the subscription.'}`;
+			return `Je abonnement is gepauzeerd. ${isOwner ? 'Hervat het om een mailbox te verbinden.' : 'Vraag je eigenaar om het abonnement te hervatten.'}`;
 		case 'incomplete':
-			return `Subscription setup is incomplete. ${isOwner ? 'Finish checkout to connect a mailbox.' : 'Ask your owner to finish checkout.'}`;
+			return `De abonnement-setup is niet voltooid. ${isOwner ? 'Rond de checkout af om een mailbox te verbinden.' : 'Vraag je eigenaar om de checkout af te ronden.'}`;
 		case 'incomplete_expired':
-			return `Subscription setup expired. ${ownerSuffix}`;
+			return `De abonnement-setup is verlopen. ${ownerSuffix}`;
 		default:
-			return `Your subscription is inactive. ${ownerSuffix}`;
+			return `Je abonnement is inactief. ${ownerSuffix}`;
 	}
 }

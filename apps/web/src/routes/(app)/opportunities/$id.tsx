@@ -1,16 +1,22 @@
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { AppIcon } from '@/components/AppIcon.component';
+import { AvailabilityPicker, type CalendarProvider } from '@/components/AvailabilityPicker.component';
+import { Banner } from '@/components/Banner.component';
 import { ExpiryActionCard } from '@/components/ExpiryActionCard.component';
 import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
-import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { PillSelect } from '@/components/PillSelect.component';
 import { QuotePanel } from '@/components/QuotePanel.component';
 import { QuotePdfAttachSelect } from '@/components/QuotePdfAttachSelect.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { BodySmall, H1, H3, Label } from '@/components/Text.component';
 import { LockGlyph } from '@/components/UpsellTeaser.component';
+import { useToast } from '@/lib/hooks/use-toast';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
+import { gmailStatusQueryOptions, microsoftStatusQueryOptions } from '@/lib/queries/email.queries';
+import { opportunityExpiryActionQueryOptions } from '@/lib/queries/expiry.queries';
 import {
 	opportunityDetailQueryOptions,
 	useAssignOpportunity,
@@ -23,15 +29,14 @@ import {
 	useUpdateReplyDraft,
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
-import { opportunityExpiryActionQueryOptions } from '@/lib/queries/expiry.queries';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toReadableDate, toReadableDateTime, toReadableTimestamp } from '@/lib/utils/date.utils';
 import { toReadableBytes } from '@/lib/utils/number.utils';
 import {
 	getStatusOptionsForCurrent,
-	OPPORTUNITY_STATUS_CHIP_COLORS,
 	OPPORTUNITY_STATUS_LABELS_NL,
+	OPPORTUNITY_STATUS_PILL_TONES,
 	OPPORTUNITY_URGENCY_COLORS,
 	OPPORTUNITY_URGENCY_LABELS_NL,
 	opportunityCustomerLabel
@@ -40,12 +45,10 @@ import { isReplyDraftEditable } from '@/lib/utils/reply-draft-editability';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Container from '@mui/material/Container';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -53,19 +56,17 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import {
 	OPPORTUNITY_URGENCIES,
 	REPLY_DRAFT_BODY_MAX_LENGTH,
 	type CustomerReplyEntry,
 	type OpportunityFieldChange,
-	type OpportunityStatus,
 	type OpportunityTimelineEvent,
 	type OpportunityUrgency,
 	type ReplyDraft,
 	type ReplyDraftAttachment
 } from '@offertum/shared';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
@@ -82,24 +83,23 @@ const AUTOSAVE_DEBOUNCE_MS = 1000;
  *  this is the moment the user actually feels the benefit of authoring one.
  */
 export const Route = createFileRoute('/(app)/opportunities/$id')({
-	loader: async ({ context, params }) => {
-		// W13 — billing entitlement: gates the reply/send panel + the expiry-card fetch.
-		const billing = await context.queryClient.ensureQueryData(billingStatusQueryOptions);
-		await Promise.all([
+	loader: ({ context, params }) =>
+		// All prefetches run in parallel — nothing is awaited serially in front. Billing is
+		// no longer a gate here: the expiry-action endpoint already returns `null` for
+		// non-entitled orgs, so prefetching it unconditionally is cheap and removes a
+		// blocking round-trip from every detail navigation.
+		Promise.all([
 			context.queryClient.ensureQueryData(opportunityDetailQueryOptions(params.id)),
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
 			// Memberships drive the assignee picker — same load cycle as the detail
 			// fetch so the picker renders instantly when the panel paints.
 			context.queryClient.ensureQueryData(membershipsQueryOptions),
 			// Persisted quote drafts for the W10.3 quote panel.
 			context.queryClient.ensureQueryData(quoteDraftsQueryOptions(params.id)),
-			// W13 — live smart-expiry suggestion (or null) for the action card. Skipped for
-			// non-entitled orgs: the endpoint always returns null for them.
-			...(isBillingEntitled(billing.state)
-				? [context.queryClient.ensureQueryData(opportunityExpiryActionQueryOptions(params.id))]
-				: [])
-		]);
-	},
+			// W13 — live smart-expiry suggestion (or null) for the action card.
+			context.queryClient.ensureQueryData(opportunityExpiryActionQueryOptions(params.id))
+		]),
 	component: OpportunityDetailPage,
 	errorComponent: SectionError
 });
@@ -118,11 +118,11 @@ function OpportunityDetailPage() {
 	const composeFollowup = useComposeFollowupReplyDraft(id);
 	const uploadAttachment = useUploadReplyDraftAttachment(id);
 	const deleteAttachment = useDeleteReplyDraftAttachment(id);
+	const toast = useToast();
 	const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
 
 	const replyDraft = opportunity.replyDraft;
 	const status = opportunity.status;
-	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[status];
 	// editability collapses to draft-state only. Opp.status no longer
 	// gates the editor; courtesy follow-ups on a WON/LOST deal stay editable until
 	// they're sent. `null` draftStatus means "no draft generated yet" → editable
@@ -185,15 +185,14 @@ function OpportunityDetailPage() {
 	}, [debouncedBody, isDraftEditable]);
 
 	return (
-		<Container maxWidth='lg' sx={{ py: 6 }}>
+		<Stack>
 			<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
 				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'baseline' }}>
 					<MuiBackToList />
-					<Typography variant='h1' sx={{ fontSize: 24 }}>
+					<H1 sx={{ fontSize: 24 }}>
 						{opportunityCustomerLabel(opportunity)} · {opportunity.requestType}
-					</Typography>
+					</H1>
 				</Stack>
-				<BackToHomeButton />
 			</Box>
 			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', mb: 3, flexWrap: 'wrap' }}>
 				<Box
@@ -206,44 +205,39 @@ function OpportunityDetailPage() {
 					}}
 					aria-label={`Urgentie: ${opportunity.urgency}`}
 				/>
-				<StandaloneSelect
-					name={`status-${opportunity.id}`}
-					size='small'
+				<PillSelect
 					value={status}
-					onChange={e =>
-						updateStatus.mutate({ id: opportunity.id, status: e.target.value as OpportunityStatus })
-					}
+					ariaLabel='Status wijzigen'
 					disabled={updateStatus.isPending}
-					variant='standard'
-					disableUnderline
-					naked
+					onChange={next =>
+						updateStatus.mutate(
+							{ id: opportunity.id, status: next },
+							{
+								onSuccess: () => toast.success('Opgeslagen', 'Status bijgewerkt.'),
+								onError: err =>
+									toast.error(
+										'Bijwerken mislukt',
+										err instanceof Error ? err.message : 'Probeer het opnieuw.'
+									)
+							}
+						)
+					}
 					options={getStatusOptionsForCurrent(status).map(s => ({
 						id: s,
-						label: OPPORTUNITY_STATUS_LABELS_NL[s]
+						label: OPPORTUNITY_STATUS_LABELS_NL[s],
+						tone: OPPORTUNITY_STATUS_PILL_TONES[s]
 					}))}
-					renderValue={() => OPPORTUNITY_STATUS_LABELS_NL[status]}
-					sx={{
-						'& .MuiSelect-select': {
-							backgroundColor: chip.bg,
-							color: chip.fg,
-							fontWeight: 500,
-							fontSize: '0.7rem',
-							padding: '2px 22px 2px 8px',
-							borderRadius: '999px',
-							minWidth: 0
-						}
-					}}
 				/>
-				<Typography variant='caption' color='text.secondary'>
+				<BodySmall color='text.secondary'>
 					Binnengekomen {toReadableTimestamp(opportunity.internalDate)}
-				</Typography>
+				</BodySmall>
 			</Stack>
 
 			{isEntitled && <ExpiryActionCard opportunityId={id} isOwner={isOwner} />}
 
 			{me.user.hasTonePlaybook === false && (
-				<Alert
-					severity='info'
+				<Banner
+					tone='info'
 					sx={{ mb: 3 }}
 					action={
 						<Button color='inherit' size='small' component={Link} to='/settings/writing-style'>
@@ -253,12 +247,12 @@ function OpportunityDetailPage() {
 				>
 					Vertel ons in een paar zinnen hoe je schrijft, dan klinken concept-antwoorden zoals jou. Nu
 					gebruiken we een neutrale standaardtoon.
-				</Alert>
+				</Banner>
 			)}
 
 			{isDraftEditable && shouldShowRegenerateHint({ me, replyDraft }) && (
-				<Alert
-					severity='info'
+				<Banner
+					tone='info'
 					sx={{ mb: 3 }}
 					action={
 						<Button
@@ -281,7 +275,7 @@ function OpportunityDetailPage() {
 				>
 					Je schrijfstijl is bijgewerkt sinds dit concept werd opgesteld. Wil je het concept opnieuw laten
 					genereren in je nieuwe stijl?
-				</Alert>
+				</Banner>
 			)}
 
 			<Stack direction={{ xs: 'column', md: 'row' }} useFlexGap spacing={3}>
@@ -298,9 +292,7 @@ function OpportunityDetailPage() {
 							spacing={1}
 							sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
 						>
-							<Typography variant='h2' sx={{ fontSize: 18 }}>
-								Concept-antwoord
-							</Typography>
+							<H3>Concept-antwoord</H3>
 							{replyDraft?.kind === 'check_in' && (
 								<Chip size='small' label='Automatische follow-up' color='info' variant='outlined' />
 							)}
@@ -327,12 +319,12 @@ function OpportunityDetailPage() {
 					{isEntitled ? (
 						<>
 							{regenerateDraft.isError && (
-								<Alert severity='error' sx={{ mb: 1 }}>
+								<Banner tone='error' sx={{ mb: 1 }}>
 									Regenereren mislukt:{' '}
 									{regenerateDraft.error instanceof Error
 										? regenerateDraft.error.message
 										: 'Onbekende fout'}
-								</Alert>
+								</Banner>
 							)}
 							{replyDraft ? (
 								<>
@@ -392,15 +384,15 @@ function OpportunityDetailPage() {
 											sx={{ mt: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
 										>
 											{sendDraft.isError && (
-												<Alert severity='error' sx={{ flex: 1 }}>
+												<Banner tone='error' sx={{ flex: 1 }}>
 													Versturen mislukt:{' '}
 													{sendDraft.error instanceof Error
 														? sendDraft.error.message
 														: 'Onbekende fout'}
-												</Alert>
+												</Banner>
 											)}
 											<Button
-												variant='contained'
+												variant='text'
 												size='medium'
 												onClick={() => setSendConfirmOpen(true)}
 												disabled={
@@ -418,17 +410,17 @@ function OpportunityDetailPage() {
 								</>
 							) : opportunity.dismissedAt ? (
 								<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-									<Typography variant='body2' color='text.secondary'>
+									<BodySmall color='text.secondary'>
 										Deze offerteaanvraag is afgewezen: er wordt geen concept-antwoord opgesteld.
-									</Typography>
+									</BodySmall>
 								</Paper>
 							) : (
 								<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
 									<CircularProgress size={20} sx={{ mb: 1 }} />
-									<Typography variant='body2' color='text.secondary'>
+									<BodySmall color='text.secondary'>
 										Concept-antwoord wordt opgesteld… Dit duurt meestal een paar seconden. Ververs
 										de pagina als het langer duurt dan een minuut.
-									</Typography>
+									</BodySmall>
 								</Paper>
 							)}
 						</>
@@ -448,9 +440,7 @@ function OpportunityDetailPage() {
 					)}
 				</Box>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
-					<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
-						Originele e-mail
-					</Typography>
+					<H3 sx={{ mb: 1 }}>Originele e-mail</H3>
 					<OriginalEmailPanel
 						subject={opportunity.subject}
 						fromName={opportunity.fromName}
@@ -458,9 +448,7 @@ function OpportunityDetailPage() {
 						body={opportunity.originalEmailBody}
 					/>
 
-					<Typography variant='h2' sx={{ fontSize: 18, mt: 4, mb: 1 }}>
-						Geëxtraheerde gegevens
-					</Typography>
+					<H3 sx={{ mt: 4, mb: 1 }}>Geëxtraheerde gegevens</H3>
 					<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} />
 				</Box>
 			</Stack>
@@ -491,11 +479,17 @@ function OpportunityDetailPage() {
 						}
 					}
 					sendDraft.mutate(undefined, {
+						onSuccess: () => toast.success('Verzonden', 'Je antwoord is naar de klant gestuurd.'),
+						onError: err =>
+							toast.error(
+								'Versturen mislukt',
+								err instanceof Error ? err.message : 'Probeer het opnieuw.'
+							),
 						onSettled: () => setSendConfirmOpen(false)
 					});
 				}}
 			/>
-		</Container>
+		</Stack>
 	);
 }
 
@@ -520,13 +514,11 @@ function LockedReplyPanel({ isOwner }: { isOwner: boolean }) {
 		>
 			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 				<LockGlyph />
-				<Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
-					Abonneer om te versturen
-				</Typography>
+				<Label fontWeight='bold'>Abonneer om te versturen</Label>
 			</Stack>
-			<Typography variant='body2' color='text.secondary'>
+			<BodySmall color='text.secondary'>
 				Abonneer om AI-antwoorden te versturen en deze aanvraag op te volgen.
-			</Typography>
+			</BodySmall>
 			<SubscribeCta isOwner={isOwner} />
 		</Paper>
 	);
@@ -608,14 +600,10 @@ function DraftEditor({
 				spacing={1}
 				sx={{ mt: 1, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
 			>
-				<Typography variant='caption' color='text.secondary'>
+				<BodySmall color='text.secondary'>
 					{body.length} / {REPLY_DRAFT_BODY_MAX_LENGTH} tekens
-				</Typography>
-				<Typography
-					variant='caption'
-					color='text.secondary'
-					sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-				>
+				</BodySmall>
+				<BodySmall color='text.secondary' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
 					{readOnly ? (
 						'Verzonden — alleen-lezen'
 					) : isSaving ? (
@@ -625,12 +613,12 @@ function DraftEditor({
 					) : (
 						`Laatst gewijzigd ${toReadableDateTime(lastUpdatedIso)}`
 					)}
-				</Typography>
+				</BodySmall>
 			</Stack>
 			{error instanceof Error && !readOnly && (
-				<Alert severity='error' sx={{ mt: 2 }}>
+				<Banner tone='error' sx={{ mt: 2 }}>
 					Opslaan mislukt: {error.message}
-				</Alert>
+				</Banner>
 			)}
 		</Paper>
 	);
@@ -668,40 +656,31 @@ function SendConfirmDialog({
 		<Dialog open={isOpen} onClose={isSending ? undefined : onClose} maxWidth='sm' fullWidth>
 			<DialogTitle>Concept versturen?</DialogTitle>
 			<DialogContent>
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+				<BodySmall color='text.secondary' sx={{ mb: 2 }}>
 					Dit verstuurt direct als antwoord op de oorspronkelijke e-mail. Je kunt het niet terugnemen.
-				</Typography>
+				</BodySmall>
 				<Box sx={{ mb: 2 }}>
-					<Typography variant='caption' color='text.secondary'>
-						Naar
-					</Typography>
-					<Typography variant='body2'>{recipientLabel}</Typography>
+					<BodySmall color='text.secondary'>Naar</BodySmall>
+					<BodySmall>{recipientLabel}</BodySmall>
 				</Box>
 				{subject && (
 					<Box sx={{ mb: 2 }}>
-						<Typography variant='caption' color='text.secondary'>
-							Onderwerp
-						</Typography>
-						<Typography variant='body2'>Re: {subject.replace(/^re:\s*/i, '')}</Typography>
+						<BodySmall color='text.secondary'>Onderwerp</BodySmall>
+						<BodySmall>Re: {subject.replace(/^re:\s*/i, '')}</BodySmall>
 					</Box>
 				)}
 				<Box>
-					<Typography variant='caption' color='text.secondary'>
-						Begin van het bericht
-					</Typography>
-					<Typography
-						variant='body2'
+					<BodySmall color='text.secondary'>Begin van het bericht</BodySmall>
+					<BodySmall
 						component='pre'
 						sx={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', m: 0, mt: 0.5, color: 'text.primary' }}
 					>
 						{preview}
-					</Typography>
+					</BodySmall>
 				</Box>
 				{attachments.length > 0 && (
 					<Box sx={{ mt: 2 }}>
-						<Typography variant='caption' color='text.secondary'>
-							Bijlagen ({attachments.length})
-						</Typography>
+						<BodySmall color='text.secondary'>Bijlagen ({attachments.length})</BodySmall>
 						<Stack direction='row' useFlexGap spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
 							{attachments.map(attachment => (
 								<Chip
@@ -745,16 +724,15 @@ function OriginalEmailPanel({
 	return (
 		<Paper variant='outlined' sx={{ p: 2 }}>
 			{subject && (
-				<Typography variant='body2' sx={{ fontWeight: 500, mb: 0.5 }}>
+				<BodySmall fontWeight='medium' sx={{ mb: 0.5 }}>
 					{subject}
-				</Typography>
+				</BodySmall>
 			)}
-			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+			<BodySmall color='text.secondary' sx={{ mb: 1 }}>
 				{fromName ?? 'Onbekend'} {fromEmail ? `<${fromEmail}>` : ''}
-			</Typography>
+			</BodySmall>
 			<Divider sx={{ mb: 1 }} />
-			<Typography
-				variant='body2'
+			<BodySmall
 				component='pre'
 				sx={{
 					whiteSpace: 'pre-wrap',
@@ -765,7 +743,7 @@ function OriginalEmailPanel({
 				}}
 			>
 				{body || '(geen tekstuele inhoud)'}
-			</Typography>
+			</BodySmall>
 		</Paper>
 	);
 }
@@ -798,6 +776,18 @@ function ExtractedFieldsPanel({
 	const updateFields = useUpdateOpportunityFields(opportunityId);
 	const assign = useAssignOpportunity(opportunityId);
 	const { data: memberships } = useSuspenseQuery(membershipsQueryOptions);
+
+	// AvailabilityPicker — anchored popover for the "Afspraak" field. Connected providers
+	// are read from the REAL mailbox status (on-demand, not route-critical — bare useQuery is
+	// allowed for interaction-driven data per the route conventions). Busy windows are mocked
+	// inside the picker; see AvailabilityPicker.mock.ts.
+	const { data: gmailStatus } = useQuery(gmailStatusQueryOptions);
+	const { data: microsoftStatus } = useQuery(microsoftStatusQueryOptions);
+	const connectedProviders: CalendarProvider[] = [
+		...(gmailStatus?.connected ? (['google'] as const) : []),
+		...(microsoftStatus?.connected ? (['microsoft'] as const) : [])
+	];
+	const [appointmentAnchorEl, setAppointmentAnchorEl] = useState<HTMLElement | null>(null);
 
 	// Sentinel string for the "Niemand" option — the underlying StandaloneSelect's
 	// `renderValue` treats `''` as "nothing selected" and shows the placeholder, so we
@@ -896,14 +886,37 @@ function ExtractedFieldsPanel({
 					size='small'
 					onAccept={commitDeadline}
 				/>
-				<StandaloneDateTimePicker
-					name='appointment'
-					label='Afspraak'
-					value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
-					fullWidth
-					size='small'
-					onAccept={commitAppointment}
-				/>
+				<Box>
+					<Label component='label' color='text.secondary'>
+						Afspraak
+					</Label>
+					<Button
+						variant='outlined'
+						color='inherit'
+						fullWidth
+						onClick={e => setAppointmentAnchorEl(e.currentTarget)}
+						endIcon={<AppIcon name='calendar' size='medium' />}
+						sx={{
+							mt: 0.5,
+							justifyContent: 'space-between',
+							textTransform: 'none',
+							fontWeight: 'normal',
+							color: opportunity.customerAppointment ? 'text.primary' : 'text.secondary'
+						}}
+					>
+						{opportunity.customerAppointment
+							? toReadableDateTime(opportunity.customerAppointment)
+							: 'Kies een tijd'}
+					</Button>
+					<AvailabilityPicker
+						open={Boolean(appointmentAnchorEl)}
+						anchorEl={appointmentAnchorEl}
+						connectedProviders={connectedProviders}
+						value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
+						onClose={() => setAppointmentAnchorEl(null)}
+						onConfirm={iso => commitAppointment(iso ? dayjs(iso) : null)}
+					/>
+				</Box>
 				<StandaloneSelect
 					name='assignee'
 					label='Toegewezen aan'
@@ -922,21 +935,19 @@ function ExtractedFieldsPanel({
 				/>
 
 				{(updateFields.isError || assign.isError) && (
-					<Alert severity='error'>
+					<Banner tone='error'>
 						Bijwerken mislukt:{' '}
 						{updateFields.error instanceof Error
 							? updateFields.error.message
 							: assign.error instanceof Error
 								? assign.error.message
 								: 'Onbekende fout'}
-					</Alert>
+					</Banner>
 				)}
 				<Box>
-					<Typography variant='caption' color='text.secondary'>
-						Onderdelen
-					</Typography>
+					<BodySmall color='text.secondary'>Onderdelen</BodySmall>
 					{opportunity.deliverableHints.length === 0 ? (
-						<Typography variant='body2'>–</Typography>
+						<BodySmall>–</BodySmall>
 					) : (
 						<Stack direction='row' useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>
 							{opportunity.deliverableHints.map(hint => (
@@ -953,10 +964,8 @@ function ExtractedFieldsPanel({
 function ExtractedField({ label, value }: { label: string; value: string | null }) {
 	return (
 		<Box>
-			<Typography variant='caption' color='text.secondary'>
-				{label}
-			</Typography>
-			<Typography variant='body2'>{value ?? '—'}</Typography>
+			<BodySmall color='text.secondary'>{label}</BodySmall>
+			<BodySmall>{value ?? '—'}</BodySmall>
 		</Box>
 	);
 }
@@ -1004,9 +1013,7 @@ function AttachmentsPanel({
 				spacing={1}
 				sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
 			>
-				<Typography variant='subtitle2'>
-					Bijlagen{attachments.length > 0 ? ` (${attachments.length})` : ''}
-				</Typography>
+				<Label>Bijlagen{attachments.length > 0 ? ` (${attachments.length})` : ''}</Label>
 				{!readOnly && (
 					<>
 						<input
@@ -1038,9 +1045,7 @@ function AttachmentsPanel({
 			</Stack>
 			<QuotePdfAttachSelect opportunityId={opportunityId} attachments={attachments} readOnly={readOnly} />
 			{attachments.length === 0 ? (
-				<Typography variant='body2' color='text.secondary'>
-					Geen bijlagen toegevoegd.
-				</Typography>
+				<BodySmall color='text.secondary'>Geen bijlagen toegevoegd.</BodySmall>
 			) : (
 				<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
 					{attachments.map(attachment => (
@@ -1059,14 +1064,14 @@ function AttachmentsPanel({
 				</Stack>
 			)}
 			{uploadError instanceof Error && (
-				<Alert severity='error' sx={{ mt: 1 }}>
+				<Banner tone='error' sx={{ mt: 1 }}>
 					Uploaden mislukt: {uploadError.message}
-				</Alert>
+				</Banner>
 			)}
 			{deleteError instanceof Error && (
-				<Alert severity='error' sx={{ mt: 1 }}>
+				<Banner tone='error' sx={{ mt: 1 }}>
 					Verwijderen mislukt: {deleteError.message}
-				</Alert>
+				</Banner>
 			)}
 		</Paper>
 	);
@@ -1167,9 +1172,7 @@ function TimelinePanel({
 
 	return (
 		<Box sx={{ mt: 4 }}>
-			<Typography variant='h2' sx={{ fontSize: 18, mb: 1 }}>
-				Tijdlijn ({totalEntries})
-			</Typography>
+			<H3 sx={{ mb: 1 }}>Tijdlijn ({totalEntries})</H3>
 			<Stack useFlexGap spacing={1}>
 				{merged.map(entry => {
 					if (entry.kind === 'draft') {
@@ -1338,22 +1341,16 @@ function TimelineEventEntry({ event }: { event: OpportunityTimelineEvent }) {
 				sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 			>
 				<Chip size='small' label={copy.chipLabel} color={copy.chipColor} variant='outlined' />
-				<Typography variant='caption' sx={{ fontWeight: 500 }}>
-					{copy.headline}
-				</Typography>
-				<Typography variant='caption' color='text.secondary'>
+				<BodySmall fontWeight='medium'>{copy.headline}</BodySmall>
+				<BodySmall color='text.secondary'>
 					· {toReadableDateTime(event.occurredAt)}
 					{event.actorName && ` · door ${event.actorName}`}
-				</Typography>
+				</BodySmall>
 			</Stack>
 			{copy.detail && (
-				<Typography
-					variant='caption'
-					color='text.secondary'
-					sx={{ display: 'block', mt: 0.5, pl: 0.25, whiteSpace: 'pre-wrap' }}
-				>
+				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.5, pl: 0.25, whiteSpace: 'pre-wrap' }}>
 					{copy.detail}
-				</Typography>
+				</BodySmall>
 			)}
 		</Paper>
 	);
@@ -1378,12 +1375,10 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 				>
 					<Chip size='small' label={chipLabel} color={chipColor} variant='filled' />
-					<Typography variant='caption' sx={{ fontWeight: 500 }}>
-						{senderLabel}
-					</Typography>
-					<Typography variant='caption' color='text.secondary'>
+					<BodySmall fontWeight='medium'>{senderLabel}</BodySmall>
+					<BodySmall color='text.secondary'>
 						· {verb} {toReadableDateTime(reply.receivedAt)}
-					</Typography>
+					</BodySmall>
 					{reply.wasDetectedAsCloser && (
 						<Chip
 							size='small'
@@ -1396,8 +1391,7 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 				</Stack>
 			</AccordionSummary>
 			<AccordionDetails sx={{ pt: 0 }}>
-				<Typography
-					variant='body2'
+				<BodySmall
 					component='pre'
 					sx={{
 						whiteSpace: 'pre-wrap',
@@ -1410,7 +1404,7 @@ function CustomerReplyHistoryEntry({ reply }: { reply: CustomerReplyEntry }) {
 					}}
 				>
 					{reply.body || '(geen tekstuele inhoud)'}
-				</Typography>
+				</BodySmall>
 			</AccordionDetails>
 		</Accordion>
 	);
@@ -1442,9 +1436,7 @@ function ReplyDraftHistoryEntry({
 					spacing={1}
 					sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, width: '100%' }}
 				>
-					<Typography variant='caption' sx={{ fontWeight: 600 }}>
-						v{ordinal}
-					</Typography>
+					<BodySmall fontWeight='bold'>v{ordinal}</BodySmall>
 					<Chip
 						size='small'
 						label={isSent ? 'Verzonden' : 'Vervangen'}
@@ -1454,13 +1446,11 @@ function ReplyDraftHistoryEntry({
 					{draft.kind === 'check_in' && (
 						<Chip size='small' label='Automatische follow-up' color='info' variant='outlined' />
 					)}
-					<Typography variant='caption' color='text.secondary'>
-						{headerText}
-					</Typography>
+					<BodySmall color='text.secondary'>{headerText}</BodySmall>
 					{draft.attachments.length > 0 && (
-						<Typography variant='caption' color='text.secondary'>
+						<BodySmall color='text.secondary'>
 							· {draft.attachments.length} bijlage{draft.attachments.length === 1 ? '' : 'n'}
-						</Typography>
+						</BodySmall>
 					)}
 					{replies.length > 0 && (
 						<Chip
@@ -1473,8 +1463,7 @@ function ReplyDraftHistoryEntry({
 				</Stack>
 			</AccordionSummary>
 			<AccordionDetails sx={{ pt: 0 }}>
-				<Typography
-					variant='body2'
+				<BodySmall
 					component='pre'
 					sx={{
 						whiteSpace: 'pre-wrap',
@@ -1487,12 +1476,12 @@ function ReplyDraftHistoryEntry({
 					}}
 				>
 					{draft.body}
-				</Typography>
+				</BodySmall>
 				{draft.attachments.length > 0 && (
 					<Box sx={{ mt: 2 }}>
-						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
+						<BodySmall color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
 							Bijlagen
-						</Typography>
+						</BodySmall>
 						<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
 							{draft.attachments.map(attachment => (
 								<Chip
@@ -1511,9 +1500,9 @@ function ReplyDraftHistoryEntry({
 				)}
 				{replies.length > 0 && (
 					<Box sx={{ mt: 2, ml: 1, pl: 1, borderLeft: '2px solid', borderColor: 'info.light' }}>
-						<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
+						<BodySmall color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
 							Antwoorden van de klant op deze versie
-						</Typography>
+						</BodySmall>
 						<Stack useFlexGap spacing={0.5}>
 							{replies
 								.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))

@@ -1,3 +1,4 @@
+import type { AppIconName } from '@/components/AppIcon.component';
 import type { AutocompleteProps } from '@mui/material/Autocomplete';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import type { SxProps, Theme } from '@mui/material/styles';
@@ -30,6 +31,10 @@ export interface SelectProps {
 export interface Option<T = string> {
 	id: string | number;
 	label: T;
+	// Muted second line under the primary label (DS panel-item secondary text).
+	secondaryLabel?: ReactNode;
+	// Leading icon shown in front of the option (DS panel-item lead).
+	icon?: AppIconName;
 	disabled?: boolean;
 	image?: string;
 	groupBy?: string;

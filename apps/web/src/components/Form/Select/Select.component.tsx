@@ -1,8 +1,10 @@
+import { AppIcon } from '@/components/AppIcon.component';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControl from '@mui/material/FormControl';
 import FormHelperText from '@mui/material/FormHelperText';
 import InputAdornment from '@mui/material/InputAdornment';
 import InputLabel from '@mui/material/InputLabel';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import ListSubheader, { type ListSubheaderProps } from '@mui/material/ListSubheader';
 import MenuItem from '@mui/material/MenuItem';
@@ -83,7 +85,12 @@ export function StandaloneSelect({
 				items.push(
 					...groupedValue.options.map(option => (
 						<MenuItem key={option.id} value={option.id} disabled={option.disabled}>
-							<ListItemText>{option.label}</ListItemText>
+							{option.icon && (
+								<ListItemIcon>
+									<AppIcon name={option.icon} size='medium' />
+								</ListItemIcon>
+							)}
+							<ListItemText primary={option.label} secondary={option.secondaryLabel} />
 						</MenuItem>
 					))
 				);
@@ -113,6 +120,7 @@ export function StandaloneSelect({
 			data-testid={dataTestId}
 			error={Boolean(error)}
 			id={slugified}
+			labelId={naked ? undefined : labelId}
 			label={naked ? undefined : label}
 			value={value}
 			name={name}
@@ -189,7 +197,7 @@ export function StandaloneSelect({
 	return (
 		<FormControl fullWidth={fullWidth} disabled={disabled} required={required} sx={sx}>
 			{label && (
-				<InputLabel required={required} htmlFor={labelId}>
+				<InputLabel required={required} id={labelId}>
 					{label}
 				</InputLabel>
 			)}

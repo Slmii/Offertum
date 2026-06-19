@@ -1,15 +1,15 @@
+import { Banner } from '@/components/Banner.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
+import { BodySmall, H3 } from '@/components/Text.component';
 import { classifierQualityQueryOptions } from '@/lib/queries/classifier-quality.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import { toReadableNumber, toReadablePercent } from '@/lib/utils/number.utils';
 import { OPPORTUNITY_DISMISS_REASON_LABELS_NL } from '@/lib/utils/opportunity.utils';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -18,7 +18,6 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Typography from '@mui/material/Typography';
 import type {
 	AIUsageRange,
 	ClassifierDismissedRow,
@@ -57,21 +56,18 @@ function ClassifierQualityPage() {
 	const { data } = useSuspenseQuery(classifierQualityQueryOptions(range));
 
 	return (
-		<Container maxWidth='lg' sx={{ py: 6 }}>
-			<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-				<Typography variant='h1' sx={{ fontSize: 28 }}>
-					Classifier quality
-				</Typography>
-				<Chip label='dev only' size='small' color='warning' />
-				<Box sx={{ flex: 1 }} />
-				<BackToHomeButton />
-			</Box>
-			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Precision = <code>1 − (any dismissal / total opportunities)</code>. Every dismiss reason counts (from
-				the owner's perspective the system was wrong regardless of which subsystem failed). The reason chips
-				below + bulk-mail recall card diagnose <em>which</em> subsystem (classifier, bulk-mail filter, dedup) is
-				to blame.
-			</Typography>
+		<Stack>
+			<PageHeader
+				title='Classifier quality'
+				caption={
+					<>
+						Precision = <code>1 − (any dismissal / total opportunities)</code>. Every dismiss reason counts
+						(from the owner's perspective the system was wrong regardless of which subsystem failed). The
+						reason chips below + bulk-mail recall card diagnose <em>which</em> subsystem (classifier,
+						bulk-mail filter, dedup) is to blame.
+					</>
+				}
+			/>
 
 			<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3 }}>
 				{(Object.keys(RANGE_LABELS) as AIUsageRange[]).map(option => (
@@ -99,24 +95,20 @@ function ClassifierQualityPage() {
 
 			<BulkMailFilterPanel recall={data.bulkMailFilter} />
 
-			<Typography variant='h2' sx={{ fontSize: 18, mt: 4, mb: 1 }}>
-				Precision by org · classifier model
-			</Typography>
+			<H3 sx={{ mt: 4, mb: 1 }}>Precision by org · classifier model</H3>
 			<PrecisionTable rows={data.precision} />
 
-			<Typography variant='h2' sx={{ fontSize: 18, mt: 4, mb: 1 }}>
-				Recent dismissals (last 5)
-			</Typography>
-			<Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+			<H3 sx={{ mt: 4, mb: 1 }}>Recent dismissals (last 5)</H3>
+			<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 				Most-recent dismissed opportunities in the selected window, any reason. Use{' '}
 				<code>classifiedAiCallId</code> to look up the exact prompt + response that produced the call.
-			</Typography>
+			</BodySmall>
 			<RecentDismissalsTable rows={data.recentDismissals} />
 
-			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 2 }}>
+			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 2 }}>
 				Window: {toReadableDateTime(data.rangeStart)} to {toReadableDateTime(data.rangeEnd)}
-			</Typography>
-		</Container>
+			</BodySmall>
+		</Stack>
 	);
 }
 
@@ -126,18 +118,16 @@ function DismissReasonBreakdown({ counts }: { counts: DismissReasonCounts }) {
 	if (total === 0) {
 		return (
 			<Box sx={{ mb: 3 }}>
-				<Typography variant='caption' color='text.secondary'>
-					No dismissals in this window yet.
-				</Typography>
+				<BodySmall color='text.secondary'>No dismissals in this window yet.</BodySmall>
 			</Box>
 		);
 	}
 
 	return (
 		<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-			<Typography variant='caption' color='text.secondary' sx={{ mr: 1 }}>
+			<BodySmall color='text.secondary' sx={{ mr: 1 }}>
 				By reason:
-			</Typography>
+			</BodySmall>
 			{OPPORTUNITY_DISMISS_REASONS.map(reason => (
 				<Chip
 					key={reason}
@@ -158,23 +148,23 @@ function BulkMailFilterPanel({
 }) {
 	if (recall.caughtCount === 0 && recall.missedCount === 0) {
 		return (
-			<Alert severity='info' sx={{ mb: 3 }}>
+			<Banner tone='info' sx={{ mb: 3 }}>
 				No bulk-mail activity in this window: the filter hasn't fired and no opportunities were dismissed as
 				SPAM yet. Numbers will populate once mail starts flowing.
-			</Alert>
+			</Banner>
 		);
 	}
 
 	const severity = recall.recall !== null && recall.recall < 0.9 ? 'warning' : 'info';
 
 	return (
-		<Alert severity={severity} sx={{ mb: 3 }}>
+		<Banner tone={severity} sx={{ mb: 3 }}>
 			Bulk-mail filter caught <strong>{toReadableNumber(recall.caughtCount)}</strong> marketing emails before the
 			classifier ran. Users dismissed <strong>{toReadableNumber(recall.missedCount)}</strong> opportunities as
 			SPAM (the filter missed those). Recall = <strong>{toReadablePercent(recall.recall)}</strong>. Low recall
 			means the filter's signals (List-Unsubscribe header, tracking-domain count, unsubscribe phrases) need
 			tightening: promote the missed bodies to the filter's fixture corpus via the export CLI.
-		</Alert>
+		</Banner>
 	);
 }
 
@@ -233,11 +223,7 @@ function PrecisionTable({ rows }: { rows: readonly ClassifierPrecisionRow[] }) {
 function ReasonChipsCompact({ counts }: { counts: DismissReasonCounts }) {
 	const visible = OPPORTUNITY_DISMISS_REASONS.filter(r => counts[r] > 0);
 	if (visible.length === 0) {
-		return (
-			<Typography variant='caption' color='text.secondary'>
-				(none)
-			</Typography>
-		);
+		return <BodySmall color='text.secondary'>(none)</BodySmall>;
 	}
 	return (
 		<Stack direction='row' useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap' }}>
@@ -290,18 +276,12 @@ function RecentDismissalsTable({ rows }: { rows: readonly ClassifierDismissedRow
 									/>
 								</TableCell>
 								<TableCell>
-									<Typography variant='body2' sx={{ fontWeight: 500 }}>
-										{row.subject ?? '(no subject)'}
-									</Typography>
-									<Typography variant='caption' color='text.secondary'>
-										{row.fromEmail ?? '—'}
-									</Typography>
+									<BodySmall fontWeight='medium'>{row.subject ?? '(no subject)'}</BodySmall>
+									<BodySmall color='text.secondary'>{row.fromEmail ?? '—'}</BodySmall>
 								</TableCell>
 								<TableCell>
-									<Typography variant='body2'>{row.customerName ?? '(none)'}</Typography>
-									<Typography variant='caption' color='text.secondary'>
-										{row.requestType}
-									</Typography>
+									<BodySmall>{row.customerName ?? '(none)'}</BodySmall>
+									<BodySmall color='text.secondary'>{row.requestType}</BodySmall>
 								</TableCell>
 								<TableCell>
 									{row.classifierProvider && row.classifierModel ? (

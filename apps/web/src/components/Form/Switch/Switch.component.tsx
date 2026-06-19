@@ -30,10 +30,10 @@ export const Switch = ({ name, label, disabled, onChange, ...props }: FormSwitch
 							{...props}
 						/>
 					}
-					sx={{ mx: 0 }}
 					label={label}
 					disableTypography
 					labelPlacement='end'
+					sx={{ minWidth: 'fit-content', mx: 0 }}
 				/>
 			)}
 		/>
@@ -61,7 +61,9 @@ export const StandaloneSwitch = ({ checked, name, label, disabled, onChange, ...
 				/>
 			}
 			label={label}
+			disableTypography
 			labelPlacement='end'
+			sx={{ minWidth: 'fit-content', mx: 0 }}
 		/>
 	);
 };

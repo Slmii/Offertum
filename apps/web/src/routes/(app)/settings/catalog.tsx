@@ -1,8 +1,11 @@
+import { Banner } from '@/components/Banner.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
+import { BodySmall, Label } from '@/components/Text.component';
 import {
 	catalogItemsQueryOptions,
 	useCreateCatalogItem,
@@ -12,12 +15,9 @@ import {
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { CatalogItemSchema, type CatalogItemForm } from '@/lib/schemas/catalog-item.schema';
 import { toReadableEuro } from '@/lib/utils/number.utils';
-import { CATALOG_ITEM_UNIT_DEFAULT, CATALOG_ITEM_UNIT_LABELS_NL, CATALOG_ITEM_UNITS } from '@offertum/shared';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -25,13 +25,13 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import type { CatalogItem } from '@offertum/shared';
-
-const UNIT_OPTIONS = CATALOG_ITEM_UNITS.map(unit => ({ id: unit, label: CATALOG_ITEM_UNIT_LABELS_NL[unit] }));
+import { CATALOG_ITEM_UNIT_DEFAULT, CATALOG_ITEM_UNIT_LABELS_NL, CATALOG_ITEM_UNITS } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
+
+const UNIT_OPTIONS = CATALOG_ITEM_UNITS.map(unit => ({ id: unit, label: CATALOG_ITEM_UNIT_LABELS_NL[unit] }));
 
 export const Route = createFileRoute('/(app)/settings/catalog')({
 	beforeLoad: async ({ context }) => {
@@ -52,35 +52,22 @@ function CatalogSettingsPage() {
 	const [deleteTarget, setDeleteTarget] = useState<CatalogItem | null>(null);
 
 	return (
-		<Container maxWidth='md' sx={{ py: 6 }}>
-			<Box
-				sx={{
-					mb: 6,
-					display: 'flex',
-					justifyContent: 'space-between',
-					alignItems: 'flex-start'
-				}}
-			>
-				<Box>
-					<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
-						Catalogus
-					</Typography>
-					<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 560 }}>
-						Producten en diensten met standaardprijzen die Offertum voorstelt bij het opstellen van
-						offertes. De AI matcht binnenkomende vragen tegen deze lijst, exacte matches gaan
-						deterministisch, de rest valt terug op een LLM-voorstel.
-					</Typography>
-				</Box>
-				<Button variant='contained' onClick={() => setCreating(true)} sx={{ flexShrink: 0 }}>
-					Nieuw item
-				</Button>
-			</Box>
+		<Stack>
+			<PageHeader
+				title='Catalogus'
+				caption='Producten en diensten met standaardprijzen die Offertum voorstelt bij het opstellen van offertes. De AI matcht binnenkomende vragen tegen deze lijst, exacte matches gaan deterministisch, de rest valt terug op een LLM-voorstel.'
+				actions={
+					<Button variant='contained' onClick={() => setCreating(true)} sx={{ flexShrink: 0 }}>
+						Nieuw item
+					</Button>
+				}
+			/>
 
 			{data.items.length === 0 ? (
 				<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, textAlign: 'center' }}>
-					<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
+					<BodySmall color='text.secondary' sx={{ display: 'block', mb: 3 }}>
 						Nog geen items in je catalogus.
-					</Typography>
+					</BodySmall>
 					<Button variant='outlined' onClick={() => setCreating(true)}>
 						Eerste item toevoegen
 					</Button>
@@ -101,7 +88,7 @@ function CatalogSettingsPage() {
 			{creating && <CatalogItemDialog mode='create' onClose={() => setCreating(false)} />}
 			{editing && <CatalogItemDialog mode='edit' item={editing} onClose={() => setEditing(null)} />}
 			{deleteTarget && <DeleteConfirmDialog item={deleteTarget} onClose={() => setDeleteTarget(null)} />}
-		</Container>
+		</Stack>
 	);
 }
 
@@ -117,19 +104,19 @@ function CatalogItemRow({ item, onEdit, onDelete }: CatalogItemRowProps) {
 			<Stack direction='row' useFlexGap spacing={3} sx={{ alignItems: 'center' }}>
 				<Box sx={{ flexGrow: 1, minWidth: 0 }}>
 					<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
-						<Typography variant='subtitle2'>{item.name}</Typography>
+						<Label>{item.name}</Label>
 						{!item.active && <Chip label='Inactief' size='small' />}
 						{item.sku && <Chip label={`SKU: ${item.sku}`} size='small' variant='outlined' />}
 					</Stack>
 					{item.description && (
-						<Typography variant='body2' sx={{ color: 'text.secondary', mb: 1 }}>
+						<BodySmall color='text.secondary' sx={{ mb: 1 }}>
 							{item.description}
-						</Typography>
+						</BodySmall>
 					)}
-					<Typography variant='caption' sx={{ color: 'text.secondary' }}>
+					<BodySmall color='text.secondary'>
 						{toReadableEuro(Number(item.defaultPriceEur))} / {CATALOG_ITEM_UNIT_LABELS_NL[item.unit]} · BTW{' '}
 						{item.defaultVatRate}%
-					</Typography>
+					</BodySmall>
 				</Box>
 				<Stack direction='row' useFlexGap spacing={1} sx={{ flexShrink: 0 }}>
 					<Button size='small' variant='outlined' onClick={onEdit}>
@@ -211,9 +198,7 @@ function CatalogItemDialog({ mode, item, onClose }: CatalogItemDialogProps) {
 						<Field name='sku' label='SKU (optioneel)' fullWidth />
 						<FormSwitch name='active' label='Actief' />
 						{error && (
-							<Alert severity='error'>
-								{error instanceof Error ? error.message : 'Opslaan mislukt.'}
-							</Alert>
+							<Banner tone='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Banner>
 						)}
 					</Stack>
 				</DialogContent>
@@ -251,9 +236,9 @@ function DeleteConfirmDialog({ item, onClose }: DeleteConfirmDialogProps) {
 					behouden hun regels, alleen toekomstige voorstellen worden geraakt.
 				</DialogContentText>
 				{remove.error && (
-					<Alert severity='error' sx={{ mt: 2 }}>
+					<Banner tone='error' sx={{ mt: 2 }}>
 						{remove.error instanceof Error ? remove.error.message : 'Verwijderen mislukt.'}
-					</Alert>
+					</Banner>
 				)}
 			</DialogContent>
 			<DialogActions>

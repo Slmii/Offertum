@@ -1,3 +1,4 @@
+import { Body, BodySmall, H1 } from '@/components/Text.component';
 import { createPageMeta } from '@/lib/createPageMeta';
 import { useSignOut } from '@/lib/queries/auth.queries';
 import { myOrganizationsQueryOptions, useSwitchOrganization } from '@/lib/queries/team.queries';
@@ -6,7 +7,6 @@ import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
@@ -46,22 +46,20 @@ function NoOrganizationPage() {
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
-				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-					No active organization
-				</Typography>
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
+				<H1 sx={{ mb: 1 }}>No active organization</H1>
+				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 4 }}>
 					{user?.email ? `You're signed in as ${user.email}, ` : ''}but you're not currently part of any
 					organization.
-				</Typography>
+				</BodySmall>
 
 				{organizations.length === 0 ? (
 					<Stack useFlexGap spacing={2}>
-						<Typography variant='body1'>
+						<Body>
 							If you were expecting an invitation, check your email, the link expires after 7 days.
-						</Typography>
-						<Typography variant='body2' color='text.secondary'>
+						</Body>
+						<BodySmall color='text.secondary'>
 							Otherwise, sign out and sign up with a different email to start a new organization.
-						</Typography>
+						</BodySmall>
 						<Box>
 							<Button variant='outlined' onClick={() => signOut.mutate()} disabled={signOut.isPending}>
 								{signOut.isPending ? 'Signing out...' : 'Sign out'}
@@ -70,7 +68,7 @@ function NoOrganizationPage() {
 					</Stack>
 				) : (
 					<Stack useFlexGap spacing={2}>
-						<Typography variant='body1'>Pick an organization to continue:</Typography>
+						<Body>Pick an organization to continue:</Body>
 						<Stack useFlexGap spacing={1}>
 							{organizations.map(m => (
 								<Button

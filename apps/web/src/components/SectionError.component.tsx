@@ -1,8 +1,8 @@
-import Alert from '@mui/material/Alert';
+import { Banner } from '@/components/Banner.component';
+import { BodySmall } from '@/components/Text.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
-import Typography from '@mui/material/Typography';
+import Stack from '@mui/material/Stack';
 
 interface SectionErrorProps {
 	error: Error;
@@ -16,15 +16,15 @@ interface SectionErrorProps {
 // re-runs the route's loader.
 export function SectionError({ error, reset }: SectionErrorProps) {
 	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
-			<Alert severity='error' sx={{ mb: 3 }}>
-				<Typography variant='body2' sx={{ fontWeight: 500, mb: 0.5 }}>
+		<Stack>
+			<Banner tone='error' sx={{ mb: 3 }}>
+				<BodySmall fontWeight='medium' sx={{ mb: 0.5 }}>
 					Kon dit onderdeel niet laden.
-				</Typography>
-				<Typography variant='body2' color='text.secondary'>
+				</BodySmall>
+				<BodySmall color='text.secondary'>
 					{error.message || 'Onbekende fout. Probeer het later opnieuw.'}
-				</Typography>
-			</Alert>
+				</BodySmall>
+			</Banner>
 			{reset && (
 				<Box sx={{ display: 'flex', justifyContent: 'center' }}>
 					<Button variant='outlined' onClick={reset}>
@@ -32,6 +32,6 @@ export function SectionError({ error, reset }: SectionErrorProps) {
 					</Button>
 				</Box>
 			)}
-		</Container>
+		</Stack>
 	);
 }

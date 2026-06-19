@@ -1,4 +1,10 @@
-import type { Opportunity, OpportunityDismissReason, OpportunityStatus, OpportunityUrgency } from '@offertum/shared';
+import type {
+	Opportunity,
+	OpportunityDismissReason,
+	OpportunityLastActivity,
+	OpportunityStatus,
+	OpportunityUrgency
+} from '@offertum/shared';
 
 /**
  * Date fields are `Date` on the service side, but this DTO intentionally exposes ISO
@@ -34,5 +40,6 @@ export class OpportunityResponseDto implements Opportunity {
 	assignedToUserId!: string | null;
 	replyDraftSentAt!: string | null;
 	hasPendingCheckIn!: boolean;
-	lastEditedBy!: { name: string | null; at: string } | null;
+	lastActivity!: OpportunityLastActivity | null;
+	customerReplyCount!: number;
 }

@@ -1,11 +1,9 @@
+import { AppShell } from '@/components/AppShell.component';
 import { BillingRequiredBanner } from '@/components/BillingRequiredBanner.component';
-import { NotificationBell } from '@/components/NotificationBell.component';
-import { SilentErrorBoundary } from '@/components/SilentErrorBoundary.component';
+import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import { notificationsListQueryOptions } from '@/lib/queries/notifications.queries';
-import { myOrganizationsQueryOptions } from '@/lib/queries/team.queries';
-import Box from '@mui/material/Box';
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
-import { Suspense } from 'react';
+import { myMembershipQueryOptions, myOrganizationsQueryOptions } from '@/lib/queries/team.queries';
+import { createFileRoute, Outlet, redirect, useRouterState } from '@tanstack/react-router';
 
 const NO_ORGANIZATION_PATH = '/no-organization';
 
@@ -33,48 +31,41 @@ export const Route = createFileRoute('/(app)')({
 			throw redirect({ to: NO_ORGANIZATION_PATH });
 		}
 	},
-	// Prefetch the notification list so the bell renders with data on first paint
-	// instead of suspending the entire app shell. The layout component itself mounts
-	// once per session; the loader only runs on initial entry to any (app)/* route.
-	// Errors here are intentionally swallowed — notifications are non-essential, so a
-	// 500 on `/api/me/notifications` must NOT take down the entire (app)/* route tree.
-	// The bell's own ErrorBoundary handles the render-time re-throw from useSuspenseQuery.
-	loader: async ({ context }) => {
-		try {
-			await context.queryClient.ensureQueryData(notificationsListQueryOptions);
-		} catch {
-			// Bell falls back to "no notifications" via the SilentErrorBoundary below.
+	// Prefetch what the shell needs (sidebar membership/org + the bell's notifications) so
+	// it renders fully on first paint instead of suspending. `allSettled` keeps these
+	// non-blocking: a 500 on any one (notifications especially — non-essential) must NOT
+	// take down the whole (app)/* tree. Skipped on `/no-organization`, which renders bare
+	// (no current org → membership-backed sidebar would 403).
+	loader: async ({ context, location }) => {
+		if (location.pathname === NO_ORGANIZATION_PATH) {
+			return;
 		}
+		await Promise.allSettled([
+			context.queryClient.ensureQueryData(notificationsListQueryOptions),
+			context.queryClient.ensureQueryData(myMembershipQueryOptions),
+			context.queryClient.ensureQueryData(myOrganizationsQueryOptions),
+			// Sidebar reads this to padlock entitlement-gated nav items (calendar, catalog).
+			context.queryClient.ensureQueryData(billingStatusQueryOptions)
+		]);
 	},
 	component: RouteComponent
 });
 
 function RouteComponent() {
+	const pathname = useRouterState({ select: s => s.location.pathname });
+
+	// `/no-organization` is an empty-state page for users without a current org — it has no
+	// sidebar/topbar chrome (those depend on a membership that doesn't exist yet).
+	if (pathname === NO_ORGANIZATION_PATH) {
+		return <Outlet />;
+	}
+
 	return (
 		<>
 			<BillingRequiredBanner />
-			<Box
-				sx={{
-					position: 'sticky',
-					top: 0,
-					zIndex: 10,
-					backgroundColor: 'background.default',
-					borderBottom: 1,
-					borderBottomColor: 'divider',
-					display: 'flex',
-					justifyContent: 'flex-end',
-					alignItems: 'center',
-					px: 2,
-					py: 0.5
-				}}
-			>
-				<SilentErrorBoundary>
-					<Suspense fallback={null}>
-						<NotificationBell />
-					</Suspense>
-				</SilentErrorBoundary>
-			</Box>
-			<Outlet />
+			<AppShell>
+				<Outlet />
+			</AppShell>
 		</>
 	);
 }

@@ -1,15 +1,15 @@
+import { Banner } from '@/components/Banner.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
+import { BodySmall, H1 } from '@/components/Text.component';
 import { signInWithOAuth, useSignInWithEmail } from '@/lib/queries/auth.queries';
 import { type SignInForm, SignInSchema } from '@/lib/schemas/auth.schema';
-import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import type { OAuthProviderId } from '@offertum/shared';
 import { createFileRoute, redirect, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -47,12 +47,10 @@ function SignInPage() {
 	return (
 		<Container maxWidth='xs' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
-				<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-					Sign in
-				</Typography>
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+				<H1 sx={{ mb: 1 }}>Sign in</H1>
+				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 3 }}>
 					Continue with Google or Microsoft, or use a magic link.
-				</Typography>
+				</BodySmall>
 
 				<Stack useFlexGap spacing={1.5}>
 					<Button
@@ -76,9 +74,7 @@ function SignInPage() {
 				</Stack>
 
 				<Divider sx={{ my: 3 }}>
-					<Typography variant='caption' color='text.secondary'>
-						or use email
-					</Typography>
+					<BodySmall color='text.secondary'>or use email</BodySmall>
 				</Divider>
 
 				<Form<SignInForm>
@@ -89,7 +85,7 @@ function SignInPage() {
 				>
 					<Field name='email' type='email' label='Email address' fullWidth />
 
-					{signIn.isError && <Alert severity='error'>Something went wrong. Please try again.</Alert>}
+					{signIn.isError && <Banner tone='error'>Something went wrong. Please try again.</Banner>}
 
 					<Button
 						type='submit'
@@ -103,12 +99,12 @@ function SignInPage() {
 					</Button>
 				</Form>
 
-				<Typography variant='body2' color='text.secondary' sx={{ mt: 3, textAlign: 'center' }}>
+				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
 					Don't have an account?{' '}
 					<Link component={RouterLink} to='/sign-up'>
 						Create one
 					</Link>
-				</Typography>
+				</BodySmall>
 			</Paper>
 		</Container>
 	);

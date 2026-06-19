@@ -200,7 +200,8 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 		//  follow-up — `OPPORTUNITY_INCLUDE` now joins reply-draft scalars used by the
 		// editability guard + `replyDraftSentAt` wire field. flipped this to 1:N —
 		// default to an empty array so the unchanged transition tests still pass.
-		replyDrafts: []
+		replyDrafts: [],
+		threadMessages: []
 	};
 }
 

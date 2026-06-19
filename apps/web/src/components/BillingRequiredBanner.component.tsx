@@ -1,7 +1,9 @@
+import { AppIcon } from '@/components/AppIcon.component';
+import { Banner } from '@/components/Banner.component';
 import { billingNoticeStore, useBillingNotice } from '@/lib/billing-notice.store';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import { Link, useLocation } from '@tanstack/react-router';
 import { useEffect } from 'react';
 
@@ -47,25 +49,33 @@ export function BillingRequiredBanner() {
 				pt: 1
 			}}
 		>
-			<Alert
-				severity='warning'
-				variant='filled'
-				onClose={() => billingNoticeStore.clear()}
+			<Banner
+				tone='warning'
 				action={
-					<Button
-						component={Link}
-						to={notice.billingPath as '/billing'}
-						color='inherit'
-						size='small'
-						sx={{ fontWeight: 600, mr: 1 }}
-					>
-						Naar facturering
-					</Button>
+					<>
+						<Button
+							component={Link}
+							to={notice.billingPath as '/billing'}
+							color='inherit'
+							size='small'
+							sx={{ fontWeight: 'bold', mr: 1 }}
+						>
+							Naar facturering
+						</Button>
+						<IconButton
+							size='small'
+							aria-label='Sluiten'
+							onClick={() => billingNoticeStore.clear()}
+							sx={{ color: 'inherit', mt: -0.5, mr: -0.5 }}
+						>
+							<AppIcon name='x' size='medium' />
+						</IconButton>
+					</>
 				}
 				sx={{ alignItems: 'center' }}
 			>
 				{notice.message}
-			</Alert>
+			</Banner>
 		</Box>
 	);
 }

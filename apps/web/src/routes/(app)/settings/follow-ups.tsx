@@ -1,17 +1,17 @@
+import { Banner } from '@/components/Banner.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
+import { BodySmall, Overline } from '@/components/Text.component';
 import { followUpSettingsQueryOptions, useUpdateFollowUpSettings } from '@/lib/queries/follow-up-settings.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { FollowUpSettingsSchema, type FollowUpSettingsForm } from '@/lib/schemas/follow-up-settings.schema';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -71,16 +71,11 @@ function FollowUpsSettingsPage() {
 	};
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 6 }}>
-			<Box sx={{ mb: 6 }}>
-				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
-					Automatische follow-ups
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
-					Offertum kan automatisch een korte herinnering schrijven als een klant na je antwoord stil blijft.
-					Jij beoordeelt en verstuurt, niets gaat zonder jouw klik de deur uit.
-				</Typography>
-			</Box>
+		<Stack>
+			<PageHeader
+				title='Automatische follow-ups'
+				caption='Offertum kan automatisch een korte herinnering schrijven als een klant na je antwoord stil blijft. Jij beoordeelt en verstuurt, niets gaat zonder jouw klik de deur uit.'
+			/>
 
 			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, boxShadow: 1 }}>
 				<Form<FollowUpSettingsForm>
@@ -96,7 +91,7 @@ function FollowUpsSettingsPage() {
 					<SettingsBody savedFlash={savedFlash} isSaving={update.isPending} error={update.error} />
 				</Form>
 			</Paper>
-		</Container>
+		</Stack>
 	);
 }
 
@@ -116,12 +111,12 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 	return (
 		<Stack useFlexGap spacing={5}>
 			<Box>
-				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 					Cadans
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
+				</Overline>
+				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
 					Hoeveel dagen stilte voordat Offertum een herinnering opstelt.
-				</Typography>
+				</BodySmall>
 				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'flex-start' }}>
 					<Box sx={{ minWidth: 160 }}>
 						<Select
@@ -157,83 +152,72 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 							}}
 						/>
 					</Box>
-					<Typography variant='body2' sx={{ color: 'text.secondary', alignSelf: 'center' }}>
+					<BodySmall color='text.secondary' sx={{ alignSelf: 'center' }}>
 						dagen
-					</Typography>
+					</BodySmall>
 				</Stack>
 				{schedulerDisabled && (
-					<Typography
-						variant='caption'
-						sx={{ color: 'text.disabled', mt: 2, fontStyle: 'italic', display: 'block' }}
-					>
+					<BodySmall color='text.disabled' sx={{ mt: 2, fontStyle: 'italic', display: 'block' }}>
 						Geen effect zolang de scheduler uitstaat (maximum = 0).
-					</Typography>
+					</BodySmall>
 				)}
 			</Box>
 
 			<Box>
-				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 					Maximum
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
+				</Overline>
+				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
 					Het aantal herinneringen dat Offertum maximaal per offerteaanvraag mag opstellen. Zet op{' '}
 					<strong>0</strong> om de scheduler volledig uit te zetten.
-				</Typography>
+				</BodySmall>
 				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>
 						<Field name='maxCount' type='number' fullWidth />
 					</Box>
-					<Typography variant='body2' sx={{ color: 'text.secondary' }}>
-						{maxCount === 1 ? 'herinnering' : 'herinneringen'}
-					</Typography>
+					<BodySmall color='text.secondary'>{maxCount === 1 ? 'herinnering' : 'herinneringen'}</BodySmall>
 				</Stack>
-				<Typography
-					variant='caption'
-					sx={{ color: 'text.secondary', mt: 2, fontStyle: 'italic', display: 'block' }}
-				>
+				<BodySmall color='text.secondary' sx={{ mt: 2, fontStyle: 'italic', display: 'block' }}>
 					Bestaande aanvragen die al op <strong>Koud</strong> staan worden niet automatisch herstart als je
 					dit maximum verhoogt. Zet de status terug op <strong>Beantwoord</strong> om opnieuw herinneringen te
 					krijgen binnen je nieuwe limiet.
-				</Typography>
+				</BodySmall>
 			</Box>
 
 			<Box>
-				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 					Automatisch koud markeren
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
+				</Overline>
+				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
 					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Offertum de
 					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
 					je houdt opportunities dan zelf bij.
-				</Typography>
+				</BodySmall>
 				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center' }}>
 					<Box sx={{ width: 120 }}>
 						<Field name='coldAfterDays' type='number' fullWidth />
 					</Box>
-					<Typography variant='body2' sx={{ color: 'text.secondary' }}>
+					<BodySmall color='text.secondary'>
 						{coldAfterDays === 1 ? 'dag' : 'dagen'} na laatste verzending
-					</Typography>
+					</BodySmall>
 				</Stack>
 				{coldAfterDays === 0 && (
-					<Typography
-						variant='caption'
-						sx={{ color: 'text.disabled', mt: 2, fontStyle: 'italic', display: 'block' }}
-					>
+					<BodySmall color='text.disabled' sx={{ mt: 2, fontStyle: 'italic', display: 'block' }}>
 						Automatisch koud markeren staat uit.
-					</Typography>
+					</BodySmall>
 				)}
 			</Box>
 
 			{schedulerDisabled && (
-				<Alert severity='warning'>
+				<Banner tone='warning'>
 					De scheduler staat uit. Offertum maakt geen automatische herinneringen tot je dit weer aanzet.
-				</Alert>
+				</Banner>
 			)}
 
 			{!schedulerDisabled && (
 				<Box sx={{ p: 4, bgcolor: 'background.default', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-					<Typography variant='caption' sx={{ color: 'text.secondary', lineHeight: 1.5, display: 'block' }}>
-						<Box component='span' sx={{ color: 'text.primary', fontWeight: 500 }}>
+					<BodySmall color='text.secondary' sx={{ lineHeight: 1.5, display: 'block' }}>
+						<Box component='span' sx={{ color: 'text.primary', fontWeight: 'medium' }}>
 							Voorbeeld:
 						</Box>{' '}
 						je verstuurt vandaag een offerte. Reageert de klant niet, dan zet Offertum over {cadenceDays}{' '}
@@ -241,12 +225,12 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 						{maxCount > 1 ? `, en na nog ${cadenceDays} dagen een tweede` : ''}
 						{maxCount > 2 ? `, tot maximaal ${maxCount} herinneringen` : ''}. De herinneringen staan in je
 						inbox; jij beoordeelt en verstuurt.
-					</Typography>
+					</BodySmall>
 				</Box>
 			)}
 
-			{error && <Alert severity='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Alert>}
-			{savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
+			{error && <Banner tone='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Banner>}
+			{savedFlash && <Banner tone='success'>Opgeslagen.</Banner>}
 
 			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
 				<Button type='submit' variant='contained' disabled={isSaving}>

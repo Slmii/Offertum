@@ -1,8 +1,8 @@
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { BodySmall } from '@/components/Text.component';
 import { quoteDraftsQueryOptions, useAttachQuotePdf } from '@/lib/queries/quote-drafts.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import type { ReplyDraftAttachment } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
@@ -47,16 +47,8 @@ export function QuotePdfAttachSelect({
 					{ id: NONE, label: 'Geen offerte-PDF' },
 					...data.pdfs.map((pdf, index) => ({
 						id: pdf.id,
-						label: (
-							<Box>
-								<Typography variant='body2'>
-									v{data.pdfs.length - index} · {pdf.filename}
-								</Typography>
-								<Typography variant='caption' color='text.secondary'>
-									{toReadableDateTime(pdf.createdAt)}
-								</Typography>
-							</Box>
-						)
+						label: `v${data.pdfs.length - index} · ${pdf.filename}`,
+						secondaryLabel: toReadableDateTime(pdf.createdAt)
 					}))
 				]}
 				renderValue={value => {
@@ -69,9 +61,9 @@ export function QuotePdfAttachSelect({
 				onChange={event => attach.mutate(event.target.value === NONE ? null : event.target.value)}
 			/>
 			{attach.isError && (
-				<Typography variant='caption' color='error'>
+				<BodySmall color='error'>
 					Bijwerken mislukt: {attach.error instanceof Error ? attach.error.message : 'Onbekende fout'}
-				</Typography>
+				</BodySmall>
 			)}
 		</Box>
 	);

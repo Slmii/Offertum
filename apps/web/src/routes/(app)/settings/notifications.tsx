@@ -1,6 +1,11 @@
-import { SectionError } from '@/components/SectionError.component';
+import { AppIcon } from '@/components/AppIcon.component';
+import { Banner } from '@/components/Banner.component';
 import { Form } from '@/components/Form/Form.component';
-import { Switch } from '@/components/Form/Switch/Switch.component';
+import { StandaloneSwitch, Switch } from '@/components/Form/Switch/Switch.component';
+import { PageHeader } from '@/components/PageContainer.component';
+import { SectionError } from '@/components/SectionError.component';
+import { Body, BodySmall } from '@/components/Text.component';
+import { sessionQueryOptions } from '@/lib/queries/auth.queries';
 import {
 	notificationPreferencesQueryOptions,
 	useUpdateNotificationPreferences
@@ -10,16 +15,15 @@ import {
 	preferenceKey,
 	type NotificationPreferencesForm
 } from '@/lib/schemas/notification-preferences.schema';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import {
 	NOTIFICATION_CHANNELS,
 	NOTIFICATION_EVENT_TYPES,
+	defaultNotificationPreference,
 	isEmailChannelAvailable,
 	type NotificationChannel,
 	type NotificationEventType,
@@ -29,6 +33,8 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
+// Per-event copy for the in-app rows. The matrix is the source of truth for which
+// events exist; this only provides Dutch presentation labels.
 const EVENT_LABELS_NL: Record<NotificationEventType, { title: string; description: string }> = {
 	opportunity_created: {
 		title: 'Nieuwe offerteaanvraag',
@@ -48,18 +54,20 @@ const EVENT_LABELS_NL: Record<NotificationEventType, { title: string; descriptio
 	},
 	daily_digest: {
 		title: 'Dagelijks overzicht',
-		description:
-			'Elke ochtend 07:30, je belangrijkste offerteaanvragen gerangschikt + offertes die binnenkort verlopen.'
+		description: 'Elke ochtend 07:30, je belangrijkste aanvragen + offertes die binnenkort verlopen.'
 	}
 };
 
-const CHANNEL_LABELS_NL: Record<NotificationChannel, string> = {
-	in_app: 'In de app',
-	email: 'E-mail'
-};
+// Events whose email channel the backend exposes (auto_cold, weekly_digest,
+// daily_digest). Derived once so the email card iterates only over real toggles.
+const EMAIL_EVENTS = NOTIFICATION_EVENT_TYPES.filter(isEmailChannelAvailable);
 
 export const Route = createFileRoute('/(app)/settings/notifications')({
-	loader: ({ context }) => context.queryClient.ensureQueryData(notificationPreferencesQueryOptions),
+	loader: ({ context }) =>
+		Promise.all([
+			context.queryClient.ensureQueryData(notificationPreferencesQueryOptions),
+			context.queryClient.ensureQueryData(sessionQueryOptions)
+		]),
 	component: NotificationsSettingsPage,
 	errorComponent: SectionError
 });
@@ -80,14 +88,15 @@ function buildDefaults(
 				continue;
 			}
 			const key = preferenceKey(event, channel);
-			map[key] = storedByKey.get(key) ?? true;
+			map[key] = storedByKey.get(key) ?? defaultNotificationPreference(event, channel);
 		}
 	}
 	return map;
 }
 
 function NotificationsSettingsPage() {
-	const { data } = useSuspenseQuery(notificationPreferencesQueryOptions);
+	const { data: prefs } = useSuspenseQuery(notificationPreferencesQueryOptions);
+	const { data: session } = useSuspenseQuery(sessionQueryOptions);
 	const update = useUpdateNotificationPreferences();
 	const [savedFlash, setSavedFlash] = useState(false);
 
@@ -116,64 +125,198 @@ function NotificationsSettingsPage() {
 		});
 	};
 
+	const accountEmail = session?.user?.email ?? null;
+
 	return (
-		<Container maxWidth='sm' sx={{ py: 6 }}>
-			<Box sx={{ mb: 6 }}>
-				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
-					Notificaties
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 480 }}>
-					Bepaal per gebeurtenis hoe je op de hoogte gehouden wilt worden. Notificaties zijn alleen
-					informatief, niets wordt automatisch verstuurd of geaccepteerd.
-				</Typography>
+		<Stack>
+			<PageHeader
+				title='Notificaties'
+				caption='Bepaal hoe en wanneer Offertum je laat weten dat er iets gebeurt. Voorkeuren gelden alleen voor jouw account. Notificaties zijn alleen informatief, niets wordt automatisch verstuurd of geaccepteerd.'
+			/>
+
+			<Form<NotificationPreferencesForm>
+				action={onSubmit}
+				schema={NotificationPreferencesSchema}
+				defaultValues={buildDefaults(prefs.preferences)}
+			>
+				<Stack useFlexGap spacing={4}>
+					<EmailNotificationsCard accountEmail={accountEmail} />
+					<InAppNotificationsCard />
+
+					{update.error && (
+						<Banner tone='error'>
+							{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
+						</Banner>
+					)}
+					{savedFlash && <Banner tone='success'>Voorkeuren opgeslagen.</Banner>}
+
+					<SaveBar isSaving={update.isPending} />
+				</Stack>
+			</Form>
+		</Stack>
+	);
+}
+
+interface SectionCardProps {
+	title: string;
+	caption: React.ReactNode;
+	children: React.ReactNode;
+}
+
+// A titled card matching the design's per-section layout (header band + body rows).
+function SectionCard({ title, caption, children }: SectionCardProps) {
+	const { tokens } = useTheme();
+	return (
+		<Paper variant='outlined' sx={{ borderRadius: 2, overflow: 'hidden' }}>
+			<Box sx={{ p: 4, borderBottom: `1px solid ${tokens.color.line}` }}>
+				<Body fontWeight='medium' sx={{ display: 'block' }}>
+					{title}
+				</Body>
+				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+					{caption}
+				</BodySmall>
 			</Box>
+			{children}
+		</Paper>
+	);
+}
 
-			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2 }}>
-				<Form<NotificationPreferencesForm>
-					action={onSubmit}
-					schema={NotificationPreferencesSchema}
-					defaultValues={buildDefaults(data.preferences)}
-				>
-					<Stack useFlexGap spacing={3}>
-						{NOTIFICATION_EVENT_TYPES.map(event => (
-							<Box key={event}>
-								<Typography sx={{ fontWeight: 500, mb: 0.5 }}>
-									{EVENT_LABELS_NL[event].title}
-								</Typography>
-								<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
-									{EVENT_LABELS_NL[event].description}
-								</Typography>
-								<Stack direction='row' useFlexGap spacing={3}>
-									{NOTIFICATION_CHANNELS.flatMap(channel =>
-										channel === 'email' && !isEmailChannelAvailable(event)
-											? []
-											: [
-													<Switch
-														key={channel}
-														name={preferenceKey(event, channel)}
-														label={CHANNEL_LABELS_NL[channel]}
-													/>
-												]
-									)}
-								</Stack>
-							</Box>
-						))}
+interface NotifRowProps {
+	title: string;
+	switchSlot: React.ReactNode;
+	description?: string;
+	lockedReason?: string;
+	isLast?: boolean;
+}
 
-						{update.error && (
-							<Alert severity='error'>
-								{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
-							</Alert>
-						)}
-						{savedFlash && <Alert severity='success'>Opgeslagen.</Alert>}
-
-						<Stack direction='row' useFlexGap spacing={1} sx={{ justifyContent: 'flex-end' }}>
-							<Button type='submit' variant='contained' disabled={update.isPending}>
-								{update.isPending ? 'Opslaan…' : 'Opslaan'}
-							</Button>
-						</Stack>
+// One preference row: title + optional description on the left, a switch on the right.
+function NotifRow({ title, description, switchSlot, lockedReason, isLast }: NotifRowProps) {
+	const { tokens } = useTheme();
+	return (
+		<Stack
+			direction='row'
+			useFlexGap
+			spacing={2}
+			sx={{
+				p: 4,
+				alignItems: 'center',
+				justifyContent: 'space-between',
+				borderBottom: isLast ? 'none' : `1px solid ${tokens.color.line}`
+			}}
+		>
+			<Box sx={{ flex: 1, minWidth: 0 }}>
+				<Body fontWeight='medium' sx={{ display: 'block' }}>
+					{title}
+				</Body>
+				{description && (
+					<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+						{description}
+					</BodySmall>
+				)}
+				{lockedReason && (
+					<Stack direction='row' useFlexGap spacing={0.5} sx={{ alignItems: 'center', mt: 1 }}>
+						<AppIcon name='lock' size='small' />
+						<BodySmall color='text.disabled'>{lockedReason}</BodySmall>
 					</Stack>
-				</Form>
-			</Paper>
-		</Container>
+				)}
+			</Box>
+			<Box sx={{ flexShrink: 0 }}>{switchSlot}</Box>
+		</Stack>
+	);
+}
+
+interface EmailNotificationsCardProps {
+	accountEmail: string | null;
+}
+
+function EmailNotificationsCard({ accountEmail }: EmailNotificationsCardProps) {
+	return (
+		<SectionCard
+			title='E-mail meldingen'
+			caption={
+				accountEmail ? (
+					<>
+						Verstuurd naar{' '}
+						<Box component='span' sx={{ color: 'text.primary', fontWeight: 'medium' }}>
+							{accountEmail}
+						</Box>
+						.
+					</>
+				) : (
+					'Verstuurd naar het e-mailadres van je account.'
+				)
+			}
+		>
+			{EMAIL_EVENTS.map(event => (
+				<NotifRow
+					key={event}
+					title={EVENT_LABELS_NL[event].title}
+					description={EVENT_LABELS_NL[event].description}
+					switchSlot={
+						<Switch
+							name={preferenceKey(event, 'email')}
+							slotProps={{ input: { 'aria-label': `${EVENT_LABELS_NL[event].title} (e-mail)` } }}
+						/>
+					}
+				/>
+			))}
+			{/* MOCK: a locked critical "mailbox issue" email — no such event exists in the
+			    backend matrix. Always on, cannot be disabled, surfaced to match the design. */}
+			<NotifRow
+				title='Mailbox-probleem'
+				description='Als een verbinding wordt verbroken of toegang ingetrokken is — je wilt dit direct weten.'
+				lockedReason='Kan niet uitgezet worden — kritieke melding.'
+				switchSlot={
+					<Box sx={{ opacity: 0.5, pointerEvents: 'none' }}>
+						<StandaloneSwitch
+							name='mailbox-issue-locked'
+							checked
+							disabled
+							onChange={() => {}}
+							slotProps={{ input: { 'aria-label': 'Mailbox-probleem (altijd aan)' } }}
+						/>
+					</Box>
+				}
+				isLast
+			/>
+		</SectionCard>
+	);
+}
+
+function InAppNotificationsCard() {
+	return (
+		<SectionCard
+			title='In de app'
+			caption='Zichtbaar als kleine indicator naast het inbox-icoon en in het meldingenpaneel.'
+		>
+			{NOTIFICATION_EVENT_TYPES.map((event, index) => (
+				<NotifRow
+					key={event}
+					title={EVENT_LABELS_NL[event].title}
+					description={EVENT_LABELS_NL[event].description}
+					switchSlot={
+						<Switch
+							name={preferenceKey(event, 'in_app')}
+							slotProps={{ input: { 'aria-label': `${EVENT_LABELS_NL[event].title} (in de app)` } }}
+						/>
+					}
+					isLast={index === NOTIFICATION_EVENT_TYPES.length - 1}
+				/>
+			))}
+		</SectionCard>
+	);
+}
+
+interface SaveBarProps {
+	isSaving: boolean;
+}
+
+function SaveBar({ isSaving }: SaveBarProps) {
+	return (
+		<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
+			<Button type='submit' variant='contained' disabled={isSaving}>
+				{isSaving ? 'Opslaan…' : 'Voorkeuren opslaan'}
+			</Button>
+		</Stack>
 	);
 }

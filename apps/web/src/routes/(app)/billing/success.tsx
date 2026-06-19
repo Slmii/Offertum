@@ -1,4 +1,4 @@
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { Body, BodySmall, H1 } from '@/components/Text.component';
 import { useSyncBilling } from '@/lib/queries/billing.queries';
 import { BillingSearchSchema } from '@/lib/schemas/billing.schema';
 import Box from '@mui/material/Box';
@@ -6,7 +6,6 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 
@@ -29,27 +28,20 @@ function BillingSuccessPage() {
 
 	return (
 		<Container maxWidth='sm' sx={{ py: 8 }}>
-			<Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-				<BackToHomeButton />
-			</Box>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				{sync.isPending && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
-						<Typography variant='body2' color='text.secondary'>
-							Confirming your subscription…
-						</Typography>
+						<BodySmall color='text.secondary'>Confirming your subscription…</BodySmall>
 					</Box>
 				)}
 
 				{sync.isSuccess && (
 					<Box>
-						<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-							You're all set
-						</Typography>
-						<Typography variant='body1' color='text.secondary' sx={{ mb: 4 }}>
+						<H1 sx={{ mb: 1 }}>You're all set</H1>
+						<Body color='text.secondary' sx={{ mb: 4 }}>
 							Your trial has started. We'll only charge after 14 days, and you can cancel any time.
-						</Typography>
+						</Body>
 						<Button variant='contained' size='large' onClick={() => navigate({ to: '/' })}>
 							Go to dashboard
 						</Button>
@@ -58,13 +50,11 @@ function BillingSuccessPage() {
 
 				{sync.isError && (
 					<Box>
-						<Typography variant='h1' sx={{ fontSize: 28, mb: 1 }}>
-							Payment received
-						</Typography>
-						<Typography variant='body1' color='text.secondary' sx={{ mb: 4 }}>
+						<H1 sx={{ mb: 1 }}>Payment received</H1>
+						<Body color='text.secondary' sx={{ mb: 4 }}>
 							We received your payment but couldn't refresh your subscription state. It will sync shortly
 							via Stripe webhooks, refresh in a minute.
-						</Typography>
+						</Body>
 						<Button variant='outlined' onClick={() => navigate({ to: '/' })}>
 							Go to dashboard
 						</Button>

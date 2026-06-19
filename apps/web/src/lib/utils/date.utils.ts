@@ -31,10 +31,41 @@ export const toReadableDateTime = (date: Date | string) => {
 };
 
 /**
- * Human-relative ("2u geleden", "gisteren"). Use for inbox arrival times — the user
- * cares more about "how recent" than the absolute timestamp. Instant-difference based,
- * so timezone pinning isn't needed here.
+ * Compact human-relative time ("zojuist", "8m geleden", "2u geleden", "2d geleden",
+ * "1w geleden", "3mnd geleden", "2j geleden"). Abbreviated units instead of dayjs'
+ * verbose `fromNow()` ("8 minuten geleden"). Instant-difference based, so timezone
+ * pinning isn't needed here. Future timestamps render as "over <x>".
  */
 export const toReadableTimestamp = (date: Date | string) => {
-	return dayjs(date).locale('nl').fromNow();
+	const seconds = dayjs().diff(dayjs(date), 'second');
+	const past = seconds >= 0;
+	const abs = Math.abs(seconds);
+
+	if (abs < 60) {
+		return 'zojuist';
+	}
+
+	const MINUTE = 60;
+	const HOUR = 60 * MINUTE;
+	const DAY = 24 * HOUR;
+	const WEEK = 7 * DAY;
+	const MONTH = 30 * DAY;
+	const YEAR = 365 * DAY;
+
+	let core: string;
+	if (abs < HOUR) {
+		core = `${Math.floor(abs / MINUTE)}m`;
+	} else if (abs < DAY) {
+		core = `${Math.floor(abs / HOUR)}u`;
+	} else if (abs < WEEK) {
+		core = `${Math.floor(abs / DAY)}d`;
+	} else if (abs < MONTH) {
+		core = `${Math.floor(abs / WEEK)}w`;
+	} else if (abs < YEAR) {
+		core = `${Math.floor(abs / MONTH)}mnd`;
+	} else {
+		core = `${Math.floor(abs / YEAR)}j`;
+	}
+
+	return past ? `${core} geleden` : `over ${core}`;
 };

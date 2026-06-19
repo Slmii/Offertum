@@ -1,7 +1,14 @@
+import { AppIcon } from '@/components/AppIcon.component';
+import { Banner } from '@/components/Banner.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
+import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
+import { SubscribeCta } from '@/components/SubscribeCta.component';
+import { BodySmall, H2, H3, Overline } from '@/components/Text.component';
+import { LockGlyph } from '@/components/UpsellTeaser.component';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
 	pricingPlaybookQueryOptions,
 	pricingRulesQueryOptions,
@@ -16,11 +23,10 @@ import { toReadableTimestamp } from '@/lib/utils/date.utils';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -30,7 +36,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import {
 	isPricingEffectType,
 	PRICING_PLAYBOOK_TEXT_MAX_LENGTH,
@@ -57,6 +63,7 @@ export const Route = createFileRoute('/(app)/settings/pricing-playbook')({
 	},
 	loader: async ({ context }) => {
 		await Promise.all([
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(pricingPlaybookQueryOptions),
 			context.queryClient.ensureQueryData(pricingRulesQueryOptions)
 		]);
@@ -99,6 +106,76 @@ const EXAMPLES = [
 ];
 
 function PricingPlaybookSettingsPage() {
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+
+	if (!isBillingEntitled(billing.state)) {
+		return <PricingPlaybookUpsell isOwner={me.role === 'OWNER'} />;
+	}
+
+	return <PricingPlaybookEditor />;
+}
+
+const UPSELL_BULLETS = [
+	'Tarieven, materiaalopslag en BTW in je eigen woorden',
+	'Automatisch toegepast op elke offerte',
+	'Regels aanpassen zonder formules of tabellen'
+] as const;
+
+/**
+ * Locked Prijsregels upsell — shown to owners whose org is NOT entitled (no active
+ * subscription/trial). Mirrors the `LockedFeaturePage` 'playbook' variant from the
+ * Claude Design project (LockGlyph + lead + 3 value props + shared SubscribeCta) and
+ * the sibling `IntegrationsUpsell` so both gated settings sub-pages read identically.
+ */
+function PricingPlaybookUpsell({ isOwner }: { isOwner: boolean }) {
+	const { tokens } = useTheme();
+	return (
+		<Stack useFlexGap spacing={3}>
+			<Box>
+				<H2 component='h1'>Prijsregels</H2>
+				<BodySmall color='text.secondary' sx={{ mt: 0.75, maxWidth: 640 }}>
+					Schrijf je tarieven, opslagen en BTW in gewone taal — Offertum zet ze om in regels en prijst je
+					offertes automatisch.
+				</BodySmall>
+			</Box>
+
+			<Card sx={{ p: 3 }}>
+				<Stack useFlexGap spacing={2}>
+					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+						<LockGlyph />
+						<H3 component='h2'>Beschrijf je prijsbeleid in je eigen woorden</H3>
+					</Stack>
+					<BodySmall color='text.secondary'>Met een abonnement krijg je:</BodySmall>
+					<Stack useFlexGap spacing={0.5}>
+						{UPSELL_BULLETS.map(bullet => (
+							<Stack
+								key={bullet}
+								direction='row'
+								useFlexGap
+								spacing={1}
+								sx={{ alignItems: 'flex-start' }}
+							>
+								<AppIcon
+									name='check'
+									size='medium'
+									style={{ color: tokens.color.accent[500], marginTop: 2 }}
+								/>
+								<BodySmall>{bullet}</BodySmall>
+							</Stack>
+						))}
+					</Stack>
+					<SubscribeCta
+						isOwner={isOwner}
+						askOwnerText='Vraag de eigenaar van je organisatie om een abonnement.'
+					/>
+				</Stack>
+			</Card>
+		</Stack>
+	);
+}
+
+function PricingPlaybookEditor() {
 	const { data } = useSuspenseQuery(pricingPlaybookQueryOptions);
 	const update = useUpdatePricingPlaybook();
 	const [savedFlash, setSavedFlash] = useState(false);
@@ -129,26 +206,20 @@ function PricingPlaybookSettingsPage() {
 			: { label: `${data.rulesCount} regel${data.rulesCount === 1 ? '' : 's'} gevonden`, color: 'success' };
 
 	return (
-		<Container maxWidth='md' sx={{ py: 6 }}>
-			<Box sx={{ mb: 6 }}>
-				<Typography variant='h4' component='h1' sx={{ mb: 2 }}>
-					Prijsregels
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', maxWidth: 640 }}>
-					Beschrijf hoe je je prijzen bepaalt, in je eigen woorden, geen vaste vorm. Offertum leest je tekst
-					en vertaalt 'm naar regels die je offertes automatisch invullen. De voorbeelden hieronder helpen je
-					op weg.
-				</Typography>
-			</Box>
+		<Stack>
+			<PageHeader
+				title='Prijsregels'
+				caption="Beschrijf hoe je je prijzen bepaalt, in je eigen woorden, geen vaste vorm. Offertum leest je tekst en vertaalt 'm naar regels die je offertes automatisch invullen. De voorbeelden hieronder helpen je op weg."
+			/>
 
 			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, boxShadow: 1 }}>
 				<Stack useFlexGap spacing={5}>
 					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 						<Chip size='small' label={compileStatus.label} color={compileStatus.color} variant='outlined' />
 						{data.compiledAt && (
-							<Typography variant='caption' color='text.secondary'>
+							<BodySmall color='text.secondary'>
 								· Laatst verwerkt {toReadableTimestamp(data.compiledAt)}
-							</Typography>
+							</BodySmall>
 						)}
 					</Stack>
 
@@ -158,13 +229,12 @@ function PricingPlaybookSettingsPage() {
 						defaultValues={{ playbookText: data.playbookText }}
 					>
 						<Stack useFlexGap spacing={4}>
-							<Alert severity='info' variant='outlined' sx={{ alignItems: 'flex-start' }}>
-								<strong>Tip:</strong> schrijf elke prijsregel op een eigen regel of in een eigen zin.
-								Eén uitspraak per regel maakt het makkelijker voor Offertum om je tekst correct te
-								vertalen naar losse regels.{' '}
+							<Banner tone='info' title='Tip' sx={{ alignItems: 'flex-start' }}>
+								Schrijf elke prijsregel op een eigen regel of in een eigen zin. Eén uitspraak per regel
+								maakt het makkelijker voor Offertum om je tekst correct te vertalen naar losse regels.{' '}
 								<em>Bijv. "€ 85/uur voor loodgieterswerk en € 95 voor elektra"</em> werkt, maar twee
 								aparte regels geven beter resultaat.
-							</Alert>
+							</Banner>
 							<Field
 								name='playbookText'
 								type='text'
@@ -183,14 +253,12 @@ function PricingPlaybookSettingsPage() {
 							/>
 
 							{update.error && (
-								<Alert severity='error'>
+								<Banner tone='error'>
 									{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
-								</Alert>
+								</Banner>
 							)}
 							{savedFlash && (
-								<Alert severity='success'>
-									Opgeslagen. Regels worden in de achtergrond bijgewerkt.
-								</Alert>
+								<Banner tone='success'>Opgeslagen. Regels worden in de achtergrond bijgewerkt.</Banner>
 							)}
 
 							<Stack direction='row' useFlexGap spacing={1} sx={{ justifyContent: 'flex-end' }}>
@@ -206,23 +274,20 @@ function PricingPlaybookSettingsPage() {
 			<CompiledRulesPanel />
 
 			<Box sx={{ mt: 6 }}>
-				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 					Voorbeelden
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary', mb: 3 }}>
+				</Overline>
+				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
 					Klik open om te zien hoe andere ondernemers hun prijsregels in eigen woorden hebben opgeschreven.
-				</Typography>
+				</BodySmall>
 				<Stack useFlexGap spacing={1}>
 					{EXAMPLES.map(example => (
 						<Accordion key={example.title} variant='outlined' disableGutters>
 							<AccordionSummary sx={{ '& .MuiAccordionSummary-content': { my: 1 } }}>
-								<Typography variant='body2' sx={{ fontWeight: 500 }}>
-									{example.title}
-								</Typography>
+								<BodySmall fontWeight='medium'>{example.title}</BodySmall>
 							</AccordionSummary>
 							<AccordionDetails sx={{ pt: 0 }}>
-								<Typography
-									variant='body2'
+								<BodySmall
 									component='pre'
 									sx={{
 										whiteSpace: 'pre-wrap',
@@ -232,13 +297,13 @@ function PricingPlaybookSettingsPage() {
 									}}
 								>
 									{example.body}
-								</Typography>
+								</BodySmall>
 							</AccordionDetails>
 						</Accordion>
 					))}
 				</Stack>
 			</Box>
-		</Container>
+		</Stack>
 	);
 }
 
@@ -266,21 +331,21 @@ function CompiledRulesPanel() {
 	if (rules.length === 0) {
 		return (
 			<Box sx={{ mt: 6 }}>
-				<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 					Regels
-				</Typography>
-				<Typography variant='body2' sx={{ color: 'text.secondary' }}>
+				</Overline>
+				<BodySmall color='text.secondary'>
 					Nog geen regels. Sla je tekst hierboven op, Offertum maakt de regels in de achtergrond.
-				</Typography>
+				</BodySmall>
 			</Box>
 		);
 	}
 
 	return (
 		<Box sx={{ mt: 6 }}>
-			<Typography variant='overline' sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+			<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
 				Regels ({rules.filter(r => r.active).length} actief, {rules.length} totaal)
-			</Typography>
+			</Overline>
 			<Stack useFlexGap spacing={1}>
 				{rules.map(rule => (
 					<RuleCard key={rule.id} rule={rule} />
@@ -325,13 +390,13 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 						)}
 						{!rule.active && <Chip size='small' label='Inactief' variant='outlined' />}
 					</Stack>
-					<Typography variant='body2' sx={{ fontWeight: 500, mt: 0.5 }}>
+					<BodySmall fontWeight='medium' sx={{ mt: 0.5 }}>
 						{rule.description}
-					</Typography>
-					<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+					</BodySmall>
+					<BodySmall color='text.secondary' sx={{ mt: 0.5 }}>
 						{effectSummary}
 						{conditionSummary && ` · ${conditionSummary}`}
-					</Typography>
+					</BodySmall>
 					{rule.conditionNarrative && (
 						<Tooltip
 							title='Bij elke offerte controleert de AI of deze conditie van toepassing is op de aanvraag. Alleen dan past de regel toe.'
@@ -344,9 +409,9 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 								sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap', rowGap: 0.5 }}
 							>
 								<Chip size='small' label='AI-controleert' color='warning' variant='outlined' />
-								<Typography variant='caption' color='text.secondary' sx={{ fontStyle: 'italic' }}>
+								<BodySmall color='text.secondary' sx={{ fontStyle: 'italic' }}>
 									"{rule.conditionNarrative}"
-								</Typography>
+								</BodySmall>
 							</Stack>
 						</Tooltip>
 					)}
@@ -464,9 +529,9 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 						/>
 						<FormSwitch name='active' label='Actief' />
 						{update.error && (
-							<Alert severity='error'>
+							<Banner tone='error'>
 								{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
-							</Alert>
+							</Banner>
 						)}
 					</Stack>
 				</DialogContent>

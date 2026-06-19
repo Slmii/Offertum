@@ -1,17 +1,15 @@
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 /**
- * Billing is owner-only. Non-owners get bounced to the home page. The API enforces the
- * same rule (`OwnerGuard` on every billing endpoint) — this client check is just to keep
- * non-owners out of the UI so they don't see a permission-denied screen mid-action.
+ * Billing is open to every org member so non-owners land on the read-only upsell
+ * ("Vraag de eigenaar om een abonnement") instead of being silently bounced home.
+ * Every state-changing action (Checkout, Portal, end-trial) stays owner-only — the
+ * API enforces that with `OwnerGuard`, and the page only renders those buttons for
+ * owners. We prefetch the membership here so the page can branch on `isOwner` without
+ * a render-then-fetch waterfall.
  */
 export const Route = createFileRoute('/(app)/billing')({
-	beforeLoad: async ({ context }) => {
-		const me = await context.queryClient.ensureQueryData(myMembershipQueryOptions);
-		if (me.role !== 'OWNER') {
-			throw redirect({ to: '/' });
-		}
-	},
+	loader: ({ context }) => context.queryClient.ensureQueryData(myMembershipQueryOptions),
 	component: () => <Outlet />
 });

@@ -1,5 +1,5 @@
+import { BodySmall, H2 } from '@/components/Text.component';
 import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
 
 /**
  * Compact stat card — label on top in muted secondary, value on bottom in display
@@ -18,12 +18,10 @@ export interface SummaryCardProps {
 export function SummaryCard({ label, value }: SummaryCardProps) {
 	return (
 		<Paper variant='outlined' sx={{ p: 2, flex: 1 }}>
-			<Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+			<BodySmall color='text.secondary' sx={{ display: 'block' }}>
 				{label}
-			</Typography>
-			<Typography variant='h2' sx={{ fontSize: 22, mt: 0.5 }}>
-				{value}
-			</Typography>
+			</BodySmall>
+			<H2 sx={{ fontSize: 22, mt: 0.5 }}>{value}</H2>
 		</Paper>
 	);
 }

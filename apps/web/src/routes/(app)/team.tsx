@@ -1,8 +1,10 @@
-import { SectionError } from '@/components/SectionError.component';
-import { BackToHomeButton } from '@/components/BackToHomeButton.component';
+import { Banner } from '@/components/Banner.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
+import { PageHeader } from '@/components/PageContainer.component';
+import { SectionError } from '@/components/SectionError.component';
+import { BodySmall, Overline } from '@/components/Text.component';
 import { WrapperApiError } from '@/lib/api/client';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
@@ -15,11 +17,13 @@ import {
 } from '@/lib/queries/team.queries';
 import { TeamInviteSchema, type TeamInviteForm } from '@/lib/schemas/team-invite.schema';
 import { toReadableDate } from '@/lib/utils/date.utils';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
+import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
@@ -27,17 +31,25 @@ import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import type { BillingState, MembershipRole } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useMemo, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
 // OWNER is omitted intentionally — every org has exactly one owner, set at org creation.
 // Ownership transfer (if we ever build it) is a separate flow, not via invitation.
 const ROLE_OPTIONS: ReadonlyArray<{ value: MembershipRole; label: string; hint: string }> = [
-	{ value: 'MEMBER', label: 'Member', hint: 'Standard teammate — can use the app day-to-day.' },
-	{ value: 'EXTERNAL', label: 'External', hint: 'Limited access for contractors or clients.' }
+	{
+		value: 'MEMBER',
+		label: 'Member — can handle quote requests',
+		hint: 'Standard teammate — can use the app day-to-day.'
+	},
+	{
+		value: 'EXTERNAL',
+		label: 'External — read-only access',
+		hint: 'Limited access for contractors or clients.'
+	}
 ];
 
 export const Route = createFileRoute('/(app)/team')({
@@ -64,6 +76,8 @@ function TeamPage() {
 	const revokeInvitation = useRevokeInvitation();
 	const removeMember = useRemoveMember();
 
+	const [isInviteOpen, setIsInviteOpen] = useState(false);
+
 	const isOwner = me.role === 'OWNER';
 	const isTrial = status.state === 'trialing';
 	const seatsTaken = memberships.length + invitations.length;
@@ -76,27 +90,26 @@ function TeamPage() {
 	const inviteError = createInvitation.error;
 	const isTrialSeatLimit = inviteError instanceof WrapperApiError && inviteError.apiCode === 'trial_seat_limit';
 
-	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
-			<Paper variant='outlined' sx={{ p: 5 }}>
-				<Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
-					<Typography variant='h1' sx={{ fontSize: 28 }}>
-						Team
-					</Typography>
-					<BackToHomeButton />
-				</Box>
-				<Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
-					{seatsTaken} of {status.seats.included} {isTrial ? 'seats during trial' : 'included seats'}
-					{!isTrial && seatsTaken > status.seats.included
-						? ` (${seatsTaken - status.seats.included} extra @ ${formatEuros(
-								status.seats.overagePerSeatCents
-							)}/mo each)`
-						: null}
-				</Typography>
+	const pageHeaderCaption = useMemo(() => {
+		let caption = `${seatsTaken} of ${status.seats.included} ${isTrial ? 'seats during trial' : 'included seats'}`;
 
-				<Typography variant='overline' color='text.secondary'>
-					Members
-				</Typography>
+		if (!isTrial && seatsTaken > status.seats.included) {
+			caption += '(';
+
+			caption += `${seatsTaken - status.seats.included} extra @ ${formatEuros(status.seats.overagePerSeatCents)}`;
+
+			caption += '/mo each)';
+		}
+
+		return caption;
+	}, [seatsTaken, status.seats.included, isTrial, status.seats.overagePerSeatCents]);
+
+	return (
+		<Stack>
+			<Paper variant='outlined' sx={{ p: 5 }}>
+				<PageHeader title='Team' caption={pageHeaderCaption} />
+
+				<Overline color='text.secondary'>Members</Overline>
 				<List dense disablePadding sx={{ mb: 2 }}>
 					{memberships.map(m => {
 						// Hide the remove button on the owner's own row (you can't remove yourself,
@@ -137,16 +150,14 @@ function TeamPage() {
 				</List>
 
 				{removeMember.error && (
-					<Alert severity='error' sx={{ mb: 2 }}>
+					<Banner tone='error' sx={{ mb: 2 }}>
 						{removeMember.error instanceof Error ? removeMember.error.message : 'Could not remove member.'}
-					</Alert>
+					</Banner>
 				)}
 
 				{invitations.length > 0 && (
 					<>
-						<Typography variant='overline' color='text.secondary'>
-							Pending invitations
-						</Typography>
+						<Overline color='text.secondary'>Pending invitations</Overline>
 						<List dense disablePadding sx={{ mb: 2 }}>
 							{invitations.map(inv => (
 								<ListItem
@@ -175,11 +186,11 @@ function TeamPage() {
 						</List>
 
 						{revokeInvitation.error && (
-							<Alert severity='error' sx={{ mb: 2 }}>
+							<Banner tone='error' sx={{ mb: 2 }}>
 								{revokeInvitation.error instanceof Error
 									? revokeInvitation.error.message
 									: 'Could not revoke invitation.'}
-							</Alert>
+							</Banner>
 						)}
 					</>
 				)}
@@ -187,8 +198,8 @@ function TeamPage() {
 				<Divider sx={{ my: 3 }} />
 
 				{trialCapReached && isOwner && (
-					<Alert
-						severity='info'
+					<Banner
+						tone='info'
 						sx={{ mb: 2 }}
 						action={
 							<Button color='inherit' size='small' onClick={() => navigate({ to: '/billing' })}>
@@ -198,19 +209,19 @@ function TeamPage() {
 					>
 						You've used all {status.seats.included} trial seats. Subscribe to invite more teammates and pay{' '}
 						{formatEuros(status.seats.overagePerSeatCents)}/mo per extra seat.
-					</Alert>
+					</Banner>
 				)}
 
 				{trialCapReached && !isOwner && (
-					<Alert severity='info' sx={{ mb: 2 }}>
+					<Banner tone='info' sx={{ mb: 2 }}>
 						This org has used all {status.seats.included} trial seats. Ask your owner to subscribe to add
 						more teammates.
-					</Alert>
+					</Banner>
 				)}
 
 				{isOwner && !billingEntitled && (
-					<Alert
-						severity='warning'
+					<Banner
+						tone='warning'
 						sx={{ mb: 2 }}
 						action={
 							<Button color='inherit' size='small' onClick={() => navigate({ to: '/billing' })}>
@@ -219,84 +230,151 @@ function TeamPage() {
 						}
 					>
 						{billingBlockedCopy(status.state)}
-					</Alert>
+					</Banner>
 				)}
 
 				{isOwner && billingEntitled && (
 					<>
-						<Typography variant='overline' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
-							Invite a teammate
-						</Typography>
-
-						{isTrialSeatLimit && (
-							<Alert severity='warning' sx={{ mb: 2 }}>
-								{inviteError instanceof Error ? inviteError.message : 'Trial seat limit reached.'}
-							</Alert>
-						)}
-
-						{inviteError && !isTrialSeatLimit && (
-							<Alert severity='error' sx={{ mb: 2 }}>
-								{inviteError instanceof Error ? inviteError.message : 'Could not send invitation.'}
-							</Alert>
-						)}
-
 						{createInvitation.isSuccess && (
-							<Alert severity='success' sx={{ mb: 2 }}>
+							<Banner tone='success' sx={{ mb: 2 }}>
 								Invitation sent.
-							</Alert>
+							</Banner>
 						)}
 
-						<Form<TeamInviteForm>
-							action={values => {
-								createInvitation.mutate({ email: values.email.trim(), role: values.role });
-							}}
-							schema={TeamInviteSchema}
-							defaultValues={{ email: '', role: 'MEMBER' }}
-							isDisabled={createInvitation.isPending || trialCapReached}
+						<Button
+							variant='contained'
+							onClick={() => setIsInviteOpen(true)}
+							disabled={trialCapReached}
+							fullWidth
 						>
-							<InviteFormBody isSending={createInvitation.isPending} trialCapReached={trialCapReached} />
-						</Form>
+							Invite a teammate
+						</Button>
+
+						<InviteDialog
+							isOpen={isInviteOpen}
+							isSending={createInvitation.isPending}
+							error={inviteError}
+							isTrialSeatLimit={isTrialSeatLimit}
+							onClose={() => setIsInviteOpen(false)}
+							onSubscribe={() => {
+								setIsInviteOpen(false);
+								navigate({ to: '/billing' });
+							}}
+							onSubmit={values => {
+								createInvitation.mutate(
+									{ email: values.email.trim(), role: values.role },
+									{ onSuccess: () => setIsInviteOpen(false) }
+								);
+							}}
+						/>
 					</>
 				)}
 
 				{!isOwner && (
-					<Typography variant='caption' color='text.secondary'>
-						Only the organization owner can invite teammates.
-					</Typography>
+					<BodySmall color='text.secondary'>Only the organization owner can invite teammates.</BodySmall>
 				)}
 			</Paper>
-		</Container>
+		</Stack>
 	);
 }
 
-function InviteFormBody({ isSending, trialCapReached }: { isSending: boolean; trialCapReached: boolean }) {
-	const role = useWatch<TeamInviteForm, 'role'>({ name: 'role' });
-	const disabled = isSending || trialCapReached;
+const INVITE_FORM_ID = 'team-invite-form';
+
+function InviteDialog({
+	isOpen,
+	isSending,
+	error,
+	isTrialSeatLimit,
+	onClose,
+	onSubscribe,
+	onSubmit
+}: {
+	isOpen: boolean;
+	isSending: boolean;
+	isTrialSeatLimit: boolean;
+	error: Error | null;
+	onClose: () => void;
+	onSubscribe: () => void;
+	onSubmit: (values: TeamInviteForm) => void;
+}) {
 	return (
-		<>
-			<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={1}>
-				<Field
-					type='email'
-					name='email'
-					fullWidth
-					required
-					placeholder='teammate@example.com'
-					disabled={disabled}
-				/>
-				<Select
-					name='role'
-					fullWidth
-					disabled={disabled}
-					options={ROLE_OPTIONS.map(option => ({ id: option.value, label: option.label }))}
-				/>
-				<Button type='submit' variant='contained' disabled={disabled} sx={{ minWidth: 'fit-content' }}>
+		<Dialog
+			open={isOpen}
+			onClose={isSending ? undefined : onClose}
+			maxWidth='xs'
+			fullWidth
+			aria-labelledby='invite-dialog-title'
+		>
+			<DialogTitle id='invite-dialog-title'>Invite a teammate</DialogTitle>
+			<DialogContent>
+				{isTrialSeatLimit && (
+					<Banner
+						tone='warning'
+						sx={{ mb: 2 }}
+						action={
+							<Button color='inherit' size='small' onClick={onSubscribe}>
+								Subscribe
+							</Button>
+						}
+					>
+						{error instanceof Error ? error.message : 'Trial seat limit reached.'}
+					</Banner>
+				)}
+
+				{error && !isTrialSeatLimit && (
+					<Banner tone='error' sx={{ mb: 2 }}>
+						{error instanceof Error ? error.message : 'Could not send invitation.'}
+					</Banner>
+				)}
+
+				<Form<TeamInviteForm>
+					id={INVITE_FORM_ID}
+					action={onSubmit}
+					schema={TeamInviteSchema}
+					defaultValues={{ email: '', role: 'MEMBER' }}
+					isDisabled={isSending}
+				>
+					<InviteFormBody />
+				</Form>
+			</DialogContent>
+			<DialogActions>
+				<Button onClick={onClose} disabled={isSending}>
+					Cancel
+				</Button>
+				<Button
+					type='submit'
+					form={INVITE_FORM_ID}
+					variant='contained'
+					disabled={isSending}
+					startIcon={isSending ? <CircularProgress size={14} /> : null}
+				>
 					{isSending ? 'Sending...' : 'Send invite'}
 				</Button>
-			</Stack>
-			<Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1 }}>
-				{ROLE_OPTIONS.find(o => o.value === role)?.hint}
-			</Typography>
-		</>
+			</DialogActions>
+		</Dialog>
+	);
+}
+
+function InviteFormBody() {
+	const role = useWatch<TeamInviteForm, 'role'>({ name: 'role' });
+	return (
+		<Stack spacing={1.5}>
+			<Field
+				type='email'
+				name='email'
+				label='Email address'
+				fullWidth
+				required
+				placeholder='teammate@example.com'
+			/>
+			<Select
+				name='role'
+				label='Role'
+				fullWidth
+				options={ROLE_OPTIONS.map(option => ({ id: option.value, label: option.label }))}
+			/>
+			<BodySmall color='text.secondary'>{ROLE_OPTIONS.find(o => o.value === role)?.hint}</BodySmall>
+		</Stack>
 	);
 }
 

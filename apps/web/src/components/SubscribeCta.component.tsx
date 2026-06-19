@@ -1,7 +1,7 @@
+import { BodySmall } from '@/components/Text.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import type { SxProps, Theme } from '@mui/material/styles';
-import Typography from '@mui/material/Typography';
 import { Link } from '@tanstack/react-router';
 
 /**
@@ -21,9 +21,9 @@ export function SubscribeCta({
 }) {
 	if (!isOwner) {
 		return (
-			<Typography variant='body2' color='text.secondary' sx={sx}>
+			<BodySmall color='text.secondary' sx={sx}>
 				{askOwnerText}
-			</Typography>
+			</BodySmall>
 		);
 	}
 

@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
+import { ThemeModeProvider } from '@/lib/hooks/use-theme-mode';
+import { ToastProvider } from '@/lib/hooks/use-toast';
 import { sessionQueryOptions } from '@/lib/queries/auth.queries';
-import { theme } from '@/lib/utils/theme.utils';
 import createCache from '@emotion/cache';
 import { CacheProvider } from '@emotion/react';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ThemeProvider } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import type { QueryClient } from '@tanstack/react-query';
@@ -53,12 +53,12 @@ function Providers({ children }: { children: React.ReactNode }) {
 
 	return (
 		<CacheProvider value={emotionCache}>
-			<ThemeProvider theme={theme}>
+			<ThemeModeProvider>
 				<LocalizationProvider dateAdapter={AdapterDayjs}>
 					<CssBaseline />
-					{children}
+					<ToastProvider>{children}</ToastProvider>
 				</LocalizationProvider>
-			</ThemeProvider>
+			</ThemeModeProvider>
 		</CacheProvider>
 	);
 }
