@@ -4,7 +4,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 interface DialogProps {
 	open: boolean;
@@ -54,16 +54,20 @@ export function Dialog({
 	hideClose = false,
 	disableClose = false
 }: DialogProps) {
+	// Tie the dialog to its title so screen readers announce a name (MUI doesn't auto-wire this).
+	const titleId = useId();
 	return (
 		<MuiDialog
 			open={open}
 			onClose={disableClose ? undefined : onClose}
 			fullWidth
 			maxWidth={false}
+			aria-labelledby={titleId}
 			slotProps={{ paper: { sx: { width: '100%', maxWidth: width } } }}
 		>
 			<DialogTitle>
-				{title}
+				{/* Wrap just the title text so the dialog's accessible name excludes the ✕ button's label. */}
+				<span id={titleId}>{title}</span>
 				{!hideClose && (
 					<IconButton
 						aria-label='Sluiten'
