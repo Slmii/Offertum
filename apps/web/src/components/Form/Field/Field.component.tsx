@@ -156,14 +156,16 @@ export function StandaloneField({
 						<InputAdornment
 							position='end'
 							sx={{
+								// Multiline: pin the counter to the top so it sits on the first line
+								// (mb:auto pushes it up; no extra top margin beyond the input padding).
 								mb: multiline ? 'auto' : undefined,
-								mt: multiline ? 1 : undefined
+								alignSelf: multiline ? 'flex-start' : undefined
 							}}
 						>
 							{isLoading && <CircularProgress size={20} />}
 							{endElement && cloneElement(endElement)}
 							{maxLength != null && maxLength > 0 && (
-								<FormHelperText sx={{ color: 'text.secondary', opacity: 0.5 }}>
+								<FormHelperText sx={{ color: 'text.secondary', opacity: 0.5, mt: 0 }}>
 									{getByteLength(value ?? '')} / {maxLength}
 								</FormHelperText>
 							)}

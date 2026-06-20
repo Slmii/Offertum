@@ -6,8 +6,8 @@ name: Apply AI Review
 # removes the label and comments a summary of what it did / skipped.
 #
 # No loop: the fixes are pushed with the default GITHUB_TOKEN, so the resulting branch push
-# does NOT re-trigger pr-review.yml or ci.yml (GitHub anti-recursion). To run another pass,
-# re-add the label. To get a fresh review, push a commit yourself or reopen the PR.
+# does NOT re-trigger pr-review.yml (GitHub anti-recursion). To run another pass, re-add the
+# label. To get a fresh review, push a commit yourself or reopen the PR.
 #
 # Prerequisite: secret ANTHROPIC_API_KEY.
 
@@ -58,6 +58,10 @@ jobs:
 
             - name: Generate Prisma client
               run: pnpm --filter @offertum/api db:generate
+
+            - name: Generate route tree
+              # routeTree.gen.ts is gitignored — generate it so `tsc` resolves route types.
+              run: pnpm --filter @offertum/web routes:generate
 
             - name: Claude apply review feedback
               uses: anthropics/claude-code-action@v1

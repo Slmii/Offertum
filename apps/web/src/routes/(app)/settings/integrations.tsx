@@ -17,7 +17,7 @@ import { useTheme } from '@mui/material/styles';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { MOCK_INTEGRATIONS, type Integration } from './integrations.mock';
+import { MOCK_INTEGRATIONS, type Integration } from './-integrations.mock';
 
 /**
  * Settings → Integraties. A FUTURE-POSSIBILITIES DEMO ported from the Claude Design project:

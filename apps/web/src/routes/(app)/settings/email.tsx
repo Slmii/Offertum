@@ -28,7 +28,7 @@ import type { BillingState, EmailProvider, MailboxStatus } from '@offertum/share
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { toMailboxRows, type MailboxRowView } from './email.mock';
+import { toMailboxRows, type MailboxRowView } from './-email.mock';
 
 export const Route = createFileRoute('/(app)/settings/email')({
 	validateSearch: EmailSettingsSearchSchema,

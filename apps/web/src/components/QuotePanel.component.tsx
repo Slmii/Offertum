@@ -18,10 +18,6 @@ import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Link from '@mui/material/Link';
@@ -33,6 +29,7 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { BodySmall, H3, Label } from '@/components/Text.component';
 import {
 	computeQuoteTotals,
@@ -247,62 +244,66 @@ function QuoteRegenerateModal({
 	const resultLines = buildResultLines(lineEntries, ruleEntries, selection);
 
 	return (
-		<Dialog open onClose={onClose} maxWidth='md' fullWidth>
-			<DialogTitle>Offerte opnieuw genereren</DialogTitle>
-			<DialogContent dividers>
-				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
-					Vergelijk je huidige offerte met het nieuwe voorstel en kies per regel wat er gebeurt. Toeslagen en
-					voorrijkosten worden automatisch opnieuw berekend.
-				</BodySmall>
+		<Dialog
+			open
+			title='Offerte opnieuw genereren'
+			onClose={onClose}
+			width={880}
+			action={
+				<>
+					<Button onClick={onClose} disabled={replace.isPending}>
+						Annuleren
+					</Button>
+					<Button
+						variant='contained'
+						onClick={() =>
+							replace.mutate({ quoteDraftId: draft.id, lines: resultLines }, { onSuccess: onClose })
+						}
+						disabled={replace.isPending || resultLines.length === 0}
+						startIcon={replace.isPending ? <CircularProgress size={14} /> : null}
+					>
+						Toepassen ({resultLines.length})
+					</Button>
+				</>
+			}
+		>
+			<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+				Vergelijk je huidige offerte met het nieuwe voorstel en kies per regel wat er gebeurt. Toeslagen en
+				voorrijkosten worden automatisch opnieuw berekend.
+			</BodySmall>
 
-				<Label sx={{ display: 'block', mb: 1 }}>Werk &amp; materialen</Label>
-				<Stack useFlexGap spacing={1}>
-					{lineEntries.length === 0 && (
-						<BodySmall color='text.secondary'>Geen werk- of materiaalregels.</BodySmall>
-					)}
-					{lineEntries.map(entry => (
-						<QuoteDiffRow
-							key={entry.key}
-							entry={entry}
-							checked={selection[entry.key] ?? false}
-							onChange={value => setKey(entry.key, value)}
-						/>
-					))}
-				</Stack>
-
-				{ruleEntries.length > 0 && (
-					<>
-						<Divider sx={{ my: 2 }} />
-						<Label sx={{ display: 'block', mb: 1 }}>Automatisch herberekend (prijsregels)</Label>
-						<Stack useFlexGap spacing={0.5}>
-							{ruleEntries.map(entry => (
-								<RuleDiffRow key={entry.key} entry={entry} />
-							))}
-						</Stack>
-					</>
+			<Label sx={{ display: 'block', mb: 1 }}>Werk &amp; materialen</Label>
+			<Stack useFlexGap spacing={1}>
+				{lineEntries.length === 0 && (
+					<BodySmall color='text.secondary'>Geen werk- of materiaalregels.</BodySmall>
 				)}
+				{lineEntries.map(entry => (
+					<QuoteDiffRow
+						key={entry.key}
+						entry={entry}
+						checked={selection[entry.key] ?? false}
+						onChange={value => setKey(entry.key, value)}
+					/>
+				))}
+			</Stack>
 
-				{replace.isError && (
-					<Banner tone='error' sx={{ mt: 2 }}>
-						Toepassen mislukt: {replace.error instanceof Error ? replace.error.message : 'Onbekende fout'}
-					</Banner>
-				)}
-			</DialogContent>
-			<DialogActions>
-				<Button onClick={onClose} disabled={replace.isPending}>
-					Annuleren
-				</Button>
-				<Button
-					variant='contained'
-					onClick={() =>
-						replace.mutate({ quoteDraftId: draft.id, lines: resultLines }, { onSuccess: onClose })
-					}
-					disabled={replace.isPending || resultLines.length === 0}
-					startIcon={replace.isPending ? <CircularProgress size={14} /> : null}
-				>
-					Toepassen ({resultLines.length})
-				</Button>
-			</DialogActions>
+			{ruleEntries.length > 0 && (
+				<>
+					<Divider sx={{ my: 2 }} />
+					<Label sx={{ display: 'block', mb: 1 }}>Automatisch herberekend (prijsregels)</Label>
+					<Stack useFlexGap spacing={0.5}>
+						{ruleEntries.map(entry => (
+							<RuleDiffRow key={entry.key} entry={entry} />
+						))}
+					</Stack>
+				</>
+			)}
+
+			{replace.isError && (
+				<Banner tone='error' sx={{ mt: 2 }}>
+					Toepassen mislukt: {replace.error instanceof Error ? replace.error.message : 'Onbekende fout'}
+				</Banner>
+			)}
 		</Dialog>
 	);
 }

@@ -53,6 +53,10 @@ jobs:
               # Lets the reviewer run typecheck/test to verify claims if it wants to.
               run: pnpm --filter @offertum/api db:generate
 
+            - name: Generate route tree
+              # routeTree.gen.ts is gitignored — generate it so the reviewer's `tsc` resolves route types.
+              run: pnpm --filter @offertum/web routes:generate
+
             - name: Claude PR review
               uses: anthropics/claude-code-action@v1
               # gh authenticates from GH_TOKEN; make it explicit for `gh pr review`.

@@ -11,13 +11,12 @@ name: AI Audit
 #   2. Secret AUDIT_PR_TOKEN — a fine-grained PAT (or GitHub App installation token)
 #      scoped to THIS repo with Contents: write + Pull requests: write. The audit
 #      creates its branch + PR with this token instead of the default GITHUB_TOKEN, so
-#      the resulting PR triggers downstream workflows — notably pr-review.yml (a second
-#      Claude agent reviews the PR) and ci.yml. (PRs opened by the default GITHUB_TOKEN
-#      do not trigger other workflows.)
+#      the resulting PR triggers pr-review.yml (a second Claude agent reviews the PR).
+#      (PRs opened by the default GITHUB_TOKEN do not trigger other workflows.)
 #   3. Branch protection on `main` (require PR review, no force-push) so the audit's
 #      write token can't be abused to push straight to main.
-# The audit step self-runs typecheck/lint/test, but that is not a substitute for CI —
-# ci.yml also runs on `workflow-audit/**` pushes so the fixes get an independent gate.
+# The audit step self-runs typecheck/lint/test before opening the PR (there is no separate
+# CI workflow); pr-review.yml then reviews the result.
 
 on:
     push:
@@ -52,7 +51,7 @@ jobs:
                   # Full history so we can diff the push against the previous main commit.
                   fetch-depth: 0
                   # Persist the PAT so the audit branch push is attributed to it (and so
-                  # the workflow-audit/** push triggers ci.yml).
+                  # the PR triggers pr-review.yml).
                   token: ${{ secrets.AUDIT_PR_TOKEN }}
 
             - uses: pnpm/action-setup@v4
@@ -68,6 +67,10 @@ jobs:
             - name: Generate Prisma client
               # Required before typecheck — the generated client lives in src/generated/prisma.
               run: pnpm --filter @offertum/api db:generate
+
+            - name: Generate route tree
+              # routeTree.gen.ts is gitignored — generate it so the agent's `tsc` resolves route types.
+              run: pnpm --filter @offertum/web routes:generate
 
             - name: Determine diff base
               id: diffbase
@@ -96,7 +99,7 @@ jobs:
               if: steps.diffbase.outputs.skip != 'true'
               uses: anthropics/claude-code-action@v1
               # Create the branch + PR with the PAT (not GITHUB_TOKEN) so the PR triggers
-              # pr-review.yml and ci.yml. gh reads GH_TOKEN from its env.
+              # pr-review.yml. gh reads GH_TOKEN from its env.
               env:
                   GH_TOKEN: ${{ secrets.AUDIT_PR_TOKEN }}
               with:

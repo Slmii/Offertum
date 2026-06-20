@@ -1,4 +1,5 @@
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
@@ -18,11 +19,7 @@ import { toReadableEuro } from '@/lib/utils/number.utils';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import type { CatalogItem } from '@offertum/shared';
@@ -183,33 +180,43 @@ function CatalogItemDialog({ mode, item, onClose }: CatalogItemDialogProps) {
 				};
 
 	return (
-		<Dialog open onClose={onClose} maxWidth='sm' fullWidth>
-			<Form<CatalogItemForm> action={handleSubmit} schema={CatalogItemSchema} defaultValues={defaultValues}>
-				<DialogTitle>{mode === 'create' ? 'Nieuw catalogusitem' : 'Catalogusitem bewerken'}</DialogTitle>
-				<DialogContent dividers>
-					<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
-						<Field name='name' label='Naam' fullWidth autoFocus />
-						<Field name='description' label='Omschrijving (optioneel)' fullWidth multiline />
-						<Stack direction='row' useFlexGap spacing={2}>
-							<Field name='defaultPriceEur' label='Prijs (€)' fullWidth />
-							<Select name='unit' label='Eenheid' options={UNIT_OPTIONS} fullWidth />
-							<Field name='defaultVatRate' label='BTW (%)' type='number' fullWidth />
-						</Stack>
-						<Field name='sku' label='SKU (optioneel)' fullWidth />
-						<FormSwitch name='active' label='Actief' />
-						{error && (
-							<Banner tone='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Banner>
-						)}
-					</Stack>
-				</DialogContent>
-				<DialogActions>
+		<Dialog
+			open
+			title={mode === 'create' ? 'Nieuw catalogusitem' : 'Catalogusitem bewerken'}
+			onClose={onClose}
+			disableClose={isPending}
+			width={600}
+			action={
+				<>
 					<Button onClick={onClose} disabled={isPending}>
 						Annuleren
 					</Button>
-					<Button type='submit' variant='contained' disabled={isPending}>
+					<Button type='submit' form='catalog-item-form' variant='contained' disabled={isPending}>
 						{isPending ? 'Opslaan…' : 'Opslaan'}
 					</Button>
-				</DialogActions>
+				</>
+			}
+		>
+			<Form<CatalogItemForm>
+				id='catalog-item-form'
+				action={handleSubmit}
+				schema={CatalogItemSchema}
+				defaultValues={defaultValues}
+			>
+				<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
+					<Field name='name' label='Naam' fullWidth autoFocus />
+					<Field name='description' label='Omschrijving (optioneel)' fullWidth multiline />
+					<Stack direction='row' useFlexGap spacing={2}>
+						<Field name='defaultPriceEur' label='Prijs (€)' fullWidth />
+						<Select name='unit' label='Eenheid' options={UNIT_OPTIONS} fullWidth />
+						<Field name='defaultVatRate' label='BTW (%)' type='number' fullWidth />
+					</Stack>
+					<Field name='sku' label='SKU (optioneel)' fullWidth />
+					<FormSwitch name='active' label='Actief' />
+					{error && (
+						<Banner tone='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Banner>
+					)}
+				</Stack>
 			</Form>
 		</Dialog>
 	);
@@ -228,27 +235,32 @@ function DeleteConfirmDialog({ item, onClose }: DeleteConfirmDialogProps) {
 	};
 
 	return (
-		<Dialog open onClose={onClose} maxWidth='xs' fullWidth>
-			<DialogTitle>Catalogusitem verwijderen?</DialogTitle>
-			<DialogContent>
-				<DialogContentText>
-					Weet je zeker dat je <strong>{item.name}</strong> wilt verwijderen? Eerder opgestelde offertes
-					behouden hun regels, alleen toekomstige voorstellen worden geraakt.
-				</DialogContentText>
-				{remove.error && (
-					<Banner tone='error' sx={{ mt: 2 }}>
-						{remove.error instanceof Error ? remove.error.message : 'Verwijderen mislukt.'}
-					</Banner>
-				)}
-			</DialogContent>
-			<DialogActions>
-				<Button onClick={onClose} disabled={remove.isPending}>
-					Annuleren
-				</Button>
-				<Button onClick={confirm} variant='contained' color='error' disabled={remove.isPending}>
-					{remove.isPending ? 'Verwijderen…' : 'Verwijderen'}
-				</Button>
-			</DialogActions>
+		<Dialog
+			open
+			title='Catalogusitem verwijderen?'
+			onClose={onClose}
+			disableClose={remove.isPending}
+			width={440}
+			action={
+				<>
+					<Button onClick={onClose} disabled={remove.isPending}>
+						Annuleren
+					</Button>
+					<Button onClick={confirm} variant='contained' color='error' disabled={remove.isPending}>
+						{remove.isPending ? 'Verwijderen…' : 'Verwijderen'}
+					</Button>
+				</>
+			}
+		>
+			<DialogContentText>
+				Weet je zeker dat je <strong>{item.name}</strong> wilt verwijderen? Eerder opgestelde offertes behouden
+				hun regels, alleen toekomstige voorstellen worden geraakt.
+			</DialogContentText>
+			{remove.error && (
+				<Banner tone='error' sx={{ mt: 2 }}>
+					{remove.error instanceof Error ? remove.error.message : 'Verwijderen mislukt.'}
+				</Banner>
+			)}
 		</Dialog>
 	);
 }

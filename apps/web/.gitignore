@@ -4,5 +4,6 @@ dist
 .nitro
 .tanstack
 
-# TanStack Router auto-generated route tree (regenerated on dev/build)
+# TanStack Router auto-generated route tree (regenerated on dev/build, and in CI via
+# the "Generate route tree" workflow step: `pnpm --filter @offertum/web routes:generate`)
 src/routeTree.gen.ts

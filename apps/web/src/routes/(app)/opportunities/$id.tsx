@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { AvailabilityPicker, type CalendarProvider } from '@/components/AvailabilityPicker.component';
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { ExpiryActionCard } from '@/components/ExpiryActionCard.component';
 import { StandaloneDatePicker } from '@/components/Form/DatePicker/DatePicker.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
@@ -49,10 +50,6 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -653,59 +650,64 @@ function SendConfirmDialog({
 	const preview = bodyPreview.length > 280 ? `${bodyPreview.slice(0, 280)}…` : bodyPreview;
 
 	return (
-		<Dialog open={isOpen} onClose={isSending ? undefined : onClose} maxWidth='sm' fullWidth>
-			<DialogTitle>Concept versturen?</DialogTitle>
-			<DialogContent>
-				<BodySmall color='text.secondary' sx={{ mb: 2 }}>
-					Dit verstuurt direct als antwoord op de oorspronkelijke e-mail. Je kunt het niet terugnemen.
-				</BodySmall>
-				<Box sx={{ mb: 2 }}>
-					<BodySmall color='text.secondary'>Naar</BodySmall>
-					<BodySmall>{recipientLabel}</BodySmall>
-				</Box>
-				{subject && (
-					<Box sx={{ mb: 2 }}>
-						<BodySmall color='text.secondary'>Onderwerp</BodySmall>
-						<BodySmall>Re: {subject.replace(/^re:\s*/i, '')}</BodySmall>
-					</Box>
-				)}
-				<Box>
-					<BodySmall color='text.secondary'>Begin van het bericht</BodySmall>
-					<BodySmall
-						component='pre'
-						sx={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', m: 0, mt: 0.5, color: 'text.primary' }}
+		<Dialog
+			open={isOpen}
+			title='Concept versturen?'
+			onClose={onClose}
+			disableClose={isSending}
+			width={600}
+			action={
+				<>
+					<Button onClick={onClose} disabled={isSending}>
+						Annuleren
+					</Button>
+					<Button
+						onClick={onConfirm}
+						variant='contained'
+						disabled={isSending}
+						startIcon={isSending ? <CircularProgress size={14} /> : null}
 					>
-						{preview}
-					</BodySmall>
+						{isSending ? 'Versturen…' : 'Verstuur nu'}
+					</Button>
+				</>
+			}
+		>
+			<BodySmall color='text.secondary' sx={{ mb: 2 }}>
+				Dit verstuurt direct als antwoord op de oorspronkelijke e-mail. Je kunt het niet terugnemen.
+			</BodySmall>
+			<Box sx={{ mb: 2 }}>
+				<BodySmall color='text.secondary'>Naar</BodySmall>
+				<BodySmall>{recipientLabel}</BodySmall>
+			</Box>
+			{subject && (
+				<Box sx={{ mb: 2 }}>
+					<BodySmall color='text.secondary'>Onderwerp</BodySmall>
+					<BodySmall>Re: {subject.replace(/^re:\s*/i, '')}</BodySmall>
 				</Box>
-				{attachments.length > 0 && (
-					<Box sx={{ mt: 2 }}>
-						<BodySmall color='text.secondary'>Bijlagen ({attachments.length})</BodySmall>
-						<Stack direction='row' useFlexGap spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
-							{attachments.map(attachment => (
-								<Chip
-									key={attachment.id}
-									size='small'
-									label={`${attachment.filename} · ${toReadableBytes(attachment.sizeBytes)}`}
-								/>
-							))}
-						</Stack>
-					</Box>
-				)}
-			</DialogContent>
-			<DialogActions>
-				<Button onClick={onClose} disabled={isSending}>
-					Annuleren
-				</Button>
-				<Button
-					onClick={onConfirm}
-					variant='contained'
-					disabled={isSending}
-					startIcon={isSending ? <CircularProgress size={14} /> : null}
+			)}
+			<Box>
+				<BodySmall color='text.secondary'>Begin van het bericht</BodySmall>
+				<BodySmall
+					component='pre'
+					sx={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', m: 0, mt: 0.5, color: 'text.primary' }}
 				>
-					{isSending ? 'Versturen…' : 'Verstuur nu'}
-				</Button>
-			</DialogActions>
+					{preview}
+				</BodySmall>
+			</Box>
+			{attachments.length > 0 && (
+				<Box sx={{ mt: 2 }}>
+					<BodySmall color='text.secondary'>Bijlagen ({attachments.length})</BodySmall>
+					<Stack direction='row' useFlexGap spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
+						{attachments.map(attachment => (
+							<Chip
+								key={attachment.id}
+								size='small'
+								label={`${attachment.filename} · ${toReadableBytes(attachment.sizeBytes)}`}
+							/>
+						))}
+					</Stack>
+				</Box>
+			)}
 		</Dialog>
 	);
 }

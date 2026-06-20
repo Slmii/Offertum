@@ -17,10 +17,10 @@
 			"dependsOn": ["^build"]
 		},
 		"typecheck": {
-			"dependsOn": ["db:generate"]
+			"dependsOn": ["^build", "db:generate"]
 		},
 		"test": {
-			"dependsOn": ["db:generate"]
+			"dependsOn": ["^build", "db:generate"]
 		},
 		"db:generate": {
 			"cache": false,

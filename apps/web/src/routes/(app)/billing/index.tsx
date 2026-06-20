@@ -1,5 +1,6 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { PageHeader } from '@/components/PageContainer.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Body, BodySmall, H2, H3, Mono, Overline } from '@/components/Text.component';
@@ -17,11 +18,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -30,7 +27,7 @@ import type { BillingStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { MOCK_NEXT_INVOICE, MOCK_STRIPE_CUSTOMER_ID, type NextInvoice } from './billing-invoices.mock';
+import { MOCK_NEXT_INVOICE, MOCK_STRIPE_CUSTOMER_ID, type NextInvoice } from './-billing-invoices.mock';
 
 export const Route = createFileRoute('/(app)/billing/')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions),
@@ -148,38 +145,42 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 				<NextInvoiceCard invoice={MOCK_NEXT_INVOICE} />
 			</Stack>
 
-			<Dialog open={confirmUpgradeOpen} onClose={() => setConfirmUpgradeOpen(false)} maxWidth='xs' fullWidth>
-				<DialogTitle>Proefperiode beëindigen en nu abonneren?</DialogTitle>
-				<DialogContent>
-					<DialogContentText>
-						Hiermee stopt je gratis proefperiode meteen. Je opgeslagen betaalmethode wordt belast voor het{' '}
-						{toReadableEuro(status.seats.baseMonthlyPriceCents / 100)}/maand-abonnement (plus eventuele btw)
-						en je abonnement wordt direct actief. Je kunt dan teamleden uitnodigen voorbij de{' '}
-						{status.seats.included}-zitplekken-proeflimiet. Extra zitplekken kosten{' '}
-						{toReadableEuro(status.seats.overagePerSeatCents / 100)}/maand per stuk.
-					</DialogContentText>
-					{endTrial.isError && (
-						<Banner tone='error' sx={{ mt: 2 }}>
-							{endTrial.error instanceof Error
-								? endTrial.error.message
-								: 'Upgraden mislukt. Probeer het opnieuw.'}
-						</Banner>
-					)}
-					{upgradeIncomplete && (
-						<Banner tone='warning' sx={{ mt: 2 }}>
-							Je proefperiode is beëindigd, maar de betaling is niet gelukt. Sluit dit en gebruik “Beheer
-							abonnement” om je betaalmethode bij te werken.
-						</Banner>
-					)}
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={() => setConfirmUpgradeOpen(false)} disabled={endTrial.isPending}>
-						Annuleren
-					</Button>
-					<Button variant='contained' onClick={confirmUpgrade} disabled={endTrial.isPending}>
-						{endTrial.isPending ? 'Upgraden...' : 'Nu abonneren'}
-					</Button>
-				</DialogActions>
+			<Dialog
+				open={confirmUpgradeOpen}
+				title='Proefperiode beëindigen en nu abonneren?'
+				onClose={() => setConfirmUpgradeOpen(false)}
+				width={440}
+				action={
+					<>
+						<Button onClick={() => setConfirmUpgradeOpen(false)} disabled={endTrial.isPending}>
+							Annuleren
+						</Button>
+						<Button variant='contained' onClick={confirmUpgrade} disabled={endTrial.isPending}>
+							{endTrial.isPending ? 'Upgraden...' : 'Nu abonneren'}
+						</Button>
+					</>
+				}
+			>
+				<DialogContentText>
+					Hiermee stopt je gratis proefperiode meteen. Je opgeslagen betaalmethode wordt belast voor het{' '}
+					{toReadableEuro(status.seats.baseMonthlyPriceCents / 100)}/maand-abonnement (plus eventuele btw) en
+					je abonnement wordt direct actief. Je kunt dan teamleden uitnodigen voorbij de{' '}
+					{status.seats.included}-zitplekken-proeflimiet. Extra zitplekken kosten{' '}
+					{toReadableEuro(status.seats.overagePerSeatCents / 100)}/maand per stuk.
+				</DialogContentText>
+				{endTrial.isError && (
+					<Banner tone='error' sx={{ mt: 2 }}>
+						{endTrial.error instanceof Error
+							? endTrial.error.message
+							: 'Upgraden mislukt. Probeer het opnieuw.'}
+					</Banner>
+				)}
+				{upgradeIncomplete && (
+					<Banner tone='warning' sx={{ mt: 2 }}>
+						Je proefperiode is beëindigd, maar de betaling is niet gelukt. Sluit dit en gebruik “Beheer
+						abonnement” om je betaalmethode bij te werken.
+					</Banner>
+				)}
 			</Dialog>
 		</Stack>
 	);

@@ -1,6 +1,7 @@
 import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import FormLabel from '@mui/material/FormLabel';
+import InputLabel from '@mui/material/InputLabel';
 import MuiRadio from '@mui/material/Radio';
 import MuiRadioGroup from '@mui/material/RadioGroup';
 import { Controller } from 'react-hook-form';
@@ -17,7 +18,7 @@ export const RadioGroup = ({ name, label, options, disabled, row, onChange }: Fo
 			name={name}
 			render={({ field }) => (
 				<FormControl disabled={disabled}>
-					{label && <FormLabel>{label}</FormLabel>}
+					{label && <InputLabel>{label}</InputLabel>}
 					<MuiRadioGroup
 						row={row}
 						value={field.value ?? ''}

@@ -1,4 +1,5 @@
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
@@ -20,10 +21,6 @@ import { toReadableDate } from '@/lib/utils/date.utils';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
@@ -300,57 +297,56 @@ function InviteDialog({
 	return (
 		<Dialog
 			open={isOpen}
-			onClose={isSending ? undefined : onClose}
-			maxWidth='xs'
-			fullWidth
-			aria-labelledby='invite-dialog-title'
-		>
-			<DialogTitle id='invite-dialog-title'>Invite a teammate</DialogTitle>
-			<DialogContent>
-				{isTrialSeatLimit && (
-					<Banner
-						tone='warning'
-						sx={{ mb: 2 }}
-						action={
-							<Button color='inherit' size='small' onClick={onSubscribe}>
-								Subscribe
-							</Button>
-						}
+			title='Invite a teammate'
+			onClose={onClose}
+			disableClose={isSending}
+			width={440}
+			action={
+				<>
+					<Button onClick={onClose} disabled={isSending}>
+						Cancel
+					</Button>
+					<Button
+						type='submit'
+						form={INVITE_FORM_ID}
+						variant='contained'
+						disabled={isSending}
+						startIcon={isSending ? <CircularProgress size={14} /> : null}
 					>
-						{error instanceof Error ? error.message : 'Trial seat limit reached.'}
-					</Banner>
-				)}
-
-				{error && !isTrialSeatLimit && (
-					<Banner tone='error' sx={{ mb: 2 }}>
-						{error instanceof Error ? error.message : 'Could not send invitation.'}
-					</Banner>
-				)}
-
-				<Form<TeamInviteForm>
-					id={INVITE_FORM_ID}
-					action={onSubmit}
-					schema={TeamInviteSchema}
-					defaultValues={{ email: '', role: 'MEMBER' }}
-					isDisabled={isSending}
+						{isSending ? 'Sending...' : 'Send invite'}
+					</Button>
+				</>
+			}
+		>
+			{isTrialSeatLimit && (
+				<Banner
+					tone='warning'
+					sx={{ mb: 2 }}
+					action={
+						<Button color='inherit' size='small' onClick={onSubscribe}>
+							Subscribe
+						</Button>
+					}
 				>
-					<InviteFormBody />
-				</Form>
-			</DialogContent>
-			<DialogActions>
-				<Button onClick={onClose} disabled={isSending}>
-					Cancel
-				</Button>
-				<Button
-					type='submit'
-					form={INVITE_FORM_ID}
-					variant='contained'
-					disabled={isSending}
-					startIcon={isSending ? <CircularProgress size={14} /> : null}
-				>
-					{isSending ? 'Sending...' : 'Send invite'}
-				</Button>
-			</DialogActions>
+					{error instanceof Error ? error.message : 'Trial seat limit reached.'}
+				</Banner>
+			)}
+
+			{error && !isTrialSeatLimit && (
+				<Banner tone='error' sx={{ mb: 2 }}>
+					{error instanceof Error ? error.message : 'Could not send invitation.'}
+				</Banner>
+			)}
+
+			<Form<TeamInviteForm>
+				id={INVITE_FORM_ID}
+				action={onSubmit}
+				schema={TeamInviteSchema}
+				defaultValues={{ email: '', role: 'MEMBER' }}
+				isDisabled={isSending}
+			>
+				<InviteFormBody />
+			</Form>
 		</Dialog>
 	);
 }

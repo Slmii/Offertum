@@ -604,7 +604,42 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			},
 			MuiDialog: {
 				styleOverrides: {
-					paper: { borderRadius: t.radius.xl, boxShadow: t.shadow[3] }
+					// DS modal shell: radius-lg, hairline border, elevation-3, dimmed indigo scrim.
+					paper: { borderRadius: t.radius.lg, border: `1px solid ${t.color.line}`, boxShadow: t.shadow[3] }
+				}
+			},
+			MuiBackdrop: {
+				styleOverrides: { root: { backgroundColor: t.color.overlay } }
+			},
+			MuiDialogTitle: {
+				styleOverrides: {
+					// DS modal header: 18px/bold ink-1 title row with a bottom hairline; the DRY
+					// Dialog drops a close button in here, so it's a space-between flex row.
+					root: {
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'space-between',
+						gap: 16,
+						padding: '20px 24px',
+						borderBottom: `1px solid ${t.color.line}`,
+						fontFamily: t.font.sans,
+						fontSize: '1.125rem',
+						fontWeight: 700,
+						lineHeight: 1.3,
+						color: t.color.ink1
+					}
+				}
+			},
+			MuiDialogContent: {
+				styleOverrides: {
+					// MUI zeroes top padding when content follows a title; restore the DS 20px.
+					root: { padding: '20px 24px', '.MuiDialogTitle-root + &': { paddingTop: '20px' } }
+				}
+			},
+			MuiDialogActions: {
+				styleOverrides: {
+					// DS modal footer: top hairline, right-aligned buttons.
+					root: { padding: '16px 24px', borderTop: `1px solid ${t.color.line}`, gap: 8 }
 				}
 			},
 			MuiAlert: {

@@ -1,5 +1,6 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
@@ -27,10 +28,6 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -488,9 +485,22 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 	const effectUnit = effectUnitFor(rule.effect);
 
 	return (
-		<Dialog open={open} onClose={onClose} fullWidth maxWidth='sm'>
-			<DialogTitle>Regel bewerken</DialogTitle>
+		<Dialog
+			open={open}
+			title='Regel bewerken'
+			onClose={onClose}
+			width={600}
+			action={
+				<>
+					<Button onClick={onClose}>Annuleren</Button>
+					<Button type='submit' form='pricing-rule-edit-form' variant='contained' disabled={update.isPending}>
+						{update.isPending ? 'Opslaan…' : 'Opslaan'}
+					</Button>
+				</>
+			}
+		>
 			<Form<PricingRuleEditForm>
+				id='pricing-rule-edit-form'
 				action={onSubmit}
 				schema={PricingRuleEditSchema}
 				defaultValues={{
@@ -501,46 +511,38 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 					conditionNarrative: rule.conditionNarrative ?? ''
 				}}
 			>
-				<DialogContent>
-					<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
-						<Field name='description' label='Omschrijving' fullWidth />
-						<Field
-							name='value'
-							type='number'
-							label={effectUnit ? `Waarde (${effectUnit})` : 'Waarde'}
-							fullWidth
-						/>
-						<Field
-							name='priority'
-							type='number'
-							label='Prioriteit (0-1000)'
-							helperText='Hogere prioriteit wint van regels met dezelfde voorwaarde. Standaard is 100.'
-							fullWidth
-						/>
-						<Field
-							name='conditionNarrative'
-							label='AI-conditie (optioneel)'
-							helperText='Vrije tekst waaraan de AI elke offerte toetst voordat de regel wordt toegepast, bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
-							fullWidth
-							multiline
-							minRows={2}
-							maxRows={4}
-							maxLength={500}
-						/>
-						<FormSwitch name='active' label='Actief' />
-						{update.error && (
-							<Banner tone='error'>
-								{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
-							</Banner>
-						)}
-					</Stack>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={onClose}>Annuleren</Button>
-					<Button type='submit' variant='contained' disabled={update.isPending}>
-						{update.isPending ? 'Opslaan…' : 'Opslaan'}
-					</Button>
-				</DialogActions>
+				<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
+					<Field name='description' label='Omschrijving' fullWidth />
+					<Field
+						name='value'
+						type='number'
+						label={effectUnit ? `Waarde (${effectUnit})` : 'Waarde'}
+						fullWidth
+					/>
+					<Field
+						name='priority'
+						type='number'
+						label='Prioriteit (0-1000)'
+						helperText='Hogere prioriteit wint van regels met dezelfde voorwaarde. Standaard is 100.'
+						fullWidth
+					/>
+					<Field
+						name='conditionNarrative'
+						label='AI-conditie (optioneel)'
+						helperText='Vrije tekst waaraan de AI elke offerte toetst voordat de regel wordt toegepast, bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
+						fullWidth
+						multiline
+						minRows={2}
+						maxRows={4}
+						maxLength={500}
+					/>
+					<FormSwitch name='active' label='Actief' />
+					{update.error && (
+						<Banner tone='error'>
+							{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
+						</Banner>
+					)}
+				</Stack>
 			</Form>
 		</Dialog>
 	);
