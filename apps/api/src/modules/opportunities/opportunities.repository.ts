@@ -21,6 +21,22 @@ import { Injectable, Logger } from '@nestjs/common';
 export type OpportunityDismissedFilter = 'active' | 'dismissed' | 'all';
 
 /**
+ * Attribute filters shared by `listByOrganization` + `countByStatusForOrganization` so the
+ * tab counts always match the visible rows. All are AND'd together; an inactive value
+ * (false / null) contributes no condition. `now` anchors the deadline windows.
+ */
+export interface OpportunityAttributeFilters {
+	hasReplies: boolean;
+	urgency: PrismaUrgency | null;
+	deadline: 'has' | 'overdue' | 'soon' | null;
+	pendingFollowup: boolean;
+	hasAppointment: boolean;
+	now: Date;
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
  * Audit-log actions that compose the opportunity-detail timeline. Sourced from
  * `Log.metadata->>'action'` rows where `Log.metadata->>'opportunityId'` matches.
  */
@@ -79,7 +95,10 @@ const OPPORTUNITY_INCLUDE = {
 	// 1:N relation now (was 1:1). Fetch all drafts ordered by `createdAt DESC`
 	// so the mapper can pluck `[0]` for "latest" and `.find(d => d.sentAt)` for "any
 	// sent." Typical row has 1-3 drafts; payload cost is negligible.
-	replyDrafts: { orderBy: { createdAt: 'desc' }, select: { sentAt: true, status: true, kind: true, createdAt: true } },
+	replyDrafts: {
+		orderBy: { createdAt: 'desc' },
+		select: { sentAt: true, status: true, kind: true, createdAt: true }
+	},
 	// Thread-message metadata (no bodies) — drives the "N antwoorden" reply chip + the
 	// customer-side "last activity" badge. `list()` filters out own-org outbound (self-emails)
 	// using the org's email set, so customer vs. own messages are distinguished there.
@@ -674,6 +693,8 @@ export class OpportunitiesRepository {
 			owner?: { userId: string } | null;
 			/** when set, filters by assignment: a specific user or unassigned-only. */
 			assignee?: { kind: 'user'; userId: string } | { kind: 'unassigned' } | null;
+			/** has-replies / urgency / deadline / pending-follow-up / appointment filters. */
+			attributes?: OpportunityAttributeFilters | null;
 		}
 	): Promise<OpportunityRecord[]> {
 		// Keyset pagination on (createdAt DESC, id DESC) — id breaks createdAt ties so the
@@ -703,6 +724,7 @@ export class OpportunitiesRepository {
 				]
 			});
 		}
+		conditions.push(...this.attributeConditions(options.attributes));
 
 		const dismissedFilter = options.dismissed ?? 'active';
 
@@ -736,8 +758,10 @@ export class OpportunitiesRepository {
 		filters: {
 			owner?: { userId: string } | null;
 			assignee?: { kind: 'user'; userId: string } | { kind: 'unassigned' } | null;
+			attributes?: OpportunityAttributeFilters | null;
 		} = {}
 	): Promise<Record<PrismaOpportunityStatus, number>> {
+		const attributeConditions = this.attributeConditions(filters.attributes);
 		const rows = await this.prisma.opportunity.groupBy({
 			by: ['status'],
 			where: {
@@ -745,7 +769,8 @@ export class OpportunitiesRepository {
 				dismissedAt: null,
 				...(filters.owner ? { emailAccount: { is: { userId: filters.owner.userId } } } : {}),
 				...(filters.assignee?.kind === 'user' ? { assignedToUserId: filters.assignee.userId } : {}),
-				...(filters.assignee?.kind === 'unassigned' ? { assignedToUserId: null } : {})
+				...(filters.assignee?.kind === 'unassigned' ? { assignedToUserId: null } : {}),
+				...(attributeConditions.length > 0 ? { AND: attributeConditions } : {})
 			},
 			_count: { _all: true }
 		});
@@ -761,6 +786,57 @@ export class OpportunitiesRepository {
 			result[row.status] = row._count._all;
 		}
 		return result;
+	}
+
+	/**
+	 * Translate the attribute filters into Prisma where-conditions (AND'd). Shared by the
+	 * list query + the status counts so the two never disagree. Returns `[]` when nothing
+	 * is active.
+	 */
+	private attributeConditions(attributes?: OpportunityAttributeFilters | null): Prisma.OpportunityWhereInput[] {
+		if (!attributes) {
+			return [];
+		}
+		const conditions: Prisma.OpportunityWhereInput[] = [];
+
+		// Has replies: at least one reconstituted thread message exists. The originating
+		// message lives on `rawMessageId` (NOT in `threadMessages`), so any thread message is a
+		// follow-up/reply. (`some: {}` rather than a customer-side email filter because
+		// `fromEmail` casing isn't normalized across providers — Gmail keeps original case — so a
+		// case-sensitive `notIn` would be unreliable. The rare own-mailbox echo is acceptable.)
+		if (attributes.hasReplies) {
+			conditions.push({ threadMessages: { some: {} } });
+		}
+
+		if (attributes.urgency) {
+			conditions.push({ urgency: attributes.urgency });
+		}
+
+		if (attributes.deadline === 'has') {
+			conditions.push({ customerDeadline: { not: null } });
+		} else if (attributes.deadline === 'overdue') {
+			conditions.push({ customerDeadline: { lt: attributes.now } });
+		} else if (attributes.deadline === 'soon') {
+			const horizon = new Date(attributes.now.getTime() + 7 * MS_PER_DAY);
+			conditions.push({ customerDeadline: { gte: attributes.now, lte: horizon } });
+		}
+
+		// Pending follow-up: a check-in draft that hasn't been sent yet. `some` (any such draft)
+		// rather than strictly the latest — matches the list badge in every realistic case (a
+		// pending check-in is the newest draft until it's sent).
+		if (attributes.pendingFollowup) {
+			conditions.push({
+				replyDrafts: {
+					some: { kind: PrismaReplyDraftKind.CHECK_IN, status: { not: PrismaReplyDraftStatus.SENT } }
+				}
+			});
+		}
+
+		if (attributes.hasAppointment) {
+			conditions.push({ customerAppointment: { not: null } });
+		}
+
+		return conditions;
 	}
 
 	async findByIdForOrganization(organizationId: string, id: string): Promise<OpportunityRecord | null> {

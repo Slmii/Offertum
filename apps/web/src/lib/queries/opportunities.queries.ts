@@ -5,16 +5,36 @@ import type {
 	DismissOpportunityInput,
 	Opportunity,
 	OpportunityAssigneeFilter,
+	OpportunityDeadlineFilter,
 	OpportunityDetail,
 	OpportunityDismissedFilter,
 	OpportunityMailboxOwnershipFilter,
 	OpportunityStatus,
+	OpportunityUrgency,
 	ReplyDraft,
 	ReplyDraftAttachment,
 	UpdateOpportunityFieldsInput,
 	UpdateReplyDraftInput
 } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
+
+/** Attribute filters (has-replies / urgency / deadline / pending-follow-up / appointment). */
+export interface OpportunityListAttributes {
+	hasReplies?: boolean | null;
+	urgency?: OpportunityUrgency | null;
+	deadline?: OpportunityDeadlineFilter | null;
+	pendingFollowup?: boolean | null;
+	hasAppointment?: boolean | null;
+}
+
+// Normalize to a stable shape so the same filter state always produces the same query key.
+const normalizeAttributes = (a: OpportunityListAttributes | null = null) => ({
+	hasReplies: a?.hasReplies ?? false,
+	urgency: a?.urgency ?? null,
+	deadline: a?.deadline ?? 'all',
+	pendingFollowup: a?.pendingFollowup ?? false,
+	hasAppointment: a?.hasAppointment ?? false
+});
 
 export const OpportunityKeys = {
 	all: ['opportunities'] as const,
@@ -23,7 +43,8 @@ export const OpportunityKeys = {
 		search: string | null,
 		dismissed: OpportunityDismissedFilter | null,
 		owner: OpportunityMailboxOwnershipFilter | null = null,
-		assignee: OpportunityAssigneeFilter | null = null
+		assignee: OpportunityAssigneeFilter | null = null,
+		attributes: OpportunityListAttributes | null = null
 	) =>
 		[
 			'opportunities',
@@ -33,7 +54,8 @@ export const OpportunityKeys = {
 				search: search?.trim() || null,
 				dismissed: dismissed ?? 'active',
 				owner: owner ?? 'all',
-				assignee: assignee ?? 'all'
+				assignee: assignee ?? 'all',
+				attributes: normalizeAttributes(attributes)
 			}
 		] as const,
 	detail: (id: string) => ['opportunities', 'detail', id] as const
@@ -62,11 +84,15 @@ export const opportunitiesListQueryOptions = (
 	search: string | null = null,
 	dismissed: OpportunityDismissedFilter | null = null,
 	owner: OpportunityMailboxOwnershipFilter | null = null,
-	assignee: OpportunityAssigneeFilter | null = null
+	assignee: OpportunityAssigneeFilter | null = null,
+	attributes: OpportunityListAttributes | null = null
 ) =>
 	queryOptions({
-		queryKey: OpportunityKeys.list(status, search, dismissed, owner, assignee),
-		queryFn: () => listOpportunitiesServer({ data: { status, search, dismissed, owner, assignee, limit: 25 } }),
+		queryKey: OpportunityKeys.list(status, search, dismissed, owner, assignee, attributes),
+		queryFn: () =>
+			listOpportunitiesServer({
+				data: { status, search, dismissed, owner, assignee, ...normalizeAttributes(attributes), limit: 25 }
+			}),
 		staleTime: 15_000
 	});
 

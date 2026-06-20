@@ -153,6 +153,14 @@ export type OpportunityMailboxOwnershipFilter = (typeof OPPORTUNITY_MAILBOX_OWNE
 export const OPPORTUNITY_ASSIGNEE_FILTERS = ['me', 'unassigned', 'all'] as const;
 export type OpportunityAssigneeFilter = (typeof OPPORTUNITY_ASSIGNEE_FILTERS)[number];
 
+/**
+ * Deadline filter on the list endpoint. `has` → any customer deadline set; `overdue` →
+ * deadline in the past; `soon` → deadline within the next 7 days (inclusive of today).
+ * `all` (or omitted) → no filter.
+ */
+export const OPPORTUNITY_DEADLINE_FILTERS = ['all', 'has', 'overdue', 'soon'] as const;
+export type OpportunityDeadlineFilter = (typeof OPPORTUNITY_DEADLINE_FILTERS)[number];
+
 export interface ListOpportunitiesQuery {
 	cursor?: string;
 	limit?: number;
@@ -162,6 +170,15 @@ export interface ListOpportunitiesQuery {
 	dismissed?: OpportunityDismissedFilter;
 	owner?: OpportunityMailboxOwnershipFilter;
 	assignee?: OpportunityAssigneeFilter;
+	// Only opps where the customer has replied beyond the original request.
+	hasReplies?: boolean;
+	// Restrict to a single urgency level.
+	urgency?: OpportunityUrgency;
+	deadline?: OpportunityDeadlineFilter;
+	// Only opps with an auto follow-up (check-in) draft awaiting review.
+	pendingFollowup?: boolean;
+	// Only opps with a requested appointment date set.
+	hasAppointment?: boolean;
 }
 
 export interface UpdateOpportunityStatusInput {

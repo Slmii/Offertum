@@ -69,6 +69,7 @@ import { ConfigService } from '@nestjs/config';
 import type {
 	OpportunityActivityKind,
 	OpportunityAssigneeFilter,
+	OpportunityDeadlineFilter,
 	OpportunityFieldChange,
 	OpportunityMailboxOwnershipFilter,
 	OpportunityTimelineEvent,
@@ -148,6 +149,11 @@ export class OpportunitiesService {
 			dismissed: OpportunityDismissedFilter | null;
 			owner: OpportunityMailboxOwnershipFilter | null;
 			assignee: OpportunityAssigneeFilter | null;
+			hasReplies: boolean | null;
+			urgency: WireOpportunityUrgency | null;
+			deadline: OpportunityDeadlineFilter | null;
+			pendingFollowup: boolean | null;
+			hasAppointment: boolean | null;
 			/** Required when owner=mine or assignee=me; resolved from the auth context
 			 * in the controller. `null` falls back to no-op for those filters. */
 			requestingUserId: string | null;
@@ -159,6 +165,11 @@ export class OpportunitiesService {
 			dismissed: null,
 			owner: null,
 			assignee: null,
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
 			requestingUserId: null
 		}
 	): Promise<OpportunityListResponseDto> {
@@ -178,10 +189,22 @@ export class OpportunitiesService {
 					? ({ kind: 'unassigned' } as const)
 					: null;
 
+		// Attribute filters (has-replies / urgency / deadline / pending-follow-up / appointment).
+		// Applied to BOTH the list and the status counts so the tab totals match the visible rows.
+		// `now` anchors the deadline windows; computed once so list + counts agree.
+		const attributeFilters = {
+			hasReplies: options.hasReplies === true,
+			urgency: options.urgency ? OPPORTUNITY_URGENCY_FROM_WIRE[options.urgency] : null,
+			deadline: options.deadline && options.deadline !== 'all' ? options.deadline : null,
+			pendingFollowup: options.pendingFollowup === true,
+			hasAppointment: options.hasAppointment === true,
+			now: new Date()
+		} as const;
+
 		// Over-fetch by one row to detect a next page without a follow-up count query.
 		// `statusCounts` runs in parallel so the segmented filter tabs render with their
 		// (N) numbers without a second round-trip from the web. Counts respect the same
-		// owner + assignee filters so the tab totals match the visible rows.
+		// owner + assignee + attribute filters so the tab totals match the visible rows.
 		const [rows, statusCounts] = await Promise.all([
 			this.repository.listByOrganization(organizationId, {
 				take: limit + 1,
@@ -190,11 +213,13 @@ export class OpportunitiesService {
 				search: options.search,
 				dismissed: dismissedFilter,
 				owner: ownerFilter,
-				assignee: assigneeFilter
+				assignee: assigneeFilter,
+				attributes: attributeFilters
 			}),
 			this.repository.countByStatusForOrganization(organizationId, {
 				owner: ownerFilter,
-				assignee: assigneeFilter
+				assignee: assigneeFilter,
+				attributes: attributeFilters
 			})
 		]);
 
@@ -209,7 +234,10 @@ export class OpportunitiesService {
 		// regardless of page size. The org email set distinguishes customer-side thread
 		// messages from own-org outbound (self-emails).
 		const [editorMap, orgEmailAddresses] = await Promise.all([
-			this.repository.findLatestEditorPerOpportunity(organizationId, page.map(r => r.id)),
+			this.repository.findLatestEditorPerOpportunity(
+				organizationId,
+				page.map(r => r.id)
+			),
 			this.repository.findOrganizationEmailAddresses(organizationId)
 		]);
 		const actorIds = new Set<string>();
@@ -237,7 +265,11 @@ export class OpportunitiesService {
 				const candidates: Array<{ kind: OpportunityActivityKind; label: string; at: Date }> = [];
 				const editor = editorMap.get(row.id);
 				if (editor) {
-					candidates.push({ kind: 'user', label: actorLabels.get(editor.actorUserId) ?? 'Onbekend', at: editor.at });
+					candidates.push({
+						kind: 'user',
+						label: actorLabels.get(editor.actorUserId) ?? 'Onbekend',
+						at: editor.at
+					});
 				}
 				const newestCustomer = customerMessages[0];
 				if (newestCustomer) {
@@ -254,7 +286,9 @@ export class OpportunitiesService {
 					(best, current) => (best === null || current.at > best.at ? current : best),
 					null
 				);
-				dto.lastActivity = latest ? { kind: latest.kind, label: latest.label, at: latest.at.toISOString() } : null;
+				dto.lastActivity = latest
+					? { kind: latest.kind, label: latest.label, at: latest.at.toISOString() }
+					: null;
 
 				return dto;
 			}),

@@ -67,6 +67,11 @@ export class OpportunitiesController {
 			dismissed: query.dismissed ?? null,
 			owner: query.owner ?? null,
 			assignee: query.assignee ?? null,
+			hasReplies: query.hasReplies ?? null,
+			urgency: query.urgency ?? null,
+			deadline: query.deadline ?? null,
+			pendingFollowup: query.pendingFollowup ?? null,
+			hasAppointment: query.hasAppointment ?? null,
 			requestingUserId: request.authSession?.user?.id ?? null
 		});
 	}

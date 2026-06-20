@@ -290,7 +290,7 @@ export function GlobalSearch() {
 	const noResults = showResults && hasQuery && !isFetching && opResults.length === 0 && navResults.length === 0;
 
 	return (
-		<Box ref={containerRef} sx={{ position: 'relative', width: '100%', maxWidth: 480 }}>
+		<Box ref={containerRef} sx={{ position: 'relative', width: '100%' }}>
 			<Box
 				onClick={() => inputRef.current?.focus()}
 				sx={{

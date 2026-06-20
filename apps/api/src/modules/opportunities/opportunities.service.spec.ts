@@ -338,6 +338,11 @@ describe('OpportunitiesService.list pagination', () => {
 			dismissed: null,
 			owner: null,
 			assignee: null,
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
 			requestingUserId: null
 		});
 
@@ -352,7 +357,15 @@ describe('OpportunitiesService.list pagination', () => {
 			search: null,
 			dismissed: 'active',
 			owner: null,
-			assignee: null
+			assignee: null,
+			// `now` is a fresh Date per call — match the shape, not the exact instant.
+			attributes: expect.objectContaining({
+				hasReplies: false,
+				urgency: null,
+				deadline: null,
+				pendingFollowup: false,
+				hasAppointment: false
+			})
 		});
 	});
 
@@ -371,6 +384,11 @@ describe('OpportunitiesService.list pagination', () => {
 			dismissed: null,
 			owner: null,
 			assignee: null,
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
 			requestingUserId: null
 		});
 

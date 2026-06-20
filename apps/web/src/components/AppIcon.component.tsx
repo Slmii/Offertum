@@ -7,6 +7,7 @@ import {
 	IconAlertTriangle,
 	IconAlertTriangleFilled,
 	IconArrowRight,
+	IconArrowsSort,
 	IconArrowUpRight,
 	IconBell,
 	IconBellFilled,
@@ -110,6 +111,7 @@ export type AppIconName =
 	| 'chevron-right'
 	| 'chevron-down'
 	| 'chevrons-up-down'
+	| 'arrows-sort'
 	| 'lock'
 	| 'log-out'
 	| 'check'
@@ -174,6 +176,7 @@ const ICONS: Record<AppIconName, IconPair> = {
 	'chevron-left': { outline: IconChevronLeft, filled: IconChevronLeft },
 	'chevron-right': { outline: IconChevronRight, filled: IconChevronRight },
 	'chevron-down': { outline: IconChevronDown, filled: IconChevronDown },
+	'arrows-sort': { outline: IconArrowsSort, filled: IconArrowsSort },
 	'chevrons-up-down': { outline: IconSelector, filled: IconSelector },
 	lock: { outline: IconLock, filled: IconLockFilled },
 	'log-out': { outline: IconLogout, filled: IconLogout },

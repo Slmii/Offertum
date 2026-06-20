@@ -1,17 +1,24 @@
 import {
 	OPPORTUNITY_ASSIGNEE_FILTERS,
+	OPPORTUNITY_DEADLINE_FILTERS,
 	OPPORTUNITY_DISMISSED_FILTERS,
 	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
 	OPPORTUNITY_SORTS,
 	OPPORTUNITY_STATUSES,
+	OPPORTUNITY_URGENCIES,
 	type OpportunityAssigneeFilter,
+	type OpportunityDeadlineFilter,
 	type OpportunityDismissedFilter,
 	type OpportunityMailboxOwnershipFilter,
 	type OpportunitySort,
-	type OpportunityStatus
+	type OpportunityStatus,
+	type OpportunityUrgency
 } from '@offertum/shared';
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+
+// Query params arrive as strings; treat the literal "true" as boolean true, everything else false.
+const toBool = ({ value }: { value: unknown }) => value === true || value === 'true';
 
 /**
  * Query params for `GET /api/opportunities`.
@@ -77,4 +84,32 @@ export class ListOpportunitiesQueryDto {
 	@IsOptional()
 	@IsIn(OPPORTUNITY_ASSIGNEE_FILTERS)
 	assignee?: OpportunityAssigneeFilter;
+
+	/** `true` → only opps where the customer replied beyond the original request. */
+	@IsOptional()
+	@Transform(toBool)
+	@IsBoolean()
+	hasReplies?: boolean;
+
+	/** Restrict to a single urgency level (emergency / high / normal / low). */
+	@IsOptional()
+	@IsIn(OPPORTUNITY_URGENCIES)
+	urgency?: OpportunityUrgency;
+
+	/** Deadline filter: `has` / `overdue` / `soon` (≤7 days). `all` (or omitted) → no filter. */
+	@IsOptional()
+	@IsIn(OPPORTUNITY_DEADLINE_FILTERS)
+	deadline?: OpportunityDeadlineFilter;
+
+	/** `true` → only opps with an auto follow-up (check-in) draft awaiting review. */
+	@IsOptional()
+	@Transform(toBool)
+	@IsBoolean()
+	pendingFollowup?: boolean;
+
+	/** `true` → only opps with a requested appointment date set. */
+	@IsOptional()
+	@Transform(toBool)
+	@IsBoolean()
+	hasAppointment?: boolean;
 }

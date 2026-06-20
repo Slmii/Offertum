@@ -107,10 +107,12 @@ interface SeedOpportunity {
 	appointmentDaysFromNow: number | null;
 }
 
-// Ten varied opportunities spanning both seed orgs, every status, urgency mix,
+// Ten hand-curated opportunities spanning both seed orgs, every status, urgency mix,
 // and realistic Dutch SMB scenarios (installateur, bouwbedrijf, schilder, etc.).
 // Fixed IDs so re-running the seed upserts in place — no duplicates on every run.
-const opportunities: ReadonlyArray<SeedOpportunity> = [
+// `buildSyntheticOpportunities` below pads the set out to 100 total for list/paging
+// /filter/sort testing; the combined `opportunities` array is what `main()` inserts.
+const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 	{
 		rawMessageId: '22222222-0001-0000-0000-000000000001',
 		opportunityId: '33333333-0001-0000-0000-000000000001',
@@ -432,6 +434,201 @@ const opportunities: ReadonlyArray<SeedOpportunity> = [
 		deadlineDaysFromNow: null,
 		appointmentDaysFromNow: null
 	}
+];
+
+// ── Synthetic opportunity generator ──────────────────────────────────────────────
+// Pads the curated set out to 100 total so the list page's paging, filtering, and
+// sorting have realistic volume. Deterministic: index N → fixed UUIDs, so re-running
+// `pnpm db:seed` upserts in place rather than stacking duplicates. No randomness.
+
+const SYNTHETIC_CITIES: ReadonlyArray<readonly [string, string]> = [
+	['Amersfoort', '3811 EN'],
+	['Amsterdam', '1011 AB'],
+	['Utrecht', '3511 LN'],
+	['Rotterdam', '3011 AD'],
+	['Den Haag', '2511 CV'],
+	['Eindhoven', '5611 EM'],
+	['Groningen', '9711 LM'],
+	['Haarlem', '2011 CD'],
+	['Nijmegen', '6511 AA'],
+	['Tilburg', '5011 DL'],
+	['Breda', '4811 HV'],
+	['Zwolle', '8011 CW'],
+	['Apeldoorn', '7311 GP'],
+	['Arnhem', '6811 CG'],
+	['Almere', '1315 HR']
+];
+
+const SYNTHETIC_STREETS = [
+	'Hoofdstraat',
+	'Kerkstraat',
+	'Dorpsstraat',
+	'Molenweg',
+	'Schoolstraat',
+	'Stationsweg',
+	'Industrieweg',
+	'Beukenlaan',
+	'Wilgenhof',
+	'Parklaan'
+] as const;
+
+const SYNTHETIC_FIRST_NAMES = [
+	'Jan',
+	'Eva',
+	'Tom',
+	'Sanne',
+	'Daan',
+	'Lisa',
+	'Mark',
+	'Anouk',
+	'Peter',
+	'Femke',
+	'Ruud',
+	'Karin',
+	'Hugo',
+	'Inge',
+	'Bas',
+	'Noor',
+	'Joost',
+	'Mirjam',
+	'Wim',
+	'Saar'
+] as const;
+
+const SYNTHETIC_LAST_NAMES = [
+	'Bakker',
+	'de Jong',
+	'Visser',
+	'Smit',
+	'Meijer',
+	'de Boer',
+	'Mulder',
+	'Bos',
+	'Vos',
+	'Peters',
+	'Hendriks',
+	'van Dijk',
+	'van den Berg',
+	'Jacobs',
+	'Willems',
+	'Kuiper',
+	'Post',
+	'Dekker',
+	'Brouwer',
+	'van Leeuwen'
+] as const;
+
+const SYNTHETIC_REQUEST_TYPES: ReadonlyArray<{ type: string; summary: string; hints: string[] }> = [
+	{ type: 'CV-ketel onderhoud', summary: 'het jaarlijkse onderhoud van onze CV-ketel', hints: ['CV-ketel', 'jaarlijks onderhoud'] },
+	{ type: 'Badkamer renovatie', summary: 'een complete renovatie van onze badkamer', hints: ['badkamer', 'tegelwerk', 'sanitair'] },
+	{ type: 'Dakkapel plaatsen', summary: 'het plaatsen van een dakkapel op de zolderverdieping', hints: ['dakkapel', 'zolder'] },
+	{ type: 'Zonnepanelen installatie', summary: 'het installeren van zonnepanelen op ons schuine dak', hints: ['zonnepanelen', 'omvormer', 'schuin dak'] },
+	{ type: 'Schilderwerk buitenkant', summary: 'het schilderen van de kozijnen en de voorgevel', hints: ['buitenschilderwerk', 'kozijnen', 'voorgevel'] },
+	{ type: 'Warmtepomp advies', summary: 'advies en een offerte voor een hybride warmtepomp', hints: ['warmtepomp', 'hybride', 'verduurzaming'] },
+	{ type: 'Keuken plaatsen', summary: 'het plaatsen en aansluiten van een nieuwe keuken', hints: ['keuken', 'montage', 'aansluiten'] },
+	{ type: 'Elektra uitbreiding', summary: 'het uitbreiden van de groepenkast met extra groepen', hints: ['groepenkast', 'elektra', 'extra groepen'] },
+	{ type: 'Vloerverwarming aanleggen', summary: 'het aanleggen van vloerverwarming in de woonkamer', hints: ['vloerverwarming', 'woonkamer'] },
+	{ type: 'Dakgoot vervanging', summary: 'het vervangen van de dakgoten rondom de woning', hints: ['dakgoot', 'hemelwaterafvoer'] },
+	{ type: 'Isolatie spouwmuur', summary: 'het isoleren van de spouwmuren van onze jaren-70 woning', hints: ['spouwmuurisolatie', 'verduurzaming'] },
+	{ type: 'Airco installatie', summary: 'het laten installeren van een airco in de slaapkamer', hints: ['airco', 'split-unit', 'slaapkamer'] }
+];
+
+const SYNTHETIC_STATUSES: ReadonlyArray<OpportunityStatus> = [
+	OpportunityStatus.NEW,
+	OpportunityStatus.NEW,
+	OpportunityStatus.REPLIED,
+	OpportunityStatus.WAITING,
+	OpportunityStatus.WON,
+	OpportunityStatus.COLD,
+	OpportunityStatus.LOST
+];
+
+const SYNTHETIC_URGENCIES: ReadonlyArray<Urgency> = [Urgency.NORMAL, Urgency.LOW, Urgency.HIGH, Urgency.NORMAL, Urgency.EMERGENCY];
+
+function pad(value: number, length: number): string {
+	return String(value).padStart(length, '0');
+}
+
+function slugifyEmailLocal(first: string, last: string): string {
+	return `${first}.${last}`.toLowerCase().replace(/\s+/g, '');
+}
+
+// Builds opportunities numbered `start+1 .. total` (1-based) so their IDs never collide
+// with the curated entries (which occupy 1..curated.length).
+function buildSyntheticOpportunities(start: number, total: number): SeedOpportunity[] {
+	const result: SeedOpportunity[] = [];
+
+	for (let n = start + 1; n <= total; n++) {
+		const i = n - 1; // 0-based index for cycling the pools
+		const isAcme = i % 2 === 0;
+		const organizationId = isAcme ? ORG_ACME : ORG_BOUW;
+		const emailAccountId = isAcme ? SEED_EMAIL_ACCOUNT_ACME : SEED_EMAIL_ACCOUNT_BOUW;
+
+		const firstName = SYNTHETIC_FIRST_NAMES[i % SYNTHETIC_FIRST_NAMES.length];
+		const lastName = SYNTHETIC_LAST_NAMES[(i * 3) % SYNTHETIC_LAST_NAMES.length];
+		const fullName = `${firstName} ${lastName}`;
+		const email = `${slugifyEmailLocal(firstName, lastName)}@example.nl`;
+
+		const [city, postcode] = SYNTHETIC_CITIES[i % SYNTHETIC_CITIES.length];
+		const street = SYNTHETIC_STREETS[(i * 7) % SYNTHETIC_STREETS.length];
+		const houseNumber = ((i * 13) % 120) + 1;
+		const address = `${street} ${houseNumber}, ${postcode} ${city}`;
+
+		const request = SYNTHETIC_REQUEST_TYPES[i % SYNTHETIC_REQUEST_TYPES.length];
+		const status = SYNTHETIC_STATUSES[i % SYNTHETIC_STATUSES.length];
+		const urgency = SYNTHETIC_URGENCIES[i % SYNTHETIC_URGENCIES.length];
+
+		// Spread arrival over the last ~120 days; deadlines/appointments vary, some null.
+		const internalDateDaysAgo = (i * 5) % 120;
+		const deadlineDaysFromNow = i % 4 === 0 ? null : ((i * 11) % 40) + 5;
+		const appointmentDaysFromNow = i % 3 === 0 ? ((i * 7) % 20) + 2 : null;
+
+		const subject = `Offerteaanvraag: ${request.type}`;
+		const bodyText = [
+			'Geachte heer/mevrouw,',
+			'',
+			`Wij zijn op zoek naar een vakman voor ${request.summary}. De woning bevindt zich op ${address}.`,
+			'',
+			'Zou u ons een vrijblijvende offerte kunnen sturen? Een afspraak voor opname ter plaatse is bespreekbaar.',
+			'',
+			'Met vriendelijke groet,',
+			fullName,
+			address
+		].join('\n');
+
+		result.push({
+			rawMessageId: `22222222-${pad(n, 4)}-0000-0000-${pad(n, 12)}`,
+			opportunityId: `33333333-${pad(n, 4)}-0000-0000-${pad(n, 12)}`,
+			organizationId,
+			emailAccountId,
+			subject,
+			fromEmail: email,
+			fromName: fullName,
+			bodyText,
+			customerName: fullName,
+			customerEmail: email,
+			address,
+			requestType: request.type,
+			urgency,
+			status,
+			classifierConfidence: 0.8 + (i % 20) / 100,
+			classifierReason: 'Synthetische seed-opportunity voor list/paging-tests.',
+			deliverableHints: request.hints,
+			internalDateDaysAgo,
+			deadlineDaysFromNow,
+			appointmentDaysFromNow
+		});
+	}
+
+	return result;
+}
+
+const SEED_OPPORTUNITY_TOTAL = 100;
+
+// Curated entries first (stable, hand-written), then synthetic fillers up to 100.
+const opportunities: ReadonlyArray<SeedOpportunity> = [
+	...curatedOpportunities,
+	...buildSyntheticOpportunities(curatedOpportunities.length, SEED_OPPORTUNITY_TOTAL)
 ];
 
 interface SeedCatalogItem {

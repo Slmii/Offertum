@@ -615,7 +615,7 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 						borderRadius: t.radius.md,
 						border: '1px solid',
 						padding: '11px 14px',
-						alignItems: 'flex-start',
+						alignItems: 'center',
 						// marginTop nudges the icon to optically centre on the first text line (the glyph
 						// sits ~2px below its line-box top); flex-start keeps it by the title on multi-line.
 						'& .MuiAlert-icon': {

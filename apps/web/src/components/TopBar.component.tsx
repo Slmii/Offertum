@@ -35,7 +35,16 @@ export function TopBar({ breadcrumb }: TopBarProps) {
 				zIndex: 50
 			}}
 		>
-			<Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+			<Box
+				sx={{
+					flex: 1,
+					minWidth: 0,
+					// Hidden on mobile so the search bar below can take the full width.
+					display: { xs: 'none', sm: 'flex' },
+					alignItems: 'center',
+					gap: 2
+				}}
+			>
 				{breadcrumb && breadcrumb.length > 0 && (
 					<Box
 						component='nav'
@@ -75,15 +84,20 @@ export function TopBar({ breadcrumb }: TopBarProps) {
 					</Box>
 				)}
 			</Box>
-			<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-				{/* Search sits on the right, next to the notification bell. */}
-				<Box sx={{ width: { xs: 160, sm: 220, md: 300 } }}>
-					<SilentErrorBoundary>
-						<Suspense fallback={null}>
-							<GlobalSearch />
-						</Suspense>
-					</SilentErrorBoundary>
-				</Box>
+			<Box
+				sx={{
+					flexGrow: { xs: 1, md: 0 },
+					width: { xs: '100%', md: '50%' },
+					minWidth: 0
+				}}
+			>
+				<SilentErrorBoundary>
+					<Suspense fallback={null}>
+						<GlobalSearch />
+					</Suspense>
+				</SilentErrorBoundary>
+			</Box>
+			<Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
 				<SilentErrorBoundary>
 					<Suspense fallback={null}>
 						<NotificationBell />

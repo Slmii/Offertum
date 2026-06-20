@@ -1,11 +1,13 @@
 import { serverFetch } from '@/lib/api/server-fetch';
 import type {
 	OpportunityAssigneeFilter,
+	OpportunityDeadlineFilter,
 	OpportunityDetail,
 	OpportunityDismissedFilter,
 	OpportunityList,
 	OpportunityMailboxOwnershipFilter,
-	OpportunityStatus
+	OpportunityStatus,
+	OpportunityUrgency
 } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
@@ -17,6 +19,11 @@ export interface ListOpportunitiesInput {
 	dismissed?: OpportunityDismissedFilter | null;
 	owner?: OpportunityMailboxOwnershipFilter | null;
 	assignee?: OpportunityAssigneeFilter | null;
+	hasReplies?: boolean | null;
+	urgency?: OpportunityUrgency | null;
+	deadline?: OpportunityDeadlineFilter | null;
+	pendingFollowup?: boolean | null;
+	hasAppointment?: boolean | null;
 }
 
 /**
@@ -57,6 +64,23 @@ export const listOpportunitiesServer = createServerFn({ method: 'GET' })
 		}
 		if (data.assignee && data.assignee !== 'all') {
 			params.set('assignee', data.assignee);
+		}
+
+		// Attribute filters — only sent when active (server defaults are off / no filter).
+		if (data.hasReplies) {
+			params.set('hasReplies', 'true');
+		}
+		if (data.urgency) {
+			params.set('urgency', data.urgency);
+		}
+		if (data.deadline && data.deadline !== 'all') {
+			params.set('deadline', data.deadline);
+		}
+		if (data.pendingFollowup) {
+			params.set('pendingFollowup', 'true');
+		}
+		if (data.hasAppointment) {
+			params.set('hasAppointment', 'true');
 		}
 
 		const qs = params.toString();
