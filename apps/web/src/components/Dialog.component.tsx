@@ -65,8 +65,9 @@ export function Dialog({
 			aria-labelledby={titleId}
 			slotProps={{ paper: { sx: { width: '100%', maxWidth: width } } }}
 		>
-			<DialogTitle id={titleId}>
-				{title}
+			<DialogTitle>
+				{/* Wrap just the title text so the dialog's accessible name excludes the ✕ button's label. */}
+				<span id={titleId}>{title}</span>
 				{!hideClose && (
 					<IconButton
 						aria-label='Sluiten'
