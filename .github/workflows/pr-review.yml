@@ -29,6 +29,10 @@ permissions:
 jobs:
     review:
         runs-on: ubuntu-latest
+        # Placeholder so Prisma 7's config (`env('DATABASE_URL')`) resolves for
+        # `prisma generate` — generate doesn't connect, and no step needs a real DB.
+        env:
+            DATABASE_URL: postgresql://user:password@localhost:5432/offertum
         steps:
             - uses: actions/checkout@v4
               with:
