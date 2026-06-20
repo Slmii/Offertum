@@ -111,13 +111,15 @@ jobs:
               with:
                   anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
                   github_token: ${{ secrets.AUDIT_PR_TOKEN }}
+                  # Temporarily surface the agent's full output so any API error (bad model,
+                  # invalid key, no credit) is visible in the logs. Remove once it's working.
+                  show_full_output: true
                   # Align any action-side auto-branch with the naming the rest of this
                   # workflow assumes (the prompt drives the actual branch + PR via gh).
                   branch_prefix: 'workflow-audit/'
-                  # Sonnet 4.6 balances cost vs. depth for an every-push audit. Bump to
-                  # claude-opus-4-8 for deeper reviews at higher cost.
+                  # No --model: use the action's bundled default (guaranteed available to the
+                  # SDK). Add `--model <id>` back only once you've confirmed the id works.
                   claude_args: |
-                      --model claude-sonnet-4-6
                       --max-turns 40
                       --allowedTools "Edit,Read,Write,Glob,Grep,Bash(git:*),Bash(pnpm:*),Bash(gh:*),Bash(node:*)"
                   prompt: |
