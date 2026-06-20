@@ -1,26 +1,36 @@
 name: AI Audit
 
-# Runs an automated Claude Code audit on every push to main. It diffs the newly
-# pushed code against the previous main state, looks for real defects across a fixed
-# set of dimensions, and — only when it finds high-confidence, actionable issues —
-# implements focused fixes on a `workflow-audit/*` branch and opens a PR back into main.
-# When nothing actionable is found it exits cleanly without opening a PR.
+# A Claude Code audit of a pushed commit range. The claude-code-action can't run on the
+# `push` event, so ai-audit-trigger.yml (which DOES run on push to main) re-dispatches this
+# workflow via workflow_dispatch with the base/head SHAs. It diffs that range, looks for
+# real defects across a fixed set of dimensions, and — only when it finds high-confidence,
+# actionable issues — implements focused fixes on a `workflow-audit/*` branch and opens a
+# PR back into main. When nothing actionable is found it exits cleanly without a PR.
 #
 # Prerequisites (configure once in the repo, not in this file):
 #   1. Secret ANTHROPIC_API_KEY (Settings → Secrets and variables → Actions).
 #   2. Secret AUDIT_PR_TOKEN — a fine-grained PAT (or GitHub App installation token)
-#      scoped to THIS repo with Contents: write + Pull requests: write. The audit
-#      creates its branch + PR with this token instead of the default GITHUB_TOKEN, so
-#      the resulting PR triggers pr-review.yml (a second Claude agent reviews the PR).
-#      (PRs opened by the default GITHUB_TOKEN do not trigger other workflows.)
+#      scoped to THIS repo with Contents: write + Pull requests: write + Actions: write.
+#      ai-audit-trigger.yml dispatches this workflow with it (needs Actions: write), and
+#      the audit creates its branch + PR with it (Contents / Pull requests) so the resulting
+#      PR triggers pr-review.yml. (Dispatches/PRs from the default GITHUB_TOKEN do not
+#      trigger other workflows — hence the PAT.)
 #   3. Branch protection on `main` (require PR review, no force-push) so the audit's
 #      write token can't be abused to push straight to main.
 # The audit step self-runs typecheck/lint/test before opening the PR (there is no separate
 # CI workflow); pr-review.yml then reviews the result.
 
 on:
-    push:
-        branches: [main]
+    workflow_dispatch:
+        inputs:
+            base:
+                description: 'Base SHA to diff FROM (the commit before the push)'
+                required: false
+                default: ''
+            head:
+                description: 'Head SHA to diff TO (defaults to the checked-out HEAD)'
+                required: false
+                default: ''
 
 # Never run two audits for main at once; let an in-flight audit finish rather than
 # cancelling it (cancelling could leave a half-pushed branch).
@@ -35,12 +45,6 @@ permissions:
 jobs:
     audit:
         runs-on: ubuntu-latest
-        # Don't let the audit loop on itself: skip pushes made by the bot identity the
-        # action commits under, and skip merges of an audit PR (its squash/merge commit
-        # subject starts with "AI Audit:"). A genuine human change to main still audits.
-        if: >-
-            github.actor != 'github-actions[bot]' &&
-            !startsWith(github.event.head_commit.message, 'AI Audit:')
         # Placeholder so Prisma 7's config (`env('DATABASE_URL')`) resolves for
         # `prisma generate` — generate doesn't connect, and no step needs a real DB.
         env:
@@ -74,26 +78,28 @@ jobs:
 
             - name: Determine diff base
               id: diffbase
-              # github.event.before is the SHA of main before this push. It can be the
-              # all-zero SHA (branch just created / first push) or unreachable after a
-              # force-push — fall back to HEAD~1 (best effort) in those cases and warn.
-              # If the resulting range is empty (single-commit repo), flag skip=true so
-              # the paid audit step is short-circuited rather than auditing nothing.
+              # `base`/`head` come from the dispatch inputs (the push's before/after SHAs).
+              # `head` defaults to the checked-out HEAD. If `base` is empty/all-zero/unreachable
+              # (first push or force-push), fall back to HEAD~1 and warn. If the resulting range
+              # is empty, flag skip=true so the paid audit step is short-circuited.
               run: |
-                  BEFORE="${{ github.event.before }}"
+                  BASE_INPUT="${{ inputs.base }}"
+                  HEAD_INPUT="${{ inputs.head }}"
                   ZERO="0000000000000000000000000000000000000000"
-                  if [ -z "$BEFORE" ] || [ "$BEFORE" = "$ZERO" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-                    echo "::warning::github.event.before ($BEFORE) is zero/unreachable (first push or force-push); falling back to HEAD~1. Audited range may not exactly match the push."
-                    BASE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+                  HEAD_SHA="${HEAD_INPUT:-${{ github.sha }}}"
+                  if [ -z "$BASE_INPUT" ] || [ "$BASE_INPUT" = "$ZERO" ] || ! git cat-file -e "${BASE_INPUT}^{commit}" 2>/dev/null; then
+                    echo "::warning::base '$BASE_INPUT' is empty/unreachable (first push or force-push); falling back to HEAD~1. Audited range may not exactly match the push."
+                    BASE="$(git rev-parse "${HEAD_SHA}~1" 2>/dev/null || git rev-parse "$HEAD_SHA")"
                   else
-                    BASE="$BEFORE"
+                    BASE="$BASE_INPUT"
                   fi
                   echo "base=$BASE" >> "$GITHUB_OUTPUT"
-                  if [ "$BASE" = "${{ github.sha }}" ]; then
-                    echo "::warning::Empty audit range (${BASE}..${{ github.sha }}); skipping audit."
+                  echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+                  if [ "$BASE" = "$HEAD_SHA" ]; then
+                    echo "::warning::Empty audit range (${BASE}..${HEAD_SHA}); skipping audit."
                     echo "skip=true" >> "$GITHUB_OUTPUT"
                   fi
-                  echo "Auditing range ${BASE}..${{ github.sha }}"
+                  echo "Auditing range ${BASE}..${HEAD_SHA}"
 
             - name: Claude audit
               if: steps.diffbase.outputs.skip != 'true'
@@ -131,9 +137,9 @@ jobs:
                       `workflow-audit/*` branch — never push to `main` and never force-push.
 
                       ## Scope
-                      Audit ONLY the changes in the git range `${{ steps.diffbase.outputs.base }}..${{ github.sha }}`.
+                      Audit ONLY the changes in the git range `${{ steps.diffbase.outputs.base }}..${{ steps.diffbase.outputs.head }}`.
                       Start by running:
-                          git diff ${{ steps.diffbase.outputs.base }}..${{ github.sha }}
+                          git diff ${{ steps.diffbase.outputs.base }}..${{ steps.diffbase.outputs.head }}
                       Then read the enclosing functions/files for context. Do not review unrelated code.
 
                       ## What to look for (in the changed areas)

@@ -341,7 +341,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 									setDismissOpen(true);
 								}}
 							>
-								Markeer als geen offerteaanvraag…
+								Geen offerteaanvraag
 							</MenuItem>
 						)}
 					</Menu>

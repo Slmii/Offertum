@@ -1,14 +1,15 @@
 # GitHub Actions — setup
 
-This repo ships three Claude-powered workflows under [`.github/workflows/`](./workflows). There is no separate CI workflow — each agent self-runs `typecheck`/`lint`/`test`.
+This repo ships Claude-powered workflows under [`.github/workflows/`](./workflows). There is no separate CI workflow — each agent self-runs `typecheck`/`lint`/`test`.
 
 | Workflow                                  | Trigger                                   | What it does                                                                                                              |
 | ----------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [`ai-audit.yml`](./workflows/ai-audit.yml) | push to `main`                            | A Claude agent audits the pushed diff; if it finds real issues it opens a `workflow-audit/*` PR titled `AI Audit: …`.   |
+| [`ai-audit-trigger.yml`](./workflows/ai-audit-trigger.yml) | push to `main`            | Tiny bridge: re-dispatches `ai-audit.yml` with the pushed commit range (the audit action can't run on `push` directly).  |
+| [`ai-audit.yml`](./workflows/ai-audit.yml) | workflow_dispatch (from the trigger)     | A Claude agent audits the pushed diff; if it finds real issues it opens a `workflow-audit/*` PR titled `AI Audit: …`.   |
 | [`pr-review.yml`](./workflows/pr-review.yml) | every pull request                      | A second, independent Claude agent reviews the PR and posts findings as a review comment (review-only — never pushes).   |
 | [`apply-review.yml`](./workflows/apply-review.yml) | PR labeled `apply-ai-review`        | A third Claude agent reads the PR's review comments, applies the actionable ones, validates, pushes to the PR branch, then removes the label and comments a summary. |
 
-The agents chain: the audit opens a PR → that PR triggers `pr-review.yml` (second-agent review) → a human reads the review and, if they want the feedback applied, adds the `apply-ai-review` label → `apply-review.yml` applies it and pushes back to the same PR.
+The agents chain: push to `main` → `ai-audit-trigger.yml` dispatches `ai-audit.yml` → the audit opens a PR → that PR triggers `pr-review.yml` (second-agent review) → a human reads the review and, if they want the feedback applied, adds the `apply-ai-review` label → `apply-review.yml` applies it and pushes back to the same PR.
 
 ## One-time setup
 
@@ -21,13 +22,13 @@ Settings → **Secrets and variables → Actions → New repository secret**
 - **Name:** `ANTHROPIC_API_KEY`
 - **Value:** an Anthropic API key with billing/credit. The workflows use the `claude-sonnet-4-6` model (bump to `claude-opus-4-8` in the workflow's `claude_args` for deeper, pricier audits).
 
-### 2. Secret `AUDIT_PR_TOKEN` — required by `ai-audit`
+### 2. Secret `AUDIT_PR_TOKEN` — required by `ai-audit-trigger` + `ai-audit`
 
-A **fine-grained Personal Access Token** (or GitHub App installation token). The audit creates its branch + PR with this token instead of the built-in `GITHUB_TOKEN`, so the resulting PR **triggers** `pr-review.yml`. (PRs opened by the default `GITHUB_TOKEN` deliberately do not trigger other workflows.)
+A **fine-grained Personal Access Token** (or GitHub App installation token). The trigger dispatches the audit workflow with it, and the audit creates its branch + PR with it instead of the built-in `GITHUB_TOKEN` — so both the dispatch and the resulting PR actually fire downstream workflows. (Dispatches/PRs from the default `GITHUB_TOKEN` deliberately do not trigger other workflows.)
 
 1. github.com → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
 2. **Resource owner:** your account · **Repository access:** Only select repositories → this repo.
-3. **Repository permissions:** `Contents` = **Read and write**, `Pull requests` = **Read and write**.
+3. **Repository permissions:** `Contents` = **Read and write**, `Pull requests` = **Read and write**, `Actions` = **Read and write** (the last one lets the trigger dispatch the audit workflow).
 4. Generate and copy the token.
 5. Repo → Settings → Secrets and variables → Actions → New repository secret → **Name** `AUDIT_PR_TOKEN`, paste the value.
 
@@ -52,7 +53,7 @@ The apply workflow is triggered by adding a label. Create it once: repo → **Is
 
 Watch the **Actions** tab:
 
-- **AI Audit** runs on your next push to `main` (needs secrets 1 + 2). If it finds issues, look for a new `workflow-audit/*` PR.
+- **AI Audit** — on your next push to `main`, `AI Audit Trigger` runs first and dispatches `AI Audit` (needs secrets 1 + 2). If the audit finds issues, look for a new `workflow-audit/*` PR.
 - **AI PR Review** runs on any opened/updated PR — including the audit's PR — and leaves a review comment.
 - **Apply AI Review** runs when you add the `apply-ai-review` label to a PR; watch it push a commit and comment a summary, then drop the label.
 
