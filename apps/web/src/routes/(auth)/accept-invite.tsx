@@ -1,9 +1,9 @@
 import { Banner } from '@/components/Banner.component';
+import { BodySmall } from '@/components/Text.component';
 import { useAcceptInvitation } from '@/lib/queries/invitation.queries';
 import { AcceptInviteSearchSchema } from '@/lib/schemas/auth.schema';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
-import { BodySmall } from '@/components/Text.component';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
 import { createFileRoute } from '@tanstack/react-router';
@@ -42,7 +42,7 @@ function AcceptInvitePage() {
 	}, [token]);
 
 	return (
-		<Container maxWidth='xs' sx={{ py: 8 }}>
+		<Container maxWidth='sm' sx={{ py: 6 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				{(accept.isPending || accept.isSuccess) && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

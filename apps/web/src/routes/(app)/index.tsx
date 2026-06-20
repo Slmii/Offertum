@@ -1,6 +1,5 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
-import { PageHeader } from '@/components/PageContainer.component';
-import { PatternBanners } from '@/components/PatternBanners.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, H3 } from '@/components/Text.component';
 import { UpsellTeaser } from '@/components/UpsellTeaser.component';
@@ -94,7 +93,6 @@ function HomePage() {
 			/>
 
 			<UpsellTeaser isOwner={isOwner} />
-			<PatternBanners />
 
 			<Box
 				sx={{

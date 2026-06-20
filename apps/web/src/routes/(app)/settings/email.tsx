@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Body, BodySmall, Label } from '@/components/Text.component';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';

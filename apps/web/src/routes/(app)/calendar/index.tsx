@@ -1,6 +1,6 @@
 // apps/web/src/routes/(app)/calendar/index.tsx
 import { Banner } from '@/components/Banner.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
 import { BodySmall } from '@/components/Text.component';

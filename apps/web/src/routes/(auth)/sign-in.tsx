@@ -74,7 +74,7 @@ function SignInPage() {
 				</Stack>
 
 				<Divider sx={{ my: 3 }}>
-					<BodySmall color='text.secondary'>or use email</BodySmall>
+					<BodySmall color='text.secondary'>or</BodySmall>
 				</Divider>
 
 				<Form<SignInForm>

@@ -158,10 +158,12 @@ export class PatternsService {
 		if (days >= 1) {
 			return this.formatDaysWithUnit(days);
 		}
+
 		const hours = Math.round(days * 24);
 		if (hours <= 0) {
 			return 'minder dan een uur';
 		}
+
 		return `${hours} uur`;
 	}
 }

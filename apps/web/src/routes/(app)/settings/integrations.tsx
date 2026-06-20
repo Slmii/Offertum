@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
 import { Body, BodySmall, H3, Label, Overline } from '@/components/Text.component';

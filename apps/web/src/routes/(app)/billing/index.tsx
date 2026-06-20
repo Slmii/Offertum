@@ -1,7 +1,7 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
 import { Dialog } from '@/components/Dialog.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Body, BodySmall, H2, H3, Mono, Overline } from '@/components/Text.component';
 import {
@@ -17,7 +17,6 @@ import { toReadableEuro } from '@/lib/utils/number.utils';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
 import DialogContentText from '@mui/material/DialogContentText';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
@@ -452,134 +451,128 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 	const startCheckout = useStartCheckout();
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
-			<Stack useFlexGap spacing={3}>
-				<PageHeader title='Abonnement' disableMargin />
+		<Stack useFlexGap spacing={3}>
+			<PageHeader title='Abonnement' disableMargin />
 
-				<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden' }}>
-					<Box sx={{ p: 4, borderBottom: `1px solid ${tokens.color.line}` }}>
-						<Box
-							sx={{
-								width: 48,
-								height: 48,
-								borderRadius: `${tokens.radius.md}px`,
-								bgcolor: tokens.color.accent[50],
-								border: `1px solid ${tokens.color.accent[300]}`,
-								color: tokens.color.accent[700],
-								display: 'inline-flex',
-								alignItems: 'center',
-								justifyContent: 'center',
-								mb: 2
-							}}
-						>
-							<AppIcon name='lock' size='large' />
-						</Box>
-
-						<H2 component='h2' sx={{ fontSize: 24 }}>
-							Ontgrendel Slimme prioritering
-						</H2>
-						<Body color='text.secondary' sx={{ mt: 1, maxWidth: 560 }}>
-							Je gebruikt nu de basis van Offertum. Met een abonnement zet Offertum je belangrijkste
-							aanvragen vooraan en handelt het de opvolging voor je af — zodat geen enkele offerte
-							stilletjes verloopt.
-						</Body>
-
-						{startCheckout.isError && (
-							<Banner tone='error' sx={{ mt: 2 }}>
-								{startCheckout.error instanceof Error
-									? startCheckout.error.message
-									: 'Er ging iets mis. Probeer het opnieuw.'}
-							</Banner>
-						)}
-
-						<Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mt: 3, flexWrap: 'wrap' }}>
-							{isOwner ? (
-								<Button
-									variant='contained'
-									size='large'
-									startIcon={<AppIcon name='external-link' size='medium' />}
-									onClick={() => startCheckout.mutate()}
-									disabled={startCheckout.isPending}
-								>
-									{startCheckout.isPending ? 'Doorverwijzen...' : 'Start abonnement'}
-								</Button>
-							) : (
-								<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
-									<Box component='span' sx={{ color: tokens.color.ink4, display: 'inline-flex' }}>
-										<AppIcon name='info' size='medium' />
-									</Box>
-									<BodySmall fontWeight='medium' color='text.primary'>
-										Vraag de eigenaar van je organisatie om een abonnement.
-									</BodySmall>
-								</Stack>
-							)}
-							<Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
-								<Box
-									component='span'
-									sx={{ fontSize: 22, fontWeight: 'bold', color: tokens.color.ink1 }}
-								>
-									{toReadableEuro(status.seats.baseMonthlyPriceCents / 100)}
-								</Box>
-								<BodySmall color='text.secondary'>
-									/maand · {status.seats.included} zitplekken inbegrepen
-								</BodySmall>
-							</Box>
-						</Box>
-					</Box>
-
+			<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden' }}>
+				<Box sx={{ p: 4, borderBottom: `1px solid ${tokens.color.line}` }}>
 					<Box
 						sx={{
-							p: 4,
-							display: 'grid',
-							gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-							gap: 2.5
+							width: 48,
+							height: 48,
+							borderRadius: `${tokens.radius.md}px`,
+							bgcolor: tokens.color.accent[50],
+							border: `1px solid ${tokens.color.accent[300]}`,
+							color: tokens.color.accent[700],
+							display: 'inline-flex',
+							alignItems: 'center',
+							justifyContent: 'center',
+							mb: 2
 						}}
 					>
-						{BILLING_FEATURES.map(feature => (
-							<Stack
-								key={feature.title}
-								direction='row'
-								useFlexGap
-								spacing={1.5}
-								sx={{ alignItems: 'flex-start' }}
-							>
-								<Box
-									sx={{
-										width: 32,
-										height: 32,
-										flexShrink: 0,
-										borderRadius: `${tokens.radius.sm}px`,
-										bgcolor: tokens.color.paper2,
-										border: `1px solid ${tokens.color.line}`,
-										color: tokens.color.accent[700],
-										display: 'inline-flex',
-										alignItems: 'center',
-										justifyContent: 'center'
-									}}
-								>
-									<AppIcon name={feature.icon} size='medium' />
-								</Box>
-								<Box sx={{ minWidth: 0 }}>
-									<H3 component='h3' sx={{ fontSize: 14 }}>
-										{feature.title}
-									</H3>
-									<BodySmall color='text.secondary' sx={{ mt: 0.25 }}>
-										{feature.detail}
-									</BodySmall>
-								</Box>
-							</Stack>
-						))}
+						<AppIcon name='lock' size='large' />
 					</Box>
-				</Paper>
 
-				<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-					<Box component='span' sx={{ color: tokens.color.ink4, display: 'inline-flex' }}>
-						<AppIcon name='shield-check' size='small' />
+					<H2 component='h2' sx={{ fontSize: 24 }}>
+						Ontgrendel Slimme prioritering
+					</H2>
+					<Body color='text.secondary' sx={{ mt: 1, maxWidth: 560 }}>
+						Je gebruikt nu de basis van Offertum. Met een abonnement zet Offertum je belangrijkste aanvragen
+						vooraan en handelt het de opvolging voor je af — zodat geen enkele offerte stilletjes verloopt.
+					</Body>
+
+					{startCheckout.isError && (
+						<Banner tone='error' sx={{ mt: 2 }}>
+							{startCheckout.error instanceof Error
+								? startCheckout.error.message
+								: 'Er ging iets mis. Probeer het opnieuw.'}
+						</Banner>
+					)}
+
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mt: 3, flexWrap: 'wrap' }}>
+						{isOwner ? (
+							<Button
+								variant='contained'
+								size='large'
+								startIcon={<AppIcon name='external-link' size='medium' />}
+								onClick={() => startCheckout.mutate()}
+								disabled={startCheckout.isPending}
+							>
+								{startCheckout.isPending ? 'Doorverwijzen...' : 'Start abonnement'}
+							</Button>
+						) : (
+							<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+								<Box component='span' sx={{ color: tokens.color.ink4, display: 'inline-flex' }}>
+									<AppIcon name='info' size='medium' />
+								</Box>
+								<BodySmall fontWeight='medium' color='text.primary'>
+									Vraag de eigenaar van je organisatie om een abonnement.
+								</BodySmall>
+							</Stack>
+						)}
+						<Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+							<Box component='span' sx={{ fontSize: 22, fontWeight: 'bold', color: tokens.color.ink1 }}>
+								{toReadableEuro(status.seats.baseMonthlyPriceCents / 100)}
+							</Box>
+							<BodySmall color='text.secondary'>
+								/maand · {status.seats.included} zitplekken inbegrepen
+							</BodySmall>
+						</Box>
 					</Box>
-					<BodySmall color='text.secondary'>Maandelijks opzegbaar · 14 dagen gratis proberen</BodySmall>
-				</Stack>
+				</Box>
+
+				<Box
+					sx={{
+						p: 4,
+						display: 'grid',
+						gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+						gap: 2.5
+					}}
+				>
+					{BILLING_FEATURES.map(feature => (
+						<Stack
+							key={feature.title}
+							direction='row'
+							useFlexGap
+							spacing={1.5}
+							sx={{ alignItems: 'flex-start' }}
+						>
+							<Box
+								sx={{
+									width: 32,
+									height: 32,
+									flexShrink: 0,
+									borderRadius: `${tokens.radius.sm}px`,
+									bgcolor: tokens.color.paper2,
+									border: `1px solid ${tokens.color.line}`,
+									color: tokens.color.accent[700],
+									display: 'inline-flex',
+									alignItems: 'center',
+									justifyContent: 'center'
+								}}
+							>
+								<AppIcon name={feature.icon} size='medium' />
+							</Box>
+							<Box sx={{ minWidth: 0 }}>
+								<H3 component='h3' sx={{ fontSize: 14 }}>
+									{feature.title}
+								</H3>
+								<BodySmall color='text.secondary' sx={{ mt: 0.25 }}>
+									{feature.detail}
+								</BodySmall>
+							</Box>
+						</Stack>
+					))}
+				</Box>
+			</Paper>
+
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+				<Box component='span' sx={{ color: tokens.color.ink4, display: 'inline-flex' }}>
+					<AppIcon name='shield-check' size='small' />
+				</Box>
+				<BodySmall color='text.secondary'>Maandelijks opzegbaar · 14 dagen gratis proberen</BodySmall>
 			</Stack>
-		</Container>
+		</Stack>
 	);
 }
 

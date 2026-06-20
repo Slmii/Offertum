@@ -1,5 +1,5 @@
 import { Banner } from '@/components/Banner.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SummaryCard } from '@/components/SummaryCard.component';
 import { BodySmall, H3 } from '@/components/Text.component';

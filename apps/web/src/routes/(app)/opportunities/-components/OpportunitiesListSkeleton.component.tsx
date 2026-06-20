@@ -1,7 +1,7 @@
 import { FixedPageLayout } from '@/components/FixedPageLayout.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';

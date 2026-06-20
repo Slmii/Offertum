@@ -44,7 +44,7 @@ function NoOrganizationPage() {
 	const user = session?.user;
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
+		<Container maxWidth='sm' sx={{ py: 6 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<H1 sx={{ mb: 1 }}>No active organization</H1>
 				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 4 }}>

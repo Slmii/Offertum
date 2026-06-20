@@ -3,7 +3,7 @@ import { FixedPageLayout } from '@/components/FixedPageLayout.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { InfiniteList } from '@/components/InfiniteList/InfiniteList.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { PatternBanners } from '@/components/PatternBanners.component';
 import { SectionError } from '@/components/SectionError.component';
 import { UpsellTeaser } from '@/components/UpsellTeaser.component';
@@ -30,6 +30,7 @@ import { EmptyState } from './-components/EmptyState.component';
 import { FilterChipRow } from './-components/FilterChipRow.component';
 import { OpportunitiesListSkeleton } from './-components/OpportunitiesListSkeleton.component';
 import { OpportunityRow } from './-components/OpportunityRow.component';
+import { PendingFollowUpsBanner, pendingFollowUpsQueryOptions } from './-components/PendingFollowUpsBanner.component';
 import { StatusFilterTabs } from './-components/StatusFilterTabs.component';
 
 // Every field carries `.catch(undefined)` so a malformed/hand-edited URL param degrades
@@ -90,7 +91,10 @@ export const Route = createFileRoute('/(app)/opportunities/')({
 				)
 			),
 			context.queryClient.ensureQueryData(billingStatusQueryOptions),
-			context.queryClient.ensureQueryData(myMembershipQueryOptions)
+			context.queryClient.ensureQueryData(myMembershipQueryOptions),
+			// Pending follow-ups banner — independent of the page's filters; prefetch so it
+			// doesn't waterfall.
+			context.queryClient.ensureQueryData(pendingFollowUpsQueryOptions())
 		]),
 	component: OpportunitiesIndexPage,
 	pendingComponent: OpportunitiesListSkeleton,
@@ -249,6 +253,9 @@ function OpportunitiesIndexPage() {
 						title='Offerteaanvragen'
 						caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar seconden nadat ze binnenkomen.'
 					/>
+
+					{/* Auto follow-ups (check-in drafts) awaiting review — renders nothing when there are none. */}
+					<PendingFollowUpsBanner />
 
 					{/* Smart-prioritization slot: entitled orgs see AI pattern insights, others the upsell. */}
 					{isEntitled ? <PatternBanners /> : <UpsellTeaser isOwner={isOwner} />}

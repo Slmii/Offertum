@@ -7,13 +7,21 @@ config({ path: resolve(__dirname, '../.env') });
 import type { CatalogItemUnit } from '@offertum/shared';
 import { createHash } from 'node:crypto';
 import {
+	DismissReason,
 	EmailProvider,
+	ExpiryActionKind,
+	ExpiryActionStatus,
 	LogLevel,
 	MembershipRole,
+	NotificationEventType,
 	OpportunityStatus,
 	type Prisma,
 	PricingRuleType,
 	PrismaClient,
+	QuoteDraftStatus,
+	QuoteLineSource,
+	ReplyDraftKind,
+	ReplyDraftStatus,
 	Urgency
 } from '../src/generated/prisma/client';
 
@@ -52,6 +60,9 @@ const memberships: ReadonlyArray<{ email: string; orgId: string; role: Membershi
 // via `disconnectedAt` so the UI's "is connected" check doesn't surface them.
 const SEED_EMAIL_ACCOUNT_ACME = '11111111-1111-1111-1111-000000000001';
 const SEED_EMAIL_ACCOUNT_BOUW = '11111111-1111-1111-1111-000000000002';
+// Second ACME mailbox, connected by Jeroen. Lets the "Mijn mailbox" (owner=mine) list
+// filter be exercised — opps land on different inboxes within the same org.
+const SEED_EMAIL_ACCOUNT_ACME_2 = '11111111-1111-1111-1111-000000000003';
 
 const emailAccounts = [
 	{
@@ -59,6 +70,12 @@ const emailAccounts = [
 		organizationId: ORG_ACME,
 		ownerEmail: 'selami1992@gmail.com',
 		mailboxEmail: 'inbox+seed@acme-installaties.nl'
+	},
+	{
+		id: SEED_EMAIL_ACCOUNT_ACME_2,
+		organizationId: ORG_ACME,
+		ownerEmail: 'jeroen@offertum.dev',
+		mailboxEmail: 'jeroen+seed@acme-installaties.nl'
 	},
 	{
 		id: SEED_EMAIL_ACCOUNT_BOUW,
@@ -105,6 +122,102 @@ interface SeedOpportunity {
 	internalDateDaysAgo: number;
 	deadlineDaysFromNow: number | null;
 	appointmentDaysFromNow: number | null;
+	// ── Optional scenario specs (W4–W13). Curated + synthetic opps leave these unset;
+	// the `scenarioOpportunities` below set them so every feature has live seed data.
+	/** Email of the user to assign to. `null` = unassigned. Omitted = the mailbox owner. */
+	assignedToEmail?: string | null;
+	/** Soft-dismiss the opp (sets dismissedAt/dismissReason/dismissedById). */
+	dismiss?: SeedDismiss;
+	/** Reply drafts (1:N), oldest-first. The last entry is the "current" draft. */
+	drafts?: SeedReplyDraft[];
+	/** A generated quote draft + its line items + optional PDF version(s). */
+	quote?: SeedQuote;
+	/** Smart-expiry suggestion (W13) on a sent quote. */
+	expiryAction?: SeedExpiryAction;
+	/** Extra thread messages (customer replies + own-org outbound), oldest-first. */
+	threadMessages?: SeedThreadMessage[];
+	/** In-app notifications surfaced in the bell. */
+	notifications?: SeedNotification[];
+	/** Extra timeline audit-log rows beyond the always-written received_via_mailbox. */
+	timeline?: SeedTimelineLog[];
+}
+
+interface SeedDismiss {
+	reason: DismissReason;
+	byEmail: string;
+	daysAgo: number;
+}
+
+interface SeedAttachment {
+	filename: string;
+	contentType: string;
+	sizeBytes: number;
+	/** When true, this attachment is the generated quote PDF (links to the opp's QuotePdf). */
+	isQuotePdf?: boolean;
+}
+
+interface SeedReplyDraft {
+	body: string;
+	status: ReplyDraftStatus;
+	createdDaysAgo: number;
+	kind?: ReplyDraftKind;
+	wasEditedByUser?: boolean;
+	/** Sets sentAt when the draft is SENT. */
+	sentDaysAgo?: number;
+	attachments?: SeedAttachment[];
+}
+
+interface SeedQuoteLine {
+	description: string;
+	unit: string;
+	quantity: number;
+	unitPriceEur: number | null;
+	source: QuoteLineSource;
+	vatRate?: number;
+	vatReverseCharged?: boolean;
+	note?: string | null;
+}
+
+interface SeedQuote {
+	status: QuoteDraftStatus;
+	lines: SeedQuoteLine[];
+	sentDaysAgo?: number;
+	validUntilDaysFromNow?: number;
+	/** Generated PDF filenames (one QuotePdf row each), newest last. */
+	pdfFilenames?: string[];
+}
+
+interface SeedExpiryAction {
+	status: ExpiryActionStatus;
+	recommendedAction: ExpiryActionKind;
+	suggestedCopy: string;
+	takenAction?: ExpiryActionKind;
+	takenByEmail?: string;
+	validUntilDaysFromNow: number;
+}
+
+interface SeedThreadMessage {
+	fromCustomer: boolean;
+	fromName: string;
+	fromEmail: string;
+	bodyText: string;
+	daysAgo: number;
+	wasDetectedAsCloser?: boolean;
+}
+
+interface SeedNotification {
+	eventType: NotificationEventType;
+	title: string;
+	body: string;
+	daysAgo: number;
+	read?: boolean;
+}
+
+interface SeedTimelineLog {
+	action: string;
+	daysAgo: number;
+	actorEmail?: string;
+	extra?: Record<string, unknown>;
 }
 
 // Ten hand-curated opportunities spanning both seed orgs, every status, urgency mix,
@@ -553,6 +666,12 @@ function slugifyEmailLocal(first: string, last: string): string {
 	return `${first}.${last}`.toLowerCase().replace(/\s+/g, '');
 }
 
+// Deterministic UUID for a related entity (draft, quote, pdf, …) so re-seeding upserts in
+// place. `prefix8` (8 hex chars) namespaces the entity type; `oppNum` + `sub` make it unique.
+function entityId(prefix8: string, oppNum: number, sub: number): string {
+	return `${prefix8}-${pad(oppNum, 4)}-${pad(sub, 4)}-0000-${pad(oppNum, 8)}${pad(sub, 4)}`;
+}
+
 // Builds opportunities numbered `start+1 .. total` (1-based) so their IDs never collide
 // with the curated entries (which occupy 1..curated.length).
 function buildSyntheticOpportunities(start: number, total: number): SeedOpportunity[] {
@@ -625,10 +744,472 @@ function buildSyntheticOpportunities(start: number, total: number): SeedOpportun
 
 const SEED_OPPORTUNITY_TOTAL = 100;
 
-// Curated entries first (stable, hand-written), then synthetic fillers up to 100.
+// ── Scenario opportunities (101+) ────────────────────────────────────────────────
+// One opportunity per distinct feature/scenario so a fresh DB exercises EVERY surface:
+// every status, draft state + kind, multiple drafts, customer replies/threads, closers,
+// quotes (draft/sent), line-item sources, quote PDFs + history, attachments, smart-expiry
+// actions, dismiss reasons, assignment, mailbox-owner filter, urgency/deadline variants,
+// notifications, and timeline events. Each declares its related rows via the optional
+// scenario specs on SeedOpportunity; `main()` materializes them.
+
+// Compact builder: fills the boilerplate base fields, leaving the scenario specs to `extra`.
+function scenario(num: number, requestType: string, customerName: string, extra: Partial<SeedOpportunity> = {}): SeedOpportunity {
+	const slug = customerName
+		.toLowerCase()
+		.normalize('NFKD')
+		.replace(/[^a-z0-9]+/g, '.')
+		.replace(/(^\.|\.$)/g, '');
+	const email = `${slug}@example.nl`;
+	return {
+		rawMessageId: `22222222-${pad(num, 4)}-0000-0000-${pad(num, 12)}`,
+		opportunityId: `33333333-${pad(num, 4)}-0000-0000-${pad(num, 12)}`,
+		organizationId: ORG_ACME,
+		emailAccountId: SEED_EMAIL_ACCOUNT_ACME,
+		subject: `Offerteaanvraag: ${requestType}`,
+		fromEmail: email,
+		fromName: customerName,
+		bodyText: [
+			'Goedendag,',
+			'',
+			`Ik zou graag een offerte ontvangen voor ${requestType.toLowerCase()}. Kunt u laten weten wat de mogelijkheden en de kosten zijn?`,
+			'',
+			'Met vriendelijke groet,',
+			customerName
+		].join('\n'),
+		customerName,
+		customerEmail: email,
+		address: 'Voorbeeldstraat 1, 1234 AB Utrecht',
+		requestType,
+		urgency: Urgency.NORMAL,
+		status: OpportunityStatus.NEW,
+		classifierConfidence: 0.92,
+		classifierReason: 'Seed scenario-opportunity met live gerelateerde data.',
+		deliverableHints: [requestType],
+		internalDateDaysAgo: 3,
+		deadlineDaysFromNow: null,
+		appointmentDaysFromNow: null,
+		...extra
+	};
+}
+
+const SENT_REPLY_BODY = [
+	'Beste klant,',
+	'',
+	'Bedankt voor uw aanvraag. Hierbij ontvangt u onze reactie; we denken graag met u mee.',
+	'',
+	'Met vriendelijke groet,',
+	'Acme Installaties'
+].join('\n');
+
+const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
+	// 101 — NEW, AI draft pending review ("Bekijk concept")
+	scenario(101, 'CV-ketel vervangen', 'Lotte Hendriks', {
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.PENDING_APPROVAL, createdDaysAgo: 2 }],
+		notifications: [
+			{
+				eventType: NotificationEventType.OPPORTUNITY_CREATED,
+				title: 'Nieuwe offerteaanvraag',
+				body: 'CV-ketel vervangen — Lotte Hendriks',
+				daysAgo: 2
+			}
+		]
+	}),
+	// 102 — NEW, draft edited by the owner (EDITED, wasEditedByUser)
+	scenario(102, 'Badkamer verbouwen', 'Youssef El Amrani', {
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nP.S. We kunnen volgende week al langskomen voor een opname.`,
+				status: ReplyDraftStatus.EDITED,
+				wasEditedByUser: true,
+				createdDaysAgo: 2
+			}
+		]
+	}),
+	// 103 — REPLIED, single sent reply
+	scenario(103, 'Dakgoot vervangen', 'Marloes Visser', {
+		status: OpportunityStatus.REPLIED,
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 4, sentDaysAgo: 4 }]
+	}),
+	// 104 — Multiple drafts: a SENT reply + a newer PENDING follow-up (history panel + 1:N "current")
+	scenario(104, 'Zonnepanelen uitbreiden', 'Tim Bakker', {
+		status: OpportunityStatus.REPLIED,
+		drafts: [
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 6, sentDaysAgo: 6 },
+			{
+				body: 'Beste Tim, een korte aanvulling op onze vorige mail…',
+				status: ReplyDraftStatus.PENDING_APPROVAL,
+				createdDaysAgo: 1
+			}
+		]
+	}),
+	// 105 — Customer reply landed (status flipped back to NEW), fresh follow-up draft pending
+	scenario(105, 'Vloerverwarming aanleggen', 'Sofie Janssen', {
+		status: OpportunityStatus.NEW,
+		threadMessages: [
+			{
+				fromCustomer: false,
+				fromName: 'Acme Installaties',
+				fromEmail: 'inbox+seed@acme-installaties.nl',
+				bodyText: SENT_REPLY_BODY,
+				daysAgo: 5
+			},
+			{
+				fromCustomer: true,
+				fromName: 'Sofie Janssen',
+				fromEmail: 'sofie.janssen@example.nl',
+				bodyText: 'Dank! Kunnen jullie ook de oude vloer verwijderen? En wat is de levertijd?',
+				daysAgo: 1
+			}
+		],
+		drafts: [
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 5, sentDaysAgo: 5 },
+			{
+				body: 'Beste Sofie, jazeker — we kunnen de oude vloer meenemen. De levertijd is 2 weken…',
+				status: ReplyDraftStatus.PENDING_APPROVAL,
+				createdDaysAgo: 1
+			}
+		],
+		notifications: [
+			{
+				eventType: NotificationEventType.CUSTOMER_REPLY,
+				title: 'Nieuw antwoord van klant',
+				body: 'Sofie Janssen reageerde op je offerte',
+				daysAgo: 1
+			}
+		]
+	}),
+	// 106 — Thread with a conversation-closer reply ("Bedankt, tot dan!"), deal won
+	scenario(106, 'Keuken plaatsen', 'Daan Mulder', {
+		status: OpportunityStatus.WON,
+		threadMessages: [
+			{
+				fromCustomer: false,
+				fromName: 'Acme Installaties',
+				fromEmail: 'inbox+seed@acme-installaties.nl',
+				bodyText: SENT_REPLY_BODY,
+				daysAgo: 7
+			},
+			{
+				fromCustomer: true,
+				fromName: 'Daan Mulder',
+				fromEmail: 'daan.mulder@example.nl',
+				bodyText: 'Top, akkoord met de offerte. Bedankt, tot dan!',
+				daysAgo: 3,
+				wasDetectedAsCloser: true
+			}
+		],
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 7, sentDaysAgo: 7 }]
+	}),
+	// 107 — Pending automatic check-in ("Follow-up wacht") on a replied opp
+	scenario(107, 'Schilderwerk buiten', 'Anouk de Wit', {
+		status: OpportunityStatus.REPLIED,
+		drafts: [
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 12, sentDaysAgo: 12 },
+			{
+				body: 'Beste Anouk, ik wilde even checken of u nog vragen had over onze offerte?',
+				status: ReplyDraftStatus.PENDING_APPROVAL,
+				kind: ReplyDraftKind.CHECK_IN,
+				createdDaysAgo: 0
+			}
+		]
+	}),
+	// 108 — Already-sent automatic check-in in the history
+	scenario(108, 'Spouwmuur isoleren', 'Bram Visser', {
+		status: OpportunityStatus.REPLIED,
+		drafts: [
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 20, sentDaysAgo: 20 },
+			{
+				body: 'Beste Bram, een korte herinnering aan onze offerte van vorige week.',
+				status: ReplyDraftStatus.SENT,
+				kind: ReplyDraftKind.CHECK_IN,
+				createdDaysAgo: 6,
+				sentDaysAgo: 6
+			}
+		]
+	}),
+	// 109 — WAITING on the customer, reply already sent
+	scenario(109, 'Airco installeren', 'Nina Smit', {
+		status: OpportunityStatus.WAITING,
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 8, sentDaysAgo: 8 }]
+	}),
+	// 110 — Auto-cold: scheduler flipped REPLIED → COLD; timeline + notification
+	scenario(110, 'Dakkapel plaatsen', 'Ruben Post', {
+		status: OpportunityStatus.COLD,
+		internalDateDaysAgo: 40,
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 35, sentDaysAgo: 35 }],
+		timeline: [{ action: 'opportunity.auto_cold.flipped', daysAgo: 5 }],
+		notifications: [
+			{
+				eventType: NotificationEventType.OPPORTUNITY_AUTO_COLD,
+				title: 'Offerteaanvraag op stil gezet',
+				body: 'Geen reactie meer van Ruben Post',
+				daysAgo: 5,
+				read: true
+			}
+		]
+	}),
+	// 111 — WON with a sent quote + PDF attached to the sent reply
+	scenario(111, 'Complete badkamer renovatie', 'Familie Van Dijk', {
+		status: OpportunityStatus.WON,
+		internalDateDaysAgo: 18,
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 14,
+			validUntilDaysFromNow: 16,
+			pdfFilenames: ['offerte-badkamer-vandijk.pdf'],
+			lines: [
+				{ description: 'Tegelwerk badkamer', unit: 'square_meter', quantity: 18, unitPriceEur: 65, source: QuoteLineSource.CATALOG_MATCH },
+				{ description: 'Loodgieterswerk', unit: 'hour', quantity: 16, unitPriceEur: 55, source: QuoteLineSource.RULE_APPLIED, note: 'Uurtarief installateur' },
+				{ description: 'Sanitair (douche + wastafel)', unit: 'flat_fee', quantity: 1, unitPriceEur: 1850, source: QuoteLineSource.CATALOG_MATCH }
+			]
+		},
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nIn de bijlage vindt u onze offerte.`,
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 14,
+				sentDaysAgo: 14,
+				attachments: [{ filename: 'offerte-badkamer-vandijk.pdf', contentType: 'application/pdf', sizeBytes: 52000, isQuotePdf: true }]
+			}
+		]
+	}),
+	// 112 — LOST deal
+	scenario(112, 'Tuinhuis bouwen', 'Kees Brouwer', {
+		status: OpportunityStatus.LOST,
+		internalDateDaysAgo: 25,
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 22, sentDaysAgo: 22 }]
+	}),
+	// 113-116 — Dismissed (all four reasons)
+	scenario(113, 'Nieuwsbrief aanmelding', 'Marketing Bureau X', {
+		dismiss: { reason: DismissReason.NOT_A_QUOTE, byEmail: 'selami1992@gmail.com', daysAgo: 2 }
+	}),
+	scenario(114, 'CV-ketel vervangen (dubbel)', 'Lotte Hendriks', {
+		dismiss: { reason: DismissReason.DUPLICATE, byEmail: 'selami1992@gmail.com', daysAgo: 1 }
+	}),
+	scenario(115, 'Win een gratis iPhone', 'Promo Mailer', {
+		dismiss: { reason: DismissReason.SPAM, byEmail: 'selami1992@gmail.com', daysAgo: 3 }
+	}),
+	scenario(116, 'Onduidelijke aanvraag', 'Anoniem', {
+		dismiss: { reason: DismissReason.OTHER, byEmail: 'jeroen@offertum.dev', daysAgo: 4 }
+	}),
+	// 117 — Quote DRAFT with every line-item source + reverse-charge + inferred-null-price + VAT variants
+	scenario(117, 'Verbouwing zolder', 'Hugo Peters', {
+		status: OpportunityStatus.REPLIED,
+		quote: {
+			status: QuoteDraftStatus.DRAFT,
+			validUntilDaysFromNow: 30,
+			lines: [
+				{ description: 'Dakraam Velux', unit: 'flat_fee', quantity: 2, unitPriceEur: 480, source: QuoteLineSource.CATALOG_MATCH, vatRate: 21 },
+				{ description: 'Timmerwerk', unit: 'hour', quantity: 24, unitPriceEur: 52, source: QuoteLineSource.RULE_APPLIED, note: 'Uurtarief timmerman' },
+				{ description: 'Onderaanneming elektra (BTW verlegd)', unit: 'flat_fee', quantity: 1, unitPriceEur: 900, source: QuoteLineSource.RULE_APPLIED, vatReverseCharged: true, note: 'BTW verlegd naar opdrachtgever' },
+				{ description: 'Isolatiemateriaal (laag tarief)', unit: 'square_meter', quantity: 30, unitPriceEur: 18, source: QuoteLineSource.CATALOG_MATCH, vatRate: 9 },
+				{ description: 'Maatwerk inbouwkast', unit: 'flat_fee', quantity: 1, unitPriceEur: null, source: QuoteLineSource.INFERRED, note: 'Prijs nog in te stellen' }
+			]
+		}
+	}),
+	// 118 — Quote SENT + smart-expiry SUGGESTED (extend), reply with attached PDF
+	scenario(118, 'Cv-installatie nieuwbouw', 'Sander Vermeer', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 22,
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 20,
+			validUntilDaysFromNow: 4,
+			pdfFilenames: ['offerte-cv-vermeer.pdf'],
+			lines: [
+				{ description: 'CV-ketel Remeha', unit: 'flat_fee', quantity: 1, unitPriceEur: 2200, source: QuoteLineSource.CATALOG_MATCH },
+				{ description: 'Installatie + inregelen', unit: 'hour', quantity: 12, unitPriceEur: 55, source: QuoteLineSource.RULE_APPLIED }
+			]
+		},
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nOnze offerte zit in de bijlage.`,
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 20,
+				sentDaysAgo: 20,
+				attachments: [{ filename: 'offerte-cv-vermeer.pdf', contentType: 'application/pdf', sizeBytes: 49000, isQuotePdf: true }]
+			}
+		],
+		expiryAction: {
+			status: ExpiryActionStatus.SUGGESTED,
+			recommendedAction: ExpiryActionKind.EXTEND_14D,
+			suggestedCopy: 'Uw offerte verloopt binnenkort — zal ik de geldigheid met 14 dagen verlengen?',
+			validUntilDaysFromNow: 4
+		}
+	}),
+	// 119 — Quote with a PDF version history (two generated versions)
+	scenario(119, 'Uitbouw keuken', 'Eva Willems', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 15,
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 10,
+			validUntilDaysFromNow: 20,
+			pdfFilenames: ['offerte-keuken-v1.pdf', 'offerte-keuken-v2.pdf'],
+			lines: [
+				{ description: 'Uitbouw 12 m²', unit: 'square_meter', quantity: 12, unitPriceEur: 1450, source: QuoteLineSource.RULE_APPLIED },
+				{ description: 'Stelpost afwerking', unit: 'flat_fee', quantity: 1, unitPriceEur: null, source: QuoteLineSource.INFERRED, note: 'Stelpost — nader te bepalen' }
+			]
+		},
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nDe meest recente offerte vindt u in de bijlage.`,
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 10,
+				sentDaysAgo: 10,
+				attachments: [{ filename: 'offerte-keuken-v2.pdf', contentType: 'application/pdf', sizeBytes: 51000, isQuotePdf: true }]
+			}
+		]
+	}),
+	// 120 — Owner-uploaded (non-PDF) attachment on a pending draft
+	scenario(120, 'Lekkage opsporen', 'Pim Dekker', {
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nTer illustratie een foto van de situatie.`,
+				status: ReplyDraftStatus.PENDING_APPROVAL,
+				createdDaysAgo: 1,
+				attachments: [{ filename: 'situatie-foto.jpg', contentType: 'image/jpeg', sizeBytes: 184000 }]
+			}
+		]
+	}),
+	// 121 — Smart-expiry SUGGESTED: last-followup recommendation
+	scenario(121, 'Gevelreiniging', 'Iris Kuiper', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 24,
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 22,
+			validUntilDaysFromNow: 3,
+			pdfFilenames: ['offerte-gevel-kuiper.pdf'],
+			lines: [{ description: 'Gevelreiniging', unit: 'square_meter', quantity: 80, unitPriceEur: 12, source: QuoteLineSource.CATALOG_MATCH }]
+		},
+		expiryAction: {
+			status: ExpiryActionStatus.SUGGESTED,
+			recommendedAction: ExpiryActionKind.LAST_FOLLOWUP,
+			suggestedCopy: 'Zal ik een laatste vriendelijke herinnering sturen voordat de offerte verloopt?',
+			validUntilDaysFromNow: 3
+		}
+	}),
+	// 122 — Smart-expiry TAKEN (extend applied)
+	scenario(122, 'Schuur renoveren', 'Joost Linden', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 30,
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 28,
+			validUntilDaysFromNow: 12,
+			pdfFilenames: ['offerte-schuur-linden.pdf'],
+			lines: [{ description: 'Renovatie schuur', unit: 'flat_fee', quantity: 1, unitPriceEur: 4200, source: QuoteLineSource.RULE_APPLIED }]
+		},
+		expiryAction: {
+			status: ExpiryActionStatus.TAKEN,
+			recommendedAction: ExpiryActionKind.EXTEND_14D,
+			takenAction: ExpiryActionKind.EXTEND_14D,
+			takenByEmail: 'selami1992@gmail.com',
+			suggestedCopy: 'Geldigheid verlengd met 14 dagen.',
+			validUntilDaysFromNow: 12
+		}
+	}),
+	// 123 — Smart-expiry DISMISSED (mark-lost waved off)
+	scenario(123, 'Oprit bestraten', 'Mirjam Bos', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 35,
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 33,
+			validUntilDaysFromNow: -2,
+			pdfFilenames: ['offerte-oprit-bos.pdf'],
+			lines: [{ description: 'Bestrating oprit', unit: 'square_meter', quantity: 45, unitPriceEur: 38, source: QuoteLineSource.CATALOG_MATCH }]
+		},
+		expiryAction: {
+			status: ExpiryActionStatus.DISMISSED,
+			recommendedAction: ExpiryActionKind.MARK_LOST,
+			suggestedCopy: 'De offerte is verlopen — markeren als verloren?',
+			validUntilDaysFromNow: -2
+		}
+	}),
+	// 124 — Manually assigned to a teammate (Jeroen) + timeline "Toewijzing"
+	scenario(124, 'Cv-onderhoud jaarcontract', 'Wim Jacobs', {
+		assignedToEmail: 'jeroen@offertum.dev',
+		timeline: [{ action: 'opportunity.assigned', daysAgo: 1, actorEmail: 'selami1992@gmail.com', extra: { assignedToUserName: 'Jeroen Bakker' } }]
+	}),
+	// 125 — Unassigned (no one picked it up yet)
+	scenario(125, 'Kozijnen vervangen', 'Saar Hofman', { assignedToEmail: null }),
+	// 126 — Lands on Jeroen's mailbox (drives the owner=mine list filter)
+	scenario(126, 'Radiatoren vervangen', 'Bas Koster', {
+		emailAccountId: SEED_EMAIL_ACCOUNT_ACME_2
+	}),
+	// 127 — EMERGENCY urgency with imminent deadline + appointment tomorrow
+	scenario(127, 'Acute lekkage CV', 'Femke Dijkstra', {
+		urgency: Urgency.EMERGENCY,
+		internalDateDaysAgo: 0,
+		deadlineDaysFromNow: 1,
+		appointmentDaysFromNow: 1
+	}),
+	// 128 — LOW urgency, no deadline
+	scenario(128, 'Oriënterend gesprek verbouwing', 'Karel Mol', { urgency: Urgency.LOW }),
+	// 129 — Notifications showcase (created + daily digest), with deadline
+	scenario(129, 'Warmtepomp advies', 'Lieke Vos', {
+		deadlineDaysFromNow: 10,
+		notifications: [
+			{ eventType: NotificationEventType.OPPORTUNITY_CREATED, title: 'Nieuwe offerteaanvraag', body: 'Warmtepomp advies — Lieke Vos', daysAgo: 1 },
+			{ eventType: NotificationEventType.DAILY_DIGEST, title: 'Je dagelijkse overzicht', body: '3 open aanvragen, 1 verloopt binnenkort', daysAgo: 0 }
+		]
+	}),
+	// 130 — Full lifecycle showcase: thread + replies + multiple drafts + sent quote + PDF + expiry taken, WON
+	scenario(130, 'Complete woninginstallatie', 'Project Zonneveld BV', {
+		status: OpportunityStatus.WON,
+		internalDateDaysAgo: 30,
+		urgency: Urgency.HIGH,
+		deadlineDaysFromNow: 5,
+		appointmentDaysFromNow: 2,
+		threadMessages: [
+			{ fromCustomer: false, fromName: 'Acme Installaties', fromEmail: 'inbox+seed@acme-installaties.nl', bodyText: SENT_REPLY_BODY, daysAgo: 26 },
+			{ fromCustomer: true, fromName: 'Project Zonneveld BV', fromEmail: 'project.zonneveld.bv@example.nl', bodyText: 'Bedankt, kunnen we de planning bespreken?', daysAgo: 20 },
+			{ fromCustomer: false, fromName: 'Acme Installaties', fromEmail: 'inbox+seed@acme-installaties.nl', bodyText: 'Zeker, voorstel in de bijlage.', daysAgo: 18 },
+			{ fromCustomer: true, fromName: 'Project Zonneveld BV', fromEmail: 'project.zonneveld.bv@example.nl', bodyText: 'Akkoord, we gaan ervoor!', daysAgo: 12, wasDetectedAsCloser: true }
+		],
+		quote: {
+			status: QuoteDraftStatus.SENT,
+			sentDaysAgo: 18,
+			validUntilDaysFromNow: 20,
+			pdfFilenames: ['offerte-zonneveld-v1.pdf', 'offerte-zonneveld-v2.pdf'],
+			lines: [
+				{ description: 'Complete CV-installatie', unit: 'flat_fee', quantity: 1, unitPriceEur: 8400, source: QuoteLineSource.RULE_APPLIED },
+				{ description: 'Zonnepanelen (12 stuks)', unit: 'flat_fee', quantity: 1, unitPriceEur: 5600, source: QuoteLineSource.CATALOG_MATCH },
+				{ description: 'Meerwerk in overleg', unit: 'flat_fee', quantity: 1, unitPriceEur: null, source: QuoteLineSource.INFERRED, note: 'Stelpost' }
+			]
+		},
+		drafts: [
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 26, sentDaysAgo: 26 },
+			{
+				body: 'Beste, de definitieve offerte zit in de bijlage.',
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 18,
+				sentDaysAgo: 18,
+				attachments: [{ filename: 'offerte-zonneveld-v2.pdf', contentType: 'application/pdf', sizeBytes: 64000, isQuotePdf: true }]
+			}
+		],
+		expiryAction: {
+			status: ExpiryActionStatus.TAKEN,
+			recommendedAction: ExpiryActionKind.LAST_FOLLOWUP,
+			takenAction: ExpiryActionKind.LAST_FOLLOWUP,
+			takenByEmail: 'selami1992@gmail.com',
+			suggestedCopy: 'Laatste herinnering verstuurd.',
+			validUntilDaysFromNow: 20
+		},
+		timeline: [
+			{ action: 'opportunity.status.updated', daysAgo: 12, actorEmail: 'selami1992@gmail.com', extra: { from: 'replied', to: 'won' } },
+			{ action: 'opportunity.assigned', daysAgo: 25, actorEmail: 'selami1992@gmail.com', extra: { assignedToUserName: 'Selami C' } }
+		]
+	})
+];
+
+// Curated entries first (stable), synthetic fillers to 100, then the scenario opps (101+).
 const opportunities: ReadonlyArray<SeedOpportunity> = [
 	...curatedOpportunities,
-	...buildSyntheticOpportunities(curatedOpportunities.length, SEED_OPPORTUNITY_TOTAL)
+	...buildSyntheticOpportunities(curatedOpportunities.length, SEED_OPPORTUNITY_TOTAL),
+	...scenarioOpportunities
 ];
 
 interface SeedCatalogItem {
@@ -858,6 +1439,21 @@ async function main() {
 		});
 	}
 
+	// Email → {id, name} lookup, used to resolve mailbox owners, assignees, dismissers,
+	// notification recipients and timeline actors when materializing scenario opps.
+	const usersByEmail = new Map<string, { id: string; name: string | null }>();
+	for (const user of users) {
+		const u = await prisma.user.findUniqueOrThrow({ where: { email: user.email } });
+		usersByEmail.set(user.email, { id: u.id, name: u.name });
+	}
+	const userId = (email: string): string => {
+		const u = usersByEmail.get(email);
+		if (!u) {
+			throw new Error(`Seed misconfiguration: no user ${email}`);
+		}
+		return u.id;
+	};
+
 	for (const account of emailAccounts) {
 		const owner = await prisma.user.findUniqueOrThrow({ where: { email: account.ownerEmail } });
 		await prisma.emailAccount.upsert({
@@ -884,15 +1480,23 @@ async function main() {
 	}
 
 	for (const opp of opportunities) {
-		const owner = await prisma.user.findUniqueOrThrow({
-			where: { email: opp.organizationId === ORG_ACME ? 'selami1992@gmail.com' : 'bart@offertum.dev' }
-		});
 		const account = emailAccounts.find(a => a.id === opp.emailAccountId);
 		if (!account) {
 			throw new Error(
 				`Seed misconfiguration: no email account ${opp.emailAccountId} for opp ${opp.opportunityId}`
 			);
 		}
+		const mailboxOwner = usersByEmail.get(account.ownerEmail);
+		if (!mailboxOwner) {
+			throw new Error(`Seed misconfiguration: no user ${account.ownerEmail} for mailbox ${account.id}`);
+		}
+		// Assignee defaults to the mailbox owner; `null` = unassigned; a specific email overrides.
+		const assigneeId =
+			opp.assignedToEmail === null ? null : opp.assignedToEmail ? userId(opp.assignedToEmail) : mailboxOwner.id;
+		const oppNum = parseInt(opp.opportunityId.slice(9, 13), 10);
+		const dismissedAt = opp.dismiss ? daysAgo(opp.dismiss.daysAgo) : null;
+		const dismissReason = opp.dismiss ? opp.dismiss.reason : null;
+		const dismissedById = opp.dismiss ? userId(opp.dismiss.byEmail) : null;
 
 		await prisma.rawMessage.upsert({
 			where: { id: opp.rawMessageId },
@@ -935,7 +1539,13 @@ async function main() {
 				customerDeadline: opp.deadlineDaysFromNow !== null ? daysFromNow(opp.deadlineDaysFromNow) : null,
 				customerAppointment:
 					opp.appointmentDaysFromNow !== null ? daysFromNow(opp.appointmentDaysFromNow) : null,
-				assignedToUserId: owner.id
+				assignedToUserId: assigneeId,
+				dismissedAt,
+				dismissReason,
+				dismissedById,
+				// Backfill on re-seed too (originating = latest customer message). Thread
+				// scenarios bump this forward to the newest reply in the thread block below.
+				latestCustomerRawMessageId: opp.rawMessageId
 			},
 			create: {
 				id: opp.opportunityId,
@@ -955,7 +1565,13 @@ async function main() {
 				customerAppointment:
 					opp.appointmentDaysFromNow !== null ? daysFromNow(opp.appointmentDaysFromNow) : null,
 				deliverableHints: opp.deliverableHints,
-				assignedToUserId: owner.id,
+				assignedToUserId: assigneeId,
+				dismissedAt,
+				dismissReason,
+				dismissedById,
+				// Mirror production: the originating message is the latest customer message at
+				// creation. Thread scenarios bump this forward to the newest reply below.
+				latestCustomerRawMessageId: opp.rawMessageId,
 				createdAt: daysAgo(opp.internalDateDaysAgo)
 			}
 		});
@@ -980,13 +1596,233 @@ async function main() {
 					organizationId: opp.organizationId,
 					opportunityId: opp.opportunityId,
 					mailboxEmail: account.mailboxEmail,
-					mailboxOwnerUserId: owner.id,
-					mailboxOwnerName: owner.name,
+					mailboxOwnerUserId: mailboxOwner.id,
+					mailboxOwnerName: mailboxOwner.name,
 					originatingRawMessageId: opp.rawMessageId,
 					originatingInternalDate: receivedAt.toISOString()
 				}
 			}
 		});
+
+		// ── Quote draft + line items + PDF version history ──
+		let quoteDraftId: string | null = null;
+		const pdfIds: string[] = [];
+		if (opp.quote) {
+			quoteDraftId = entityId('66666666', oppNum, 1);
+			const q = opp.quote;
+			await prisma.quoteDraft.upsert({
+				where: { id: quoteDraftId },
+				update: {},
+				create: {
+					id: quoteDraftId,
+					organizationId: opp.organizationId,
+					opportunityId: opp.opportunityId,
+					status: q.status,
+					generationContext: { seed: true, requestType: opp.requestType },
+					sentAt: q.status === QuoteDraftStatus.SENT && q.sentDaysAgo != null ? daysAgo(q.sentDaysAgo) : null,
+					validUntil: q.validUntilDaysFromNow != null ? daysFromNow(q.validUntilDaysFromNow) : null,
+					createdAt: daysAgo(opp.internalDateDaysAgo)
+				}
+			});
+			for (let li = 0; li < q.lines.length; li++) {
+				const line = q.lines[li];
+				const lineId = entityId('6c6c6c6c', oppNum, li + 1);
+				await prisma.quoteLineItem.upsert({
+					where: { id: lineId },
+					update: {},
+					create: {
+						id: lineId,
+						quoteDraftId,
+						position: li,
+						description: line.description,
+						unit: line.unit,
+						quantity: line.quantity as unknown as Prisma.Decimal,
+						unitPriceEur: line.unitPriceEur == null ? null : (line.unitPriceEur as unknown as Prisma.Decimal),
+						vatRate: line.vatRate ?? 21,
+						vatReverseCharged: line.vatReverseCharged ?? false,
+						source: line.source,
+						note: line.note ?? null
+					}
+				});
+			}
+			const pdfFilenames = q.pdfFilenames ?? [];
+			for (let pi = 0; pi < pdfFilenames.length; pi++) {
+				const pdfId = entityId('6d6d6d6d', oppNum, pi + 1);
+				pdfIds.push(pdfId);
+				await prisma.quotePdf.upsert({
+					where: { id: pdfId },
+					update: {},
+					create: {
+						id: pdfId,
+						organizationId: opp.organizationId,
+						opportunityId: opp.opportunityId,
+						quoteDraftId,
+						filename: pdfFilenames[pi],
+						contentType: 'application/pdf',
+						sizeBytes: 48_000 + pi * 1500,
+						storageKey: `quote-pdfs/${opp.opportunityId}/${pdfId}-${pdfFilenames[pi]}`,
+						storageDriver: 'local',
+						createdAt: daysAgo(Math.max(0, opp.internalDateDaysAgo - pi))
+					}
+				});
+			}
+		}
+
+		// ── Reply drafts (1:N) + their attachments (owner uploads + quote-PDF copies) ──
+		if (opp.drafts) {
+			for (let di = 0; di < opp.drafts.length; di++) {
+				const d = opp.drafts[di];
+				const draftId = entityId('44444444', oppNum, di + 1);
+				await prisma.replyDraft.upsert({
+					where: { id: draftId },
+					update: {},
+					create: {
+						id: draftId,
+						opportunityId: opp.opportunityId,
+						originalBody: d.body,
+						body: d.body,
+						status: d.status,
+						kind: d.kind ?? ReplyDraftKind.REPLY,
+						wasEditedByUser: d.wasEditedByUser ?? d.status === ReplyDraftStatus.EDITED,
+						sentAt: d.status === ReplyDraftStatus.SENT && d.sentDaysAgo != null ? daysAgo(d.sentDaysAgo) : null,
+						createdAt: daysAgo(d.createdDaysAgo)
+					}
+				});
+				for (let ai = 0; ai < (d.attachments?.length ?? 0); ai++) {
+					const a = d.attachments![ai];
+					const attId = entityId('4a4a4a4a', oppNum, di * 10 + ai + 1);
+					const quotePdfId = a.isQuotePdf && pdfIds.length > 0 ? pdfIds[pdfIds.length - 1] : null;
+					await prisma.replyDraftAttachment.upsert({
+						where: { id: attId },
+						update: {},
+						create: {
+							id: attId,
+							replyDraftId: draftId,
+							filename: a.filename,
+							contentType: a.contentType,
+							sizeBytes: a.sizeBytes,
+							storageKey: `${draftId}/${attId}-${a.filename}`,
+							storageDriver: 'local',
+							quotePdfId
+						}
+					});
+				}
+			}
+		}
+
+		// ── Smart-expiry suggestion (W13) ──
+		if (opp.expiryAction && quoteDraftId) {
+			const ea = opp.expiryAction;
+			const eaId = entityId('e7e7e7e7', oppNum, 1);
+			await prisma.expiryAction.upsert({
+				where: { id: eaId },
+				update: {},
+				create: {
+					id: eaId,
+					organizationId: opp.organizationId,
+					opportunityId: opp.opportunityId,
+					quoteDraftId,
+					validUntil: daysFromNow(ea.validUntilDaysFromNow),
+					status: ea.status,
+					recommendedAction: ea.recommendedAction,
+					suggestedCopy: ea.suggestedCopy,
+					takenAction: ea.takenAction ?? null,
+					takenById: ea.takenByEmail ? userId(ea.takenByEmail) : null,
+					createdAt: daysAgo(2)
+				}
+			});
+		}
+
+		// ── Thread messages (customer replies + own-org outbound) ──
+		if (opp.threadMessages) {
+			let latestCustomerId: string | null = null;
+			let latestCustomerDays = Number.POSITIVE_INFINITY;
+			for (let ti = 0; ti < opp.threadMessages.length; ti++) {
+				const tm = opp.threadMessages[ti];
+				const msgId = entityId('2a2a2a2a', oppNum, ti + 1);
+				await prisma.rawMessage.upsert({
+					where: { id: msgId },
+					update: {},
+					create: {
+						id: msgId,
+						emailAccountId: opp.emailAccountId,
+						organizationId: opp.organizationId,
+						providerMessageId: `seed-thread-${msgId}`,
+						threadId: `seed-thread-${opp.rawMessageId}`,
+						internalDate: daysAgo(tm.daysAgo),
+						subject: `Re: ${opp.subject}`,
+						fromEmail: tm.fromEmail,
+						fromName: tm.fromName,
+						raw: gmailTextPayload(tm.bodyText),
+						isQuoteRequest: tm.fromCustomer,
+						classifiedAt: daysAgo(tm.daysAgo),
+						wasDetectedAsCloser: tm.wasDetectedAsCloser ?? false,
+						opportunityId: opp.opportunityId
+					}
+				});
+				if (tm.fromCustomer && tm.daysAgo < latestCustomerDays) {
+					latestCustomerDays = tm.daysAgo;
+					latestCustomerId = msgId;
+				}
+			}
+			if (latestCustomerId) {
+				await prisma.opportunity.update({
+					where: { id: opp.opportunityId },
+					data: { latestCustomerRawMessageId: latestCustomerId }
+				});
+			}
+		}
+
+		// ── In-app notifications (bell) ──
+		if (opp.notifications) {
+			for (let ni = 0; ni < opp.notifications.length; ni++) {
+				const n = opp.notifications[ni];
+				const notifId = entityId('77777777', oppNum, ni + 1);
+				await prisma.notification.upsert({
+					where: { id: notifId },
+					update: {},
+					create: {
+						id: notifId,
+						userId: assigneeId ?? mailboxOwner.id,
+						organizationId: opp.organizationId,
+						eventType: n.eventType,
+						title: n.title,
+						body: n.body,
+						link: `/opportunities/${opp.opportunityId}`,
+						metadata: { opportunityId: opp.opportunityId, customerName: opp.customerName },
+						readAt: n.read ? daysAgo(n.daysAgo) : null,
+						createdAt: daysAgo(n.daysAgo)
+					}
+				});
+			}
+		}
+
+		// ── Extra timeline audit-log rows (status changes, assignment, auto-cold) ──
+		if (opp.timeline) {
+			for (let tli = 0; tli < opp.timeline.length; tli++) {
+				const tl = opp.timeline[tli];
+				const logId = entityId('5a5a5a5a', oppNum, tli + 1);
+				await prisma.log.upsert({
+					where: { id: logId },
+					update: {},
+					create: {
+						id: logId,
+						level: LogLevel.INFO,
+						message: `Opportunity ${opp.opportunityId} ${tl.action}`,
+						context: 'OpportunitiesService',
+						organizationId: opp.organizationId,
+						createdAt: daysAgo(tl.daysAgo),
+						metadata: {
+							action: tl.action,
+							organizationId: opp.organizationId,
+							opportunityId: opp.opportunityId,
+							actorUserId: tl.actorEmail ? userId(tl.actorEmail) : null,
+							...(tl.extra ?? {})
+						}
+					}
+				});
+			}
+		}
 	}
 
 	for (const item of catalogItems) {
@@ -1068,6 +1904,59 @@ async function main() {
 		console.log(`  ${org.name} — ${count} opportunit${count === 1 ? 'y' : 'ies'}`);
 	}
 	console.log(`  Total: ${opportunities.length}`);
+
+	// Status + dismiss/assignment breakdown so a reseed shows the funnel is populated.
+	const byStatus = opportunities.reduce<Record<string, number>>((acc, o) => {
+		acc[o.status] = (acc[o.status] ?? 0) + 1;
+		return acc;
+	}, {});
+	console.log(
+		`  By status: ${Object.entries(byStatus)
+			.map(([s, n]) => `${s}=${n}`)
+			.join(', ')}`
+	);
+	const dismissed = opportunities.filter(o => o.dismiss);
+	const dismissByReason = dismissed.reduce<Record<string, number>>((acc, o) => {
+		acc[o.dismiss!.reason] = (acc[o.dismiss!.reason] ?? 0) + 1;
+		return acc;
+	}, {});
+	console.log(
+		`  Dismissed: ${dismissed.length}${
+			dismissed.length
+				? ` (${Object.entries(dismissByReason)
+						.map(([r, n]) => `${r}=${n}`)
+						.join(', ')})`
+				: ''
+		} · Unassigned: ${opportunities.filter(o => o.assignedToEmail === null).length}`
+	);
+
+	// Related scenario records — counted from the specs `main()` materialized above.
+	const drafts = opportunities.flatMap(o => o.drafts ?? []);
+	const quotes = opportunities.flatMap(o => (o.quote ? [o.quote] : []));
+	const lineItems = quotes.reduce((n, q) => n + q.lines.length, 0);
+	const pdfs = quotes.reduce((n, q) => n + (q.pdfFilenames?.length ?? 0), 0);
+	const attachments = drafts.reduce((n, d) => n + (d.attachments?.length ?? 0), 0);
+	const expiry = opportunities.filter(o => o.expiryAction);
+	const threadMsgs = opportunities.reduce((n, o) => n + (o.threadMessages?.length ?? 0), 0);
+	const notifs = opportunities.reduce((n, o) => n + (o.notifications?.length ?? 0), 0);
+	const timelineLogs = opportunities.reduce((n, o) => n + (o.timeline?.length ?? 0), 0);
+
+	console.log('\nRelated scenario records:');
+	console.log(
+		`  Reply drafts:      ${drafts.length} (sent ${drafts.filter(d => d.status === ReplyDraftStatus.SENT).length}, pending ${drafts.filter(d => d.status === ReplyDraftStatus.PENDING_APPROVAL).length}, edited ${drafts.filter(d => d.status === ReplyDraftStatus.EDITED).length}, check-in ${drafts.filter(d => d.kind === ReplyDraftKind.CHECK_IN).length})`
+	);
+	console.log(
+		`  Quote drafts:      ${quotes.length} (sent ${quotes.filter(q => q.status === QuoteDraftStatus.SENT).length}, draft ${quotes.filter(q => q.status === QuoteDraftStatus.DRAFT).length})`
+	);
+	console.log(`  Quote line items:  ${lineItems}`);
+	console.log(`  Quote PDFs:        ${pdfs}`);
+	console.log(`  Draft attachments: ${attachments}`);
+	console.log(
+		`  Expiry actions:    ${expiry.length} (suggested ${expiry.filter(o => o.expiryAction!.status === ExpiryActionStatus.SUGGESTED).length}, taken ${expiry.filter(o => o.expiryAction!.status === ExpiryActionStatus.TAKEN).length}, dismissed ${expiry.filter(o => o.expiryAction!.status === ExpiryActionStatus.DISMISSED).length})`
+	);
+	console.log(`  Thread messages:   ${threadMsgs}`);
+	console.log(`  Notifications:     ${notifs}`);
+	console.log(`  Timeline logs:     ${timelineLogs}`);
 
 	console.log('\nCatalog items:');
 	for (const org of orgs) {

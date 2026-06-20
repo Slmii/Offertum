@@ -47,7 +47,7 @@ export function EmptyState({ isEntitled, isOwner }: { isEntitled: boolean; isOwn
 					<Button
 						component={Link}
 						to='/settings/email'
-						variant='outlined'
+						variant='contained'
 						size='small'
 						endIcon={<AppIcon name='arrow-right' size='small' />}
 					>

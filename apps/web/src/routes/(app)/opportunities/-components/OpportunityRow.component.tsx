@@ -1,4 +1,4 @@
-import { AppIcon } from '@/components/AppIcon.component';
+import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Pill } from '@/components/Pill.component';
 import { PillSelect } from '@/components/PillSelect.component';
 import { Body, BodySmall } from '@/components/Text.component';
@@ -19,9 +19,14 @@ import MenuItem from '@mui/material/MenuItem';
 import { useTheme } from '@mui/material/styles';
 import type { Opportunity } from '@offertum/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { DismissDialog } from './DismissDialog.component';
 import { LastActivityBadge } from './LastActivityBadge.component';
+
+// Fixed width of the right meta column (arrival time ⇆ hover affordance) — the same on every
+// row so the timestamps + kebab line up under each other. Sized for the longest affordance
+// ("Beoordeel follow-up →") so the absolutely-positioned hover label never overflows.
+const META_COLUMN_WIDTH = 172;
 
 /**
  * A single opportunity row in the list. Whole card navigates to the detail; interactive bits
@@ -38,8 +43,21 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 	const isNew = (status === 'new' || pendingCheckIn) && !isDismissed;
 	const affordance = isNew ? (pendingCheckIn ? 'Beoordeel follow-up' : 'Bekijk concept') : 'Open';
 	const deadlineLabel = opportunity.customerDeadline ? toReadableDate(opportunity.customerDeadline) : null;
+	const appointmentLabel = opportunity.customerAppointment ? toReadableDate(opportunity.customerAppointment) : null;
 	const arrivedLabel = toReadableTimestamp(opportunity.internalDate);
 	const customerLabel = opportunityCustomerLabel(opportunity);
+	// Sub-line meta chips: address (truncates), deadline, appointment. Built as a list so a
+	// row can carry any combination (the `hasAppointment` list filter implies an appointment cue).
+	const metaParts: { icon: AppIconName; text: string; truncate?: boolean }[] = [];
+	if (opportunity.address) {
+		metaParts.push({ icon: 'map-pin', text: opportunity.address, truncate: true });
+	}
+	if (deadlineLabel) {
+		metaParts.push({ icon: 'calendar', text: deadlineLabel });
+	}
+	if (appointmentLabel) {
+		metaParts.push({ icon: 'clock', text: appointmentLabel });
+	}
 	const updateStatus = useUpdateOpportunityStatus();
 	const undismiss = useUndismissOpportunity();
 	const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -123,9 +141,9 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 				/>
 
 				{/* Fixed-width status column so every customer name lines up under each other,
-				    regardless of the status label's length. Dismissed rows show a wider pill
-				    and may overflow this width gracefully (flexShrink keeps the row intact). */}
-				<Box sx={{ flexShrink: 0, width: 140 }} onClick={e => e.stopPropagation()}>
+				    regardless of the status label's length. Dismissed rows (a separate view) show a
+				    wider "Afgewezen · reason" pill and size naturally so it can't overlap the name. */}
+				<Box sx={{ flexShrink: 0, width: isDismissed ? 'auto' : 140 }} onClick={e => e.stopPropagation()}>
 					{isDismissed && opportunity.dismissReason ? (
 						<Pill tone='lost'>
 							Afgewezen · {OPPORTUNITY_DISMISS_REASON_LABELS_NL[opportunity.dismissReason]}
@@ -165,7 +183,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							{opportunity.requestType}
 						</BodySmall>
 					</Box>
-					{(opportunity.address || deadlineLabel) && (
+					{metaParts.length > 0 && (
 						<Box
 							sx={{
 								display: 'flex',
@@ -177,31 +195,32 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 								overflow: 'hidden'
 							}}
 						>
-							{opportunity.address && (
-								<Box
-									component='span'
-									sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}
-								>
-									<AppIcon name='map-pin' size='small' />
-									<Box component='span' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-										{opportunity.address}
+							{metaParts.map((part, i) => (
+								<Fragment key={part.icon}>
+									{i > 0 && (
+										<Box component='span' sx={{ color: c.lineStrong }}>
+											·
+										</Box>
+									)}
+									<Box
+										component='span'
+										sx={{
+											display: 'inline-flex',
+											alignItems: 'center',
+											gap: 0.5,
+											...(part.truncate ? { minWidth: 0 } : { flexShrink: 0 })
+										}}
+									>
+										<AppIcon name={part.icon} size='small' />
+										<Box
+											component='span'
+											sx={part.truncate ? { overflow: 'hidden', textOverflow: 'ellipsis' } : undefined}
+										>
+											{part.text}
+										</Box>
 									</Box>
-								</Box>
-							)}
-							{opportunity.address && deadlineLabel && (
-								<Box component='span' sx={{ color: c.lineStrong }}>
-									·
-								</Box>
-							)}
-							{deadlineLabel && (
-								<Box
-									component='span'
-									sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}
-								>
-									<AppIcon name='calendar' size='small' />
-									<span>{deadlineLabel}</span>
-								</Box>
-							)}
+								</Fragment>
+							))}
 						</Box>
 					)}
 					{opportunity.subject && (
@@ -276,7 +295,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					sx={{
 						flexShrink: 0,
 						position: 'relative',
-						minWidth: 110,
+						width: META_COLUMN_WIDTH,
 						textAlign: 'right',
 						fontSize: 12,
 						color: c.ink4

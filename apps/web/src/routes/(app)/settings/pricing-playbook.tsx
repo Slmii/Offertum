@@ -4,7 +4,7 @@ import { Dialog } from '@/components/Dialog.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
 import { BodySmall, H2, H3, Overline } from '@/components/Text.component';

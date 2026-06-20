@@ -27,7 +27,7 @@ function BillingSuccessPage() {
 	}, []);
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
+		<Container maxWidth='sm' sx={{ py: 6 }}>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				{sync.isPending && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

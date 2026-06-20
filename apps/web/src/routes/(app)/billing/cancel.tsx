@@ -13,7 +13,7 @@ function BillingCancelPage() {
 	const navigate = useNavigate();
 
 	return (
-		<Container maxWidth='sm' sx={{ py: 8 }}>
+		<Container maxWidth='sm' sx={{ py: 6 }}>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				<H1 sx={{ mb: 1 }}>Checkout canceled</H1>
 				<Body color='text.secondary' sx={{ mb: 4 }}>

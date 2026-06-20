@@ -1,5 +1,5 @@
 import { Banner } from '@/components/Banner.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SubscribeCta } from '@/components/SubscribeCta.component';
 import { BodySmall, H3 } from '@/components/Text.component';
 import { LockGlyph } from '@/components/UpsellTeaser.component';

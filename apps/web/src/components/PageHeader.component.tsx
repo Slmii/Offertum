@@ -23,7 +23,7 @@ export function PageHeader({ title, caption, actions, disableMargin }: PageHeade
 				mb: disableMargin ? 0 : 3
 			}}
 		>
-			<Stack useFlexGap spacing={2}>
+			<Stack useFlexGap spacing={1}>
 				<H1>{title}</H1>
 				{caption && <Body sx={{ color: tokens.color.ink3 }}>{caption}</Body>}
 			</Stack>

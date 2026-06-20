@@ -2,7 +2,7 @@ import { AppIcon } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
 import { Form } from '@/components/Form/Form.component';
 import { StandaloneSwitch, Switch } from '@/components/Form/Switch/Switch.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Body, BodySmall } from '@/components/Text.component';
 import { sessionQueryOptions } from '@/lib/queries/auth.queries';

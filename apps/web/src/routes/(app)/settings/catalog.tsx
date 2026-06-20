@@ -4,7 +4,7 @@ import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
-import { PageHeader } from '@/components/PageContainer.component';
+import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, Label } from '@/components/Text.component';
 import {
