@@ -16,8 +16,10 @@ export function LastActivityBadge({ lastActivity }: { lastActivity: Opportunity[
 	}
 
 	const c = tokens.color;
+	// customer reply → reply arrow; Offertum/system → sparkles; owner edit → pencil (edited by).
 	const icon =
-		lastActivity.kind === 'customer' ? 'corner-up-left' : lastActivity.kind === 'system' ? 'sparkles' : 'user';
+		lastActivity.kind === 'customer' ? 'corner-up-left' : lastActivity.kind === 'system' ? 'sparkles' : 'pen-line';
+
 	const iconColor = lastActivity.kind === 'system' ? c.accent[500] : c.ink4;
 	return (
 		<Box

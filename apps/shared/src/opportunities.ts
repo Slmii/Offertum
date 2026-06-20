@@ -62,6 +62,12 @@ export interface Opportunity {
 	 */
 	assignedToUserId: string | null;
 	/**
+	 * Display name (or email) of the assignee, resolved on the list endpoint so the row
+	 * can show a "Toegewezen aan X" chip without a per-row lookup. `null` when unassigned.
+	 * Distinct from `lastActivity` (who last acted) — this is who currently owns the opp.
+	 */
+	assignedToName: string | null;
+	/**
 	 *  follow-up — ISO timestamp the reply draft was sent at via Offertum, or `null`
 	 * when no reply has been sent (no draft yet, or draft is still pending / edited).
 	 * Surfaces on the LIST shape so the dismiss dialog can warn "you already replied;

@@ -4,11 +4,13 @@ import { Body, BodySmall } from '@/components/Text.component';
 import { opportunitiesListQueryOptions } from '@/lib/queries/opportunities.queries';
 import { opportunityCustomerLabel } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import { useTheme } from '@mui/material/styles';
 import type { Opportunity } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
 
 // Query for the opps with an auto follow-up (check-in) draft awaiting review — independent of
 // the page's current filters. Prefetch this in the route loader so the banner doesn't waterfall.
@@ -18,6 +20,32 @@ export const pendingFollowUpsQueryOptions = () =>
 // At most this many rows render inline; the rest collapse into a "Toon alle …" button so the
 // fixed page header stays compact.
 const MAX_VISIBLE = 2;
+
+// Persisted set of dismissed check-in "signatures". A signature is per-check-in (opp id + the
+// check-in draft timestamp), so dismissing hides the CURRENT batch but a new or regenerated
+// follow-up produces a fresh signature → the banner returns.
+const DISMISS_STORAGE_KEY = 'offertum.pendingFollowups.dismissed';
+
+// Identifies one pending check-in; `lastActivity.at` is the check-in draft's createdAt for a
+// pending-check-in opp, so it changes when a new follow-up is drafted.
+const checkInSignature = (op: Opportunity) => `${op.id}:${op.lastActivity?.at ?? ''}`;
+
+function readDismissed(): Set<string> {
+	try {
+		const raw = localStorage.getItem(DISMISS_STORAGE_KEY);
+		return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+	} catch {
+		return new Set();
+	}
+}
+
+function writeDismissed(signatures: string[]): void {
+	try {
+		localStorage.setItem(DISMISS_STORAGE_KEY, JSON.stringify(signatures));
+	} catch {
+		// localStorage unavailable (private mode / SSR) — dismissal just won't persist.
+	}
+}
 
 /**
  * Review banner for pending auto follow-ups — Offertum-drafted check-ins for opportunities that
@@ -29,8 +57,26 @@ export function PendingFollowUpsBanner() {
 	const navigate = useNavigate();
 	const { data } = useSuspenseQuery(pendingFollowUpsQueryOptions());
 
+	// Read the persisted dismissals after mount (kept out of the initializer so SSR + the first
+	// client render agree — same pattern as the app shell).
+	const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setDismissed(readDismissed());
+	}, []);
+
 	const opps = data.opportunities;
-	if (opps.length === 0) {
+	const signatures = opps.map(checkInSignature);
+	// Show while there's at least one pending check-in the user hasn't dismissed yet.
+	const hasUndismissed = signatures.some(sig => !dismissed.has(sig));
+
+	const onDismiss = () => {
+		// Snapshot exactly the current batch — drops stale signatures and keeps the set bounded.
+		setDismissed(new Set(signatures));
+		writeDismissed(signatures);
+	};
+
+	if (opps.length === 0 || !hasUndismissed) {
 		return null;
 	}
 
@@ -63,7 +109,7 @@ export function PendingFollowUpsBanner() {
 				>
 					<AppIcon name='sparkles' size='small' />
 				</Box>
-				<Box sx={{ minWidth: 0 }}>
+				<Box sx={{ minWidth: 0, flex: 1 }}>
 					<Body fontWeight='bold' sx={{ color: '#fff' }}>
 						{title}
 					</Body>
@@ -71,6 +117,20 @@ export function PendingFollowUpsBanner() {
 						Offertum heeft concepten klaarstaan voor klanten die stil zijn geworden.
 					</BodySmall>
 				</Box>
+				<IconButton
+					aria-label='Verberg tot een nieuwe follow-up'
+					onClick={onDismiss}
+					size='small'
+					sx={{
+						color: '#fff',
+						flexShrink: 0,
+						alignSelf: 'flex-start',
+						mr: -0.5,
+						'&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.16)' }
+					}}
+				>
+					<AppIcon name='x' size='small' />
+				</IconButton>
 			</FlowingGradient>
 
 			{visible.map(op => (

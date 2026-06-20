@@ -67,7 +67,7 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
                   claude_args: |
                       --model claude-sonnet-4-6
-                      --max-turns 30
+                      --max-turns 60
                       --allowedTools "Read,Glob,Grep,Bash(git:*),Bash(pnpm:*),Bash(gh:*),Bash(node:*)"
                   prompt: |
                       You are a second, independent reviewer for pull request

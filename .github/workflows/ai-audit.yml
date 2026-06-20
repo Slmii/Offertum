@@ -121,7 +121,7 @@ jobs:
                   # claude-opus-4-8 for deeper reviews at higher cost.
                   claude_args: |
                       --model claude-sonnet-4-6
-                      --max-turns 40
+                      --max-turns 80
                       --allowedTools "Edit,Read,Write,Glob,Grep,Bash(git:*),Bash(pnpm:*),Bash(gh:*),Bash(node:*)"
                   prompt: |
                       You are running as an automated post-push code audit on the `main` branch of

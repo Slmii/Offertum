@@ -242,6 +242,34 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 
 				<LastActivityBadge lastActivity={opportunity.lastActivity} />
 
+				{!isDismissed && opportunity.assignedToName && (
+					<Box
+						component='span'
+						title={`Toegewezen aan ${opportunity.assignedToName}`}
+						sx={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 0.5,
+							flexShrink: 0,
+							maxWidth: 150,
+							px: '7px',
+							py: '2px',
+							backgroundColor: c.paper2,
+							border: `1px solid ${c.line}`,
+							color: c.ink3,
+							fontSize: 11,
+							fontWeight: 'medium',
+							borderRadius: `${tokens.radius.sm}px`,
+							whiteSpace: 'nowrap'
+						}}
+					>
+						<AppIcon name='user' size='small' />
+						<Box component='span' sx={{ color: c.ink2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+							{opportunity.assignedToName}
+						</Box>
+					</Box>
+				)}
+
 				{opportunity.customerReplyCount > 0 && (
 					<Box
 						component='span'

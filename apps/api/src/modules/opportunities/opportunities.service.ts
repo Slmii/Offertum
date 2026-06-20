@@ -244,6 +244,12 @@ export class OpportunitiesService {
 		for (const e of editorMap.values()) {
 			actorIds.add(e.actorUserId);
 		}
+		// Also resolve assignee names so each row can show a "Toegewezen aan X" chip.
+		for (const row of page) {
+			if (row.assignedToUserId) {
+				actorIds.add(row.assignedToUserId);
+			}
+		}
 		const actorLabels =
 			actorIds.size > 0
 				? await this.repository.findUserDisplayLabels(Array.from(actorIds))
@@ -259,6 +265,9 @@ export class OpportunitiesService {
 					m => m.fromEmail === null || !orgEmailAddresses.has(m.fromEmail.toLowerCase())
 				);
 				dto.customerReplyCount = customerMessages.length;
+
+				// Assignee chip — resolved name from the batched label map (null = unassigned).
+				dto.assignedToName = row.assignedToUserId ? (actorLabels.get(row.assignedToUserId) ?? null) : null;
 
 				// Pick the most recent of: owner edit (audit log), newest customer reply, and a
 				// pending Offertum check-in. Whichever timestamp is latest wins the badge.
@@ -1956,6 +1965,8 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
 		assignedToUserId: opportunity.assignedToUserId ?? null,
+		// Resolved by `list()` (it has the batched user-label lookup); defaults here.
+		assignedToName: null,
 		// `replyDrafts` is 1:N, ordered `createdAt DESC` by the include. Picking
 		// the *first* draft with a `sentAt` gives us the most-recent send, which is what
 		// the dismiss-dialog warning + the `dismissedAfterSend` audit flag care about.
@@ -2106,6 +2117,7 @@ function toOpportunityDetailResponseDto(
 		dismissReason: opportunity.dismissReason ? OPPORTUNITY_DISMISS_REASON_TO_WIRE[opportunity.dismissReason] : null,
 		dismissedByUserId: opportunity.dismissedById ?? null,
 		assignedToUserId: opportunity.assignedToUserId ?? null,
+		assignedToName: null,
 		// `replyDrafts` is 1:N. See the list mapper for the same `find` logic.
 		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
