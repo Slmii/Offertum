@@ -77,7 +77,8 @@ export const opportunityDetailQueryOptions = (id: string) =>
 		refetchInterval: query => {
 			const detail = query.state.data;
 			if (!detail) {
-				return 3_000;
+				// No data or error state — let TanStack Query's own retry handle recovery.
+				return false;
 			}
 			const awaitingDraft = detail.replyDraft === null && detail.dismissedAt === null;
 			return awaitingDraft ? 3_000 : false;
