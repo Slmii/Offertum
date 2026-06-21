@@ -77,8 +77,7 @@ export const opportunityDetailQueryOptions = (id: string) =>
 		refetchInterval: query => {
 			const detail = query.state.data;
 			if (!detail) {
-				// No data yet (loading) or errored — let TanStack Query's own retry
-				// handle recovery; don't start the draft-awaiting poll loop here.
+				// No data or error state — let TanStack Query's own retry handle recovery.
 				return false;
 			}
 			const awaitingDraft = detail.replyDraft === null && detail.dismissedAt === null;
