@@ -70,7 +70,18 @@ export const opportunityDetailQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: OpportunityKeys.detail(id),
 		queryFn: () => getOpportunityDetailServer({ data: { id } }),
-		staleTime: 5_000
+		staleTime: 5_000,
+		// Auto-poll while the initial reply draft is still being generated in the background
+		// (Inngest), so it appears without a manual refresh. Stops once a draft exists or the
+		// opp is dismissed (no draft is generated for dismissed opps).
+		refetchInterval: query => {
+			const detail = query.state.data;
+			if (!detail) {
+				return 3_000;
+			}
+			const awaitingDraft = detail.replyDraft === null && detail.dismissedAt === null;
+			return awaitingDraft ? 3_000 : false;
+		}
 	});
 
 /**
