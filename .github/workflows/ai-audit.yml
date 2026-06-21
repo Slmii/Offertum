@@ -195,3 +195,11 @@ jobs:
                       - **Remaining risks / assumptions / follow-ups** — anything not fixed, or needing a human.
 
                       The PR title MUST start with "AI Audit:" so it is clearly machine-generated.
+
+                      ## Final verdict (always print this last)
+                      End your run by printing EXACTLY ONE of these lines so the outcome is visible in
+                      the workflow log without opening the PR list:
+                          AUDIT VERDICT: NO_ISSUES — reviewed the range, nothing high-confidence to fix.
+                          AUDIT VERDICT: PR_OPENED <url> — opened a fix PR.
+                          AUDIT VERDICT: FAILED <reason> — found issues but could not open a PR (quote the exact error, e.g. gh/push failure).
+                      If `gh pr create` or `git push` fails, do NOT swallow it — print the FAILED line with the verbatim error.
