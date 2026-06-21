@@ -1,0 +1,27 @@
+name: Trigger Claude routine
+
+on:
+    push:
+        branches: [main]
+
+jobs:
+    trigger:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Fire routine
+              env:
+                  ROUTINE_TOKEN: ${{ secrets.CLAUDE_ROUTINE_TRIGGER_TOKEN }}
+                  # Passed via env (not inline ${{ }}) so values can't break the shell.
+                  GH_REPO: ${{ github.repository }}
+                  GH_REF: ${{ github.ref_name }}
+                  GH_SHA: ${{ github.sha }}
+                  GH_ACTOR: ${{ github.actor }}
+              run: |
+                  TEXT="Push to ${GH_REF} (${GH_SHA}) by ${GH_ACTOR} in ${GH_REPO}."
+                  curl --fail-with-body -sS -X POST \
+                    "https://api.anthropic.com/v1/claude_code/routines/trig_01YFSc7zHT2Nv8z4r8f4KQL4/fire" \
+                    -H "Authorization: Bearer $ROUTINE_TOKEN" \
+                    -H "anthropic-version: 2023-06-01" \
+                    -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"text\": \"$TEXT\"}"
