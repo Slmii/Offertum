@@ -7,6 +7,10 @@ on:
 jobs:
     trigger:
         runs-on: ubuntu-latest
+        # Don't re-fire the audit when a workflow-audit PR is merged into main — that push
+        # is the audit's own work coming back, and reviewing it again would loop. A merge
+        # commit reads "Merge pull request … from …/workflow-audit/…".
+        if: ${{ !contains(github.event.head_commit.message, 'workflow-audit/') }}
         steps:
             - name: Fire routine
               env:
