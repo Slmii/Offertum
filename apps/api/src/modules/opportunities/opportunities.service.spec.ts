@@ -395,6 +395,70 @@ describe('OpportunitiesService.list pagination', () => {
 		expect(list.opportunities).toHaveLength(1);
 		expect(list.nextCursor).toBeNull();
 	});
+
+	it('populates assignedToName from batched user label lookup', async () => {
+		const assigned: OpportunityRecord = {
+			...makeOpportunityRecord(PrismaOpportunityStatus.NEW),
+			assignedToUserId: 'user-1'
+		};
+		const repository = makeRepository({
+			listByOrganization: jest.fn().mockReturnValue(Promise.resolve([assigned])),
+			findUserDisplayLabels: jest
+				.fn()
+				.mockReturnValue(Promise.resolve(new Map([['user-1', 'Jan de Vries']])))
+		});
+		const service = makeService({ repository });
+
+		const list = await service.list('org-1', {
+			cursor: null,
+			limit: 25,
+			status: null,
+			search: null,
+			dismissed: null,
+			owner: null,
+			assignee: null,
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
+			requestingUserId: null
+		});
+
+		expect(list.opportunities[0]?.assignedToName).toBe('Jan de Vries');
+		expect(repository.findUserDisplayLabels).toHaveBeenCalledWith(['user-1']);
+	});
+
+	it('sets assignedToName to null when assignee is not found in label map', async () => {
+		const assigned: OpportunityRecord = {
+			...makeOpportunityRecord(PrismaOpportunityStatus.NEW),
+			assignedToUserId: 'user-deleted'
+		};
+		const repository = makeRepository({
+			listByOrganization: jest.fn().mockReturnValue(Promise.resolve([assigned])),
+			// Label map does not contain the assignee (e.g. user was deleted mid-flight).
+			findUserDisplayLabels: jest.fn().mockReturnValue(Promise.resolve(new Map()))
+		});
+		const service = makeService({ repository });
+
+		const list = await service.list('org-1', {
+			cursor: null,
+			limit: 25,
+			status: null,
+			search: null,
+			dismissed: null,
+			owner: null,
+			assignee: null,
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
+			requestingUserId: null
+		});
+
+		expect(list.opportunities[0]?.assignedToName).toBeNull();
+	});
 });
 
 describe('OpportunitiesService.updateStatus', () => {
