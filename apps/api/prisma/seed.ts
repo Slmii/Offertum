@@ -1693,7 +1693,10 @@ function escapePdfText(text: string): string {
 }
 
 // Minimal but valid single-page PDF (with a computed xref table) so the dummy
-// actually opens in a viewer.
+// actually opens in a viewer. All byte-length calculations use 'latin1' to stay
+// consistent with the final Buffer.from(..., 'latin1') encoding — UTF-8's default
+// would count multi-byte characters (e.g. accented letters) as more bytes than
+// latin1 does, producing wrong /Length and corrupt xref offsets.
 function dummyPdf(lines: string[]): Buffer {
 	const content = lines
 		.map((line, i) => `BT /F1 ${i === 0 ? 20 : 12} Tf 60 ${780 - i * 26} Td (${escapePdfText(line)}) Tj ET`)
@@ -1702,16 +1705,16 @@ function dummyPdf(lines: string[]): Buffer {
 		'<< /Type /Catalog /Pages 2 0 R >>',
 		'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
 		'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-		`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+		`<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`,
 		'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
 	];
 	let body = '%PDF-1.4\n';
 	const offsets: number[] = [];
 	for (let i = 0; i < objects.length; i++) {
-		offsets.push(Buffer.byteLength(body));
+		offsets.push(Buffer.byteLength(body, 'latin1'));
 		body += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
 	}
-	const xrefStart = Buffer.byteLength(body);
+	const xrefStart = Buffer.byteLength(body, 'latin1');
 	let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
 	for (const off of offsets) {
 		xref += `${String(off).padStart(10, '0')} 00000 n \n`;
@@ -1732,7 +1735,7 @@ const DUMMY_PNG = Buffer.from(
 
 function dummyBytesFor(contentType: string, label: string): Buffer {
 	if (contentType === 'application/pdf') {
-		return dummyPdf(['Offertum — voorbeeldbijlage', label, '(dummy seed-bestand)']);
+		return dummyPdf(['Offertum - voorbeeldbijlage', label, '(dummy seed-bestand)']);
 	}
 	if (contentType === 'image/jpeg') {
 		return DUMMY_JPEG;
