@@ -69,7 +69,7 @@ function CalendarUpsell({ isOwner }: { isOwner: boolean }) {
 					</H3>
 				</Stack>
 
-				<BodySmall color='text.secondary'>
+				<BodySmall color='textSecondary'>
 					Met een abonnement synchroniseer je je offerte-deadlines, afspraken en verloopdatums automatisch met
 					de agenda op je telefoon (Apple/Google Agenda).
 				</BodySmall>

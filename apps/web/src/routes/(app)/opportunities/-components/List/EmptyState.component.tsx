@@ -101,7 +101,7 @@ function EmptyCard({
 
 				<Stack useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 					<H2 component='h2'>{title}</H2>
-					<BodySmall color='text.secondary' sx={{ maxWidth: 380, lineHeight: 1.55 }}>
+					<BodySmall color='textSecondary' sx={{ maxWidth: 380, lineHeight: 1.55 }}>
 						{subtitle}
 					</BodySmall>
 				</Stack>

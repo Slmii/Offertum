@@ -133,7 +133,7 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 						)}
 					</Box>
 
-					<BodySmall color='text.secondary' sx={{ mt: 3 }}>
+					<BodySmall color='textSecondary' sx={{ mt: 3 }}>
 						Betaal met kaart, iDEAL of SEPA-incasso. Maandelijks opzegbaar.
 					</BodySmall>
 				</Paper>
@@ -203,13 +203,13 @@ function StatusPanel({
 	return (
 		<Box>
 			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-				<Overline color='text.secondary'>Huidig abonnement</Overline>
+				<Overline color='textSecondary'>Huidig abonnement</Overline>
 				<Chip size='small' color={chip.color} label={chip.label} />
 			</Box>
 
 			<Body sx={{ mb: 0.5 }}>{primaryLine(state, endDate, isPaymentProcessing)}</Body>
 			{secondaryLine(state, isPaymentProcessing) && (
-				<BodySmall color='text.secondary'>{secondaryLine(state, isPaymentProcessing)}</BodySmall>
+				<BodySmall color='textSecondary'>{secondaryLine(state, isPaymentProcessing)}</BodySmall>
 			)}
 
 			<StripeCustomerIdRow customerId={MOCK_STRIPE_CUSTOMER_ID} />
@@ -233,7 +233,7 @@ function StatusPanel({
 			{paymentMethodBrand && paymentMethodLast4 && (
 				<>
 					<Divider sx={{ my: 2 }} />
-					<BodySmall color='text.secondary'>
+					<BodySmall color='textSecondary'>
 						Betaalmethode: {formatPaymentMethod(paymentMethodBrand)} eindigend op {paymentMethodLast4}
 					</BodySmall>
 				</>
@@ -262,10 +262,10 @@ function StripeCustomerIdRow({ customerId }: { customerId: string }) {
 
 	return (
 		<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
-			<BodySmall color='text.secondary' component='span'>
+			<BodySmall color='textSecondary' component='span'>
 				Stripe Customer ID:
 			</BodySmall>
-			<Mono color='text.secondary' sx={{ fontSize: 12 }}>
+			<Mono color='textSecondary' sx={{ fontSize: 12 }}>
 				{customerId}
 			</Mono>
 			<Button
@@ -347,15 +347,15 @@ function SeatsCard({ seats, state }: { seats: BillingStatus['seats']; state: Bil
 			</Box>
 
 			<Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mt: 1 }}>
-				<BodySmall color='text.secondary'>{seats.used} actief</BodySmall>
-				<BodySmall color='text.secondary' sx={{ textAlign: 'right' }}>
+				<BodySmall color='textSecondary'>{seats.used} actief</BodySmall>
+				<BodySmall color='textSecondary' sx={{ textAlign: 'right' }}>
 					{seats.included} zitplekken inbegrepen · {toReadableEuro(seats.overagePerSeatCents / 100)} per extra
 					zitplek
 				</BodySmall>
 			</Box>
 
 			{state === 'trialing' && (
-				<BodySmall color='text.secondary' sx={{ mt: 1.5 }}>
+				<BodySmall color='textSecondary' sx={{ mt: 1.5 }}>
 					Tijdens de proefperiode kun je maximaal {seats.included} zitplekken gebruiken. Abonneer om voorbij{' '}
 					{seats.included} zitplekken te groeien.
 				</BodySmall>
@@ -397,7 +397,7 @@ function NextInvoiceCard({ invoice }: { invoice: NextInvoice }) {
 				Volgende factuur
 			</H2>
 			<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-				<BodySmall color='text.secondary'>{toReadableDate(invoice.dueDateIso, 'D MMM YYYY')}</BodySmall>
+				<BodySmall color='textSecondary'>{toReadableDate(invoice.dueDateIso, 'D MMM YYYY')}</BodySmall>
 				<Box component='span' sx={{ fontSize: 22, fontWeight: 'bold', color: tokens.color.ink1 }}>
 					{toReadableEuro(invoice.totalCents / 100)}
 				</Box>
@@ -476,7 +476,7 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 					<H2 component='h2' sx={{ fontSize: 24 }}>
 						Ontgrendel Slimme prioritering
 					</H2>
-					<Body color='text.secondary' sx={{ mt: 1, maxWidth: 560 }}>
+					<Body color='textSecondary' sx={{ mt: 1, maxWidth: 560 }}>
 						Je gebruikt nu de basis van Offertum. Met een abonnement zet Offertum je belangrijkste aanvragen
 						vooraan en handelt het de opvolging voor je af — zodat geen enkele offerte stilletjes verloopt.
 					</Body>
@@ -514,7 +514,7 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 							<Box component='span' sx={{ fontSize: 22, fontWeight: 'bold', color: tokens.color.ink1 }}>
 								{toReadableEuro(status.seats.baseMonthlyPriceCents / 100)}
 							</Box>
-							<BodySmall color='text.secondary'>
+							<BodySmall color='textSecondary'>
 								/maand · {status.seats.included} zitplekken inbegrepen
 							</BodySmall>
 						</Box>
@@ -557,7 +557,7 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 								<H3 component='h3' sx={{ fontSize: 14 }}>
 									{feature.title}
 								</H3>
-								<BodySmall color='text.secondary' sx={{ mt: 0.25 }}>
+								<BodySmall color='textSecondary' sx={{ mt: 0.25 }}>
 									{feature.detail}
 								</BodySmall>
 							</Box>
@@ -570,7 +570,7 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 				<Box component='span' sx={{ color: tokens.color.ink4, display: 'inline-flex' }}>
 					<AppIcon name='shield-check' size='small' />
 				</Box>
-				<BodySmall color='text.secondary'>Maandelijks opzegbaar · 14 dagen gratis proberen</BodySmall>
+				<BodySmall color='textSecondary'>Maandelijks opzegbaar · 14 dagen gratis proberen</BodySmall>
 			</Stack>
 		</Stack>
 	);

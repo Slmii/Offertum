@@ -4,6 +4,7 @@ import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { RadioGroup as FormRadioGroup } from '@/components/Form/Radio/Radio.component';
 import { BodySmall } from '@/components/Text.component';
+import { useToast } from '@/lib/hooks/use-toast';
 import { useDismissOpportunity } from '@/lib/queries/opportunities.queries';
 import { DismissOpportunitySchema, type DismissOpportunityForm } from '@/lib/schemas/dismiss-opportunity.schema';
 import { OPPORTUNITY_DISMISS_REASON_LABELS_NL } from '@/lib/utils/opportunity.utils';
@@ -28,11 +29,16 @@ export function DismissDialog({
 	onClose: () => void;
 }) {
 	const dismiss = useDismissOpportunity();
+	const toast = useToast();
 
 	const onSubmit = (values: DismissOpportunityForm) => {
 		dismiss.mutate(
 			{ id: opportunityId, reason: values.reason, notes: values.notes },
-			{ onSuccess: () => onClose() }
+			{
+				onSuccess: () => onClose(),
+				onError: err =>
+					toast.error('Afwijzen mislukt', err instanceof Error ? err.message : 'Probeer het opnieuw.')
+			}
 		);
 	};
 
@@ -70,7 +76,7 @@ export function DismissDialog({
 					geen offerte. Het verzonden e-mailbericht blijft staan.
 				</Banner>
 			)}
-			<BodySmall color='text.secondary' sx={{ mb: 2 }}>
+			<BodySmall color='textSecondary' sx={{ mb: 2 }}>
 				Je feedback helpt onze AI om in de toekomst beter te herkennen wat wél en geen offerteaanvraag is.
 			</BodySmall>
 			<Form<DismissOpportunityForm>
@@ -96,11 +102,6 @@ export function DismissDialog({
 					maxLength={500}
 					minRows={4}
 				/>
-				{dismiss.isError && (
-					<Banner tone='error'>
-						{dismiss.error instanceof Error ? dismiss.error.message : 'Afwijzen mislukt'}
-					</Banner>
-				)}
 			</Form>
 		</Dialog>
 	);

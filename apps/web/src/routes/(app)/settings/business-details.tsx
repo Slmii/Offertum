@@ -247,7 +247,7 @@ function BusinessDetailsSettingsPage() {
 						<H3 component='h2' sx={{ mb: 1 }}>
 							Logo en briefpapier
 						</H3>
-						<BodySmall color='text.secondary'>Deze bestanden worden gebruikt op offerte-PDF's.</BodySmall>
+						<BodySmall color='textSecondary'>Deze bestanden worden gebruikt op offerte-PDF's.</BodySmall>
 					</Box>
 
 					<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={2}>
@@ -283,7 +283,7 @@ function BusinessDetailsSettingsPage() {
 					<Divider />
 
 					<Box>
-						<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+						<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 							Bekijk hoe je gegevens op een offerte-PDF verschijnen (met voorbeeldregels).
 						</BodySmall>
 						<Button variant='outlined' onClick={handlePdfPreview} disabled={pdfPreviewPending}>
@@ -305,9 +305,7 @@ function BusinessDetailsSettingsPage() {
 							<H3 component='h2' sx={{ color: 'error.main', mb: 1 }}>
 								Gevarenzone
 							</H3>
-							<BodySmall color='text.secondary'>
-								Acties die niet ongedaan gemaakt kunnen worden.
-							</BodySmall>
+							<BodySmall color='textSecondary'>Acties die niet ongedaan gemaakt kunnen worden.</BodySmall>
 						</Box>
 						<Divider />
 
@@ -321,7 +319,7 @@ function BusinessDetailsSettingsPage() {
 								<Label component='p' sx={{ mb: 0.5 }}>
 									Verwijder alle ingelezen e-mails uit Offertum
 								</Label>
-								<BodySmall color='text.secondary'>
+								<BodySmall color='textSecondary'>
 									Klantgegevens, concepten en geschiedenis worden gewist. Je mailbox-koppelingen
 									blijven actief — nieuwe e-mails worden opnieuw ingelezen.
 								</BodySmall>
@@ -339,7 +337,7 @@ function BusinessDetailsSettingsPage() {
 							<Label component='p' sx={{ mb: 0.5 }}>
 								Verwijder organisatie permanent
 							</Label>
-							<BodySmall color='text.secondary'>
+							<BodySmall color='textSecondary'>
 								Alle leden worden losgekoppeld en alle organisatiegegevens worden gewist. Een
 								geannuleerd abonnement loopt door tot het einde van de periode.
 							</BodySmall>
@@ -429,7 +427,7 @@ function BusinessAssetControl({
 						/>
 					</Box>
 				) : (
-					<BodySmall color='text.secondary'>Geen bestand ingesteld.</BodySmall>
+					<BodySmall color='textSecondary'>Geen bestand ingesteld.</BodySmall>
 				)}
 				{canEdit && (
 					<Stack direction='row' useFlexGap spacing={1}>

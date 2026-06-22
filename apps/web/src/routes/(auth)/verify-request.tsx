@@ -16,13 +16,13 @@ function VerifyRequestPage() {
 		<Container maxWidth='xs' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				<H1 sx={{ mb: 2 }}>Check your inbox</H1>
-				<Body color='text.secondary' sx={{ mb: 1 }}>
+				<Body color='textSecondary' sx={{ mb: 1 }}>
 					{email ? `We sent a magic link to ${email}.` : 'We sent a magic link.'}
 				</Body>
-				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 4 }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mb: 4 }}>
 					Click the link in the email to sign in. The link expires in 24 hours.
 				</BodySmall>
-				<BodySmall color='text.secondary' sx={{ display: 'block' }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block' }}>
 					Didn't receive it?{' '}
 					<Link to='/sign-in' style={{ color: 'inherit' }}>
 						Try again

@@ -1,4 +1,8 @@
+import { PickerFooter } from '@/components/Form/PickerFooter.component';
+import { useBodyScrollLock } from '@/lib/hooks/use-body-scroll-lock';
 import { useDevice } from '@/lib/hooks/useDevice';
+import Backdrop from '@mui/material/Backdrop';
+import Portal from '@mui/material/Portal';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { DatePicker as MuiDatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
@@ -18,6 +22,18 @@ const textFieldStyles: SxProps<Theme> = {
 	}
 };
 
+// Two date values represent the same instant (handles the null cases too).
+const isSameValue = (a: Dayjs | null, b: Dayjs | null) => (a && b ? a.isSame(b) : a === b);
+
+// Calendar-popover surface — radius-lg card with a hairline border + soft shadow (design DS).
+const popoverPaperSx: SxProps<Theme> = {
+	borderRadius: theme => `${theme.tokens.radius.lg}px`,
+	border: theme => `1px solid ${theme.tokens.color.line}`,
+	boxShadow: theme => theme.tokens.shadow[2],
+	marginTop: theme => theme.spacing(1),
+	overflow: 'hidden'
+};
+
 export const StandaloneDatePicker = ({
 	value,
 	name,
@@ -30,12 +46,16 @@ export const StandaloneDatePicker = ({
 	required,
 	error,
 	helperText,
-	format = 'DD-MM-YYYY',
+	format = 'D MMM YYYY',
 	size = 'small',
 	disabled = false
 }: DatePickerProps & { value: Dayjs | null }) => {
 	const [isOpen, setIsOpen] = useState(false);
 	const { isMdDown } = useDevice();
+
+	// Desktop popover is a Popper (no Modal), so lock body scroll while open — same as a Select.
+	// Mobile uses a Dialog, which already locks.
+	useBodyScrollLock(isOpen && !isMdDown);
 
 	// MUI v6+ pickers need the parent to reflect onChange into the value prop for
 	// the multi-view flow (year → month → day) to advance. Local mirror lets the
@@ -45,7 +65,10 @@ export const StandaloneDatePicker = ({
 	const [internalValue, setInternalValue] = useState<Dayjs | null>(value);
 	const [prevValue, setPrevValue] = useState<Dayjs | null>(value);
 
-	if (value !== prevValue) {
+	// Compare by instant, NOT object identity: the parent builds a fresh `dayjs(...)` every
+	// render, so `value !== prevValue` would be true on every render and resync `internalValue`
+	// back to the (stale, pre-mutation) prop — flashing the old value after a selection.
+	if (!isSameValue(value, prevValue)) {
 		setPrevValue(value);
 		setInternalValue(value);
 	}
@@ -57,8 +80,37 @@ export const StandaloneDatePicker = ({
 
 	const labelId = `${slugify(name)}-label`;
 
+	const sharedSlotProps = {
+		textField: {
+			id: labelId,
+			onClick: () => !disabled && setIsOpen(true),
+			name,
+			error: !!error,
+			helperText: error || helperText,
+			required,
+			fullWidth,
+			size,
+			sx: textFieldStyles
+		},
+		field: { clearable: true },
+		desktopPaper: { sx: popoverPaperSx }
+	} as const;
+
 	return (
 		<>
+			{/* Dimmed scrim behind the desktop popover (the calendar popper has none of its own),
+			    matching the Select/Dialog backdrop. Portaled to <body> so it covers the whole
+			    viewport (incl. the app bar) instead of being trapped in a local stacking context.
+			    Clicking it closes the picker. */}
+			{!isMdDown && (
+				<Portal>
+					<Backdrop
+						open={isOpen}
+						onClick={() => setIsOpen(false)}
+						sx={{ zIndex: theme => theme.zIndex.modal - 1 }}
+					/>
+				</Portal>
+			)}
 			{isMdDown ? (
 				<MobileDatePicker
 					value={internalValue ? dayjs(internalValue) : null}
@@ -72,20 +124,8 @@ export const StandaloneDatePicker = ({
 					minDate={minDate ? dayjs(minDate) : undefined}
 					open={isOpen}
 					showDaysOutsideCurrentMonth
-					slotProps={{
-						textField: {
-							id: labelId,
-							onClick: () => !disabled && setIsOpen(true),
-							name,
-							error: !!error,
-							helperText: error || helperText,
-							required,
-							fullWidth,
-							size,
-							sx: textFieldStyles
-						},
-						field: { clearable: true }
-					}}
+					slots={{ actionBar: PickerFooter }}
+					slotProps={sharedSlotProps}
 					onClose={() => setIsOpen(false)}
 				/>
 			) : (
@@ -102,20 +142,8 @@ export const StandaloneDatePicker = ({
 					open={isOpen}
 					showDaysOutsideCurrentMonth
 					format={format}
-					slotProps={{
-						textField: {
-							id: labelId,
-							onClick: () => !disabled && setIsOpen(true),
-							name,
-							error: !!error,
-							helperText: error || helperText,
-							required,
-							fullWidth,
-							size,
-							sx: textFieldStyles
-						},
-						field: { clearable: true }
-					}}
+					slots={{ actionBar: PickerFooter }}
+					slotProps={sharedSlotProps}
 					onClose={() => setIsOpen(false)}
 				/>
 			)}

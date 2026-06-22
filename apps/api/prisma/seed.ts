@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config } from 'dotenv';
-import { resolve } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, resolve } from 'node:path';
 
 config({ path: resolve(__dirname, '../.env') });
 
@@ -632,18 +633,66 @@ const SYNTHETIC_LAST_NAMES = [
 ] as const;
 
 const SYNTHETIC_REQUEST_TYPES: ReadonlyArray<{ type: string; summary: string; hints: string[] }> = [
-	{ type: 'CV-ketel onderhoud', summary: 'het jaarlijkse onderhoud van onze CV-ketel', hints: ['CV-ketel', 'jaarlijks onderhoud'] },
-	{ type: 'Badkamer renovatie', summary: 'een complete renovatie van onze badkamer', hints: ['badkamer', 'tegelwerk', 'sanitair'] },
-	{ type: 'Dakkapel plaatsen', summary: 'het plaatsen van een dakkapel op de zolderverdieping', hints: ['dakkapel', 'zolder'] },
-	{ type: 'Zonnepanelen installatie', summary: 'het installeren van zonnepanelen op ons schuine dak', hints: ['zonnepanelen', 'omvormer', 'schuin dak'] },
-	{ type: 'Schilderwerk buitenkant', summary: 'het schilderen van de kozijnen en de voorgevel', hints: ['buitenschilderwerk', 'kozijnen', 'voorgevel'] },
-	{ type: 'Warmtepomp advies', summary: 'advies en een offerte voor een hybride warmtepomp', hints: ['warmtepomp', 'hybride', 'verduurzaming'] },
-	{ type: 'Keuken plaatsen', summary: 'het plaatsen en aansluiten van een nieuwe keuken', hints: ['keuken', 'montage', 'aansluiten'] },
-	{ type: 'Elektra uitbreiding', summary: 'het uitbreiden van de groepenkast met extra groepen', hints: ['groepenkast', 'elektra', 'extra groepen'] },
-	{ type: 'Vloerverwarming aanleggen', summary: 'het aanleggen van vloerverwarming in de woonkamer', hints: ['vloerverwarming', 'woonkamer'] },
-	{ type: 'Dakgoot vervanging', summary: 'het vervangen van de dakgoten rondom de woning', hints: ['dakgoot', 'hemelwaterafvoer'] },
-	{ type: 'Isolatie spouwmuur', summary: 'het isoleren van de spouwmuren van onze jaren-70 woning', hints: ['spouwmuurisolatie', 'verduurzaming'] },
-	{ type: 'Airco installatie', summary: 'het laten installeren van een airco in de slaapkamer', hints: ['airco', 'split-unit', 'slaapkamer'] }
+	{
+		type: 'CV-ketel onderhoud',
+		summary: 'het jaarlijkse onderhoud van onze CV-ketel',
+		hints: ['CV-ketel', 'jaarlijks onderhoud']
+	},
+	{
+		type: 'Badkamer renovatie',
+		summary: 'een complete renovatie van onze badkamer',
+		hints: ['badkamer', 'tegelwerk', 'sanitair']
+	},
+	{
+		type: 'Dakkapel plaatsen',
+		summary: 'het plaatsen van een dakkapel op de zolderverdieping',
+		hints: ['dakkapel', 'zolder']
+	},
+	{
+		type: 'Zonnepanelen installatie',
+		summary: 'het installeren van zonnepanelen op ons schuine dak',
+		hints: ['zonnepanelen', 'omvormer', 'schuin dak']
+	},
+	{
+		type: 'Schilderwerk buitenkant',
+		summary: 'het schilderen van de kozijnen en de voorgevel',
+		hints: ['buitenschilderwerk', 'kozijnen', 'voorgevel']
+	},
+	{
+		type: 'Warmtepomp advies',
+		summary: 'advies en een offerte voor een hybride warmtepomp',
+		hints: ['warmtepomp', 'hybride', 'verduurzaming']
+	},
+	{
+		type: 'Keuken plaatsen',
+		summary: 'het plaatsen en aansluiten van een nieuwe keuken',
+		hints: ['keuken', 'montage', 'aansluiten']
+	},
+	{
+		type: 'Elektra uitbreiding',
+		summary: 'het uitbreiden van de groepenkast met extra groepen',
+		hints: ['groepenkast', 'elektra', 'extra groepen']
+	},
+	{
+		type: 'Vloerverwarming aanleggen',
+		summary: 'het aanleggen van vloerverwarming in de woonkamer',
+		hints: ['vloerverwarming', 'woonkamer']
+	},
+	{
+		type: 'Dakgoot vervanging',
+		summary: 'het vervangen van de dakgoten rondom de woning',
+		hints: ['dakgoot', 'hemelwaterafvoer']
+	},
+	{
+		type: 'Isolatie spouwmuur',
+		summary: 'het isoleren van de spouwmuren van onze jaren-70 woning',
+		hints: ['spouwmuurisolatie', 'verduurzaming']
+	},
+	{
+		type: 'Airco installatie',
+		summary: 'het laten installeren van een airco in de slaapkamer',
+		hints: ['airco', 'split-unit', 'slaapkamer']
+	}
 ];
 
 const SYNTHETIC_STATUSES: ReadonlyArray<OpportunityStatus> = [
@@ -656,7 +705,13 @@ const SYNTHETIC_STATUSES: ReadonlyArray<OpportunityStatus> = [
 	OpportunityStatus.LOST
 ];
 
-const SYNTHETIC_URGENCIES: ReadonlyArray<Urgency> = [Urgency.NORMAL, Urgency.LOW, Urgency.HIGH, Urgency.NORMAL, Urgency.EMERGENCY];
+const SYNTHETIC_URGENCIES: ReadonlyArray<Urgency> = [
+	Urgency.NORMAL,
+	Urgency.LOW,
+	Urgency.HIGH,
+	Urgency.NORMAL,
+	Urgency.EMERGENCY
+];
 
 function pad(value: number, length: number): string {
 	return String(value).padStart(length, '0');
@@ -753,7 +808,12 @@ const SEED_OPPORTUNITY_TOTAL = 100;
 // scenario specs on SeedOpportunity; `main()` materializes them.
 
 // Compact builder: fills the boilerplate base fields, leaving the scenario specs to `extra`.
-function scenario(num: number, requestType: string, customerName: string, extra: Partial<SeedOpportunity> = {}): SeedOpportunity {
+function scenario(
+	num: number,
+	requestType: string,
+	customerName: string,
+	extra: Partial<SeedOpportunity> = {}
+): SeedOpportunity {
 	const slug = customerName
 		.toLowerCase()
 		.normalize('NFKD')
@@ -958,9 +1018,28 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			validUntilDaysFromNow: 16,
 			pdfFilenames: ['offerte-badkamer-vandijk.pdf'],
 			lines: [
-				{ description: 'Tegelwerk badkamer', unit: 'square_meter', quantity: 18, unitPriceEur: 65, source: QuoteLineSource.CATALOG_MATCH },
-				{ description: 'Loodgieterswerk', unit: 'hour', quantity: 16, unitPriceEur: 55, source: QuoteLineSource.RULE_APPLIED, note: 'Uurtarief installateur' },
-				{ description: 'Sanitair (douche + wastafel)', unit: 'flat_fee', quantity: 1, unitPriceEur: 1850, source: QuoteLineSource.CATALOG_MATCH }
+				{
+					description: 'Tegelwerk badkamer',
+					unit: 'square_meter',
+					quantity: 18,
+					unitPriceEur: 65,
+					source: QuoteLineSource.CATALOG_MATCH
+				},
+				{
+					description: 'Loodgieterswerk',
+					unit: 'hour',
+					quantity: 16,
+					unitPriceEur: 55,
+					source: QuoteLineSource.RULE_APPLIED,
+					note: 'Uurtarief installateur'
+				},
+				{
+					description: 'Sanitair (douche + wastafel)',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: 1850,
+					source: QuoteLineSource.CATALOG_MATCH
+				}
 			]
 		},
 		drafts: [
@@ -969,7 +1048,14 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				status: ReplyDraftStatus.SENT,
 				createdDaysAgo: 14,
 				sentDaysAgo: 14,
-				attachments: [{ filename: 'offerte-badkamer-vandijk.pdf', contentType: 'application/pdf', sizeBytes: 52000, isQuotePdf: true }]
+				attachments: [
+					{
+						filename: 'offerte-badkamer-vandijk.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 52000,
+						isQuotePdf: true
+					}
+				]
 			}
 		]
 	}),
@@ -999,11 +1085,47 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			status: QuoteDraftStatus.DRAFT,
 			validUntilDaysFromNow: 30,
 			lines: [
-				{ description: 'Dakraam Velux', unit: 'flat_fee', quantity: 2, unitPriceEur: 480, source: QuoteLineSource.CATALOG_MATCH, vatRate: 21 },
-				{ description: 'Timmerwerk', unit: 'hour', quantity: 24, unitPriceEur: 52, source: QuoteLineSource.RULE_APPLIED, note: 'Uurtarief timmerman' },
-				{ description: 'Onderaanneming elektra (BTW verlegd)', unit: 'flat_fee', quantity: 1, unitPriceEur: 900, source: QuoteLineSource.RULE_APPLIED, vatReverseCharged: true, note: 'BTW verlegd naar opdrachtgever' },
-				{ description: 'Isolatiemateriaal (laag tarief)', unit: 'square_meter', quantity: 30, unitPriceEur: 18, source: QuoteLineSource.CATALOG_MATCH, vatRate: 9 },
-				{ description: 'Maatwerk inbouwkast', unit: 'flat_fee', quantity: 1, unitPriceEur: null, source: QuoteLineSource.INFERRED, note: 'Prijs nog in te stellen' }
+				{
+					description: 'Dakraam Velux',
+					unit: 'flat_fee',
+					quantity: 2,
+					unitPriceEur: 480,
+					source: QuoteLineSource.CATALOG_MATCH,
+					vatRate: 21
+				},
+				{
+					description: 'Timmerwerk',
+					unit: 'hour',
+					quantity: 24,
+					unitPriceEur: 52,
+					source: QuoteLineSource.RULE_APPLIED,
+					note: 'Uurtarief timmerman'
+				},
+				{
+					description: 'Onderaanneming elektra (BTW verlegd)',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: 900,
+					source: QuoteLineSource.RULE_APPLIED,
+					vatReverseCharged: true,
+					note: 'BTW verlegd naar opdrachtgever'
+				},
+				{
+					description: 'Isolatiemateriaal (laag tarief)',
+					unit: 'square_meter',
+					quantity: 30,
+					unitPriceEur: 18,
+					source: QuoteLineSource.CATALOG_MATCH,
+					vatRate: 9
+				},
+				{
+					description: 'Maatwerk inbouwkast',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: null,
+					source: QuoteLineSource.INFERRED,
+					note: 'Prijs nog in te stellen'
+				}
 			]
 		}
 	}),
@@ -1017,8 +1139,20 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			validUntilDaysFromNow: 4,
 			pdfFilenames: ['offerte-cv-vermeer.pdf'],
 			lines: [
-				{ description: 'CV-ketel Remeha', unit: 'flat_fee', quantity: 1, unitPriceEur: 2200, source: QuoteLineSource.CATALOG_MATCH },
-				{ description: 'Installatie + inregelen', unit: 'hour', quantity: 12, unitPriceEur: 55, source: QuoteLineSource.RULE_APPLIED }
+				{
+					description: 'CV-ketel Remeha',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: 2200,
+					source: QuoteLineSource.CATALOG_MATCH
+				},
+				{
+					description: 'Installatie + inregelen',
+					unit: 'hour',
+					quantity: 12,
+					unitPriceEur: 55,
+					source: QuoteLineSource.RULE_APPLIED
+				}
 			]
 		},
 		drafts: [
@@ -1027,7 +1161,14 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				status: ReplyDraftStatus.SENT,
 				createdDaysAgo: 20,
 				sentDaysAgo: 20,
-				attachments: [{ filename: 'offerte-cv-vermeer.pdf', contentType: 'application/pdf', sizeBytes: 49000, isQuotePdf: true }]
+				attachments: [
+					{
+						filename: 'offerte-cv-vermeer.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 49000,
+						isQuotePdf: true
+					}
+				]
 			}
 		],
 		expiryAction: {
@@ -1047,8 +1188,21 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			validUntilDaysFromNow: 20,
 			pdfFilenames: ['offerte-keuken-v1.pdf', 'offerte-keuken-v2.pdf'],
 			lines: [
-				{ description: 'Uitbouw 12 m²', unit: 'square_meter', quantity: 12, unitPriceEur: 1450, source: QuoteLineSource.RULE_APPLIED },
-				{ description: 'Stelpost afwerking', unit: 'flat_fee', quantity: 1, unitPriceEur: null, source: QuoteLineSource.INFERRED, note: 'Stelpost — nader te bepalen' }
+				{
+					description: 'Uitbouw 12 m²',
+					unit: 'square_meter',
+					quantity: 12,
+					unitPriceEur: 1450,
+					source: QuoteLineSource.RULE_APPLIED
+				},
+				{
+					description: 'Stelpost afwerking',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: null,
+					source: QuoteLineSource.INFERRED,
+					note: 'Stelpost — nader te bepalen'
+				}
 			]
 		},
 		drafts: [
@@ -1057,7 +1211,14 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				status: ReplyDraftStatus.SENT,
 				createdDaysAgo: 10,
 				sentDaysAgo: 10,
-				attachments: [{ filename: 'offerte-keuken-v2.pdf', contentType: 'application/pdf', sizeBytes: 51000, isQuotePdf: true }]
+				attachments: [
+					{
+						filename: 'offerte-keuken-v2.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 51000,
+						isQuotePdf: true
+					}
+				]
 			}
 		]
 	}),
@@ -1081,7 +1242,15 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			sentDaysAgo: 22,
 			validUntilDaysFromNow: 3,
 			pdfFilenames: ['offerte-gevel-kuiper.pdf'],
-			lines: [{ description: 'Gevelreiniging', unit: 'square_meter', quantity: 80, unitPriceEur: 12, source: QuoteLineSource.CATALOG_MATCH }]
+			lines: [
+				{
+					description: 'Gevelreiniging',
+					unit: 'square_meter',
+					quantity: 80,
+					unitPriceEur: 12,
+					source: QuoteLineSource.CATALOG_MATCH
+				}
+			]
 		},
 		expiryAction: {
 			status: ExpiryActionStatus.SUGGESTED,
@@ -1099,7 +1268,15 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			sentDaysAgo: 28,
 			validUntilDaysFromNow: 12,
 			pdfFilenames: ['offerte-schuur-linden.pdf'],
-			lines: [{ description: 'Renovatie schuur', unit: 'flat_fee', quantity: 1, unitPriceEur: 4200, source: QuoteLineSource.RULE_APPLIED }]
+			lines: [
+				{
+					description: 'Renovatie schuur',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: 4200,
+					source: QuoteLineSource.RULE_APPLIED
+				}
+			]
 		},
 		expiryAction: {
 			status: ExpiryActionStatus.TAKEN,
@@ -1119,7 +1296,15 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			sentDaysAgo: 33,
 			validUntilDaysFromNow: -2,
 			pdfFilenames: ['offerte-oprit-bos.pdf'],
-			lines: [{ description: 'Bestrating oprit', unit: 'square_meter', quantity: 45, unitPriceEur: 38, source: QuoteLineSource.CATALOG_MATCH }]
+			lines: [
+				{
+					description: 'Bestrating oprit',
+					unit: 'square_meter',
+					quantity: 45,
+					unitPriceEur: 38,
+					source: QuoteLineSource.CATALOG_MATCH
+				}
+			]
 		},
 		expiryAction: {
 			status: ExpiryActionStatus.DISMISSED,
@@ -1131,7 +1316,14 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 124 — Manually assigned to a teammate (Jeroen) + timeline "Toewijzing"
 	scenario(124, 'Cv-onderhoud jaarcontract', 'Wim Jacobs', {
 		assignedToEmail: 'jeroen@offertum.dev',
-		timeline: [{ action: 'opportunity.assigned', daysAgo: 1, actorEmail: 'selami1992@gmail.com', extra: { assignedToUserName: 'Jeroen Bakker' } }]
+		timeline: [
+			{
+				action: 'opportunity.assigned',
+				daysAgo: 1,
+				actorEmail: 'selami1992@gmail.com',
+				extra: { assignedToUserName: 'Jeroen Bakker' }
+			}
+		]
 	}),
 	// 125 — Unassigned (no one picked it up yet)
 	scenario(125, 'Kozijnen vervangen', 'Saar Hofman', { assignedToEmail: null }),
@@ -1152,8 +1344,18 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	scenario(129, 'Warmtepomp advies', 'Lieke Vos', {
 		deadlineDaysFromNow: 10,
 		notifications: [
-			{ eventType: NotificationEventType.OPPORTUNITY_CREATED, title: 'Nieuwe offerteaanvraag', body: 'Warmtepomp advies — Lieke Vos', daysAgo: 1 },
-			{ eventType: NotificationEventType.DAILY_DIGEST, title: 'Je dagelijkse overzicht', body: '3 open aanvragen, 1 verloopt binnenkort', daysAgo: 0 }
+			{
+				eventType: NotificationEventType.OPPORTUNITY_CREATED,
+				title: 'Nieuwe offerteaanvraag',
+				body: 'Warmtepomp advies — Lieke Vos',
+				daysAgo: 1
+			},
+			{
+				eventType: NotificationEventType.DAILY_DIGEST,
+				title: 'Je dagelijkse overzicht',
+				body: '3 open aanvragen, 1 verloopt binnenkort',
+				daysAgo: 0
+			}
 		]
 	}),
 	// 130 — Full lifecycle showcase: thread + replies + multiple drafts + sent quote + PDF + expiry taken, WON
@@ -1164,10 +1366,35 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		deadlineDaysFromNow: 5,
 		appointmentDaysFromNow: 2,
 		threadMessages: [
-			{ fromCustomer: false, fromName: 'Acme Installaties', fromEmail: 'inbox+seed@acme-installaties.nl', bodyText: SENT_REPLY_BODY, daysAgo: 26 },
-			{ fromCustomer: true, fromName: 'Project Zonneveld BV', fromEmail: 'project.zonneveld.bv@example.nl', bodyText: 'Bedankt, kunnen we de planning bespreken?', daysAgo: 20 },
-			{ fromCustomer: false, fromName: 'Acme Installaties', fromEmail: 'inbox+seed@acme-installaties.nl', bodyText: 'Zeker, voorstel in de bijlage.', daysAgo: 18 },
-			{ fromCustomer: true, fromName: 'Project Zonneveld BV', fromEmail: 'project.zonneveld.bv@example.nl', bodyText: 'Akkoord, we gaan ervoor!', daysAgo: 12, wasDetectedAsCloser: true }
+			{
+				fromCustomer: false,
+				fromName: 'Acme Installaties',
+				fromEmail: 'inbox+seed@acme-installaties.nl',
+				bodyText: SENT_REPLY_BODY,
+				daysAgo: 26
+			},
+			{
+				fromCustomer: true,
+				fromName: 'Project Zonneveld BV',
+				fromEmail: 'project.zonneveld.bv@example.nl',
+				bodyText: 'Bedankt, kunnen we de planning bespreken?',
+				daysAgo: 20
+			},
+			{
+				fromCustomer: false,
+				fromName: 'Acme Installaties',
+				fromEmail: 'inbox+seed@acme-installaties.nl',
+				bodyText: 'Zeker, voorstel in de bijlage.',
+				daysAgo: 18
+			},
+			{
+				fromCustomer: true,
+				fromName: 'Project Zonneveld BV',
+				fromEmail: 'project.zonneveld.bv@example.nl',
+				bodyText: 'Akkoord, we gaan ervoor!',
+				daysAgo: 12,
+				wasDetectedAsCloser: true
+			}
 		],
 		quote: {
 			status: QuoteDraftStatus.SENT,
@@ -1175,9 +1402,28 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			validUntilDaysFromNow: 20,
 			pdfFilenames: ['offerte-zonneveld-v1.pdf', 'offerte-zonneveld-v2.pdf'],
 			lines: [
-				{ description: 'Complete CV-installatie', unit: 'flat_fee', quantity: 1, unitPriceEur: 8400, source: QuoteLineSource.RULE_APPLIED },
-				{ description: 'Zonnepanelen (12 stuks)', unit: 'flat_fee', quantity: 1, unitPriceEur: 5600, source: QuoteLineSource.CATALOG_MATCH },
-				{ description: 'Meerwerk in overleg', unit: 'flat_fee', quantity: 1, unitPriceEur: null, source: QuoteLineSource.INFERRED, note: 'Stelpost' }
+				{
+					description: 'Complete CV-installatie',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: 8400,
+					source: QuoteLineSource.RULE_APPLIED
+				},
+				{
+					description: 'Zonnepanelen (12 stuks)',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: 5600,
+					source: QuoteLineSource.CATALOG_MATCH
+				},
+				{
+					description: 'Meerwerk in overleg',
+					unit: 'flat_fee',
+					quantity: 1,
+					unitPriceEur: null,
+					source: QuoteLineSource.INFERRED,
+					note: 'Stelpost'
+				}
 			]
 		},
 		drafts: [
@@ -1187,7 +1433,14 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				status: ReplyDraftStatus.SENT,
 				createdDaysAgo: 18,
 				sentDaysAgo: 18,
-				attachments: [{ filename: 'offerte-zonneveld-v2.pdf', contentType: 'application/pdf', sizeBytes: 64000, isQuotePdf: true }]
+				attachments: [
+					{
+						filename: 'offerte-zonneveld-v2.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 64000,
+						isQuotePdf: true
+					}
+				]
 			}
 		],
 		expiryAction: {
@@ -1199,8 +1452,18 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			validUntilDaysFromNow: 20
 		},
 		timeline: [
-			{ action: 'opportunity.status.updated', daysAgo: 12, actorEmail: 'selami1992@gmail.com', extra: { from: 'replied', to: 'won' } },
-			{ action: 'opportunity.assigned', daysAgo: 25, actorEmail: 'selami1992@gmail.com', extra: { assignedToUserName: 'Selami C' } }
+			{
+				action: 'opportunity.status.updated',
+				daysAgo: 12,
+				actorEmail: 'selami1992@gmail.com',
+				extra: { from: 'replied', to: 'won' }
+			},
+			{
+				action: 'opportunity.assigned',
+				daysAgo: 25,
+				actorEmail: 'selami1992@gmail.com',
+				extra: { assignedToUserName: 'Selami C' }
+			}
 		]
 	})
 ];
@@ -1411,6 +1674,80 @@ function daysAgo(days: number): Date {
 
 function daysFromNow(days: number): Date {
 	return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+// ── Dummy attachment blobs ──────────────────────────────────────────────────
+// The QuotePdf / ReplyDraftAttachment rows below reference files in the local
+// AttachmentStorage. Seeding only the rows leaves every download/preview 404-ing,
+// so we also write a small valid dummy file (+ the `.contenttype` sidecar the
+// local driver expects) at each storageKey. Mirrors LocalAttachmentStorage's path
+// resolution (root = ATTACHMENT_STORAGE_LOCAL_DIR, anchored at apps/api) so the
+// running API reads exactly what we write here.
+const ATTACHMENT_ROOT = (() => {
+	const configured = process.env.ATTACHMENT_STORAGE_LOCAL_DIR ?? '.attachments';
+	return isAbsolute(configured) ? resolve(configured) : resolve(__dirname, '..', configured);
+})();
+
+function escapePdfText(text: string): string {
+	return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+// Minimal but valid single-page PDF (with a computed xref table) so the dummy
+// actually opens in a viewer.
+function dummyPdf(lines: string[]): Buffer {
+	const content = lines
+		.map((line, i) => `BT /F1 ${i === 0 ? 20 : 12} Tf 60 ${780 - i * 26} Td (${escapePdfText(line)}) Tj ET`)
+		.join('\n');
+	const objects = [
+		'<< /Type /Catalog /Pages 2 0 R >>',
+		'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+		'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+		`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+		'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+	];
+	let body = '%PDF-1.4\n';
+	const offsets: number[] = [];
+	for (let i = 0; i < objects.length; i++) {
+		offsets.push(Buffer.byteLength(body));
+		body += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+	}
+	const xrefStart = Buffer.byteLength(body);
+	let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	for (const off of offsets) {
+		xref += `${String(off).padStart(10, '0')} 00000 n \n`;
+	}
+	const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+	return Buffer.from(body + xref + trailer, 'latin1');
+}
+
+// 1×1 placeholder images so non-PDF dummies open as real images.
+const DUMMY_JPEG = Buffer.from(
+	'/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AfwD/2Q==',
+	'base64'
+);
+const DUMMY_PNG = Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+	'base64'
+);
+
+function dummyBytesFor(contentType: string, label: string): Buffer {
+	if (contentType === 'application/pdf') {
+		return dummyPdf(['Offertum — voorbeeldbijlage', label, '(dummy seed-bestand)']);
+	}
+	if (contentType === 'image/jpeg') {
+		return DUMMY_JPEG;
+	}
+	if (contentType === 'image/png') {
+		return DUMMY_PNG;
+	}
+	return Buffer.from(`Offertum dummy attachment\n${label}\n`, 'utf-8');
+}
+
+async function writeDummyAsset(storageKey: string, contentType: string, label: string): Promise<void> {
+	const fullPath = resolve(ATTACHMENT_ROOT, storageKey);
+	await mkdir(dirname(fullPath), { recursive: true });
+	await writeFile(fullPath, dummyBytesFor(contentType, label));
+	await writeFile(`${fullPath}.contenttype`, contentType, 'utf-8');
 }
 
 async function main() {
@@ -1637,7 +1974,8 @@ async function main() {
 						description: line.description,
 						unit: line.unit,
 						quantity: line.quantity as unknown as Prisma.Decimal,
-						unitPriceEur: line.unitPriceEur == null ? null : (line.unitPriceEur as unknown as Prisma.Decimal),
+						unitPriceEur:
+							line.unitPriceEur == null ? null : (line.unitPriceEur as unknown as Prisma.Decimal),
 						vatRate: line.vatRate ?? 21,
 						vatReverseCharged: line.vatReverseCharged ?? false,
 						source: line.source,
@@ -1649,6 +1987,8 @@ async function main() {
 			for (let pi = 0; pi < pdfFilenames.length; pi++) {
 				const pdfId = entityId('6d6d6d6d', oppNum, pi + 1);
 				pdfIds.push(pdfId);
+				const pdfStorageKey = `quote-pdfs/${opp.opportunityId}/${pdfId}-${pdfFilenames[pi]}`;
+				await writeDummyAsset(pdfStorageKey, 'application/pdf', pdfFilenames[pi]);
 				await prisma.quotePdf.upsert({
 					where: { id: pdfId },
 					update: {},
@@ -1660,7 +2000,7 @@ async function main() {
 						filename: pdfFilenames[pi],
 						contentType: 'application/pdf',
 						sizeBytes: 48_000 + pi * 1500,
-						storageKey: `quote-pdfs/${opp.opportunityId}/${pdfId}-${pdfFilenames[pi]}`,
+						storageKey: pdfStorageKey,
 						storageDriver: 'local',
 						createdAt: daysAgo(Math.max(0, opp.internalDateDaysAgo - pi))
 					}
@@ -1684,7 +2024,8 @@ async function main() {
 						status: d.status,
 						kind: d.kind ?? ReplyDraftKind.REPLY,
 						wasEditedByUser: d.wasEditedByUser ?? d.status === ReplyDraftStatus.EDITED,
-						sentAt: d.status === ReplyDraftStatus.SENT && d.sentDaysAgo != null ? daysAgo(d.sentDaysAgo) : null,
+						sentAt:
+							d.status === ReplyDraftStatus.SENT && d.sentDaysAgo != null ? daysAgo(d.sentDaysAgo) : null,
 						createdAt: daysAgo(d.createdDaysAgo)
 					}
 				});
@@ -1692,6 +2033,8 @@ async function main() {
 					const a = d.attachments![ai];
 					const attId = entityId('4a4a4a4a', oppNum, di * 10 + ai + 1);
 					const quotePdfId = a.isQuotePdf && pdfIds.length > 0 ? pdfIds[pdfIds.length - 1] : null;
+					const attStorageKey = `${draftId}/${attId}-${a.filename}`;
+					await writeDummyAsset(attStorageKey, a.contentType, a.filename);
 					await prisma.replyDraftAttachment.upsert({
 						where: { id: attId },
 						update: {},
@@ -1701,7 +2044,7 @@ async function main() {
 							filename: a.filename,
 							contentType: a.contentType,
 							sizeBytes: a.sizeBytes,
-							storageKey: `${draftId}/${attId}-${a.filename}`,
+							storageKey: attStorageKey,
 							storageDriver: 'local',
 							quotePdfId
 						}

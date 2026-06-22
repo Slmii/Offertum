@@ -31,6 +31,26 @@ export const toReadableDateTime = (date: Date | string) => {
 };
 
 /**
+ * Calendar days from today until `date`, NL-phrased ("nog 4 dagen", "nog 1 dag", "vandaag",
+ * "verlopen"). Business-time-zone pinned and computed against the current day — relative, like
+ * `toReadableTimestamp`, so a sub-second SSR/client skew never changes the rendered string
+ * (both sides land on the same Amsterdam calendar day except at the midnight boundary).
+ */
+export const toDaysUntilLabel = (date: Date | string) => {
+	const target = dayjs(date).tz(BUSINESS_TIME_ZONE).startOf('day');
+	const today = dayjs().tz(BUSINESS_TIME_ZONE).startOf('day');
+	const days = target.diff(today, 'day');
+
+	if (days < 0) {
+		return 'verlopen';
+	}
+	if (days === 0) {
+		return 'vandaag';
+	}
+	return `nog ${days} ${days === 1 ? 'dag' : 'dagen'}`;
+};
+
+/**
  * Compact human-relative time ("zojuist", "8m geleden", "2u geleden", "2d geleden",
  * "1w geleden", "3mnd geleden", "2j geleden"). Abbreviated units instead of dayjs'
  * verbose `fromNow()` ("8 minuten geleden"). Instant-difference based, so timezone

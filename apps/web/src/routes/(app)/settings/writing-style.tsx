@@ -92,7 +92,7 @@ function WritingStylePage() {
 			</Paper>
 
 			<H3 sx={{ mb: 1 }}>Voorbeelden om je op weg te helpen</H3>
-			<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 				Schrijf in je eigen woorden, dit zijn alleen aanknopingspunten. Je hoeft niets letterlijk over te nemen.
 			</BodySmall>
 
@@ -188,7 +188,7 @@ function WritingStyleBody({
 				spacing={2}
 				sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
 			>
-				<BodySmall color='text.secondary'>
+				<BodySmall color='textSecondary'>
 					{trimmedLength} / {TONE_PLAYBOOK_MAX_LENGTH} tekens
 					{savedAt && ` · Laatst opgeslagen ${toReadableDateTime(savedAt)}`}
 				</BodySmall>

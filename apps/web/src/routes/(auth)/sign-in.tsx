@@ -48,7 +48,7 @@ function SignInPage() {
 		<Container maxWidth='xs' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<H1 sx={{ mb: 1 }}>Sign in</H1>
-				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 3 }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mb: 3 }}>
 					Continue with Google or Microsoft, or use a magic link.
 				</BodySmall>
 
@@ -74,7 +74,7 @@ function SignInPage() {
 				</Stack>
 
 				<Divider sx={{ my: 3 }}>
-					<BodySmall color='text.secondary'>or</BodySmall>
+					<BodySmall color='textSecondary'>or</BodySmall>
 				</Divider>
 
 				<Form<SignInForm>
@@ -99,7 +99,7 @@ function SignInPage() {
 					</Button>
 				</Form>
 
-				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
 					Don't have an account?{' '}
 					<Link component={RouterLink} to='/sign-up'>
 						Create one

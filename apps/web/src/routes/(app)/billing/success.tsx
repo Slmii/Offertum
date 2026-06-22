@@ -32,14 +32,14 @@ function BillingSuccessPage() {
 				{sync.isPending && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
-						<BodySmall color='text.secondary'>Confirming your subscription…</BodySmall>
+						<BodySmall color='textSecondary'>Confirming your subscription…</BodySmall>
 					</Box>
 				)}
 
 				{sync.isSuccess && (
 					<Box>
 						<H1 sx={{ mb: 1 }}>You're all set</H1>
-						<Body color='text.secondary' sx={{ mb: 4 }}>
+						<Body color='textSecondary' sx={{ mb: 4 }}>
 							Your trial has started. We'll only charge after 14 days, and you can cancel any time.
 						</Body>
 						<Button variant='contained' size='large' onClick={() => navigate({ to: '/' })}>
@@ -51,7 +51,7 @@ function BillingSuccessPage() {
 				{sync.isError && (
 					<Box>
 						<H1 sx={{ mb: 1 }}>Payment received</H1>
-						<Body color='text.secondary' sx={{ mb: 4 }}>
+						<Body color='textSecondary' sx={{ mb: 4 }}>
 							We received your payment but couldn't refresh your subscription state. It will sync shortly
 							via Stripe webhooks, refresh in a minute.
 						</Body>

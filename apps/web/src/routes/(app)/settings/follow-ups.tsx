@@ -111,10 +111,10 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 	return (
 		<Stack useFlexGap spacing={5}>
 			<Box>
-				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+				<Overline color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 					Cadans
 				</Overline>
-				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
+				<BodySmall color='textSecondary' sx={{ mb: 3 }}>
 					Hoeveel dagen stilte voordat Offertum een herinnering opstelt.
 				</BodySmall>
 				<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'flex-start' }}>
@@ -152,7 +152,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 							}}
 						/>
 					</Box>
-					<BodySmall color='text.secondary' sx={{ alignSelf: 'center' }}>
+					<BodySmall color='textSecondary' sx={{ alignSelf: 'center' }}>
 						dagen
 					</BodySmall>
 				</Stack>
@@ -164,10 +164,10 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 			</Box>
 
 			<Box>
-				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+				<Overline color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 					Maximum
 				</Overline>
-				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
+				<BodySmall color='textSecondary' sx={{ mb: 3 }}>
 					Het aantal herinneringen dat Offertum maximaal per offerteaanvraag mag opstellen. Zet op{' '}
 					<strong>0</strong> om de scheduler volledig uit te zetten.
 				</BodySmall>
@@ -175,9 +175,9 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					<Box sx={{ width: 120 }}>
 						<Field name='maxCount' type='number' fullWidth />
 					</Box>
-					<BodySmall color='text.secondary'>{maxCount === 1 ? 'herinnering' : 'herinneringen'}</BodySmall>
+					<BodySmall color='textSecondary'>{maxCount === 1 ? 'herinnering' : 'herinneringen'}</BodySmall>
 				</Stack>
-				<BodySmall color='text.secondary' sx={{ mt: 2, fontStyle: 'italic', display: 'block' }}>
+				<BodySmall color='textSecondary' sx={{ mt: 2, fontStyle: 'italic', display: 'block' }}>
 					Bestaande aanvragen die al op <strong>Koud</strong> staan worden niet automatisch herstart als je
 					dit maximum verhoogt. Zet de status terug op <strong>Beantwoord</strong> om opnieuw herinneringen te
 					krijgen binnen je nieuwe limiet.
@@ -185,10 +185,10 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 			</Box>
 
 			<Box>
-				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+				<Overline color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 					Automatisch koud markeren
 				</Overline>
-				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
+				<BodySmall color='textSecondary' sx={{ mb: 3 }}>
 					Na deze stilteperiode (zonder klantreactie en met alle herinneringen verstuurd) zet Offertum de
 					offerteaanvraag automatisch op <strong>Koud</strong>. Zet op <strong>0</strong> om dit uit te zetten
 					je houdt opportunities dan zelf bij.
@@ -197,7 +197,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					<Box sx={{ width: 120 }}>
 						<Field name='coldAfterDays' type='number' fullWidth />
 					</Box>
-					<BodySmall color='text.secondary'>
+					<BodySmall color='textSecondary'>
 						{coldAfterDays === 1 ? 'dag' : 'dagen'} na laatste verzending
 					</BodySmall>
 				</Stack>
@@ -216,7 +216,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 
 			{!schedulerDisabled && (
 				<Box sx={{ p: 4, bgcolor: 'background.default', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-					<BodySmall color='text.secondary' sx={{ lineHeight: 1.5, display: 'block' }}>
+					<BodySmall color='textSecondary' sx={{ lineHeight: 1.5, display: 'block' }}>
 						<Box component='span' sx={{ color: 'text.primary', fontWeight: 'medium' }}>
 							Voorbeeld:
 						</Box>{' '}
