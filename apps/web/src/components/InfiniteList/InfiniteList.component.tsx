@@ -111,7 +111,7 @@ function ElementList<T>({
 				maxHeight,
 				overflowY: 'auto',
 				// Room so a focused row's outline isn't clipped by the scroll edge.
-				p: '4px',
+				p: 0.5,
 				m: '-4px'
 			}}
 		>

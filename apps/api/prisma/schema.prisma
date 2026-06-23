@@ -727,6 +727,7 @@ model Opportunity {
   classifierReason           String?           @db.Text
   customerName               String?
   customerEmail              String?
+  customerPhone              String?
   address                    String?           @db.Text
   requestType                String
   urgency                    Urgency

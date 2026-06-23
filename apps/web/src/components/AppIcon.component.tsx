@@ -12,6 +12,8 @@ import {
 	IconArrowUpRight,
 	IconBell,
 	IconBellFilled,
+	IconBrandGmail,
+	IconBrandOffice,
 	IconCalendar,
 	IconCalendarFilled,
 	IconCheck,
@@ -167,6 +169,8 @@ export type AppIconName =
 	| 'snowflake'
 	| 'bell'
 	| 'mail'
+	| 'brand-gmail'
+	| 'brand-office'
 	| 'device-mobile'
 	| 'copy'
 	| 'download'
@@ -252,6 +256,9 @@ const ICONS: Record<AppIconName, IconPair> = {
 	snowflake: { outline: IconSnowflake, filled: IconSnowflake },
 	bell: { outline: IconBell, filled: IconBellFilled },
 	mail: { outline: IconMail, filled: IconMailFilled },
+	// Tabler ships no filled brand glyphs — outline doubles as the filled slot.
+	'brand-gmail': { outline: IconBrandGmail, filled: IconBrandGmail },
+	'brand-office': { outline: IconBrandOffice, filled: IconBrandOffice },
 	'device-mobile': { outline: IconDeviceMobile, filled: IconDeviceMobileFilled },
 	copy: { outline: IconCopy, filled: IconCopyFilled },
 	// Tabler ships no filled download — outline doubles as the filled slot.

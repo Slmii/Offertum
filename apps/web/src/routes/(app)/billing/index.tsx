@@ -138,7 +138,6 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 				</Paper>
 
 				<SeatsCard seats={status.seats} state={status.state} />
-
 			</Stack>
 
 			<Dialog
@@ -208,7 +207,6 @@ function StatusPanel({
 			{secondaryLine(state, isPaymentProcessing) && (
 				<BodySmall color='textSecondary'>{secondaryLine(state, isPaymentProcessing)}</BodySmall>
 			)}
-
 
 			{showCancellationBanner && (
 				<Banner

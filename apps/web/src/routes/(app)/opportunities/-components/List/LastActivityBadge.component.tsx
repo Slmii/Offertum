@@ -27,10 +27,10 @@ export function LastActivityBadge({ lastActivity }: { lastActivity: Opportunity[
 			sx={{
 				display: 'inline-flex',
 				alignItems: 'center',
-				gap: 0.625,
+				gap: 0.75,
 				flexShrink: 0,
-				px: '7px',
-				py: '2px',
+				px: 1,
+				py: 0.25,
 				backgroundColor: c.paper2,
 				border: `1px solid ${c.line}`,
 				color: c.ink3,

@@ -77,7 +77,7 @@ export function DismissDialog({
 				</Banner>
 			)}
 			<BodySmall color='textSecondary' sx={{ mb: 2 }}>
-				Je feedback helpt onze AI om in de toekomst beter te herkennen wat wél en geen offerteaanvraag is.
+				We gebruiken je feedback om onze herkenning te verbeteren.
 			</BodySmall>
 			<Form<DismissOpportunityForm>
 				id={DISMISS_FORM_ID}

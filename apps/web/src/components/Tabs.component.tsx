@@ -100,16 +100,16 @@ function containerSx(variant: Variant, tokens: Theme['tokens']): object {
 			return {
 				minHeight: 0,
 				width: 'fit-content',
-				p: '3px',
+				p: 0.5,
 				backgroundColor: tokens.color.paper2,
 				border: `1px solid ${tokens.color.line}`,
 				borderRadius: `${tokens.radius.md}px`,
-				[flex]: { gap: '3px' }
+				[flex]: { gap: 0.5 }
 			};
 		case 'chip':
 			return { minHeight: 0, [flex]: { gap: 0.75, flexWrap: 'wrap' } };
 		case 'vertical':
-			return { minHeight: 0, [flex]: { gap: '1px' } };
+			return { minHeight: 0, [flex]: { gap: 0.25 } };
 		default: // underline
 			return { minHeight: 0, borderBottom: `1px solid ${tokens.color.line}` };
 	}
@@ -196,7 +196,7 @@ function countSx(variant: Variant, active: boolean, tokens: Theme['tokens']): ob
 		default: // underline
 			return {
 				px: 0.75,
-				py: '1px',
+				py: 0.25,
 				borderRadius: `${tokens.radius.sm}px`,
 				fontSize: 11,
 				fontWeight: 'bold',

@@ -58,7 +58,7 @@ export function WonComposerState({
 					<Box sx={{ fontFamily: tokens.font.display, fontSize: 19, fontWeight: 'bold', color: c.won[700] }}>
 						Gewonnen
 					</Box>
-					<BodySmall color='textSecondary' sx={{ mt: '2px' }}>
+					<BodySmall color='textSecondary' sx={{ mt: 0.25 }}>
 						De opdracht is bevestigd{confirmedBy}. Mooi werk.
 					</BodySmall>
 				</Box>

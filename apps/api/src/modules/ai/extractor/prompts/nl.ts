@@ -78,6 +78,13 @@ export function buildExtractorPromptNL(input: ExtractorInput, referenceDateIso: 
 		doorgestuurde headers of algemene bedrijfsgegevens. Null alleen als er nergens
 		een e-mailadres beschikbaar is.
 
+		### customerPhone (string | null)
+		Het telefoonnummer van de afzender, precies zoals geschreven (behoud de notatie,
+		bijv. "06 12 34 56 78", "+31 6 12345678", "0345-123456"). Zoek in de ondertekening
+		en de body. Neem geen nummers over uit disclaimers, doorgestuurde headers of
+		algemene bedrijfsgegevens van een ander bedrijf. Null als er geen telefoonnummer
+		in de e-mail staat.
+
 		### address (string | null)
 		Locatie van de KLUS of LEVERING, zo gedetailleerd als de e-mail het geeft.
 		Voorbeelden: "Utrecht-Noord", "Amsterdam De Pijp", "Rotterdam Hillegersberg", een

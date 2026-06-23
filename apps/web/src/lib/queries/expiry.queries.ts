@@ -6,7 +6,10 @@ import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query
 
 export const ExpiryKeys = {
 	all: ['expiry-action'] as const,
-	forOpportunity: (opportunityId: string) => [...(['expiry-action'] as const), opportunityId] as const
+	forOpportunity: (opportunityId: string) => [...(['expiry-action'] as const), opportunityId] as const,
+	// Mutation key for the take-action call — lets the detail page observe an in-flight
+	// LAST_FOLLOWUP (which generates a reply draft) via `useIsMutating` and show the loading state.
+	take: (opportunityId: string) => ['expiry-take', opportunityId] as const
 };
 
 /**
@@ -32,6 +35,7 @@ export function useTakeExpiryAction(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
+		mutationKey: ExpiryKeys.take(opportunityId),
 		mutationFn: ({ id, kind }: { id: string; kind: ExpiryActionKindValue }) => takeExpiryAction({ id, kind }),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ExpiryKeys.forOpportunity(opportunityId) });

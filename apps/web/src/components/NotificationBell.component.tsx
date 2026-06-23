@@ -196,7 +196,7 @@ function FilterTab({
 				alignItems: 'center',
 				gap: 0.75,
 				px: 1.25,
-				py: 0.625,
+				py: 0.75,
 				border: 'none',
 				borderRadius: `${tokens.radius.sm}px`,
 				backgroundColor: active ? tokens.color.paper3 : 'transparent',
@@ -257,7 +257,7 @@ function NotificationRow({ notification, onActivate }: { notification: AppNotifi
 				sx={{
 					width: 32,
 					height: 32,
-					mt: '1px',
+					mt: 0.25,
 					borderRadius: `${tokens.radius.sm}px`,
 					backgroundColor: kind.bg(tokens),
 					color: kind.fg(tokens),

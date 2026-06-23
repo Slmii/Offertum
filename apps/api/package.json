@@ -17,6 +17,7 @@
 		"db:deploy": "prisma migrate deploy",
 		"db:studio": "prisma studio",
 		"db:seed": "prisma db seed",
+		"db:seed:check": "tsx prisma/seed.ts --check",
 		"invite": "tsx scripts/invite.ts",
 		"fixtures:export": "tsx scripts/export-classifier-fixtures.ts",
 		"inngest": "inngest-cli dev -u http://localhost:3000/api/inngest",

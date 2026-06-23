@@ -43,7 +43,8 @@ function VoiceColumn({ tone, label, samples }: { tone: keyof typeof VOICE_TONES;
 				<Box
 					key={index}
 					sx={{
-						p: '10px 12px',
+						py: 1.25,
+						px: 1.5,
 						borderRadius: `${tokens.radius.md}px`,
 						border: `1px solid ${t.border}`,
 						backgroundColor: t.bg,

@@ -43,6 +43,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Jeroen Bakker',
 			customerEmail: 'j.bakker@gmail.com',
+			customerPhone: null,
 			address: 'Utrecht-Noord',
 			requestType: 'CV-ketel vervangen',
 			urgency: 'high',
@@ -59,6 +60,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Lisa van der Meer',
 			customerEmail: 'lisa.vdm@outlook.com',
+			customerPhone: null,
 			address: 'Kasteel de Wittenburg',
 			requestType: 'Bruiloftsfotografie',
 			urgency: 'normal',
@@ -76,6 +78,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 			// name), the signature person wins here.
 			customerName: 'Henk',
 			customerEmail: 'devries.familie@ziggo.nl',
+			customerPhone: null,
 			address: 'Amersfoort',
 			requestType: 'Buitenschilderwerk woning',
 			urgency: 'normal',
@@ -92,6 +95,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Mark Visser',
 			customerEmail: 'mark.visser@hotmail.com',
+			customerPhone: null,
 			address: 'Den Haag',
 			requestType: 'Dakkapel plaatsen',
 			urgency: 'normal',
@@ -105,6 +109,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Sander Hoekstra',
 			customerEmail: 'sander@buildbright.nl',
+			customerPhone: null,
 			address: null,
 			requestType: 'Migratie naar Microsoft 365',
 			urgency: 'normal',
@@ -119,6 +124,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Ingrid de Jong',
 			customerEmail: 'ingrid.dj@gmail.com',
+			customerPhone: null,
 			address: 'Almere',
 			requestType: 'Tuininrichting',
 			urgency: 'normal',
@@ -132,6 +138,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Pieter Janssen',
 			customerEmail: 'p.janssen@kpnmail.nl',
+			customerPhone: null,
 			address: 'Rotterdam Hillegersberg',
 			requestType: 'Lekkage reparatie + nieuwe wastafel',
 			urgency: 'high',
@@ -149,6 +156,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Marije Veenstra',
 			customerEmail: 'marketing@atlasverzekeringen.nl',
+			customerPhone: null,
 			address: null,
 			requestType: 'Brochures drukken',
 			urgency: 'normal',
@@ -163,6 +171,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Daan van der Linden',
 			customerEmail: 'daanvdl@protonmail.com',
+			customerPhone: null,
 			address: 'Amsterdam',
 			requestType: 'Internationale verhuizing',
 			urgency: 'normal',
@@ -176,6 +185,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'F. Hendriks',
 			customerEmail: 'fhendriks78@gmail.com',
+			customerPhone: null,
 			address: 'Eindhoven',
 			requestType: 'Schuttingen plaatsen',
 			urgency: 'normal',
@@ -191,6 +201,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Joep',
 			customerEmail: 'joep88@hotmail.com',
+			customerPhone: null,
 			address: null,
 			requestType: 'Veranda plaatsen',
 			urgency: 'normal',
@@ -205,6 +216,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'James Thompson',
 			customerEmail: 'james.t.nl@gmail.com',
+			customerPhone: null,
 			address: 'Amsterdam De Pijp',
 			requestType: 'Keukenrenovatie',
 			urgency: 'normal',
@@ -218,6 +230,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Wouter Bos',
 			customerEmail: 'w.bos.tuinder@kpnmail.nl',
+			customerPhone: null,
 			address: null,
 			requestType: 'Tuinhuis plaatsen',
 			urgency: 'normal',
@@ -232,6 +245,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Patrick van Doorn',
 			customerEmail: 'p.vandoorn@xs4all.nl',
+			customerPhone: null,
 			address: null,
 			requestType: 'Houten vlonder vervangen',
 			urgency: 'normal',
@@ -247,6 +261,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Rachid El Amrani',
 			customerEmail: 'rachid@example.com',
+			customerPhone: null,
 			address: 'Breda',
 			requestType: 'Gevelreiniging',
 			urgency: 'normal',
@@ -261,6 +276,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Marja Bos',
 			customerEmail: 'marja.bos@gmail.com',
+			customerPhone: null,
 			address: null,
 			requestType: 'Dakraam plaatsen',
 			urgency: 'normal',
@@ -275,6 +291,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Facility Team',
 			customerEmail: 'facility@example.nl',
+			customerPhone: null,
 			address: null,
 			requestType: 'Werkomschrijving uit bijlage',
 			urgency: 'normal',
@@ -289,6 +306,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Ellen de Graaf',
 			customerEmail: 'ellen@example.com',
+			customerPhone: null,
 			address: null,
 			requestType: 'Badkamerrenovatie',
 			urgency: 'normal',
@@ -306,6 +324,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Sven Akkermans',
 			customerEmail: 'sven.akkermans@quartzcompany.nl', // fromEmail wins, NOT marketing@ in signature
+			customerPhone: null,
 			address: 'Tilburg',
 			requestType: 'Zonweringen plaatsen',
 			urgency: 'normal',
@@ -320,6 +339,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Receptie — DeVries Notarissen',
 			customerEmail: 'j.terhaar@devries-notarissen.nl', // body explicitly redirects → override fromEmail
+			customerPhone: null,
 			address: 'Zwolle',
 			requestType: 'Interieurrenovatie kantoorruimte',
 			urgency: 'normal',
@@ -334,6 +354,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Mariska Bouwman',
 			customerEmail: 'mariska@logiplus-bv.nl',
+			customerPhone: null,
 			// Work location is Veghel; signature has Goirle. address rule must prefer work location.
 			address: 'Veghel',
 			requestType: 'Schilderwerk magazijn',
@@ -349,6 +370,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Hans Verschoor',
 			customerEmail: 'h.verschoor@gmail.com',
+			customerPhone: null,
 			address: null,
 			requestType: 'Tuinmuur opnieuw metselen',
 			// "morgen langskomen" without acute damage = high (not emergency — tuinmuur is
@@ -367,6 +389,7 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 		expected: {
 			customerName: 'Sandra Meijer',
 			customerEmail: 'sandra@kerkenraad-utrecht.nl',
+			customerPhone: null,
 			address: 'Utrecht',
 			requestType: 'Airconditioning installatie',
 			urgency: 'high', // offerte gewenst binnen 1-14 dagen (29 mei vs 16 mei ref)

@@ -110,6 +110,7 @@ function makeService(
 					wrapExtractor({
 						customerName: 'Alice',
 						customerEmail: 'alice@example.com',
+						customerPhone: null,
 						address: 'Utrecht',
 						requestType: 'CV-ketel vervangen',
 						urgency: 'normal',
@@ -178,6 +179,7 @@ function makeOpportunityRecord(status: PrismaOpportunityStatus): OpportunityReco
 		classifierReason: 'Offerte aanvraag',
 		customerName: 'Alice',
 		customerEmail: 'alice@example.com',
+		customerPhone: null,
 		address: 'Utrecht',
 		requestType: 'CV-ketel vervangen',
 		urgency: PrismaUrgency.NORMAL,
@@ -249,6 +251,7 @@ describe('OpportunitiesService.processRawMessagesForAccount', () => {
 						{
 							customerName: 'Alice',
 							customerEmail: 'alice@example.com',
+							customerPhone: null,
 							address: 'Utrecht',
 							requestType: 'CV-ketel vervangen',
 							urgency: 'high',
@@ -403,9 +406,7 @@ describe('OpportunitiesService.list pagination', () => {
 		};
 		const repository = makeRepository({
 			listByOrganization: jest.fn().mockReturnValue(Promise.resolve([assigned])),
-			findUserDisplayLabels: jest
-				.fn()
-				.mockReturnValue(Promise.resolve(new Map([['user-1', 'Jan de Vries']])))
+			findUserDisplayLabels: jest.fn().mockReturnValue(Promise.resolve(new Map([['user-1', 'Jan de Vries']])))
 		});
 		const service = makeService({ repository });
 

@@ -7,7 +7,7 @@ import { BodySmall, H1, H2 } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
-import { opportunityExpiryActionQueryOptions } from '@/lib/queries/expiry.queries';
+import { ExpiryKeys, opportunityExpiryActionQueryOptions } from '@/lib/queries/expiry.queries';
 import {
 	opportunityDetailQueryOptions,
 	useComposeFollowupReplyDraft,
@@ -38,7 +38,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import { useTheme } from '@mui/material/styles';
 import { type OpportunityStatus } from '@offertum/shared';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useIsMutating, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { AssigneePicker } from './-components/Details/AssigneePicker.component';
@@ -141,6 +141,15 @@ function OpportunityDetailPage() {
 	const showRegenerateHint = Boolean(
 		isEntitled && replyDraft && isDraftEditable && shouldShowRegenerateHint({ me, replyDraft })
 	);
+
+	// True while the expiry card's "Laatste herinnering" (LAST_FOLLOWUP) action is generating a
+	// reply draft. That mutation lives in ExpiryActionCard, so we observe it via useIsMutating and
+	// show the composer's loading state for the duration (other expiry actions don't draft).
+	const isGeneratingFollowup =
+		useIsMutating({
+			mutationKey: ExpiryKeys.take(id),
+			predicate: mutation => (mutation.state.variables as { kind?: string } | undefined)?.kind === 'LAST_FOLLOWUP'
+		}) > 0;
 
 	// Status switcher — surfaced on the context-rail pill (the header pipeline mirrors it
 	// read-only). Options stay fully-open (pattern #20); ordering is just UX guidance.
@@ -342,6 +351,7 @@ function OpportunityDetailPage() {
 					</Stack>
 					<Collapse in={isThreadCollapsible ? isThreadOpen : true}>
 						<ConversationThread
+							opportunityId={id}
 							original={{
 								subject: opportunity.subject,
 								fromName: opportunity.fromName,
@@ -410,7 +420,9 @@ function OpportunityDetailPage() {
 					)}
 
 					{isEntitled ? (
-						status === 'won' ? (
+						isGeneratingFollowup ? (
+							<ComposerLoadingState customerName={opportunity.customerName} />
+						) : status === 'won' ? (
 							<WonComposerState
 								customerName={opportunity.customerName}
 								appointmentIso={opportunity.customerAppointment}
@@ -440,7 +452,8 @@ function OpportunityDetailPage() {
 									{/* Composer header band — icon tile + title (+ check-in subtitle) + regenerate */}
 									<Box
 										sx={{
-											p: '13px 18px',
+											py: 1.75,
+											px: 2.25,
 											borderBottom: `1px solid ${isPendingCheckIn ? tokens.color.accent[300] : tokens.color.line}`,
 											backgroundColor: isPendingCheckIn
 												? tokens.color.accent[50]
@@ -479,7 +492,7 @@ function OpportunityDetailPage() {
 												{isPendingCheckIn ? 'Automatische follow-up' : 'Jouw antwoord'}
 											</Box>
 											{isPendingCheckIn && (
-												<Box sx={{ fontSize: 12, color: tokens.color.accent[700], mt: '1px' }}>
+												<Box sx={{ fontSize: 12, color: tokens.color.accent[700], mt: 0.25 }}>
 													Opgesteld door Offertum — klant is{' '}
 													{checkInSilentSince ?? 'een paar dagen'} stil
 												</Box>
@@ -512,7 +525,7 @@ function OpportunityDetailPage() {
 									</Box>
 
 									{/* Editor */}
-									<Box sx={{ p: '18px' }}>
+									<Box sx={{ p: 2.25 }}>
 										<DraftEditor
 											body={body}
 											setBody={setBody}
@@ -564,7 +577,8 @@ function OpportunityDetailPage() {
 									{/* Action bar — dismiss (left) + send (right) */}
 									<Box
 										sx={{
-											p: '14px 18px',
+											py: 1.75,
+											px: 2.25,
 											borderTop: `1px solid ${tokens.color.line}`,
 											backgroundColor: tokens.color.paper2,
 											display: 'flex',
@@ -576,8 +590,8 @@ function OpportunityDetailPage() {
 										}}
 									>
 										<Button
-											variant='text'
-											color='inherit'
+											variant='contained'
+											color='error'
 											size='medium'
 											onClick={() => setDismissOpen(true)}
 											startIcon={<AppIcon name='x' size='small' />}
@@ -651,7 +665,7 @@ function OpportunityDetailPage() {
 									{opportunity.timeline.length === 1 ? 'gebeurtenis' : 'gebeurtenissen'}
 								</BodySmall>
 							</Stack>
-							<Paper variant='outlined' sx={{ p: '24px' }}>
+							<Paper variant='outlined' sx={{ p: 3 }}>
 								<Timeline events={opportunity.timeline} />
 							</Paper>
 						</Box>
@@ -662,6 +676,7 @@ function OpportunityDetailPage() {
 						<ContextRailCard
 							customerName={opportunity.customerName}
 							customerEmail={opportunity.customerEmail}
+							customerPhone={opportunity.customerPhone}
 						/>
 						{isEntitled && <ExpiryActionCard opportunityId={id} isOwner={isOwner} />}
 						<RailQuoteCard opportunityId={id} />

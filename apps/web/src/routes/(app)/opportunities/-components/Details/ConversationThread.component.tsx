@@ -36,7 +36,7 @@ interface ThreadBubbleData {
 	body: string;
 	subject: string | null;
 	version: number | null;
-	attachmentsCount: number;
+	attachments: ReplyDraft['attachments'];
 	hasReplyBadge: boolean;
 	isCheckIn: boolean;
 	wasCloser: boolean;
@@ -57,7 +57,7 @@ function buildBubbles(
 		body: original.body,
 		subject: original.subject,
 		version: null,
-		attachmentsCount: 0,
+		attachments: [],
 		hasReplyBadge: false,
 		isCheckIn: false,
 		wasCloser: false
@@ -77,7 +77,7 @@ function buildBubbles(
 			body: draft.body,
 			subject: null,
 			version: index + 1,
-			attachmentsCount: draft.attachments.length,
+			attachments: draft.attachments,
 			hasReplyBadge: false,
 			// A sent draft Offertum generated as an automatic silence check-in.
 			isCheckIn: draft.kind === 'check_in',
@@ -95,7 +95,7 @@ function buildBubbles(
 			body: reply.body,
 			subject: null,
 			version: null,
-			attachmentsCount: 0,
+			attachments: [],
 			// Only inbound customer replies carry the "Antwoord" badge; the should-reply
 			// classifier may have flagged the message as a conversation closer (no draft generated).
 			hasReplyBadge: !isOutbound,
@@ -109,10 +109,12 @@ function buildBubbles(
 }
 
 export function ConversationThread({
+	opportunityId,
 	original,
 	sentDrafts,
 	customerReplies
 }: {
+	opportunityId: string;
 	original: OriginalEmail;
 	sentDrafts: ReplyDraft[];
 	customerReplies: CustomerReplyEntry[];
@@ -136,13 +138,26 @@ export function ConversationThread({
 				}}
 			/>
 			{bubbles.map(bubble => (
-				<ThreadBubble key={bubble.id} bubble={bubble} defaultOpen={bubbles.length === 1} />
+				<ThreadBubble
+					key={bubble.id}
+					bubble={bubble}
+					opportunityId={opportunityId}
+					defaultOpen={bubbles.length === 1}
+				/>
 			))}
 		</Box>
 	);
 }
 
-function ThreadBubble({ bubble, defaultOpen }: { bubble: ThreadBubbleData; defaultOpen: boolean }) {
+function ThreadBubble({
+	bubble,
+	opportunityId,
+	defaultOpen
+}: {
+	bubble: ThreadBubbleData;
+	opportunityId: string;
+	defaultOpen: boolean;
+}) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 	const isOut = bubble.direction === 'out';
@@ -303,20 +318,46 @@ function ThreadBubble({ bubble, defaultOpen }: { bubble: ThreadBubbleData; defau
 						{bubble.body || '(geen tekstuele inhoud)'}
 					</Box>
 
-					{bubble.attachmentsCount > 0 && (
-						<Box
-							sx={{
-								px: 2,
-								pb: 1.5,
-								display: 'inline-flex',
-								alignItems: 'center',
-								gap: 0.75,
-								color: c.ink4,
-								fontSize: 12
-							}}
-						>
-							<AppIcon name='paperclip' size='small' /> {bubble.attachmentsCount} bijlage
-							{bubble.attachmentsCount === 1 ? '' : 'n'}
+					{bubble.attachments.length > 0 && (
+						<Box sx={{ px: 2, pb: 1.5, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+							{bubble.attachments.map(attachment => (
+								<Box
+									key={attachment.id}
+									component='button'
+									type='button'
+									onClick={() =>
+										window.open(
+											`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachment.id}/download`,
+											'_blank',
+											'noopener,noreferrer'
+										)
+									}
+									sx={{
+										display: 'inline-flex',
+										alignItems: 'center',
+										gap: 0.75,
+										maxWidth: '100%',
+										px: 1,
+										py: 0.5,
+										borderRadius: `${tokens.radius.sm}px`,
+										border: `1px solid ${c.line}`,
+										backgroundColor: c.surface,
+										color: c.ink2,
+										fontFamily: tokens.font.sans,
+										fontSize: 12.5,
+										cursor: 'pointer',
+										'&:hover': { backgroundColor: c.paper2, borderColor: c.lineStrong }
+									}}
+								>
+									<AppIcon name='paperclip' size='small' />
+									<Box
+										component='span'
+										sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+									>
+										{attachment.filename}
+									</Box>
+								</Box>
+							))}
 						</Box>
 					)}
 				</AccordionDetails>

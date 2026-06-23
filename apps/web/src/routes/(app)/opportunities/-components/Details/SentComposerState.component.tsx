@@ -30,7 +30,7 @@ export function SentComposerState({
 				border: `1px solid ${c.accent[300]}`,
 				borderRadius: `${tokens.radius.lg}px`,
 				backgroundColor: c.accent[50],
-				p: '18px',
+				p: 2.25,
 				display: 'flex',
 				alignItems: 'center',
 				gap: 1.75,
@@ -63,8 +63,7 @@ export function SentComposerState({
 				</Box>
 			</Stack>
 			<Button
-				variant='outlined'
-				color='inherit'
+				variant='contained'
 				size='small'
 				onClick={onComposeFollowup}
 				disabled={isComposing}

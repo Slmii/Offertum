@@ -250,7 +250,7 @@ function AvailabilityBody({ connectedProviders, onCancel, onConfirm }: Availabil
 						mt: 2,
 						mb: 1.5,
 						px: 1.25,
-						py: 0.625,
+						py: 0.75,
 						bgcolor: tokens.color.accent[50],
 						color: tokens.color.accent[700],
 						borderRadius: `${tokens.radius.sm}px`
@@ -355,7 +355,7 @@ function AvailabilityBody({ connectedProviders, onCancel, onConfirm }: Availabil
 										borderRadius: '50%',
 										bgcolor: tokens.color.accent[500],
 										opacity: 0.7,
-										mt: '1px'
+										mt: 0.25
 									}}
 								/>
 							)}
@@ -385,7 +385,7 @@ function AvailabilityBody({ connectedProviders, onCancel, onConfirm }: Availabil
 				>
 					<Box
 						component='span'
-						sx={{ mt: '2px', flexShrink: 0, color: tokens.color.ink4, display: 'inline-flex' }}
+						sx={{ mt: 0.25, flexShrink: 0, color: tokens.color.ink4, display: 'inline-flex' }}
 					>
 						<AppIcon name='info' size='small' />
 					</Box>

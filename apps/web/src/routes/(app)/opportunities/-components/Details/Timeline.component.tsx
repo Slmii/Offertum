@@ -1,4 +1,5 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
+import { quotePdfDownloadUrl } from '@/lib/queries/quote-drafts.queries';
 import { toReadableDate, toReadableDateTime } from '@/lib/utils/date.utils';
 import { OPPORTUNITY_STATUS_LABELS_NL, OPPORTUNITY_URGENCY_LABELS_NL } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
@@ -248,14 +249,14 @@ function TimelineRow({ event }: { event: OpportunityTimelineEvent }) {
 				<AppIcon name={icon} size='small' />
 			</Box>
 
-			<Box sx={{ flex: 1, minWidth: 0, pt: '4px' }}>
+			<Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
 				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
 					<Box
 						component='span'
 						sx={{
 							flexShrink: 0,
-							px: '9px',
-							py: '3px',
+							px: 1.25,
+							py: 0.5,
 							borderRadius: `${tokens.radius.md}px`,
 							backgroundColor: t.tint,
 							border: `1px solid ${t.border}`,
@@ -293,8 +294,8 @@ function TimelineDetail({ event }: { event: OpportunityTimelineEvent }) {
 			<Box
 				sx={{
 					mt: 1.25,
-					px: '18px',
-					py: '14px',
+					px: 2.25,
+					py: 1.75,
 					backgroundColor: c.surfaceSunk,
 					borderRadius: `${tokens.radius.lg}px`,
 					display: 'flex',
@@ -307,7 +308,7 @@ function TimelineDetail({ event }: { event: OpportunityTimelineEvent }) {
 						key={change.field}
 						sx={{ display: 'grid', gridTemplateColumns: '88px 1fr', gap: 1.5, alignItems: 'start' }}
 					>
-						<Box sx={{ fontSize: 13, color: c.ink3, fontWeight: 'medium', pt: '1px' }}>
+						<Box sx={{ fontSize: 13, color: c.ink3, fontWeight: 'medium', pt: 0.25 }}>
 							{TIMELINE_FIELD_LABELS_NL[change.field]}
 						</Box>
 						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -341,15 +342,23 @@ function TimelineDetail({ event }: { event: OpportunityTimelineEvent }) {
 	}
 
 	if (event.kind === 'quote_pdf_generated') {
+		// The generated PDF is downloadable/previewable — open it in a new tab.
 		return (
 			<Box
+				component='a'
+				href={quotePdfDownloadUrl(event.quotePdfId)}
+				target='_blank'
+				rel='noopener noreferrer'
 				sx={{
 					mt: 0.5,
 					fontSize: 13,
-					color: c.ink3,
+					color: c.accent[700],
+					fontWeight: 'medium',
 					display: 'inline-flex',
 					alignItems: 'center',
-					gap: 0.5
+					gap: 0.5,
+					textDecoration: 'none',
+					'&:hover': { textDecoration: 'underline' }
 				}}
 			>
 				<AppIcon name='file-text' size='small' /> {event.filename}

@@ -1,9 +1,38 @@
-import { AppIcon } from '@/components/AppIcon.component';
+import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Avatar } from '@/components/Avatar.component';
+import { SplitButton } from '@/components/SplitButton.component';
 import { BodySmall } from '@/components/Text.component';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import { useTheme } from '@mui/material/styles';
+
+interface MailTarget {
+	label: string;
+	icon: AppIconName;
+	url: string;
+	// Web-compose targets open in a new tab; the default mailapp uses a `mailto:` handoff.
+	external: boolean;
+}
+
+/** Compose-URL targets for an email — the default OS mail app plus Gmail / Outlook web. */
+function mailTargetsFor(email: string): MailTarget[] {
+	const to = encodeURIComponent(email);
+	return [
+		{ label: 'Standaard mailapp', icon: 'mail', url: `mailto:${email}`, external: false },
+		{
+			label: 'Gmail',
+			icon: 'brand-gmail',
+			url: `https://mail.google.com/mail/?view=cm&fs=1&to=${to}`,
+			external: true
+		},
+		{
+			label: 'Outlook',
+			icon: 'brand-office',
+			url: `https://outlook.office.com/mail/deeplink/compose?to=${to}`,
+			external: true
+		}
+	];
+}
 
 /**
  * Context-rail contact card — ported from the design's `ContextRailCard` (Werkruimte).
@@ -14,14 +43,32 @@ import { useTheme } from '@mui/material/styles';
  */
 export function ContextRailCard({
 	customerName,
-	customerEmail
+	customerEmail,
+	customerPhone
 }: {
 	customerName: string | null;
 	customerEmail: string | null;
+	customerPhone: string | null;
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 	const displayName = customerName?.trim() || customerEmail || 'Onbekende klant';
+
+	// "Mail" is a split button: the main button opens the OS default mail app, the arrow menu
+	// offers Gmail / Outlook web compose. Targets carry a pre-filled `to=`.
+	const mailTargets = customerEmail ? mailTargetsFor(customerEmail) : [];
+	const openMailTarget = (target: MailTarget) => {
+		if (target.external) {
+			window.open(target.url, '_blank', 'noopener,noreferrer');
+		} else {
+			window.location.assign(target.url);
+		}
+	};
+	const mailOptions = mailTargets.map(target => ({
+		label: target.label,
+		icon: target.icon,
+		onClick: () => openMailTarget(target)
+	}));
 
 	// Shared style for the two quick-contact buttons (Mail / Bel) — flex 1, 34px tall, neutral.
 	const contactButtonSx = {
@@ -44,8 +91,8 @@ export function ContextRailCard({
 	} as const;
 
 	return (
-		<Paper variant='outlined' sx={{ p: '18px' }}>
-			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: '14px' }}>
+		<Paper variant='outlined' sx={{ p: 2.25 }}>
+			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.75 }}>
 				<Avatar name={displayName} size={44} />
 				<Box sx={{ minWidth: 0 }}>
 					<Box
@@ -75,33 +122,35 @@ export function ContextRailCard({
 							{customerEmail}
 						</BodySmall>
 					)}
+					{customerPhone && (
+						<BodySmall color='textSecondary' sx={{ display: 'block', whiteSpace: 'nowrap' }}>
+							{customerPhone}
+						</BodySmall>
+					)}
 				</Box>
 			</Box>
 
 			<Box sx={{ display: 'flex', gap: 1 }}>
+				<SplitButton
+					sx={{ flex: 1 }}
+					disabled={!customerEmail}
+					ariaLabel='Kies mailapp'
+					primary={{
+						label: 'Mail',
+						icon: 'mail',
+						onClick: () => mailTargets[0] && openMailTarget(mailTargets[0])
+					}}
+					options={mailOptions.slice(1)} // skip the first target, which is the primary button
+				/>
 				<Box
 					component='a'
-					target='_blank'
-					href={customerEmail ? `mailto:${customerEmail}` : undefined}
+					href={customerPhone ? `tel:${customerPhone.replace(/\s+/g, '')}` : undefined}
 					sx={{
 						...contactButtonSx,
-						pointerEvents: customerEmail ? 'auto' : 'none',
-						opacity: customerEmail ? 1 : 0.55
+						pointerEvents: customerPhone ? 'auto' : 'none',
+						opacity: customerPhone ? 1 : 0.55
 					}}
-				>
-					<AppIcon name='mail' size='small' /> Mail
-				</Box>
-				{/* Phone number extraction is not yet implemented — no customerPhone field
-				    exists in the opportunity data model. The button is disabled until
-				    a phone field is added to the extractor. */}
-				<Box
-					component='a'
-					sx={{
-						...contactButtonSx,
-						pointerEvents: 'none',
-						opacity: 0.55
-					}}
-					aria-disabled='true'
+					aria-disabled={customerPhone ? undefined : 'true'}
 				>
 					<AppIcon name='phone' size='small' /> Bel
 				</Box>

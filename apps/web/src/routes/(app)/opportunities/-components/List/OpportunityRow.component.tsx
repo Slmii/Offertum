@@ -91,7 +91,10 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					display: 'flex',
 					alignItems: 'center',
 					gap: 2,
-					p: '14px 18px 14px 20px',
+					pt: 1.75,
+					pr: 2.25,
+					pb: 1.75,
+					pl: 2.5,
 					borderRadius: `${tokens.radius.md}px`,
 					backgroundColor: isDismissed ? c.paper2 : pendingCheckIn ? c.accent[50] : c.surface,
 					border: `1px solid ${isDismissed ? c.line : pendingCheckIn ? c.accent[300] : c.line}`,
@@ -163,7 +166,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					)}
 				</Box>
 
-				<Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+				<Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
 					<Box
 						sx={{
 							display: 'flex',
@@ -256,8 +259,8 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							gap: 0.5,
 							flexShrink: 0,
 							maxWidth: 150,
-							px: '7px',
-							py: '2px',
+							px: 1,
+							py: 0.25,
 							backgroundColor: c.paper2,
 							border: `1px solid ${c.line}`,
 							color: c.ink3,
@@ -282,8 +285,8 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							alignItems: 'center',
 							gap: 0.5,
 							flexShrink: 0,
-							px: '8px',
-							py: '3px',
+							px: 1,
+							py: 0.5,
 							backgroundColor: c.paper2,
 							border: `1px solid ${c.line}`,
 							color: c.ink2,
@@ -309,8 +312,8 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 							alignItems: 'center',
 							gap: 0.75,
 							flexShrink: 0,
-							px: '8px',
-							py: '4px',
+							px: 1,
+							py: 0.5,
 							backgroundColor: c.accent[500],
 							color: c.surface,
 							fontSize: 12,

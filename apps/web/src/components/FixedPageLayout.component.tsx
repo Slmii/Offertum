@@ -55,7 +55,7 @@ export function FixedPageLayout({ header, children, scrollRef, offsetPx, bodySx 
 				ref={scrollRef}
 				sx={[
 					// `mx/px: 4px` keeps a focused row's outline from being clipped by the scroll edge.
-					{ flex: 1, minHeight: 0, overflowY: 'auto', px: '4px', mx: '-4px' },
+					{ flex: 1, minHeight: 0, overflowY: 'auto', px: 0.5, mx: '-4px' },
 					...(Array.isArray(bodySx) ? bodySx : [bodySx])
 				]}
 			>

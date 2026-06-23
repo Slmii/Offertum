@@ -97,11 +97,11 @@ export function ExtractedFieldsPanel({
 	};
 
 	return (
-		<Paper variant='outlined' sx={{ p: '18px' }}>
+		<Paper variant='outlined' sx={{ p: 2.25 }}>
 			<Overline component='div' sx={{ mb: 2 }}>
 				Aanvraaggegevens
 			</Overline>
-			<Stack useFlexGap spacing={1.625}>
+			<Stack useFlexGap spacing={1.75}>
 				<RailField label='Adres' icon='map-pin'>
 					<StandaloneField
 						name='address'

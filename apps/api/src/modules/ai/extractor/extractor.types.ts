@@ -47,6 +47,9 @@ const DELIVERABLE_HINTS_CAP = 10;
  *  - `requestType`: one short noun-phrase describing the work ("CV-ketel vervangen",
  *    "Bruiloftsfotografie", "Migratie naar Microsoft 365"). The extractor's job is to
  *    summarize, not paraphrase verbatim.
+ *  - `customerPhone`: the customer's phone number as written (preserve their formatting,
+ *    e.g. "06 12 34 56 78", "+31 6 …"). Pulled from the `From` identity / signature /
+ *    body. Null when no number is present anywhere in the email.
  *  - `urgency`: enum, see above.
  *  - `customerDeadline`: ISO date string (YYYY-MM-DD) for the project / delivery /
  *    completion deadline. Null when no project-completion date is derivable. Inspection
@@ -61,6 +64,7 @@ const DELIVERABLE_HINTS_CAP = 10;
 export const ExtractorResultSchema = z.object({
 	customerName: z.string().nullable(),
 	customerEmail: z.string().nullable(),
+	customerPhone: z.string().nullable(),
 	address: z.string().nullable(),
 	requestType: z.string(),
 	urgency: UrgencyEnum,

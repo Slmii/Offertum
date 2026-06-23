@@ -1,4 +1,5 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
+import { FlowingGradient } from '@/components/FlowingGradient.component';
 import { BodySmall, H3 } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
 import {
@@ -52,8 +53,7 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 	return (
 		<Box
 			sx={{
-				mb: 3,
-				p: '20px',
+				p: 2.5,
 				borderRadius: `${tokens.radius.xl}px`,
 				backgroundColor: c.pending[50],
 				border: `1px solid ${c.pending[500]}`
@@ -116,8 +116,8 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 				sx={{
 					display: 'inline-block',
 					mb: 1.5,
-					px: '10px',
-					py: '3px',
+					px: 1.25,
+					py: 0.5,
 					borderRadius: `${tokens.radius.md}px`,
 					backgroundColor: alpha(c.pending[500], 0.2),
 					color: c.pending[700],
@@ -137,6 +137,7 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 					{EXPIRY_ACTION_KINDS.map(kind => {
 						const isRecommended = kind === expiryAction.recommendedAction;
 						const isThisPending = takeAction.isPending && takeAction.variables?.kind === kind;
+
 						return (
 							<Box
 								key={kind}
@@ -147,12 +148,14 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 								}
 								disabled={isPending}
 								sx={{
+									position: 'relative',
+									overflow: 'hidden',
 									display: 'flex',
 									alignItems: 'center',
 									gap: 1,
 									width: '100%',
 									minHeight: 44,
-									px: '14px',
+									px: 1.75,
 									textAlign: 'left',
 									borderRadius: `${tokens.radius.md}px`,
 									fontFamily: tokens.font.sans,
@@ -162,13 +165,9 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 									transition: `background ${tokens.motion.durFast}ms`,
 									...(isRecommended
 										? {
-												backgroundColor: c.accent[500],
+												// Background is the animated FlowingGradient layer below.
 												border: `1px solid ${c.accent[500]}`,
-												color: c.accent.fg,
-												'&:hover': {
-													backgroundColor: c.accent[600],
-													borderColor: c.accent[600]
-												}
+												color: c.accent.fg
 											}
 										: {
 												backgroundColor: c.paper,
@@ -178,23 +177,31 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 											})
 								}}
 							>
-								<Box component='span' sx={{ display: 'inline-flex', flexShrink: 0 }}>
+								{isRecommended && (
+									<FlowingGradient sx={{ position: 'absolute', inset: 0, zIndex: 0 }} />
+								)}
+								<Box
+									component='span'
+									sx={{ position: 'relative', zIndex: 1, display: 'inline-flex', flexShrink: 0 }}
+								>
 									{isThisPending ? (
 										<CircularProgress size={14} color='inherit' />
 									) : (
 										<AppIcon name={EXPIRY_ACTION_ICONS[kind]} size='small' />
 									)}
 								</Box>
-								<Box component='span' sx={{ flex: 1 }}>
+								<Box component='span' sx={{ position: 'relative', zIndex: 1, flex: 1 }}>
 									{EXPIRY_ACTION_LABELS_NL[kind]}
 								</Box>
 								{isRecommended && (
 									<Box
 										component='span'
 										sx={{
+											position: 'relative',
+											zIndex: 1,
 											flexShrink: 0,
-											px: '8px',
-											py: '2px',
+											px: 1,
+											py: 0.25,
 											borderRadius: `${tokens.radius.sm}px`,
 											backgroundColor: alpha('#ffffff', 0.18),
 											color: c.accent.fg,

@@ -64,8 +64,8 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 					component='span'
 					sx={{
 						ml: 'auto',
-						px: '8px',
-						py: '1px',
+						px: 1,
+						py: 0.25,
 						borderRadius: `${tokens.radius.sm}px`,
 						backgroundColor: c.surface,
 						border: `1px solid ${c.lineStrong}`,

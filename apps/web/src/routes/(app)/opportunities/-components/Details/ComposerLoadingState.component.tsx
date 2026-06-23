@@ -31,7 +31,8 @@ export function ComposerLoadingState({ customerName }: { customerName: string | 
 			{/* Header band — accent-tinted */}
 			<Box
 				sx={{
-					p: '16px 18px',
+					py: 2,
+					px: 2.25,
 					borderBottom: `1px solid ${c.accent[200]}`,
 					backgroundColor: c.accent[50],
 					display: 'flex',
@@ -57,7 +58,7 @@ export function ComposerLoadingState({ customerName }: { customerName: string | 
 				</Box>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
 					<Box sx={{ fontSize: 16, fontWeight: 'bold', color: c.ink1 }}>Concept wordt opgesteld</Box>
-					<Box sx={{ fontSize: 14, color: c.accent[700], mt: '2px' }}>
+					<Box sx={{ fontSize: 14, color: c.accent[700], mt: 0.25 }}>
 						{customerName
 							? `Offertum schrijft een antwoord voor ${customerName} in jouw stijl.`
 							: 'Offertum schrijft een antwoord in jouw stijl.'}
@@ -66,7 +67,7 @@ export function ComposerLoadingState({ customerName }: { customerName: string | 
 			</Box>
 
 			{/* Body — shimmering paragraph skeleton */}
-			<Box sx={{ p: '22px', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+			<Box sx={{ p: 2.75, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
 				{SKELETON_PARAGRAPHS.map((paragraph, paragraphIndex) => (
 					<Box key={paragraphIndex} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
 						{paragraph.map((width, lineIndex) => (
@@ -86,7 +87,8 @@ export function ComposerLoadingState({ customerName }: { customerName: string | 
 			{/* Footer band — hint + inert (muted) send button */}
 			<Box
 				sx={{
-					p: '14px 18px',
+					py: 1.75,
+					px: 2.25,
 					borderTop: `1px solid ${c.line}`,
 					backgroundColor: c.paper2,
 					display: 'flex',
@@ -106,7 +108,7 @@ export function ComposerLoadingState({ customerName }: { customerName: string | 
 						display: 'inline-flex',
 						alignItems: 'center',
 						gap: 0.75,
-						px: '16px',
+						px: 2,
 						height: 38,
 						borderRadius: `${tokens.radius.md}px`,
 						backgroundColor: c.accent[300],

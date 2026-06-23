@@ -259,6 +259,10 @@ A user has `currentOrganizationId` for the active session. `OrganizationGuard` r
 - TypeScript everywhere. Named exports for components/utilities; avoid default exports.
 - Type/interface field order: primitives first, then booleans, then functions. Optionals after required.
 - Boolean variable prefixes: `is*`, `has*`, `can*`, `should*`.
+- **No hardcoded px in MUI spacing props.** Use theme spacing units (8px base) for every spacing shorthand — `p px py pt pb pl pr m mx my mt mb ml mr gap rowGap columnGap` — and `Stack`/`Grid` `spacing`/`gap`. Convert `px ÷ 8`: `8px → 1`, `20px → 2.5`, `12px → 1.5`, `2px → 0.25`. Split multi-value padding into axes: `p: '14px 18px'` → `py: 1.75, px: 2.25`. Never write `p: '20px'`. This keeps spacing on one scale and lets a theme spacing change propagate.
+    - **Only multiples of `0.25` (i.e. even px).** Round odd px to the nearest even before converting — `11px → 1.5` (not `1.375`), `7px → 1` (not `0.875`). No eighth/fractional unit values.
+    - **No 1px spacing.** A 1px padding/margin/gap is pointless — drop it entirely (or, if it's load-bearing, round up to `0.25`/2px). Never emit `0.125`.
+    - px is still fine for non-spacing CSS — `width`, `height`, `borderRadius`/`tokens.radius`, `fontSize`, `top`/`inset`, etc.
 - All API modules under `src/modules/<feature>/`. New modules: controller + service + module + `dto/` (request DTOs and `*.response.dto.ts`).
 - Per-app `.env` files (never root-level env). Read via `ConfigService<EnvSchema, true>.get('KEY', { infer: true })` for NestJS-managed code; raw `process.env` only for pre-DI code (`auth.config.ts`, `load-env.ts`, `lib/mails/send.ts`, `prisma/seed.ts`).
 - UI text in English first (Dutch i18n later).

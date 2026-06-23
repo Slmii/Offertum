@@ -113,6 +113,7 @@ interface SeedOpportunity {
 	bodyText: string;
 	customerName: string;
 	customerEmail: string;
+	customerPhone?: string | null;
 	address: string | null;
 	requestType: string;
 	urgency: Urgency;
@@ -182,10 +183,17 @@ interface SeedQuoteLine {
 interface SeedQuote {
 	status: QuoteDraftStatus;
 	lines: SeedQuoteLine[];
+	/** When the draft was assembled (the `opportunity.quote_created` event). Must be
+	 * after the opp arrived and at/after every PDF generation + the send. */
+	createdDaysAgo: number;
 	sentDaysAgo?: number;
 	validUntilDaysFromNow?: number;
 	/** Generated PDF filenames (one QuotePdf row each), newest last. */
 	pdfFilenames?: string[];
+	/** Per-PDF generation day (aligned with `pdfFilenames`), newest last. Each must
+	 * be at/after the draft was created and at/before the quote was sent. Defaults to
+	 * `createdDaysAgo - 1 - index` when omitted. */
+	pdfDaysAgo?: number[];
 }
 
 interface SeedExpiryAction {
@@ -214,12 +222,42 @@ interface SeedNotification {
 	read?: boolean;
 }
 
-interface SeedTimelineLog {
-	action: string;
-	daysAgo: number;
-	actorEmail?: string;
-	extra?: Record<string, unknown>;
+type WireStatus = 'new' | 'replied' | 'waiting' | 'won' | 'lost' | 'cold';
+
+const STATUS_TO_WIRE: Record<OpportunityStatus, WireStatus> = {
+	[OpportunityStatus.NEW]: 'new',
+	[OpportunityStatus.REPLIED]: 'replied',
+	[OpportunityStatus.WAITING]: 'waiting',
+	[OpportunityStatus.COLD]: 'cold',
+	[OpportunityStatus.WON]: 'won',
+	[OpportunityStatus.LOST]: 'lost'
+};
+
+interface SeedFieldChange {
+	field: 'urgency' | 'address' | 'customerDeadline' | 'customerAppointment';
+	before: string | null;
+	after: string | null;
 }
+
+/**
+ * Audit-log timeline entries, modeled as a discriminated union so each kind
+ * materializes the EXACT metadata shape the detail-view mapper
+ * (`toOpportunityTimelineEvent`) reads. Getting a key wrong (the old `extra` blob
+ * did) silently drops the event — the mapper returns `null`. `daysAgo` is when the
+ * action happened; it drives both `Log.createdAt` (timeline ordering) and the
+ * displayed timestamp, so it must respect the opportunity's lifecycle order.
+ */
+type SeedTimelineLog =
+	| {
+			kind: 'status_changed';
+			daysAgo: number;
+			actorEmail: string;
+			to: OpportunityStatus;
+			from?: OpportunityStatus | null;
+	  }
+	| { kind: 'assigned'; daysAgo: number; actorEmail: string; toEmail: string | null; fromEmail?: string | null }
+	| { kind: 'auto_cold'; daysAgo: number; daysSinceSent: number; coldAfterDays?: number }
+	| { kind: 'fields_updated'; daysAgo: number; actorEmail: string; changes: SeedFieldChange[] };
 
 // Ten hand-curated opportunities spanning both seed orgs, every status, urgency mix,
 // and realistic Dutch SMB scenarios (installateur, bouwbedrijf, schilder, etc.).
@@ -248,6 +286,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Marieke Jansen',
 		customerEmail: 'marieke.jansen@example.nl',
+		customerPhone: '06 24 18 33 02',
 		address: 'Hoofdstraat 12, 3811 EN Amersfoort',
 		requestType: 'CV-ketel vervanging (gas → hybride warmtepomp)',
 		urgency: Urgency.NORMAL,
@@ -281,6 +320,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Pieter de Vos',
 		customerEmail: 'pieter.devos@example.nl',
+		customerPhone: '06 11 92 33 44',
 		address: 'Kerkstraat 88, 1011 AB Amsterdam',
 		requestType: 'Loodgieterswerk — acute lekkage badkamervloer',
 		urgency: Urgency.EMERGENCY,
@@ -313,6 +353,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Lisa Bakker',
 		customerEmail: 'lisa.bakker@example.nl',
+		customerPhone: '06 41 52 63 74',
 		address: 'Lange Voorhout 4, 2514 EE Den Haag',
 		requestType: 'Elektra — krachtstroomgroep inductiekookplaat',
 		urgency: Urgency.HIGH,
@@ -345,6 +386,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Jurgen ten Have',
 		customerEmail: 'jurgen@bedrijfx.nl',
+		customerPhone: '06 38 29 17 06',
 		address: 'Industrieweg 22, 5708 AK Helmond',
 		requestType: 'Airco — multi-split twee binnenunits',
 		urgency: Urgency.NORMAL,
@@ -377,6 +419,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Familie van der Berg',
 		customerEmail: 'familie.vanderberg@example.nl',
+		customerPhone: '06 50 61 72 83',
 		address: 'Dorpsstraat 3, 7152 GE Eibergen',
 		requestType: 'CV jaarlijks onderhoudscontract',
 		urgency: Urgency.LOW,
@@ -409,6 +452,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Sara Kuipers',
 		customerEmail: 'sara.kuipers@example.nl',
+		customerPhone: '06 19 28 37 46',
 		address: 'Brouwersgracht 41, 1015 GA Amsterdam',
 		requestType: 'Verbouwing — uitbouw achterkamer ~12 m²',
 		urgency: Urgency.NORMAL,
@@ -441,6 +485,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Tom Visser',
 		customerEmail: 'tom.visser@example.nl',
+		customerPhone: '06 44 55 66 77',
 		address: 'Wilgenlaan 17, 3742 BX Baarn',
 		requestType: 'Dakkapel — voorzijde ~2,5 m breed',
 		urgency: Urgency.NORMAL,
@@ -473,6 +518,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Familie Geerts',
 		customerEmail: 'familie.geerts@example.nl',
+		customerPhone: '06 22 73 44 55',
 		address: 'Oranjestraat 25, 6711 GG Ede',
 		requestType: 'Badkamerrenovatie — complete strip + nieuw',
 		urgency: Urgency.HIGH,
@@ -505,6 +551,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Wouter Smits',
 		customerEmail: 'wouter.smits@example.nl',
+		customerPhone: '06 13 57 91 02',
 		address: 'Schoolweg 9, 8061 BB Hasselt',
 		requestType: 'Isolatie — vrijstaande schuur 18 m²',
 		urgency: Urgency.LOW,
@@ -537,6 +584,7 @@ const curatedOpportunities: ReadonlyArray<SeedOpportunity> = [
 		].join('\n'),
 		customerName: 'Jasper Koopmans',
 		customerEmail: 'jasper.koopmans@example.nl',
+		customerPhone: '06 48 26 04 82',
 		address: 'Markt 14, 5611 EB Eindhoven',
 		requestType: 'Keukenrenovatie — IKEA Metod inbouw',
 		urgency: Urgency.NORMAL,
@@ -713,6 +761,17 @@ const SYNTHETIC_URGENCIES: ReadonlyArray<Urgency> = [
 	Urgency.EMERGENCY
 ];
 
+// Minimum arrival age (days) per status, so a status implying engagement leaves room
+// for its lifecycle (reply, status change, silence flip) between arrival and today.
+const STATUS_ARRIVAL_FLOOR: Record<OpportunityStatus, number> = {
+	[OpportunityStatus.NEW]: 1,
+	[OpportunityStatus.REPLIED]: 8,
+	[OpportunityStatus.WAITING]: 11,
+	[OpportunityStatus.WON]: 16,
+	[OpportunityStatus.LOST]: 19,
+	[OpportunityStatus.COLD]: 24
+};
+
 function pad(value: number, length: number): string {
 	return String(value).padStart(length, '0');
 }
@@ -752,8 +811,11 @@ function buildSyntheticOpportunities(start: number, total: number): SeedOpportun
 		const status = SYNTHETIC_STATUSES[i % SYNTHETIC_STATUSES.length];
 		const urgency = SYNTHETIC_URGENCIES[i % SYNTHETIC_URGENCIES.length];
 
-		// Spread arrival over the last ~120 days; deadlines/appointments vary, some null.
-		const internalDateDaysAgo = (i * 5) % 120;
+		// Arrival is floored per status so the lifecycle that `fillDefaultLifecycle`
+		// generates (reply → status change / auto-cold) always fits BEFORE today and
+		// AFTER arrival — a NEW opp can be a day old, a COLD one must predate the
+		// 14-day silence flip. Index terms keep arrivals spread out for list sorting.
+		const internalDateDaysAgo = STATUS_ARRIVAL_FLOOR[status] + (i % 7) + Math.floor(i / 7) * 3;
 		const deadlineDaysFromNow = i % 4 === 0 ? null : ((i * 11) % 40) + 5;
 		const appointmentDaysFromNow = i % 3 === 0 ? ((i * 7) % 20) + 2 : null;
 
@@ -838,6 +900,7 @@ function scenario(
 		].join('\n'),
 		customerName,
 		customerEmail: email,
+		customerPhone: '06 20 30 40 50',
 		address: 'Voorbeeldstraat 1, 1234 AB Utrecht',
 		requestType,
 		urgency: Urgency.NORMAL,
@@ -860,6 +923,44 @@ const SENT_REPLY_BODY = [
 	'Met vriendelijke groet,',
 	'Acme Installaties'
 ].join('\n');
+
+// Mailbox address that renders as our own ("outbound") side in the conversation view —
+// must match a connected EmailAccount.email so `direction` resolves to outbound.
+const ACME_MAILBOX_EMAIL = 'inbox+seed@acme-installaties.nl';
+
+const SHOWCASE_OUR_LINES = [
+	'Bedankt voor uw aanvraag! We hebben uw bericht ontvangen en denken graag met u mee.',
+	'Goede vraag — dat kunnen we zeker meenemen. Hierbij wat meer toelichting.',
+	'Geen probleem, we passen het voorstel daarop aan en sturen het u toe.'
+];
+const SHOWCASE_CUSTOMER_LINES = [
+	'Bedankt voor de snelle reactie! Ik heb nog een vraag over de planning.',
+	'Helder, dank. Kunnen jullie ook de afvoer van het oude materiaal regelen?'
+];
+
+/**
+ * Builds an alternating conversation of `count` thread messages (1–5) for the reply-count
+ * showcase opps (131–135). Index 0 is our outbound reply, then it alternates customer ↔ us.
+ * Messages are spaced one day apart, newest 1 day ago and oldest `count` days ago — so the
+ * opportunity must have arrived more than `count` days ago. Drives both the "Met antwoord"
+ * (hasReplies) filter and the multi-bubble conversation thread.
+ */
+function showcaseThread(customerName: string, customerEmail: string, count: number): SeedThreadMessage[] {
+	const messages: SeedThreadMessage[] = [];
+	for (let i = 0; i < count; i++) {
+		const fromCustomer = i % 2 === 1;
+		messages.push({
+			fromCustomer,
+			fromName: fromCustomer ? customerName : 'Acme Installaties',
+			fromEmail: fromCustomer ? customerEmail : ACME_MAILBOX_EMAIL,
+			bodyText: fromCustomer
+				? SHOWCASE_CUSTOMER_LINES[Math.floor(i / 2)]
+				: SHOWCASE_OUR_LINES[Math.floor(i / 2)],
+			daysAgo: count - i
+		});
+	}
+	return messages;
+}
 
 const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 101 — NEW, AI draft pending review ("Bekijk concept")
@@ -888,13 +989,15 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 103 — REPLIED, single sent reply
 	scenario(103, 'Dakgoot vervangen', 'Marloes Visser', {
 		status: OpportunityStatus.REPLIED,
-		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 4, sentDaysAgo: 4 }]
+		internalDateDaysAgo: 6,
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 5, sentDaysAgo: 4 }]
 	}),
 	// 104 — Multiple drafts: a SENT reply + a newer PENDING follow-up (history panel + 1:N "current")
 	scenario(104, 'Zonnepanelen uitbreiden', 'Tim Bakker', {
 		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 8,
 		drafts: [
-			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 6, sentDaysAgo: 6 },
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 7, sentDaysAgo: 6 },
 			{
 				body: 'Beste Tim, een korte aanvulling op onze vorige mail…',
 				status: ReplyDraftStatus.PENDING_APPROVAL,
@@ -905,6 +1008,8 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 105 — Customer reply landed (status flipped back to NEW), fresh follow-up draft pending
 	scenario(105, 'Vloerverwarming aanleggen', 'Sofie Janssen', {
 		status: OpportunityStatus.NEW,
+		// Arrival predates our first reply (5d ago) — the request must come first.
+		internalDateDaysAgo: 7,
 		threadMessages: [
 			{
 				fromCustomer: false,
@@ -941,6 +1046,7 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 106 — Thread with a conversation-closer reply ("Bedankt, tot dan!"), deal won
 	scenario(106, 'Keuken plaatsen', 'Daan Mulder', {
 		status: OpportunityStatus.WON,
+		internalDateDaysAgo: 9,
 		threadMessages: [
 			{
 				fromCustomer: false,
@@ -958,13 +1064,24 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				wasDetectedAsCloser: true
 			}
 		],
-		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 7, sentDaysAgo: 7 }]
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 8, sentDaysAgo: 7 }],
+		// Owner marked it won after the customer's closer reply (3d ago).
+		timeline: [
+			{
+				kind: 'status_changed',
+				daysAgo: 2,
+				actorEmail: 'selami1992@gmail.com',
+				from: OpportunityStatus.REPLIED,
+				to: OpportunityStatus.WON
+			}
+		]
 	}),
 	// 107 — Pending automatic check-in ("Follow-up wacht") on a replied opp
 	scenario(107, 'Schilderwerk buiten', 'Anouk de Wit', {
 		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 14,
 		drafts: [
-			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 12, sentDaysAgo: 12 },
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 13, sentDaysAgo: 12 },
 			{
 				body: 'Beste Anouk, ik wilde even checken of u nog vragen had over onze offerte?',
 				status: ReplyDraftStatus.PENDING_APPROVAL,
@@ -976,13 +1093,14 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 108 — Already-sent automatic check-in in the history
 	scenario(108, 'Spouwmuur isoleren', 'Bram Visser', {
 		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 22,
 		drafts: [
-			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 20, sentDaysAgo: 20 },
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 21, sentDaysAgo: 20 },
 			{
 				body: 'Beste Bram, een korte herinnering aan onze offerte van vorige week.',
 				status: ReplyDraftStatus.SENT,
 				kind: ReplyDraftKind.CHECK_IN,
-				createdDaysAgo: 6,
+				createdDaysAgo: 7,
 				sentDaysAgo: 6
 			}
 		]
@@ -990,14 +1108,26 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 109 — WAITING on the customer, reply already sent
 	scenario(109, 'Airco installeren', 'Nina Smit', {
 		status: OpportunityStatus.WAITING,
-		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 8, sentDaysAgo: 8 }]
+		internalDateDaysAgo: 10,
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 9, sentDaysAgo: 8 }],
+		// Owner set it to "wachten op klant" right after sending the reply.
+		timeline: [
+			{
+				kind: 'status_changed',
+				daysAgo: 7,
+				actorEmail: 'selami1992@gmail.com',
+				from: OpportunityStatus.REPLIED,
+				to: OpportunityStatus.WAITING
+			}
+		]
 	}),
 	// 110 — Auto-cold: scheduler flipped REPLIED → COLD; timeline + notification
 	scenario(110, 'Dakkapel plaatsen', 'Ruben Post', {
 		status: OpportunityStatus.COLD,
 		internalDateDaysAgo: 40,
-		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 35, sentDaysAgo: 35 }],
-		timeline: [{ action: 'opportunity.auto_cold.flipped', daysAgo: 5 }],
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 36, sentDaysAgo: 35 }],
+		// Scheduler flipped REPLIED → COLD 5d ago, 30d after the last sent reply.
+		timeline: [{ kind: 'auto_cold', daysAgo: 5, daysSinceSent: 30, coldAfterDays: 14 }],
 		notifications: [
 			{
 				eventType: NotificationEventType.OPPORTUNITY_AUTO_COLD,
@@ -1014,9 +1144,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		internalDateDaysAgo: 18,
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 16,
 			sentDaysAgo: 14,
 			validUntilDaysFromNow: 16,
 			pdfFilenames: ['offerte-badkamer-vandijk.pdf'],
+			pdfDaysAgo: [15],
 			lines: [
 				{
 					description: 'Tegelwerk badkamer',
@@ -1046,7 +1178,7 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			{
 				body: `${SENT_REPLY_BODY}\n\nIn de bijlage vindt u onze offerte.`,
 				status: ReplyDraftStatus.SENT,
-				createdDaysAgo: 14,
+				createdDaysAgo: 15,
 				sentDaysAgo: 14,
 				attachments: [
 					{
@@ -1057,13 +1189,33 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 					}
 				]
 			}
+		],
+		// Owner marked the deal won a week after sending the quote.
+		timeline: [
+			{
+				kind: 'status_changed',
+				daysAgo: 7,
+				actorEmail: 'selami1992@gmail.com',
+				from: OpportunityStatus.REPLIED,
+				to: OpportunityStatus.WON
+			}
 		]
 	}),
 	// 112 — LOST deal
 	scenario(112, 'Tuinhuis bouwen', 'Kees Brouwer', {
 		status: OpportunityStatus.LOST,
 		internalDateDaysAgo: 25,
-		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 22, sentDaysAgo: 22 }]
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 23, sentDaysAgo: 22 }],
+		// Customer went with another contractor; owner marked it lost.
+		timeline: [
+			{
+				kind: 'status_changed',
+				daysAgo: 10,
+				actorEmail: 'selami1992@gmail.com',
+				from: OpportunityStatus.REPLIED,
+				to: OpportunityStatus.LOST
+			}
+		]
 	}),
 	// 113-116 — Dismissed (all four reasons)
 	scenario(113, 'Nieuwsbrief aanmelding', 'Marketing Bureau X', {
@@ -1081,8 +1233,12 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 	// 117 — Quote DRAFT with every line-item source + reverse-charge + inferred-null-price + VAT variants
 	scenario(117, 'Verbouwing zolder', 'Hugo Peters', {
 		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 8,
+		// Acknowledged the request, then started drafting the quote (still DRAFT).
+		drafts: [{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 7, sentDaysAgo: 6 }],
 		quote: {
 			status: QuoteDraftStatus.DRAFT,
+			createdDaysAgo: 4,
 			validUntilDaysFromNow: 30,
 			lines: [
 				{
@@ -1135,9 +1291,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		internalDateDaysAgo: 22,
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 21,
 			sentDaysAgo: 20,
 			validUntilDaysFromNow: 4,
 			pdfFilenames: ['offerte-cv-vermeer.pdf'],
+			pdfDaysAgo: [20],
 			lines: [
 				{
 					description: 'CV-ketel Remeha',
@@ -1184,9 +1342,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		internalDateDaysAgo: 15,
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 13,
 			sentDaysAgo: 10,
 			validUntilDaysFromNow: 20,
 			pdfFilenames: ['offerte-keuken-v1.pdf', 'offerte-keuken-v2.pdf'],
+			pdfDaysAgo: [12, 11],
 			lines: [
 				{
 					description: 'Uitbouw 12 m²',
@@ -1239,9 +1399,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		internalDateDaysAgo: 24,
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 23,
 			sentDaysAgo: 22,
 			validUntilDaysFromNow: 3,
 			pdfFilenames: ['offerte-gevel-kuiper.pdf'],
+			pdfDaysAgo: [22],
 			lines: [
 				{
 					description: 'Gevelreiniging',
@@ -1252,6 +1414,22 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				}
 			]
 		},
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nDe offerte voor de gevelreiniging vindt u in de bijlage.`,
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 22,
+				sentDaysAgo: 22,
+				attachments: [
+					{
+						filename: 'offerte-gevel-kuiper.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 38000,
+						isQuotePdf: true
+					}
+				]
+			}
+		],
 		expiryAction: {
 			status: ExpiryActionStatus.SUGGESTED,
 			recommendedAction: ExpiryActionKind.LAST_FOLLOWUP,
@@ -1265,9 +1443,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		internalDateDaysAgo: 30,
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 29,
 			sentDaysAgo: 28,
 			validUntilDaysFromNow: 12,
 			pdfFilenames: ['offerte-schuur-linden.pdf'],
+			pdfDaysAgo: [28],
 			lines: [
 				{
 					description: 'Renovatie schuur',
@@ -1278,6 +1458,22 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				}
 			]
 		},
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nIn de bijlage onze offerte voor de renovatie.`,
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 28,
+				sentDaysAgo: 28,
+				attachments: [
+					{
+						filename: 'offerte-schuur-linden.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 41000,
+						isQuotePdf: true
+					}
+				]
+			}
+		],
 		expiryAction: {
 			status: ExpiryActionStatus.TAKEN,
 			recommendedAction: ExpiryActionKind.EXTEND_14D,
@@ -1293,9 +1489,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		internalDateDaysAgo: 35,
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 34,
 			sentDaysAgo: 33,
 			validUntilDaysFromNow: -2,
 			pdfFilenames: ['offerte-oprit-bos.pdf'],
+			pdfDaysAgo: [33],
 			lines: [
 				{
 					description: 'Bestrating oprit',
@@ -1306,6 +1504,22 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 				}
 			]
 		},
+		drafts: [
+			{
+				body: `${SENT_REPLY_BODY}\n\nDe offerte voor de oprit vindt u in de bijlage.`,
+				status: ReplyDraftStatus.SENT,
+				createdDaysAgo: 33,
+				sentDaysAgo: 33,
+				attachments: [
+					{
+						filename: 'offerte-oprit-bos.pdf',
+						contentType: 'application/pdf',
+						sizeBytes: 36000,
+						isQuotePdf: true
+					}
+				]
+			}
+		],
 		expiryAction: {
 			status: ExpiryActionStatus.DISMISSED,
 			recommendedAction: ExpiryActionKind.MARK_LOST,
@@ -1318,10 +1532,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		assignedToEmail: 'jeroen@offertum.dev',
 		timeline: [
 			{
-				action: 'opportunity.assigned',
+				kind: 'assigned',
 				daysAgo: 1,
 				actorEmail: 'selami1992@gmail.com',
-				extra: { assignedToUserName: 'Jeroen Bakker' }
+				fromEmail: 'selami1992@gmail.com',
+				toEmail: 'jeroen@offertum.dev'
 			}
 		]
 	}),
@@ -1338,8 +1553,19 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		deadlineDaysFromNow: 1,
 		appointmentDaysFromNow: 1
 	}),
-	// 128 — LOW urgency, no deadline
-	scenario(128, 'Oriënterend gesprek verbouwing', 'Karel Mol', { urgency: Urgency.LOW }),
+	// 128 — LOW urgency, no deadline; owner corrected the urgency (fields_updated event)
+	scenario(128, 'Oriënterend gesprek verbouwing', 'Karel Mol', {
+		urgency: Urgency.LOW,
+		internalDateDaysAgo: 4,
+		timeline: [
+			{
+				kind: 'fields_updated',
+				daysAgo: 2,
+				actorEmail: 'selami1992@gmail.com',
+				changes: [{ field: 'urgency', before: 'normal', after: 'low' }]
+			}
+		]
+	}),
 	// 129 — Notifications showcase (created + daily digest), with deadline
 	scenario(129, 'Warmtepomp advies', 'Lieke Vos', {
 		deadlineDaysFromNow: 10,
@@ -1365,6 +1591,8 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		urgency: Urgency.HIGH,
 		deadlineDaysFromNow: 5,
 		appointmentDaysFromNow: 2,
+		// Reassigned to Jeroen early on (a real reassignment — the "Toewijzing" event).
+		assignedToEmail: 'jeroen@offertum.dev',
 		threadMessages: [
 			{
 				fromCustomer: false,
@@ -1398,9 +1626,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 		],
 		quote: {
 			status: QuoteDraftStatus.SENT,
+			createdDaysAgo: 20,
 			sentDaysAgo: 18,
 			validUntilDaysFromNow: 20,
 			pdfFilenames: ['offerte-zonneveld-v1.pdf', 'offerte-zonneveld-v2.pdf'],
+			pdfDaysAgo: [19, 18],
 			lines: [
 				{
 					description: 'Complete CV-installatie',
@@ -1427,11 +1657,11 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			]
 		},
 		drafts: [
-			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 26, sentDaysAgo: 26 },
+			{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: 27, sentDaysAgo: 26 },
 			{
 				body: 'Beste, de definitieve offerte zit in de bijlage.',
 				status: ReplyDraftStatus.SENT,
-				createdDaysAgo: 18,
+				createdDaysAgo: 19,
 				sentDaysAgo: 18,
 				attachments: [
 					{
@@ -1451,29 +1681,262 @@ const scenarioOpportunities: ReadonlyArray<SeedOpportunity> = [
 			suggestedCopy: 'Laatste herinnering verstuurd.',
 			validUntilDaysFromNow: 20
 		},
+		// Reassigned to Jeroen 25d ago, then marked won 11d ago — just after the
+		// customer's closer reply (12d ago).
 		timeline: [
 			{
-				action: 'opportunity.status.updated',
-				daysAgo: 12,
-				actorEmail: 'selami1992@gmail.com',
-				extra: { from: 'replied', to: 'won' }
-			},
-			{
-				action: 'opportunity.assigned',
+				kind: 'assigned',
 				daysAgo: 25,
 				actorEmail: 'selami1992@gmail.com',
-				extra: { assignedToUserName: 'Selami C' }
+				fromEmail: 'selami1992@gmail.com',
+				toEmail: 'jeroen@offertum.dev'
+			},
+			{
+				kind: 'status_changed',
+				daysAgo: 11,
+				actorEmail: 'selami1992@gmail.com',
+				from: OpportunityStatus.REPLIED,
+				to: OpportunityStatus.WON
 			}
 		]
+	}),
+	// 131–135 — Reply-count showcase: conversations of 1 → 5 thread messages so the
+	// "Met antwoord" filter + the conversation view have a range of thread lengths.
+	// Odd counts end on our reply (status REPLIED, awaiting the customer); even counts
+	// end on the customer (status NEW, awaiting us).
+	scenario(131, 'Cv-ketel onderhoud', 'Noa Hendrikse', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 3,
+		threadMessages: showcaseThread('Noa Hendrikse', 'noa.hendrikse@example.nl', 1)
+	}),
+	scenario(132, 'Badkamer renoveren', 'Daan Vermeulen', {
+		status: OpportunityStatus.NEW,
+		internalDateDaysAgo: 4,
+		threadMessages: showcaseThread('Daan Vermeulen', 'daan.vermeulen@example.nl', 2)
+	}),
+	scenario(133, 'Dakkapel plaatsen', 'Imani Okafor', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 5,
+		threadMessages: showcaseThread('Imani Okafor', 'imani.okafor@example.nl', 3)
+	}),
+	scenario(134, 'Zonnepanelen installeren', 'Lieke Hofman', {
+		status: OpportunityStatus.NEW,
+		internalDateDaysAgo: 6,
+		threadMessages: showcaseThread('Lieke Hofman', 'lieke.hofman@example.nl', 4)
+	}),
+	scenario(135, 'Vloerverwarming aanleggen', 'Sven Bakker', {
+		status: OpportunityStatus.REPLIED,
+		internalDateDaysAgo: 7,
+		threadMessages: showcaseThread('Sven Bakker', 'sven.bakker@example.nl', 5)
 	})
 ];
 
+// Resolve the mailbox owner's email for an email account — the actor for the
+// system-generated default lifecycle (they're the one who'd have replied).
+function ownerEmailForAccount(emailAccountId: string): string {
+	const account = emailAccounts.find(a => a.id === emailAccountId);
+	if (!account) {
+		throw new Error(`Seed misconfiguration: no email account ${emailAccountId}`);
+	}
+	return account.ownerEmail;
+}
+
+/**
+ * Curated + synthetic opps declare only a status. A status past NEW that carries no
+ * reply, no thread, and no dismissal is nonsensical ("replied" with nothing sent), so
+ * here we synthesize the minimal coherent lifecycle that justifies the status:
+ *   REPLIED  → one SENT reply
+ *   WAITING  → SENT reply + manual status change to "wachten op klant"
+ *   WON/LOST → SENT reply + manual status change to won/lost (after the reply)
+ *   COLD     → SENT reply + a system auto-cold flip ≥14 days of silence later
+ * All timestamps derive from the opportunity's arrival day so the events stay strictly
+ * ordered (arrival → reply → status change/flip → today). Multi-message conversations
+ * (varying reply counts) are modeled by the dedicated 131–135 showcase scenarios, not
+ * here. Opps that already declare drafts / threadMessages / a dismissal (the bespoke
+ * scenarios) are returned untouched.
+ */
+function fillDefaultLifecycle(opp: SeedOpportunity): SeedOpportunity {
+	if (opp.status === OpportunityStatus.NEW || opp.drafts || opp.threadMessages || opp.dismiss) {
+		return opp;
+	}
+
+	const arrival = opp.internalDateDaysAgo;
+	const replyCreated = Math.max(2, arrival - 1);
+	const replySent = Math.max(1, arrival - 2);
+	const actorEmail = ownerEmailForAccount(opp.emailAccountId);
+
+	const drafts: SeedReplyDraft[] = [
+		{ body: SENT_REPLY_BODY, status: ReplyDraftStatus.SENT, createdDaysAgo: replyCreated, sentDaysAgo: replySent }
+	];
+
+	const timeline: SeedTimelineLog[] = [];
+	if (opp.status === OpportunityStatus.WAITING) {
+		timeline.push({
+			kind: 'status_changed',
+			daysAgo: Math.max(1, replySent - 1),
+			actorEmail,
+			from: OpportunityStatus.REPLIED,
+			to: OpportunityStatus.WAITING
+		});
+	} else if (opp.status === OpportunityStatus.WON || opp.status === OpportunityStatus.LOST) {
+		timeline.push({
+			kind: 'status_changed',
+			daysAgo: Math.max(1, replySent - 2),
+			actorEmail,
+			from: OpportunityStatus.REPLIED,
+			to: opp.status
+		});
+	} else if (opp.status === OpportunityStatus.COLD) {
+		// Flip happens ~16 days after the reply (past the 14-day default threshold).
+		const flipDaysAgo = Math.max(1, replySent - 16);
+		timeline.push({
+			kind: 'auto_cold',
+			daysAgo: flipDaysAgo,
+			daysSinceSent: replySent - flipDaysAgo,
+			coldAfterDays: 14
+		});
+	}
+
+	return { ...opp, drafts, timeline };
+}
+
 // Curated entries first (stable), synthetic fillers to 100, then the scenario opps (101+).
+// Curated + synthetic get a synthesized lifecycle so their status is always backed by
+// real reply/timeline rows; scenarios bring their own.
 const opportunities: ReadonlyArray<SeedOpportunity> = [
-	...curatedOpportunities,
-	...buildSyntheticOpportunities(curatedOpportunities.length, SEED_OPPORTUNITY_TOTAL),
+	...curatedOpportunities.map(fillDefaultLifecycle),
+	...buildSyntheticOpportunities(curatedOpportunities.length, SEED_OPPORTUNITY_TOTAL).map(fillDefaultLifecycle),
 	...scenarioOpportunities
 ];
+
+// ── Lifecycle validator ──────────────────────────────────────────────────────────
+// Treats every opportunity as a story on a single clock (daysAgo, where bigger = older).
+// Asserts that no event predates the request, that quote draft → PDF → send → close stay
+// in order, and that any status past NEW is backed by a real reply / quote. Throws with
+// every violation so a malformed seed fails loudly BEFORE writing a single row — the
+// guarantee behind "the timeline is always correct". Run standalone via `--check`.
+function resolvePdfDaysAgo(quote: SeedQuote, index: number): number {
+	return quote.pdfDaysAgo?.[index] ?? Math.max(0, quote.createdDaysAgo - 1 - index);
+}
+
+function validateOpportunities(opps: ReadonlyArray<SeedOpportunity>): void {
+	const errors: string[] = [];
+
+	for (const opp of opps) {
+		const id = opp.opportunityId.slice(0, 13);
+		const arrival = opp.internalDateDaysAgo;
+		const fail = (msg: string) => errors.push(`[${id} ${opp.requestType}] ${msg}`);
+
+		if (arrival < 0) {
+			fail(`arrival (${arrival}d) is negative`);
+		}
+
+		const sentReplyDays: number[] = [];
+		for (const d of opp.drafts ?? []) {
+			if (d.createdDaysAgo > arrival) {
+				fail(`reply created ${d.createdDaysAgo}d ago predates arrival ${arrival}d ago`);
+			}
+			if (d.sentDaysAgo != null) {
+				if (d.sentDaysAgo > d.createdDaysAgo) {
+					fail(`reply sent ${d.sentDaysAgo}d ago predates its own creation ${d.createdDaysAgo}d ago`);
+				}
+				if (d.sentDaysAgo > arrival) {
+					fail(`reply sent ${d.sentDaysAgo}d ago predates arrival ${arrival}d ago`);
+				}
+				sentReplyDays.push(d.sentDaysAgo);
+			}
+		}
+
+		for (const tm of opp.threadMessages ?? []) {
+			if (tm.daysAgo > arrival) {
+				fail(`thread message ${tm.daysAgo}d ago predates arrival ${arrival}d ago`);
+			}
+		}
+
+		if (opp.quote) {
+			const q = opp.quote;
+			if (q.createdDaysAgo > arrival) {
+				fail(`quote created ${q.createdDaysAgo}d ago predates arrival ${arrival}d ago`);
+			}
+			const pdfDays = (q.pdfFilenames ?? []).map((_, i) => resolvePdfDaysAgo(q, i));
+			for (let i = 0; i < pdfDays.length; i++) {
+				if (pdfDays[i] > q.createdDaysAgo) {
+					fail(`PDF v${i + 1} generated ${pdfDays[i]}d ago predates quote creation ${q.createdDaysAgo}d ago`);
+				}
+				if (i > 0 && pdfDays[i] >= pdfDays[i - 1]) {
+					fail(`PDF v${i + 1} (${pdfDays[i]}d) is not newer than v${i} (${pdfDays[i - 1]}d)`);
+				}
+			}
+			if (q.status === QuoteDraftStatus.SENT) {
+				if (q.sentDaysAgo == null) {
+					fail('quote is SENT but has no sentDaysAgo');
+				} else {
+					if (q.sentDaysAgo > q.createdDaysAgo) {
+						fail(`quote sent ${q.sentDaysAgo}d ago predates its creation ${q.createdDaysAgo}d ago`);
+					}
+					for (let i = 0; i < pdfDays.length; i++) {
+						if (q.sentDaysAgo > pdfDays[i]) {
+							fail(`quote sent ${q.sentDaysAgo}d ago predates PDF v${i + 1} generation ${pdfDays[i]}d ago`);
+						}
+					}
+				}
+			}
+		}
+
+		// A quote-PDF attachment on a SENT reply needs a PDF generated at/before the send.
+		for (const d of opp.drafts ?? []) {
+			const hasQuotePdf = (d.attachments ?? []).some(a => a.isQuotePdf);
+			if (hasQuotePdf && d.sentDaysAgo != null) {
+				const pdfDays = (opp.quote?.pdfFilenames ?? []).map((_, i) => resolvePdfDaysAgo(opp.quote!, i));
+				if (!opp.quote || pdfDays.length === 0) {
+					fail('reply attaches a quote PDF but the opp has no generated quote PDF');
+				} else if (!pdfDays.some(p => p >= d.sentDaysAgo!)) {
+					fail(`reply with quote PDF sent ${d.sentDaysAgo}d ago, but no PDF was generated by then`);
+				}
+			}
+		}
+
+		for (const tl of opp.timeline ?? []) {
+			if (tl.daysAgo > arrival) {
+				fail(`timeline ${tl.kind} ${tl.daysAgo}d ago predates arrival ${arrival}d ago`);
+			}
+		}
+
+		// Status must be backed by an artifact + a matching closing event.
+		const engaged =
+			opp.status === OpportunityStatus.REPLIED ||
+			opp.status === OpportunityStatus.WAITING ||
+			opp.status === OpportunityStatus.WON ||
+			opp.status === OpportunityStatus.LOST ||
+			opp.status === OpportunityStatus.COLD;
+		const hasOutbound = (opp.threadMessages ?? []).some(tm => !tm.fromCustomer);
+		const hasSentQuote = opp.quote?.status === QuoteDraftStatus.SENT;
+		if (engaged && sentReplyDays.length === 0 && !hasOutbound && !hasSentQuote) {
+			fail(`status ${opp.status} has no sent reply / quote to justify it`);
+		}
+		const timelineKinds = (opp.timeline ?? []).map(t => t.kind);
+		const statusTargets = (opp.timeline ?? [])
+			.filter((t): t is Extract<SeedTimelineLog, { kind: 'status_changed' }> => t.kind === 'status_changed')
+			.map(t => t.to);
+		if (opp.status === OpportunityStatus.WON && !statusTargets.includes(OpportunityStatus.WON)) {
+			fail('status WON but no status_changed → won timeline event');
+		}
+		if (opp.status === OpportunityStatus.LOST && !statusTargets.includes(OpportunityStatus.LOST)) {
+			fail('status LOST but no status_changed → lost timeline event');
+		}
+		if (
+			opp.status === OpportunityStatus.COLD &&
+			!timelineKinds.includes('auto_cold') &&
+			!statusTargets.includes(OpportunityStatus.COLD)
+		) {
+			fail('status COLD but no auto_cold / status_changed → cold timeline event');
+		}
+	}
+
+	if (errors.length > 0) {
+		throw new Error(`Seed lifecycle validation failed (${errors.length} issue(s)):\n  - ${errors.join('\n  - ')}`);
+	}
+}
 
 interface SeedCatalogItem {
 	id: string;
@@ -1754,6 +2217,9 @@ async function writeDummyAsset(storageKey: string, contentType: string, label: s
 }
 
 async function main() {
+	// Fail fast on any out-of-order / status-inconsistent opportunity before writing.
+	validateOpportunities(opportunities);
+
 	for (const org of orgs) {
 		await prisma.organization.upsert({
 			where: { id: org.id },
@@ -1870,6 +2336,7 @@ async function main() {
 				status: opp.status,
 				customerName: opp.customerName,
 				customerEmail: opp.customerEmail,
+				customerPhone: opp.customerPhone ?? null,
 				address: opp.address,
 				requestType: opp.requestType,
 				urgency: opp.urgency,
@@ -1898,6 +2365,7 @@ async function main() {
 				classifierReason: opp.classifierReason,
 				customerName: opp.customerName,
 				customerEmail: opp.customerEmail,
+				customerPhone: opp.customerPhone ?? null,
 				address: opp.address,
 				requestType: opp.requestType,
 				urgency: opp.urgency,
@@ -1945,6 +2413,9 @@ async function main() {
 		});
 
 		// ── Quote draft + line items + PDF version history ──
+		// Quote actor = the assignee (the owner working the deal), falling back to the
+		// mailbox owner. Used as `actorUserId` on the quote_created / quote_pdf logs.
+		const quoteActorId = assigneeId ?? mailboxOwner.id;
 		let quoteDraftId: string | null = null;
 		const pdfIds: string[] = [];
 		if (opp.quote) {
@@ -1961,7 +2432,7 @@ async function main() {
 					generationContext: { seed: true, requestType: opp.requestType },
 					sentAt: q.status === QuoteDraftStatus.SENT && q.sentDaysAgo != null ? daysAgo(q.sentDaysAgo) : null,
 					validUntil: q.validUntilDaysFromNow != null ? daysFromNow(q.validUntilDaysFromNow) : null,
-					createdAt: daysAgo(opp.internalDateDaysAgo)
+					createdAt: daysAgo(q.createdDaysAgo)
 				}
 			});
 			for (let li = 0; li < q.lines.length; li++) {
@@ -1986,10 +2457,38 @@ async function main() {
 					}
 				});
 			}
+
+			// Mirror the production `opportunity.quote_created` audit row → "Offerte
+			// opgesteld" timeline event.
+			const quoteCreatedLogId = entityId('5c5c5c5c', oppNum, 1);
+			await prisma.log.upsert({
+				where: { id: quoteCreatedLogId },
+				update: {},
+				create: {
+					id: quoteCreatedLogId,
+					level: LogLevel.INFO,
+					message: `Quote draft ${quoteDraftId} created for opportunity ${opp.opportunityId}`,
+					context: 'QuoteDraftsService',
+					organizationId: opp.organizationId,
+					createdAt: daysAgo(q.createdDaysAgo),
+					metadata: {
+						action: 'opportunity.quote_created',
+						organizationId: opp.organizationId,
+						opportunityId: opp.opportunityId,
+						quoteDraftId,
+						lineCount: q.lines.length,
+						actorUserId: quoteActorId
+					}
+				}
+			});
+
 			const pdfFilenames = q.pdfFilenames ?? [];
 			for (let pi = 0; pi < pdfFilenames.length; pi++) {
 				const pdfId = entityId('6d6d6d6d', oppNum, pi + 1);
 				pdfIds.push(pdfId);
+				// Each PDF is generated at/after the draft was assembled and at/before the
+				// send (validated below); default spreads versions back from createdDaysAgo.
+				const pdfDaysAgo = q.pdfDaysAgo?.[pi] ?? Math.max(0, q.createdDaysAgo - 1 - pi);
 				const pdfStorageKey = `quote-pdfs/${opp.opportunityId}/${pdfId}-${pdfFilenames[pi]}`;
 				await writeDummyAsset(pdfStorageKey, 'application/pdf', pdfFilenames[pi]);
 				await prisma.quotePdf.upsert({
@@ -2005,7 +2504,31 @@ async function main() {
 						sizeBytes: 48_000 + pi * 1500,
 						storageKey: pdfStorageKey,
 						storageDriver: 'local',
-						createdAt: daysAgo(Math.max(0, opp.internalDateDaysAgo - pi))
+						createdAt: daysAgo(pdfDaysAgo)
+					}
+				});
+
+				// Mirror `opportunity.quote_pdf_generated` → "Offerte-PDF gegenereerd".
+				const pdfLogId = entityId('5d5d5d5d', oppNum, pi + 1);
+				await prisma.log.upsert({
+					where: { id: pdfLogId },
+					update: {},
+					create: {
+						id: pdfLogId,
+						level: LogLevel.INFO,
+						message: `Quote PDF ${pdfFilenames[pi]} (version ${pdfId}) generated for opportunity ${opp.opportunityId}`,
+						context: 'QuoteDraftsService',
+						organizationId: opp.organizationId,
+						createdAt: daysAgo(pdfDaysAgo),
+						metadata: {
+							action: 'opportunity.quote_pdf_generated',
+							organizationId: opp.organizationId,
+							opportunityId: opp.opportunityId,
+							quoteDraftId,
+							quotePdfId: pdfId,
+							filename: pdfFilenames[pi],
+							actorUserId: quoteActorId
+						}
 					}
 				});
 			}
@@ -2144,27 +2667,76 @@ async function main() {
 		}
 
 		// ── Extra timeline audit-log rows (status changes, assignment, auto-cold) ──
+		// Each kind materializes the EXACT metadata shape `toOpportunityTimelineEvent`
+		// reads — see the discriminated union on SeedTimelineLog.
 		if (opp.timeline) {
 			for (let tli = 0; tli < opp.timeline.length; tli++) {
 				const tl = opp.timeline[tli];
 				const logId = entityId('5a5a5a5a', oppNum, tli + 1);
+				const base = {
+					organizationId: opp.organizationId,
+					opportunityId: opp.opportunityId
+				};
+				let action: string;
+				let metadata: Prisma.InputJsonValue;
+				switch (tl.kind) {
+					case 'status_changed':
+						action = 'opportunity.status.updated';
+						metadata = {
+							...base,
+							action: 'opportunity.status.updated',
+							previousStatus: tl.from ? STATUS_TO_WIRE[tl.from] : null,
+							nextStatus: STATUS_TO_WIRE[tl.to],
+							actorUserId: userId(tl.actorEmail)
+						};
+						break;
+					case 'assigned':
+						action = 'opportunity.assigned';
+						metadata = {
+							...base,
+							action: 'opportunity.assigned',
+							previousAssigneeUserId: tl.fromEmail ? userId(tl.fromEmail) : null,
+							nextAssigneeUserId: tl.toEmail ? userId(tl.toEmail) : null,
+							actorUserId: userId(tl.actorEmail)
+						};
+						break;
+					case 'auto_cold':
+						action = 'opportunity.auto_cold.flipped';
+						metadata = {
+							...base,
+							action: 'opportunity.auto_cold.flipped',
+							actorUserId: null,
+							daysSinceSent: tl.daysSinceSent,
+							coldAfterDays: tl.coldAfterDays ?? 14
+						};
+						break;
+					case 'fields_updated': {
+						action = 'opportunity.fields_updated';
+						const diff: Record<string, { before: string | null; after: string | null }> = {};
+						for (const change of tl.changes) {
+							diff[change.field] = { before: change.before, after: change.after };
+						}
+						metadata = {
+							...base,
+							action: 'opportunity.fields_updated',
+							actorUserId: userId(tl.actorEmail),
+							changedKeys: tl.changes.map(c => c.field),
+							diff
+						};
+						break;
+					}
+				}
 				await prisma.log.upsert({
 					where: { id: logId },
 					update: {},
 					create: {
 						id: logId,
 						level: LogLevel.INFO,
-						message: `Opportunity ${opp.opportunityId} ${tl.action}`,
+						message: `Opportunity ${opp.opportunityId} ${action}`,
 						context: 'OpportunitiesService',
 						organizationId: opp.organizationId,
 						createdAt: daysAgo(tl.daysAgo),
-						metadata: {
-							action: tl.action,
-							organizationId: opp.organizationId,
-							opportunityId: opp.opportunityId,
-							actorUserId: tl.actorEmail ? userId(tl.actorEmail) : null,
-							...(tl.extra ?? {})
-						}
+						metadata
 					}
 				});
 			}
@@ -2312,12 +2884,34 @@ async function main() {
 	console.log(`  Total: ${catalogItems.length}`);
 }
 
-main()
-	.catch(async error => {
-		console.error(error);
-		await prisma.$disconnect();
+// `--check` validates the lifecycle of every seeded opportunity WITHOUT touching the
+// database (no Prisma query is issued). Lets the timeline invariants be verified in CI
+// or locally without a running Postgres: `tsx prisma/seed.ts --check`.
+if (process.argv.includes('--check')) {
+	try {
+		validateOpportunities(opportunities);
+		console.log(`✓ ${opportunities.length} opportunities passed lifecycle validation`);
+		// Coverage for the "Met antwoord" (hasReplies) list filter = opps with ≥1 thread message.
+		const withReplies = opportunities.filter(o => (o.threadMessages?.length ?? 0) > 0);
+		const counts = withReplies
+			.map(o => o.threadMessages!.length)
+			.sort((a, b) => a - b)
+			.join(', ');
+		console.log(`  hasReplies coverage: ${withReplies.length} opps — reply counts: [${counts}]`);
+		void prisma.$disconnect();
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : error);
+		void prisma.$disconnect();
 		process.exit(1);
-	})
-	.then(async () => {
-		await prisma.$disconnect();
-	});
+	}
+} else {
+	main()
+		.catch(async error => {
+			console.error(error);
+			await prisma.$disconnect();
+			process.exit(1);
+		})
+		.then(async () => {
+			await prisma.$disconnect();
+		});
+}

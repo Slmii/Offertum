@@ -335,7 +335,7 @@ function QuoteDiffRow({
 
 	if (entry.status === 'unchanged' && entry.proposed) {
 		return (
-			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', pl: '11px' }}>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', pl: 1.5 }}>
 				{chip}
 				<LineSummary line={entry.proposed} />
 			</Stack>
@@ -354,7 +354,7 @@ function QuoteDiffRow({
 						</Stack>
 					}
 				/>
-				<BodySmall color='textSecondary' sx={{ display: 'block', pl: '30px' }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', pl: 3.75 }}>
 					huidig: {summarize(entry.current.quantity, entry.current.unitPriceEur)} → nieuw:{' '}
 					{summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)} ·{' '}
 					{checked ? 'nieuwe regel gebruiken' : 'huidige regel behouden'}

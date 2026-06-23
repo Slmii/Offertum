@@ -479,9 +479,9 @@ function StatusPill({ tone, label }: { tone: 'accent' | 'won' | 'pending'; label
 			sx={{
 				display: 'inline-flex',
 				alignItems: 'center',
-				gap: 0.625,
+				gap: 0.75,
 				px: 1,
-				py: '2px',
+				py: 0.25,
 				border: `1px solid ${palette.border}`,
 				color: palette.fg,
 				fontSize: 11,

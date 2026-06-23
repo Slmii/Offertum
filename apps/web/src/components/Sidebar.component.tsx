@@ -163,7 +163,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 					pb: 2,
 					display: 'flex',
 					flexDirection: 'column',
-					gap: '2px',
+					gap: 0.25,
 					overflowY: 'auto'
 				}}
 			>
@@ -406,8 +406,8 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
 			aria-label='Thema'
 			sx={{
 				display: 'flex',
-				gap: '3px',
-				p: '3px',
+				gap: 0.5,
+				p: 0.5,
 				backgroundColor: tokens.color.surface,
 				border: `1px solid ${tokens.color.line}`,
 				borderRadius: `${tokens.radius.md}px`

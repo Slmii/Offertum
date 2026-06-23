@@ -71,7 +71,8 @@ export function QuotePdfAttachSelect({
 					display: 'flex',
 					alignItems: 'center',
 					gap: 1.5,
-					p: '12px 14px',
+					py: 1.5,
+					px: 1.75,
 					backgroundColor: c.paper2,
 					border: `1px dashed ${c.lineStrong}`,
 					borderRadius: `${tokens.radius.md}px`
@@ -186,9 +187,9 @@ export function QuotePdfAttachSelect({
 			>
 				<Box
 					sx={{
-						px: '10px',
-						pt: '6px',
-						pb: '4px',
+						px: 1.25,
+						pt: 0.75,
+						pb: 0.5,
 						fontSize: 10,
 						fontWeight: 'bold',
 						letterSpacing: '0.06em',
@@ -209,8 +210,8 @@ export function QuotePdfAttachSelect({
 									fontWeight: 'bold',
 									color: isSelected ? c.accent[700] : c.ink1,
 									backgroundColor: isSelected ? c.surface : c.paper3,
-									px: '7px',
-									py: '2px',
+									px: 1,
+									py: 0.25,
 									borderRadius: `${tokens.radius.sm}px`,
 									flexShrink: 0,
 									fontVariantNumeric: 'tabular-nums'

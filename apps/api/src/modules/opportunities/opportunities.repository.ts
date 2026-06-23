@@ -641,6 +641,7 @@ export class OpportunitiesRepository {
 						classifierReason: input.classification.reason,
 						customerName: input.extraction.customerName,
 						customerEmail: input.extraction.customerEmail,
+						customerPhone: input.extraction.customerPhone,
 						address: input.extraction.address,
 						requestType: input.extraction.requestType,
 						urgency: EXTRACTOR_URGENCY_TO_PRISMA[input.extraction.urgency],

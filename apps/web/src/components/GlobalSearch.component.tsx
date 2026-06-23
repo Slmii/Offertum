@@ -365,8 +365,8 @@ export function GlobalSearch() {
 						fontFamily: tokens.font.mono,
 						fontSize: 11,
 						color: tokens.color.ink4,
-						px: 0.625,
-						py: '1px',
+						px: 0.75,
+						py: 0.25,
 						backgroundColor: 'background.paper',
 						border: `1px solid ${tokens.color.line}`,
 						borderRadius: '3px',
@@ -508,20 +508,20 @@ function SearchFooterHints() {
 				fontFamily: tokens.font.sans
 			}}
 		>
-			<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.625 }}>
+			<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
 				<SearchKbd>↑</SearchKbd>
 				<SearchKbd>↓</SearchKbd>
 				navigeer
 			</Box>
-			<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.625 }}>
+			<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
 				<SearchKbd>↵</SearchKbd>
 				open
 			</Box>
-			<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.625 }}>
+			<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
 				<SearchKbd>esc</SearchKbd>
 				sluit
 			</Box>
-			<Box component='span' sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center', gap: 0.625 }}>
+			<Box component='span' sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
 				<AppIcon name='sparkles' size='small' />
 				AI-zoek komt eraan
 			</Box>
@@ -672,7 +672,7 @@ function OpportunityRow({
 				sx={{
 					flexShrink: 0,
 					px: 1,
-					py: '2px',
+					py: 0.25,
 					borderRadius: '999px',
 					backgroundColor: chip.bg,
 					color: chip.fg,

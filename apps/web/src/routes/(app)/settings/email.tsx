@@ -385,7 +385,7 @@ function StatusBadge({ connected }: { connected: boolean }) {
 			sx={{
 				display: 'inline-flex',
 				alignItems: 'center',
-				gap: 0.625,
+				gap: 0.75,
 				px: 1,
 				py: 0.25,
 				border: `1px solid ${borderColor}`,

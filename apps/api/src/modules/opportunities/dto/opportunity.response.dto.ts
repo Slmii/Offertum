@@ -31,6 +31,7 @@ export class OpportunityResponseDto implements Opportunity {
 	classifierReason!: string | null;
 	customerName!: string | null;
 	customerEmail!: string | null;
+	customerPhone!: string | null;
 	address!: string | null;
 	customerDeadline!: string | null;
 	customerAppointment!: string | null;

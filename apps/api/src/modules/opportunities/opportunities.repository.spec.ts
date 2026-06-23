@@ -66,6 +66,7 @@ const CREATE_INPUT = {
 	extraction: {
 		customerName: 'Alice',
 		customerEmail: 'alice@example.com',
+		customerPhone: null,
 		address: 'Utrecht',
 		requestType: 'CV-ketel vervangen',
 		urgency: 'high' as const,

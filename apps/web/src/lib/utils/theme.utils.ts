@@ -135,6 +135,18 @@ export const darkTokens = {
 export type ThemeMode = 'light' | 'dark';
 
 /**
+ * Cookie that persists the chosen theme. Unlike localStorage it's readable at SSR, so the server
+ * renders the correct mode on the first paint — that's what kills the light→dark flash on refresh.
+ */
+export const THEME_COOKIE = 'offertum-theme';
+
+/** Extract the persisted mode from a Cookie header (SSR) or `document.cookie` (client). Defaults to light. */
+export function readThemeModeFromCookie(cookieHeader: string | null | undefined): ThemeMode {
+	const match = cookieHeader?.match(new RegExp(`(?:^|;\\s*)${THEME_COOKIE}=(light|dark)\\b`));
+	return match?.[1] === 'dark' ? 'dark' : 'light';
+}
+
+/**
  * The token shape consumed across the app via `theme.tokens`. Both the light (`tokens`) and
  * dark (`darkTokens`) sets satisfy it. Defined as the light tokens' type so callers keep full
  * literal autocomplete; the dark set is structurally identical (same keys, string values).
@@ -417,6 +429,21 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							'&:hover': { backgroundColor: t.color.accent[600] },
 							'&:active': { backgroundColor: t.color.accent[700] }
 						}
+					},
+					{
+						props: { variant: 'outlined', color: 'error' },
+						style: {
+							borderColor: t.color.lost[500],
+							color: t.color.lost[500],
+							'&:hover': {
+								borderColor: t.color.lost[700],
+								backgroundColor: t.color.lost[50]
+							},
+							'&:active': {
+								borderColor: t.color.lost[700],
+								backgroundColor: t.color.lost[50]
+							}
+						}
 					}
 				]
 			},
@@ -427,6 +454,13 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 				styleOverrides: {
 					root: { backgroundImage: 'none' },
 					outlined: { borderColor: t.color.line }
+				}
+			},
+			MuiPopover: {
+				styleOverrides: {
+					paper: {
+						marginTop: 8
+					}
 				}
 			},
 			MuiCard: {

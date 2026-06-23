@@ -86,8 +86,8 @@ export function AssigneePicker({
 	});
 
 	return (
-		<Paper variant='outlined' sx={{ p: '18px' }}>
-			<InputLabel sx={{ mb: '5px' }}>Toegewezen aan</InputLabel>
+		<Paper variant='outlined' sx={{ p: 2.25 }}>
+			<InputLabel sx={{ mb: 0.75 }}>Toegewezen aan</InputLabel>
 			<Box
 				component='button'
 				type='button'
@@ -168,9 +168,9 @@ export function AssigneePicker({
 			>
 				<Box
 					sx={{
-						px: '10px',
-						pt: '6px',
-						pb: '4px',
+						px: 1.25,
+						pt: 0.75,
+						pb: 0.5,
 						fontSize: 10,
 						fontWeight: 'bold',
 						letterSpacing: '0.06em',

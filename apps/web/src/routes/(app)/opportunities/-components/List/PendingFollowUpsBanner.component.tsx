@@ -99,7 +99,7 @@ export function PendingFollowUpsBanner() {
 		<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden', mb: 3, borderColor: c.accent[300] }}>
 			{/* Header band — flowing accent gradient (ported from the design's `.qm-followup-flow`),
 			    white text on top, to catch the eye. */}
-			<FlowingGradient sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: '12px 16px' }}>
+			<FlowingGradient sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, px: 2 }}>
 				<Box
 					sx={{
 						width: 30,
@@ -162,7 +162,8 @@ export function PendingFollowUpsBanner() {
 						border: 'none',
 						borderTop: `1px solid ${c.line}`,
 						background: 'transparent',
-						p: '12px 20px',
+						py: 1.5,
+						px: 2.5,
 						color: c.accent[700],
 						fontFamily: tokens.font.sans,
 						fontSize: 13,
@@ -199,7 +200,8 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 				display: 'flex',
 				alignItems: 'center',
 				gap: 2,
-				p: '12px 20px',
+				py: 1.5,
+				px: 2.5,
 				borderTop: `1px solid ${c.line}`,
 				cursor: 'pointer',
 				transition: `background ${tokens.motion.durFast}ms`,
@@ -218,7 +220,7 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 						{opportunity.requestType}
 					</BodySmall>
 				</Box>
-				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, color: c.ink3, fontSize: 12, mt: '2px' }}>
+				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, color: c.ink3, fontSize: 12, mt: 0.25 }}>
 					<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
 						<AppIcon name='file-text' size='small' />
 						Concept gereed
@@ -253,4 +255,3 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 		</Box>
 	);
 }
-

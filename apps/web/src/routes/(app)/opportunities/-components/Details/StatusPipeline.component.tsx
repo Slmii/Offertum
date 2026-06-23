@@ -91,7 +91,7 @@ export function StatusPipeline({ status }: { status: OpportunityStatus }) {
 							sx={{
 								display: 'inline-flex',
 								alignItems: 'center',
-								gap: '7px',
+								gap: 1,
 								padding: '6px 12px 6px 8px',
 								backgroundColor: bg,
 								border: `1px solid ${ring}`,

@@ -1,7 +1,6 @@
-import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { TenantWrite } from '@/common/decorators/tenant-write.decorator';
-import { AttachQuotePdfDto } from '@/modules/reply-draft-attachments/dto/attach-quote-pdf.dto';
+import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { ATTACHMENT_MAX_FILE_BYTES } from '@/lib/storage/attachment-constraints';
 import { AssignOpportunityDto } from '@/modules/opportunities/dto/assign-opportunity.dto';
@@ -17,6 +16,7 @@ import { UpdateOpportunityFieldsDto } from '@/modules/opportunities/dto/update-o
 import { UpdateOpportunityStatusDto } from '@/modules/opportunities/dto/update-opportunity-status.dto';
 import { UpdateReplyDraftDto } from '@/modules/opportunities/dto/update-reply-draft.dto';
 import { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
+import { AttachQuotePdfDto } from '@/modules/reply-draft-attachments/dto/attach-quote-pdf.dto';
 import { ReplyDraftAttachmentResponseDto } from '@/modules/reply-draft-attachments/dto/reply-draft-attachment.response.dto';
 import {
 	ReplyDraftAttachmentsService,
@@ -202,16 +202,23 @@ export class OpportunitiesController {
 		@Res() response: Response
 	): Promise<void> {
 		const result = await this.attachments.download(request.organizationId!, id, attachmentId);
-		// `attachment` (vs `inline`) so the browser triggers a save dialog instead of
-		// trying to render PDFs/images in-tab — matches the "stage these to send"
-		// mental model. The filename is wrapped in quotes per RFC 6266 and we use the
-		// `filename*` UTF-8 form so accented filenames survive.
+
+		// `inline` for browser-renderable types (PDFs, images) so they preview in-tab when the
+		// owner reviews what was sent; `attachment` (save dialog) for everything else (docs, zips).
+		// The filename is wrapped in quotes per RFC 6266 and we use the `filename*` UTF-8 form so
+		// accented filenames survive.
+		const isPreviewable = result.contentType === 'application/pdf' || result.contentType.startsWith('image/');
 		const encodedName = encodeURIComponent(result.filename);
+
 		response.setHeader('Content-Type', result.contentType);
 		response.setHeader(
 			'Content-Disposition',
-			`attachment; filename="${result.filename.replace(/"/g, '')}"; filename*=UTF-8''${encodedName}`
+			`${isPreviewable ? 'inline' : 'attachment'}; filename="${result.filename.replace(/"/g, '')}"; filename*=UTF-8''${encodedName}`
 		);
+		// Don't let the browser cache the response — a previously-downloaded file would otherwise
+		// keep serving the old `attachment` disposition (forcing a download) even after this flips
+		// to `inline`.
+		response.setHeader('Cache-Control', 'no-store');
 		response.setHeader('Content-Length', String(result.data.byteLength));
 		response.end(result.data);
 	}

@@ -60,7 +60,8 @@ export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 				border: `1px solid ${theme.tokens.color.line}`,
 				borderLeft: `4px solid ${toneAccent(theme.tokens, tone)}`,
 				borderRadius: `${theme.tokens.radius.md}px`,
-				p: '12px 16px',
+				py: 1.5,
+				px: 2,
 				minWidth: 280,
 				maxWidth: 360,
 				boxShadow: theme.tokens.shadow[2],
@@ -69,7 +70,7 @@ export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 		>
 			<Box
 				component='span'
-				sx={theme => ({ display: 'inline-flex', mt: '1px', color: toneAccent(theme.tokens, tone) })}
+				sx={theme => ({ display: 'inline-flex', mt: 0.25, color: toneAccent(theme.tokens, tone) })}
 			>
 				<AppIcon name={TONE_ICON[tone]} size='medium' filled />
 			</Box>
