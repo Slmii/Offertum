@@ -3,7 +3,7 @@ import { Banner } from '@/components/Banner.component';
 import { Dialog } from '@/components/Dialog.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
-import { Body, BodySmall, H2, H3, Mono, Overline } from '@/components/Text.component';
+import { Body, BodySmall, H2, H3, Overline } from '@/components/Text.component';
 import {
 	billingStatusQueryOptions,
 	isBillingEntitled,
@@ -26,7 +26,6 @@ import type { BillingStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import type { NextInvoice } from './-billing-invoices.mock';
 
 export const Route = createFileRoute('/(app)/billing/')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions),
@@ -239,46 +238,6 @@ function StatusPanel({
 	);
 }
 
-/**
- * MOCK — the Stripe Customer ID is not yet returned by `GET /api/billing/status`.
- * Rendered with a copy-to-clipboard button (clipboard can fail in non-secure contexts;
- * the ID stays visible so it can be copied manually as a fallback).
- */
-function StripeCustomerIdRow({ customerId }: { customerId: string }) {
-	const [copied, setCopied] = useState(false);
-
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(customerId);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 2000);
-		} catch {
-			setCopied(false);
-		}
-	};
-
-	return (
-		<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
-			<BodySmall color='textSecondary' component='span'>
-				Stripe Customer ID:
-			</BodySmall>
-			<Mono color='textSecondary' sx={{ fontSize: 12 }}>
-				{customerId}
-			</Mono>
-			<Button
-				size='small'
-				variant='outlined'
-				color='inherit'
-				startIcon={<AppIcon name='copy' size='small' />}
-				onClick={handleCopy}
-				sx={{ minWidth: 0, py: 0.25, px: 1 }}
-			>
-				{copied ? 'Gekopieerd' : 'Kopieer'}
-			</Button>
-		</Stack>
-	);
-}
-
 /* ===================== Seats ===================== */
 
 function SeatsCard({ seats, state }: { seats: BillingStatus['seats']; state: BillingStatus['state'] }) {
@@ -381,34 +340,6 @@ function SeatSeparator({ children }: { children: string }) {
 		<Box component='span' aria-hidden='true' sx={{ color: tokens.color.lineStrong, fontSize: 18 }}>
 			{children}
 		</Box>
-	);
-}
-
-/* ===================== Invoices (MOCK) ===================== */
-
-function NextInvoiceCard({ invoice }: { invoice: NextInvoice }) {
-	const { tokens } = useTheme();
-	return (
-		<Paper variant='outlined' sx={{ p: 3 }}>
-			<H2 component='h2' sx={{ fontSize: 18, mb: 1.5 }}>
-				Volgende factuur
-			</H2>
-			<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-				<BodySmall color='textSecondary'>{toReadableDate(invoice.dueDateIso, 'D MMM YYYY')}</BodySmall>
-				<Box component='span' sx={{ fontSize: 22, fontWeight: 'bold', color: tokens.color.ink1 }}>
-					{toReadableEuro(invoice.totalCents / 100)}
-				</Box>
-			</Box>
-			<Divider />
-			<Stack useFlexGap spacing={1} sx={{ mt: 1.5 }}>
-				{invoice.lines.map(line => (
-					<Box key={line.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-						<BodySmall>{line.label}</BodySmall>
-						<BodySmall>{toReadableEuro(line.amountCents / 100)}</BodySmall>
-					</Box>
-				))}
-			</Stack>
-		</Paper>
 	);
 }
 

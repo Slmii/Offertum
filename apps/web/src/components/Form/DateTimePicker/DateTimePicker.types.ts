@@ -13,7 +13,7 @@ export interface DateTimePickerProps {
 	helperText?: string;
 	error?: string;
 	size?: 'small' | 'medium';
-	/** Minute granularity for the time wheel. Default `5` to keep wheels short. */
+	/** Minute granularity for the digital-clock time slots. Default `15`. */
 	minutesStep?: number;
 	onChange?: (date: Dayjs | null) => void;
 	/** Fired only when the user CONFIRMS a value (closes the picker on desktop,
