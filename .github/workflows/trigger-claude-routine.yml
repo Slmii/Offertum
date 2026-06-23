@@ -7,12 +7,13 @@ on:
 jobs:
     trigger:
         runs-on: ubuntu-latest
-        # Don't re-fire the audit when a workflow-audit PR is merged into main — that push
-        # is the audit's own work coming back, and reviewing it again would loop. A merge
-        # commit reads "Merge pull request … from …/workflow-audit/…".
+        # Don't re-fire the routine when a routine's own PR is merged into main — that push
+        # is the routine's work coming back, and reviewing it again would loop. A merge commit
+        # reads "Merge pull request … from …/<branch>/…", so we skip the workflow-audit branches
+        # and the triage branches (triage/issue-… PRs opened by the triage routine).
         # Also skip when the commit message opts out with [skip-review] — for trivial
         # changes (typos, formatting, dep bumps) that aren't worth a routine review.
-        if: ${{ !contains(github.event.head_commit.message, 'workflow-audit/') && !contains(github.event.head_commit.message, '[skip-review]') }}
+        if: ${{ !contains(github.event.head_commit.message, 'workflow-audit/') && !contains(github.event.head_commit.message, 'triage/') && !contains(github.event.head_commit.message, '[skip-review]') }}
         steps:
             - name: Fire routine
               env:
