@@ -51,6 +51,21 @@ export const toDaysUntilLabel = (date: Date | string) => {
 };
 
 /**
+ * Calendar days since `date` in Amsterdam timezone, NL-phrased ("3 dagen", "1 dag"), or
+ * `null` when fewer than 1 full Amsterdam calendar day has elapsed. Symmetric counterpart
+ * to `toDaysUntilLabel` — same timezone-pinned day arithmetic, opposite direction.
+ */
+export const toDaysSinceLabel = (date: Date | string): string | null => {
+	const sent = dayjs(date).tz(BUSINESS_TIME_ZONE).startOf('day');
+	const today = dayjs().tz(BUSINESS_TIME_ZONE).startOf('day');
+	const days = today.diff(sent, 'day');
+	if (days <= 0) {
+		return null;
+	}
+	return `${days} ${days === 1 ? 'dag' : 'dagen'}`;
+};
+
+/**
  * Compact human-relative time ("zojuist", "8m geleden", "2u geleden", "2d geleden",
  * "1w geleden", "3mnd geleden", "2j geleden"). Abbreviated units instead of dayjs'
  * verbose `fromNow()` ("8 minuten geleden"). Instant-difference based, so timezone
