@@ -40,7 +40,7 @@ function SignUpPage() {
 		<Container maxWidth='xs' sx={{ py: 8 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<H1 sx={{ mb: 1 }}>Create your account</H1>
-				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 3 }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mb: 3 }}>
 					Start a 14-day free trial. No credit card required.
 				</BodySmall>
 
@@ -66,14 +66,14 @@ function SignUpPage() {
 					</Button>
 				</Form>
 
-				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
 					Already have an account?{' '}
 					<Link component={RouterLink} to='/sign-in'>
 						Sign in
 					</Link>
 				</BodySmall>
 
-				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
 					Joining a colleague's team? Ask your owner to invite you from the Team page instead.
 				</BodySmall>
 			</Paper>

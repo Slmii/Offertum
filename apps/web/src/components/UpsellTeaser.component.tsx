@@ -36,16 +36,12 @@ export function UpsellTeaser({ isOwner }: { isOwner: boolean }) {
 					<H3 component='h2'>Slimme prioritering</H3>
 				</Stack>
 
-				<BodySmall color='text.secondary'>Met een abonnement krijg je:</BodySmall>
+				<BodySmall color='textSecondary'>Met een abonnement krijg je:</BodySmall>
 
 				<Stack useFlexGap spacing={0.5}>
 					{VALUE_PROPS.map(prop => (
 						<Stack key={prop} direction='row' useFlexGap spacing={1} sx={{ alignItems: 'flex-start' }}>
-							<Box
-								component='span'
-								aria-hidden='true'
-								sx={{ color: 'text.secondary', flexShrink: 0, lineHeight: '1.43' }}
-							>
+							<Box component='span' aria-hidden='true' sx={{ flexShrink: 0, lineHeight: '1.43' }}>
 								•
 							</Box>
 							<BodySmall>{prop}</BodySmall>

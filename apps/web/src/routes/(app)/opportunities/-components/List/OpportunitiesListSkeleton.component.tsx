@@ -43,7 +43,7 @@ export function OpportunitiesListSkeleton() {
 				<>
 					<PageHeader
 						title='Offerteaanvragen'
-						caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar seconden nadat ze binnenkomen.'
+						caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar minuten nadat ze binnenkomen.'
 					/>
 
 					<StatusFilterTabs active={null} counts={ZERO_COUNTS} onChange={noop} />

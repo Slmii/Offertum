@@ -7,6 +7,12 @@ on:
 jobs:
     trigger:
         runs-on: ubuntu-latest
+        # Don't re-fire the audit when a workflow-audit PR is merged into main — that push
+        # is the audit's own work coming back, and reviewing it again would loop. A merge
+        # commit reads "Merge pull request … from …/workflow-audit/…".
+        # Also skip when the commit message opts out with [skip-review] — for trivial
+        # changes (typos, formatting, dep bumps) that aren't worth a routine review.
+        if: ${{ !contains(github.event.head_commit.message, 'workflow-audit/') && !contains(github.event.head_commit.message, '[skip-review]') }}
         steps:
             - name: Fire routine
               env:
@@ -16,8 +22,10 @@ jobs:
                   GH_REF: ${{ github.ref_name }}
                   GH_SHA: ${{ github.sha }}
                   GH_ACTOR: ${{ github.actor }}
+                  # SHA of main BEFORE this push, so the routine can review the exact range.
+                  GH_BEFORE: ${{ github.event.before }}
               run: |
-                  TEXT="Push to ${GH_REF} (${GH_SHA}) by ${GH_ACTOR} in ${GH_REPO}."
+                  TEXT="Review the push to ${GH_REF} in ${GH_REPO}: diff range ${GH_BEFORE}..${GH_SHA} (pushed by ${GH_ACTOR})."
                   curl --fail-with-body -sS -X POST \
                     "https://api.anthropic.com/v1/claude_code/routines/trig_01YFSc7zHT2Nv8z4r8f4KQL4/fire" \
                     -H "Authorization: Bearer $ROUTINE_TOKEN" \

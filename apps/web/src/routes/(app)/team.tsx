@@ -106,7 +106,7 @@ function TeamPage() {
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<PageHeader title='Team' caption={pageHeaderCaption} />
 
-				<Overline color='text.secondary'>Members</Overline>
+				<Overline color='textSecondary'>Members</Overline>
 				<List dense disablePadding sx={{ mb: 2 }}>
 					{memberships.map(m => {
 						// Hide the remove button on the owner's own row (you can't remove yourself,
@@ -154,7 +154,7 @@ function TeamPage() {
 
 				{invitations.length > 0 && (
 					<>
-						<Overline color='text.secondary'>Pending invitations</Overline>
+						<Overline color='textSecondary'>Pending invitations</Overline>
 						<List dense disablePadding sx={{ mb: 2 }}>
 							{invitations.map(inv => (
 								<ListItem
@@ -268,7 +268,7 @@ function TeamPage() {
 				)}
 
 				{!isOwner && (
-					<BodySmall color='text.secondary'>Only the organization owner can invite teammates.</BodySmall>
+					<BodySmall color='textSecondary'>Only the organization owner can invite teammates.</BodySmall>
 				)}
 			</Paper>
 		</Stack>
@@ -369,7 +369,7 @@ function InviteFormBody() {
 				fullWidth
 				options={ROLE_OPTIONS.map(option => ({ id: option.value, label: option.label }))}
 			/>
-			<BodySmall color='text.secondary'>{ROLE_OPTIONS.find(o => o.value === role)?.hint}</BodySmall>
+			<BodySmall color='textSecondary'>{ROLE_OPTIONS.find(o => o.value === role)?.hint}</BodySmall>
 		</Stack>
 	);
 }

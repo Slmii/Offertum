@@ -47,7 +47,7 @@ function AcceptInvitePage() {
 				{(accept.isPending || accept.isSuccess) && (
 					<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
 						<CircularProgress size={32} />
-						<BodySmall color='text.secondary'>Accepting invitation…</BodySmall>
+						<BodySmall color='textSecondary'>Accepting invitation…</BodySmall>
 					</Box>
 				)}
 

@@ -1,6 +1,4 @@
 import { AppIcon } from '@/components/AppIcon.component';
-import { Banner } from '@/components/Banner.component';
-import { BodySmall, Label } from '@/components/Text.component';
 import {
 	getMockBusyWindows,
 	MOCK_DEFAULT_SELECTED_DATE,
@@ -8,11 +6,13 @@ import {
 	MOCK_PICKER_TODAY,
 	type BusyWindow
 } from '@/components/AvailabilityPicker.mock';
+import { Banner } from '@/components/Banner.component';
+import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
+import { BodySmall, Label } from '@/components/Text.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Popover from '@mui/material/Popover';
 import Stack from '@mui/material/Stack';
-import { StandaloneDateTimePicker } from '@/components/Form/DateTimePicker/DateTimePicker.component';
 import { useTheme } from '@mui/material/styles';
 import { Link } from '@tanstack/react-router';
 import dayjs, { type Dayjs } from 'dayjs';

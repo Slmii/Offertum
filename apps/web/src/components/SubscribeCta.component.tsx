@@ -21,7 +21,7 @@ export function SubscribeCta({
 }) {
 	if (!isOwner) {
 		return (
-			<BodySmall color='text.secondary' sx={sx}>
+			<BodySmall color='textSecondary' sx={sx}>
 				{askOwnerText}
 			</BodySmall>
 		);

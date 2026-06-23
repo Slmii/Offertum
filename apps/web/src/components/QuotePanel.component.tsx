@@ -1,5 +1,8 @@
+import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { BodySmall, H3, Label } from '@/components/Text.component';
 import {
 	quoteDraftsQueryOptions,
 	quotePdfDownloadUrl,
@@ -28,9 +31,6 @@ import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import { Banner } from '@/components/Banner.component';
-import { Dialog } from '@/components/Dialog.component';
-import { BodySmall, H3, Label } from '@/components/Text.component';
 import {
 	computeQuoteTotals,
 	lineNetCents,
@@ -104,7 +104,7 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 			</Stack>
 
 			{latest?.validUntil && (
-				<BodySmall color='text.secondary' sx={{ mb: 1 }}>
+				<BodySmall color='textSecondary' sx={{ mb: 1 }}>
 					Geldig tot {toReadableDate(latest.validUntil)}
 				</BodySmall>
 			)}
@@ -140,7 +140,7 @@ export function QuotePanel({ opportunityId }: { opportunityId: string }) {
 				<QuoteDraftEditor draft={latest} opportunityId={opportunityId} />
 			) : (
 				<Paper variant='outlined' sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
-					<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+					<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 						Nog geen offerte opgesteld. Stel automatisch regels voor op basis van de aanvraag, je catalogus
 						en je prijsregels.
 					</BodySmall>
@@ -187,11 +187,11 @@ function QuotePdfHistory({ pdfs }: { pdfs: QuotePdf[] }) {
 							spacing={1}
 							sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
 						>
-							<BodySmall color='text.secondary'>v{pdfs.length - index}</BodySmall>
+							<BodySmall color='textSecondary'>v{pdfs.length - index}</BodySmall>
 							<Link href={quotePdfDownloadUrl(pdf.id)} target='_blank' rel='noopener' underline='hover'>
 								{pdf.filename}
 							</Link>
-							<BodySmall color='text.secondary'>{toReadableDateTime(pdf.createdAt)}</BodySmall>
+							<BodySmall color='textSecondary'>{toReadableDateTime(pdf.createdAt)}</BodySmall>
 						</Stack>
 					))}
 				</Stack>
@@ -267,7 +267,7 @@ function QuoteRegenerateModal({
 				</>
 			}
 		>
-			<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 				Vergelijk je huidige offerte met het nieuwe voorstel en kies per regel wat er gebeurt. Toeslagen en
 				voorrijkosten worden automatisch opnieuw berekend.
 			</BodySmall>
@@ -275,7 +275,7 @@ function QuoteRegenerateModal({
 			<Label sx={{ display: 'block', mb: 1 }}>Werk &amp; materialen</Label>
 			<Stack useFlexGap spacing={1}>
 				{lineEntries.length === 0 && (
-					<BodySmall color='text.secondary'>Geen werk- of materiaalregels.</BodySmall>
+					<BodySmall color='textSecondary'>Geen werk- of materiaalregels.</BodySmall>
 				)}
 				{lineEntries.map(entry => (
 					<QuoteDiffRow
@@ -354,7 +354,7 @@ function QuoteDiffRow({
 						</Stack>
 					}
 				/>
-				<BodySmall color='text.secondary' sx={{ display: 'block', pl: '30px' }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', pl: '30px' }}>
 					huidig: {summarize(entry.current.quantity, entry.current.unitPriceEur)} → nieuw:{' '}
 					{summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)} ·{' '}
 					{checked ? 'nieuwe regel gebruiken' : 'huidige regel behouden'}
@@ -385,7 +385,7 @@ function QuoteDiffRow({
 					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 						{chip}
 						<LineSummary line={entry.current} />
-						<BodySmall color='text.secondary'>(behouden?)</BodySmall>
+						<BodySmall color='textSecondary'>(behouden?)</BodySmall>
 					</Stack>
 				}
 			/>
@@ -397,14 +397,14 @@ function QuoteDiffRow({
 
 function RuleDiffRow({ entry }: { entry: QuoteLineDiffEntry }) {
 	if (!entry.proposed) {
-		return <BodySmall color='text.secondary'>{entry.current?.description} — vervalt</BodySmall>;
+		return <BodySmall color='textSecondary'>{entry.current?.description} — vervalt</BodySmall>;
 	}
 	const changed = entry.current !== null && !sameLine(entry.current, entry.proposed);
 	return (
 		<BodySmall>
 			{entry.proposed.description} · {summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)}
 			{changed && entry.current && (
-				<BodySmall component='span' color='text.secondary'>
+				<BodySmall component='span' color='textSecondary'>
 					{' '}
 					(was {formatLinePrice(entry.current.unitPriceEur)})
 				</BodySmall>
@@ -417,7 +417,7 @@ function LineSummary({ line }: { line: QuoteLineItem | ProposedQuoteLine }) {
 	return (
 		<BodySmall>
 			{line.description}{' '}
-			<BodySmall component='span' color='text.secondary'>
+			<BodySmall component='span' color='textSecondary'>
 				· {summarize(String(line.quantity), line.unitPriceEur)}
 			</BodySmall>
 		</BodySmall>
@@ -679,16 +679,16 @@ function QuoteTotals({ totals }: { totals: ReturnType<typeof computeQuoteTotals>
 	return (
 		<Stack useFlexGap spacing={0.5} sx={{ ml: 'auto', maxWidth: 360 }}>
 			<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
-				<BodySmall color='text.secondary'>Subtotaal (excl. btw)</BodySmall>
+				<BodySmall color='textSecondary'>Subtotaal (excl. btw)</BodySmall>
 				<BodySmall>{toReadableEuro(totals.netCents / 100)}</BodySmall>
 			</Stack>
 
 			{totals.brackets.map(bracket => (
 				<Stack key={bracket.key} useFlexGap spacing={0}>
 					<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between' }}>
-						<BodySmall color='text.secondary'>
+						<BodySmall color='textSecondary'>
 							{bracketVatLabel(bracket)}{' '}
-							<BodySmall component='span' color='text.secondary'>
+							<BodySmall component='span' color='textSecondary'>
 								over {toReadableEuro(bracket.netCents / 100)}
 							</BodySmall>
 						</BodySmall>
@@ -697,7 +697,7 @@ function QuoteTotals({ totals }: { totals: ReturnType<typeof computeQuoteTotals>
 					{/* Reverse charge isn't a discount — the net still counts; only the VAT
 					    (€0 here) shifts to the customer. Spell that out so €0 doesn't read as a
 					    mistake. */}
-					{bracket.reverseCharged && <BodySmall color='text.secondary'>verlegd naar afnemer</BodySmall>}
+					{bracket.reverseCharged && <BodySmall color='textSecondary'>verlegd naar afnemer</BodySmall>}
 				</Stack>
 			))}
 
@@ -762,7 +762,7 @@ function QuoteLineRow({
 					{line.vatReverseCharged && (
 						<Chip size='small' variant='outlined' color='info' label='BTW verlegd' />
 					)}
-					{line.note && <BodySmall color='text.secondary'>{line.note}</BodySmall>}
+					{line.note && <BodySmall color='textSecondary'>{line.note}</BodySmall>}
 				</Stack>
 			</TableCell>
 			<TableCell align='right'>

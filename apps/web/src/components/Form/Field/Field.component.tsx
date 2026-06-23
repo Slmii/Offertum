@@ -165,7 +165,7 @@ export function StandaloneField({
 							{isLoading && <CircularProgress size={20} />}
 							{endElement && cloneElement(endElement)}
 							{maxLength != null && maxLength > 0 && (
-								<FormHelperText sx={{ color: 'text.secondary', opacity: 0.5, mt: 0 }}>
+								<FormHelperText sx={{ color: 'text.secondary', mt: 0 }}>
 									{getByteLength(value ?? '')} / {maxLength}
 								</FormHelperText>
 							)}

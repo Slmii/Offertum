@@ -4,7 +4,7 @@ import { Form } from '@/components/Form/Form.component';
 import { StandaloneSwitch, Switch } from '@/components/Form/Switch/Switch.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
-import { Body, BodySmall } from '@/components/Text.component';
+import { Body, BodySmall, H3 } from '@/components/Text.component';
 import { sessionQueryOptions } from '@/lib/queries/auth.queries';
 import {
 	notificationPreferencesQueryOptions,
@@ -169,10 +169,8 @@ function SectionCard({ title, caption, children }: SectionCardProps) {
 	return (
 		<Paper variant='outlined' sx={{ borderRadius: 2, overflow: 'hidden' }}>
 			<Box sx={{ p: 4, borderBottom: `1px solid ${tokens.color.line}` }}>
-				<Body fontWeight='medium' sx={{ display: 'block' }}>
-					{title}
-				</Body>
-				<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+				<H3 sx={{ display: 'block' }}>{title}</H3>
+				<BodySmall color='textSecondary' sx={{ display: 'block' }}>
 					{caption}
 				</BodySmall>
 			</Box>
@@ -209,14 +207,19 @@ function NotifRow({ title, description, switchSlot, lockedReason, isLast }: Noti
 					{title}
 				</Body>
 				{description && (
-					<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+					<BodySmall color='textSecondary' sx={{ display: 'block' }}>
 						{description}
 					</BodySmall>
 				)}
 				{lockedReason && (
-					<Stack direction='row' useFlexGap spacing={0.5} sx={{ alignItems: 'center', mt: 1 }}>
+					<Stack
+						direction='row'
+						useFlexGap
+						spacing={0.5}
+						sx={{ alignItems: 'center', mt: 1, color: 'error.main' }}
+					>
 						<AppIcon name='lock' size='small' />
-						<BodySmall color='text.disabled'>{lockedReason}</BodySmall>
+						<BodySmall>{lockedReason}</BodySmall>
 					</Stack>
 				)}
 			</Box>

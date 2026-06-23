@@ -4,7 +4,7 @@
 
 **Goal:** Surface the dates Offertum already extracts (quote sent, expiry, appointment, deadline, follow-up) in an in-app calendar and a per-user iCal subscription feed, so quotes stop silently expiring and appointments stop being missed.
 
-**Architecture:** Events are *projected on read* from current `Opportunity` + `QuoteDraft` + `ReplyDraft` rows by a pure mapper — no `OfferteEvent` table, no backfill, no drift. A new `calendar` API module exposes an authenticated JSON endpoint (for FullCalendar) and a public token-authenticated `text/calendar` feed (hand-rolled iCal serializer). The web app renders FullCalendar (month/week/agenda) and a settings page to manage the feed token.
+**Architecture:** Events are _projected on read_ from current `Opportunity` + `QuoteDraft` + `ReplyDraft` rows by a pure mapper — no `OfferteEvent` table, no backfill, no drift. A new `calendar` API module exposes an authenticated JSON endpoint (for FullCalendar) and a public token-authenticated `text/calendar` feed (hand-rolled iCal serializer). The web app renders FullCalendar (month/week/agenda) and a settings page to manage the feed token.
 
 **Tech Stack:** NestJS 11 + Prisma 7 (API), TanStack Start + React 19 + MUI v9 + TanStack Query v5 (web), FullCalendar React (new web dep, approved), hand-rolled RFC 5545 serializer (no API dep).
 
@@ -15,6 +15,7 @@
 ## File structure
 
 **API (`apps/api/src/`)**
+
 - `modules/calendar/calendar-event-type.ts` — `CalendarEventType` union + per-type metadata (Dutch label prefix, all-day flag, color key).
 - `modules/calendar/calendar-event.mapper.ts` — PURE: source rows + org config → `CalendarEvent[]`.
 - `modules/calendar/calendar.repository.ts` — Prisma reads (active opps + sent quote drafts + latest sent reply draft + check-in count).
@@ -30,10 +31,12 @@
 - `prisma/schema.prisma` — add `Organization.quoteValidityDays`, `User.icalFeedToken` (MODIFY).
 
 **Shared (`apps/shared/src/`)**
+
 - `calendar.ts` — wire types.
 - `index.ts` — export `./calendar.js` (MODIFY).
 
 **Web (`apps/web/src/`)**
+
 - `lib/api/calendar.api.ts` — `createServerFn` handlers.
 - `lib/queries/calendar.queries.ts` — queryOptions + token mutations.
 - `lib/utils/calendar.utils.ts` — type → color + Dutch label.
@@ -46,6 +49,7 @@
 ## Task 1: Schema changes (USER runs migration + generate)
 
 **Files:**
+
 - Modify: `apps/api/prisma/schema.prisma`
 
 - [ ] **Step 1: Add `quoteValidityDays` to the Organization model**
@@ -76,10 +80,12 @@ In `model User`, after `tonePlaybookUpdatedAt DateTime?` (around line 210), add:
 Do NOT run any Prisma command. Print this message and wait:
 
 > Schema edited. Please run these yourself, then tell me when done:
+>
 > ```bash
 > cd apps/api && pnpm db:migrate   # name it e.g. calendar_w12
 > pnpm db:generate
 > ```
+>
 > Code in later tasks that references `quoteValidityDays` / `icalFeedToken` will not typecheck until these run — that's expected.
 
 - [ ] **Step 4: Commit (after user confirms migration ran)**
@@ -94,6 +100,7 @@ git commit -m "feat(calendar): add quoteValidityDays + icalFeedToken schema fiel
 ## Task 2: Shared wire types
 
 **Files:**
+
 - Create: `apps/shared/src/calendar.ts`
 - Modify: `apps/shared/src/index.ts`
 
@@ -159,6 +166,7 @@ git commit -m "feat(calendar): add shared CalendarEvent + IcalFeed wire types"
 ## Task 3: Event-type metadata
 
 **Files:**
+
 - Create: `apps/api/src/modules/calendar/calendar-event-type.ts`
 
 - [ ] **Step 1: Create the metadata table**
@@ -200,6 +208,7 @@ git commit -m "feat(calendar): add event-type presentation metadata"
 ## Task 4: Pure event mapper (TDD)
 
 **Files:**
+
 - Create: `apps/api/src/modules/calendar/calendar-event.mapper.ts`
 - Test: `apps/api/src/modules/calendar/calendar-event.mapper.spec.ts`
 
@@ -269,7 +278,11 @@ describe('toCalendarEvents', () => {
 
 	it('emits a follow_up event when REPLIED, under cap, with a sent reply draft', () => {
 		const events = toCalendarEvents(
-			baseSource({ status: 'REPLIED', latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'), priorCheckInCount: 1 }),
+			baseSource({
+				status: 'REPLIED',
+				latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'),
+				priorCheckInCount: 1
+			}),
 			CFG
 		);
 		const followUp = events.find(e => e.type === 'follow_up');
@@ -278,7 +291,11 @@ describe('toCalendarEvents', () => {
 
 	it('suppresses follow_up when the check-in cap is reached', () => {
 		const events = toCalendarEvents(
-			baseSource({ status: 'REPLIED', latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'), priorCheckInCount: 2 }),
+			baseSource({
+				status: 'REPLIED',
+				latestSentReplyDraftAt: new Date('2026-06-01T08:00:00.000Z'),
+				priorCheckInCount: 2
+			}),
 			CFG
 		);
 		expect(events.some(e => e.type === 'follow_up')).toBe(false);
@@ -293,7 +310,10 @@ describe('toCalendarEvents', () => {
 	});
 
 	it('falls back to "Aanvraag" when customerName is null', () => {
-		const events = toCalendarEvents(baseSource({ customerName: null, customerDeadline: new Date('2026-06-15') }), CFG);
+		const events = toCalendarEvents(
+			baseSource({ customerName: null, customerDeadline: new Date('2026-06-15') }),
+			CFG
+		);
 		expect(events[0].title).toBe('Deadline klant — Aanvraag');
 	});
 });
@@ -337,7 +357,13 @@ function addDays(date: Date, days: number): Date {
 	return new Date(date.getTime() + days * DAY_MS);
 }
 
-function buildEvent(id: string, opportunityId: string, type: CalendarEventType, label: string, at: Date): CalendarEvent {
+function buildEvent(
+	id: string,
+	opportunityId: string,
+	type: CalendarEventType,
+	label: string,
+	at: Date
+): CalendarEvent {
 	return {
 		id,
 		opportunityId,
@@ -361,16 +387,34 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 	const events: CalendarEvent[] = [];
 
 	if (src.customerAppointment) {
-		events.push(buildEvent(`${src.opportunityId}:appointment`, src.opportunityId, 'appointment', label, src.customerAppointment));
+		events.push(
+			buildEvent(
+				`${src.opportunityId}:appointment`,
+				src.opportunityId,
+				'appointment',
+				label,
+				src.customerAppointment
+			)
+		);
 	}
 
 	if (src.customerDeadline) {
-		events.push(buildEvent(`${src.opportunityId}:deadline`, src.opportunityId, 'deadline', label, src.customerDeadline));
+		events.push(
+			buildEvent(`${src.opportunityId}:deadline`, src.opportunityId, 'deadline', label, src.customerDeadline)
+		);
 	}
 
 	for (const draft of src.sentQuoteDrafts) {
 		events.push(buildEvent(`${draft.id}:sent`, src.opportunityId, 'sent', label, draft.sentAt));
-		events.push(buildEvent(`${draft.id}:expiry`, src.opportunityId, 'expiry', label, addDays(draft.sentAt, cfg.quoteValidityDays)));
+		events.push(
+			buildEvent(
+				`${draft.id}:expiry`,
+				src.opportunityId,
+				'expiry',
+				label,
+				addDays(draft.sentAt, cfg.quoteValidityDays)
+			)
+		);
 	}
 
 	// Follow-up: same eligibility as the silence-check-in scheduler — REPLIED, a sent reply
@@ -382,7 +426,13 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		src.priorCheckInCount < cfg.followUpMaxCount;
 	if (followUpEligible && src.latestSentReplyDraftAt) {
 		events.push(
-			buildEvent(`${src.opportunityId}:follow_up`, src.opportunityId, 'follow_up', label, addDays(src.latestSentReplyDraftAt, cfg.followUpCadenceDays))
+			buildEvent(
+				`${src.opportunityId}:follow_up`,
+				src.opportunityId,
+				'follow_up',
+				label,
+				addDays(src.latestSentReplyDraftAt, cfg.followUpCadenceDays)
+			)
 		);
 	}
 
@@ -407,6 +457,7 @@ git commit -m "feat(calendar): add pure opportunity→events mapper with tests"
 ## Task 5: Hand-rolled iCal serializer (TDD)
 
 **Files:**
+
 - Create: `apps/api/src/lib/calendar/ical-serializer.ts`
 - Test: `apps/api/src/lib/calendar/ical-serializer.spec.ts`
 
@@ -440,28 +491,59 @@ describe('serializeICalendar', () => {
 			at: new Date('2026-06-01T08:00:00.000Z'),
 			allDay: false
 		};
-		const ics = serializeICalendar({ prodId: PROD_ID, dtstamp: new Date('2026-06-02T00:00:00.000Z'), events: [event] });
+		const ics = serializeICalendar({
+			prodId: PROD_ID,
+			dtstamp: new Date('2026-06-02T00:00:00.000Z'),
+			events: [event]
+		});
 		expect(ics).toContain('UID:qd-1:sent@offertum\r\n');
 		expect(ics).toContain('DTSTART:20260601T080000Z\r\n');
 		expect(ics).toContain('SUMMARY:Offerte verstuurd — Jansen\r\n');
 	});
 
 	it('emits an all-day VEVENT with VALUE=DATE', () => {
-		const event: ICalEvent = { uid: 'opp-1:deadline@offertum', summary: 'Deadline klant — Jansen', at: new Date('2026-06-15T00:00:00.000Z'), allDay: true };
-		const ics = serializeICalendar({ prodId: PROD_ID, dtstamp: new Date('2026-06-02T00:00:00.000Z'), events: [event] });
+		const event: ICalEvent = {
+			uid: 'opp-1:deadline@offertum',
+			summary: 'Deadline klant — Jansen',
+			at: new Date('2026-06-15T00:00:00.000Z'),
+			allDay: true
+		};
+		const ics = serializeICalendar({
+			prodId: PROD_ID,
+			dtstamp: new Date('2026-06-02T00:00:00.000Z'),
+			events: [event]
+		});
 		expect(ics).toContain('DTSTART;VALUE=DATE:20260615\r\n');
 	});
 
 	it('escapes commas, semicolons, and backslashes in SUMMARY', () => {
-		const event: ICalEvent = { uid: 'x@offertum', summary: 'A, B; C \\ D', at: new Date('2026-06-01T08:00:00.000Z'), allDay: false };
-		const ics = serializeICalendar({ prodId: PROD_ID, dtstamp: new Date('2026-06-02T00:00:00.000Z'), events: [event] });
+		const event: ICalEvent = {
+			uid: 'x@offertum',
+			summary: 'A, B; C \\ D',
+			at: new Date('2026-06-01T08:00:00.000Z'),
+			allDay: false
+		};
+		const ics = serializeICalendar({
+			prodId: PROD_ID,
+			dtstamp: new Date('2026-06-02T00:00:00.000Z'),
+			events: [event]
+		});
 		expect(ics).toContain('SUMMARY:A\\, B\\; C \\\\ D\r\n');
 	});
 
 	it('folds lines longer than 75 octets', () => {
 		const longName = 'X'.repeat(200);
-		const event: ICalEvent = { uid: 'x@offertum', summary: longName, at: new Date('2026-06-01T08:00:00.000Z'), allDay: false };
-		const ics = serializeICalendar({ prodId: PROD_ID, dtstamp: new Date('2026-06-02T00:00:00.000Z'), events: [event] });
+		const event: ICalEvent = {
+			uid: 'x@offertum',
+			summary: longName,
+			at: new Date('2026-06-01T08:00:00.000Z'),
+			allDay: false
+		};
+		const ics = serializeICalendar({
+			prodId: PROD_ID,
+			dtstamp: new Date('2026-06-02T00:00:00.000Z'),
+			events: [event]
+		});
 		// No physical line exceeds 75 octets...
 		for (const line of ics.split('\r\n')) {
 			expect(Buffer.byteLength(line, 'utf8')).toBeLessThanOrEqual(75);
@@ -504,7 +586,10 @@ function escapeText(value: string): string {
 
 /** `YYYYMMDDTHHMMSSZ` (UTC) for timed values. */
 function formatUtc(date: Date): string {
-	return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+	return date
+		.toISOString()
+		.replace(/[-:]/g, '')
+		.replace(/\.\d{3}Z$/, 'Z');
 }
 
 /** `YYYYMMDD` (UTC date) for all-day values. */
@@ -582,6 +667,7 @@ git commit -m "feat(calendar): add hand-rolled RFC 5545 iCal serializer with tes
 ## Task 6: Error constants
 
 **Files:**
+
 - Modify: `apps/api/src/lib/errors.ts`
 
 - [ ] **Step 1: Add calendar error constants**
@@ -606,6 +692,7 @@ git commit -m "feat(calendar): add calendar feed error constants"
 ## Task 7: Calendar repository
 
 **Files:**
+
 - Create: `apps/api/src/modules/calendar/calendar.repository.ts`
 
 > The repository is thin Prisma glue. We don't TDD it (DB-bound, follows the existing
@@ -732,6 +819,7 @@ git commit -m "feat(calendar): add calendar repository (active sources + feed to
 ## Task 8: DTOs
 
 **Files:**
+
 - Create: `apps/api/src/modules/calendar/dto/calendar-event.response.dto.ts`
 - Create: `apps/api/src/modules/calendar/dto/ical-feed.response.dto.ts`
 
@@ -788,6 +876,7 @@ git commit -m "feat(calendar): add CalendarEvent + IcalFeed response DTOs"
 ## Task 9: Calendar service (TDD)
 
 **Files:**
+
 - Create: `apps/api/src/modules/calendar/calendar.service.ts`
 - Test: `apps/api/src/modules/calendar/calendar.service.spec.ts`
 
@@ -847,14 +936,24 @@ describe('CalendarService', () => {
 				}
 			]);
 			const service = new CalendarService(repo, makeConfig());
-			const events = await service.getEvents('org-1', { scope: 'all', requestingUserId: 'u1', from: new Date('2026-06-01'), to: new Date('2026-06-30') });
+			const events = await service.getEvents('org-1', {
+				scope: 'all',
+				requestingUserId: 'u1',
+				from: new Date('2026-06-01'),
+				to: new Date('2026-06-30')
+			});
 			expect(events.map(e => e.type)).toEqual(['deadline']);
 		});
 
 		it('returns [] when the org has no calendar config', async () => {
 			repo.findOrgCalendarConfig.mockResolvedValue(null);
 			const service = new CalendarService(repo, makeConfig());
-			const events = await service.getEvents('org-1', { scope: 'all', requestingUserId: null, from: new Date('2026-06-01'), to: new Date('2026-06-30') });
+			const events = await service.getEvents('org-1', {
+				scope: 'all',
+				requestingUserId: null,
+				from: new Date('2026-06-01'),
+				to: new Date('2026-06-30')
+			});
 			expect(events).toEqual([]);
 		});
 	});
@@ -877,7 +976,9 @@ describe('CalendarService', () => {
 		it('getFeedToken returns the existing url, or null when disabled', async () => {
 			repo.findIcalToken.mockResolvedValue('existing-token');
 			const service = new CalendarService(repo, makeConfig());
-			expect((await service.getFeedToken('user-1')).url).toBe('https://app.offertum.test/api/calendar/ical/existing-token.ics');
+			expect((await service.getFeedToken('user-1')).url).toBe(
+				'https://app.offertum.test/api/calendar/ical/existing-token.ics'
+			);
 			repo.findIcalToken.mockResolvedValue(null);
 			expect((await service.getFeedToken('user-1')).url).toBeNull();
 		});
@@ -937,7 +1038,11 @@ export class CalendarService {
 		if (!config) {
 			return [];
 		}
-		const sources = await this.repository.findActiveSources(organizationId, options.scope, options.requestingUserId);
+		const sources = await this.repository.findActiveSources(
+			organizationId,
+			options.scope,
+			options.requestingUserId
+		);
 		const fromMs = options.from.getTime();
 		const toMs = options.to.getTime();
 		return sources
@@ -961,7 +1066,12 @@ export class CalendarService {
 		const from = new Date(now.getTime() - FEED_WINDOW_PAST_DAYS * DAY_MS);
 		const to = new Date(now.getTime() + FEED_WINDOW_FUTURE_DAYS * DAY_MS);
 		// Feed always shows the whole org (a subscribed feed has no per-user toggle).
-		const events = await this.getEvents(user.currentOrganizationId, { scope: 'all', requestingUserId: null, from, to });
+		const events = await this.getEvents(user.currentOrganizationId, {
+			scope: 'all',
+			requestingUserId: null,
+			from,
+			to
+		});
 		const icalEvents: ICalEvent[] = events.map(event => ({
 			uid: `${event.id}@offertum`,
 			summary: event.title,
@@ -1015,6 +1125,7 @@ git commit -m "feat(calendar): add calendar service (events window + feed render
 ## Task 10: Controllers + module + registration
 
 **Files:**
+
 - Create: `apps/api/src/modules/calendar/calendar.controller.ts`
 - Create: `apps/api/src/modules/calendar/calendar-ical.controller.ts`
 - Create: `apps/api/src/modules/calendar/calendar.module.ts`
@@ -1227,14 +1338,17 @@ git commit -m "feat(calendar): add calendar controllers + module, register in ap
 ## Task 11: Add FullCalendar dependency
 
 **Files:**
+
 - Modify: `apps/web/package.json` (via pnpm)
 
 - [ ] **Step 1: Install the approved FullCalendar packages**
 
 Run (from repo root):
+
 ```bash
 pnpm --filter @offertum/web add @fullcalendar/react @fullcalendar/core @fullcalendar/daygrid @fullcalendar/timegrid @fullcalendar/list
 ```
+
 Expected: all five resolve (MIT) and land in `apps/web/package.json` dependencies.
 
 - [ ] **Step 2: Commit**
@@ -1249,6 +1363,7 @@ git commit -m "build(web): add FullCalendar (react/daygrid/timegrid/list) for th
 ## Task 12: Web — calendar utils (TDD) + api handlers + queries
 
 **Files:**
+
 - Create: `apps/web/src/lib/utils/calendar.utils.ts`
 - Test: `apps/web/src/lib/utils/calendar.utils.test.ts`
 - Create: `apps/web/src/lib/api/calendar.api.ts`
@@ -1369,7 +1484,8 @@ import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query
 
 export const CalendarKeys = {
 	all: ['calendar'] as const,
-	events: (from: string, to: string, scope: CalendarEventScope) => ['calendar', 'events', { from, to, scope }] as const,
+	events: (from: string, to: string, scope: CalendarEventScope) =>
+		['calendar', 'events', { from, to, scope }] as const,
 	feed: ['calendar', 'feed'] as const
 };
 
@@ -1415,6 +1531,7 @@ git commit -m "feat(web): add calendar utils, api handlers, and queries"
 ## Task 13: Web — calendar route (FullCalendar)
 
 **Files:**
+
 - Create: `apps/web/src/routes/(app)/calendar/index.tsx`
 
 - [ ] **Step 1: Write the route**
@@ -1505,7 +1622,10 @@ function CalendarPage() {
 						<Switch
 							checked={activeScope === 'mine'}
 							onChange={(_, checked) =>
-								navigate({ search: prev => ({ ...prev, scope: checked ? 'mine' : undefined }), replace: true })
+								navigate({
+									search: prev => ({ ...prev, scope: checked ? 'mine' : undefined }),
+									replace: true
+								})
 							}
 						/>
 					}
@@ -1516,7 +1636,11 @@ function CalendarPage() {
 				<FullCalendar
 					plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
 					initialView={initialView}
-					headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' }}
+					headerToolbar={{
+						left: 'prev,next today',
+						center: 'title',
+						right: 'dayGridMonth,timeGridWeek,listWeek'
+					}}
 					locale='nl'
 					firstDay={1}
 					height='auto'
@@ -1554,6 +1678,7 @@ git commit -m "feat(web): add FullCalendar agenda route with mine/all scope togg
 ## Task 14: Web — iCal feed settings page
 
 **Files:**
+
 - Create: `apps/web/src/routes/(app)/settings/calendar.tsx`
 
 - [ ] **Step 1: Write the settings page**
@@ -1591,14 +1716,14 @@ function CalendarSettingsPage() {
 			<Typography variant='h1' sx={{ fontSize: 28, mt: 2, mb: 1 }}>
 				Agenda-abonnement
 			</Typography>
-			<Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om je offertes,
-				deadlines en afspraken automatisch te zien.
+			<Typography variant='body2' color='textSecondary' sx={{ mb: 3 }}>
+				Abonneer je agenda-app (Apple Agenda, Google Calendar) op deze link om je offertes, deadlines en
+				afspraken automatisch te zien.
 			</Typography>
 
 			<Alert severity='warning' sx={{ mb: 3 }}>
-				Iedereen met deze link kan je agenda-items zien (klantnaam + type aanvraag). Deel hem
-				niet en vernieuw de link als je hem per ongeluk hebt gedeeld.
+				Iedereen met deze link kan je agenda-items zien (klantnaam + type aanvraag). Deel hem niet en vernieuw
+				de link als je hem per ongeluk hebt gedeeld.
 			</Alert>
 
 			{feed.url ? (
@@ -1617,7 +1742,12 @@ function CalendarSettingsPage() {
 						<Button variant='outlined' onClick={() => generate.mutate()} disabled={generate.isPending}>
 							Vernieuwen
 						</Button>
-						<Button color='error' variant='outlined' onClick={() => revoke.mutate()} disabled={revoke.isPending}>
+						<Button
+							color='error'
+							variant='outlined'
+							onClick={() => revoke.mutate()}
+							disabled={revoke.isPending}
+						>
 							Intrekken
 						</Button>
 					</Stack>
@@ -1644,6 +1774,7 @@ git commit -m "feat(web): add iCal feed subscription settings page"
 ## Task 15: Web — nav entries on the home dashboard
 
 **Files:**
+
 - Modify: `apps/web/src/routes/(app)/index.tsx`
 
 - [ ] **Step 1: Add an "Agenda" button next to the opportunities button**

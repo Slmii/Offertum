@@ -111,7 +111,7 @@ function AIUsagePage() {
 					<TableBody>
 						{data.rows.length === 0 ? (
 							<TableRow>
-								<TableCell colSpan={9} align='center' sx={{ py: 6, color: 'text.secondary' }}>
+								<TableCell colSpan={9} align='center' sx={{ py: 6 }}>
 									No AI calls in this range.
 								</TableCell>
 							</TableRow>
@@ -154,7 +154,7 @@ function AIUsagePage() {
 				</Table>
 			</TableContainer>
 
-			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 2 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mt: 2 }}>
 				Window: {toReadableDateTime(data.rangeStart)} to {toReadableDateTime(data.rangeEnd)}
 			</BodySmall>
 		</Stack>

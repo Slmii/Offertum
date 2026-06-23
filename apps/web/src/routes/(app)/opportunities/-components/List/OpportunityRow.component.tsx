@@ -20,7 +20,7 @@ import { useTheme } from '@mui/material/styles';
 import type { Opportunity } from '@offertum/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Fragment, useState } from 'react';
-import { DismissDialog } from './DismissDialog.component';
+import { DismissDialog } from '../DismissDialog.component';
 import { LastActivityBadge } from './LastActivityBadge.component';
 
 // Fixed width of the right meta column (arrival time ⇆ hover affordance) — the same on every
@@ -179,7 +179,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 						<Box component='span' sx={{ color: c.ink4 }}>
 							·
 						</Box>
-						<BodySmall color='text.secondary' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+						<BodySmall color='textSecondary' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
 							{opportunity.requestType}
 						</BodySmall>
 					</Box>
@@ -214,7 +214,11 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 										<AppIcon name={part.icon} size='small' />
 										<Box
 											component='span'
-											sx={part.truncate ? { overflow: 'hidden', textOverflow: 'ellipsis' } : undefined}
+											sx={
+												part.truncate
+													? { overflow: 'hidden', textOverflow: 'ellipsis' }
+													: undefined
+											}
 										>
 											{part.text}
 										</Box>

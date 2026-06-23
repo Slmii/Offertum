@@ -21,7 +21,7 @@ export function SectionError({ error, reset }: SectionErrorProps) {
 				<BodySmall fontWeight='medium' sx={{ mb: 0.5 }}>
 					Kon dit onderdeel niet laden.
 				</BodySmall>
-				<BodySmall color='text.secondary'>
+				<BodySmall color='textSecondary'>
 					{error.message || 'Onbekende fout. Probeer het later opnieuw.'}
 				</BodySmall>
 			</Banner>

@@ -7,6 +7,10 @@ import { CacheProvider } from '@emotion/react';
 import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { nlNL } from '@mui/x-date-pickers/locales';
+import 'dayjs/locale/nl';
+
+const pickerLocaleText = nlNL.components.MuiLocalizationProvider.defaultProps.localeText;
 import type { QueryClient } from '@tanstack/react-query';
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
@@ -54,7 +58,7 @@ function Providers({ children }: { children: React.ReactNode }) {
 	return (
 		<CacheProvider value={emotionCache}>
 			<ThemeModeProvider>
-				<LocalizationProvider dateAdapter={AdapterDayjs}>
+				<LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale='nl' localeText={pickerLocaleText}>
 					<CssBaseline />
 					<ToastProvider>{children}</ToastProvider>
 				</LocalizationProvider>

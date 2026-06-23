@@ -104,14 +104,19 @@ export class PatternsService {
 			return null;
 		}
 
-		const headline = 'Snel reageren wint meer offertes';
-
+		let headline: string;
 		let detail: string;
 		if (fastPct !== null && slowPct !== null && fastPct > slowPct) {
 			// Both ends have data and fast wins more — frame it as the speed-wins insight.
+			headline = 'Snel reageren wint meer offertes';
 			detail = `Je wint ${fastPct}% bij reactie binnen 4u, tegen ${slowPct}% bij meer dan 24u.`;
+		} else if (fastPct !== null && slowPct !== null && slowPct > fastPct) {
+			// Data shows the inverse — don't claim speed wins.
+			headline = 'Snelheid maakt hier minder verschil';
+			detail = this.neutralWinRateDetail(buckets);
 		} else {
-			// Otherwise stay neutral and factual with whatever buckets have data.
+			// Neutral: one bucket missing or equal percentages — stay factual.
+			headline = 'Reactiesnelheid en winkans';
 			detail = this.neutralWinRateDetail(buckets);
 		}
 

@@ -26,12 +26,15 @@ import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
-import { EmptyState } from './-components/EmptyState.component';
-import { FilterChipRow } from './-components/FilterChipRow.component';
-import { OpportunitiesListSkeleton } from './-components/OpportunitiesListSkeleton.component';
-import { OpportunityRow } from './-components/OpportunityRow.component';
-import { PendingFollowUpsBanner, pendingFollowUpsQueryOptions } from './-components/PendingFollowUpsBanner.component';
-import { StatusFilterTabs } from './-components/StatusFilterTabs.component';
+import { EmptyState } from './-components/List/EmptyState.component';
+import { FilterChipRow } from './-components/List/FilterChipRow.component';
+import { OpportunitiesListSkeleton } from './-components/List/OpportunitiesListSkeleton.component';
+import { OpportunityRow } from './-components/List/OpportunityRow.component';
+import {
+	PendingFollowUpsBanner,
+	pendingFollowUpsQueryOptions
+} from './-components/List/PendingFollowUpsBanner.component';
+import { StatusFilterTabs } from './-components/List/StatusFilterTabs.component';
 
 // Every field carries `.catch(undefined)` so a malformed/hand-edited URL param degrades
 // to its default instead of throwing in `validateSearch` (which renders the error page).
@@ -251,7 +254,7 @@ function OpportunitiesIndexPage() {
 				<>
 					<PageHeader
 						title='Offerteaanvragen'
-						caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar seconden nadat ze binnenkomen.'
+						caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar minuten nadat ze binnenkomen.'
 					/>
 
 					{/* Auto follow-ups (check-in drafts) awaiting review — renders nothing when there are none. */}

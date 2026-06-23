@@ -133,7 +133,6 @@ export function NotificationBell() {
 						to='/settings/notifications'
 						onClick={onClose}
 						startIcon={<AppIcon name='settings' size='small' />}
-						sx={{ color: 'text.secondary' }}
 					>
 						Voorkeuren
 					</Button>
@@ -166,7 +165,7 @@ function EmptyState({ filter }: { filter: NotificationFilter }) {
 			<BodySmall fontWeight='medium' sx={{ display: 'block' }}>
 				{filter === 'unread' ? 'Geen ongelezen meldingen.' : 'Nog geen notificaties.'}
 			</BodySmall>
-			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.25 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.25 }}>
 				Je bent helemaal bij.
 			</BodySmall>
 		</Box>
@@ -289,7 +288,7 @@ function NotificationRow({ notification, onActivate }: { notification: AppNotifi
 					</BodySmall>
 				</Stack>
 				<BodySmall
-					color='text.secondary'
+					color='textSecondary'
 					sx={{
 						display: '-webkit-box',
 						WebkitLineClamp: 2,
