@@ -91,12 +91,17 @@ export function ContextRailCard({
 				>
 					<AppIcon name='mail' size='small' /> Mail
 				</Box>
+				{/* Phone number extraction is not yet implemented — no customerPhone field
+				    exists in the opportunity data model. The button is disabled until
+				    a phone field is added to the extractor. */}
 				<Box
 					component='a'
-					type='button'
-					sx={contactButtonSx}
-					href={customerEmail ? `tel:${customerEmail}` : undefined}
-					target='_blank'
+					sx={{
+						...contactButtonSx,
+						pointerEvents: 'none',
+						opacity: 0.55
+					}}
+					aria-disabled='true'
 				>
 					<AppIcon name='phone' size='small' /> Bel
 				</Box>
