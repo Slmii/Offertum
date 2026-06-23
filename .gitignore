@@ -25,3 +25,4 @@ node_modules
 # Generated files
 marketing
 brag-output
+/docs/
