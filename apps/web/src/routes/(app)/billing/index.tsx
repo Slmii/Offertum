@@ -26,7 +26,7 @@ import type { BillingStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { MOCK_NEXT_INVOICE, MOCK_STRIPE_CUSTOMER_ID, type NextInvoice } from './-billing-invoices.mock';
+import type { NextInvoice } from './-billing-invoices.mock';
 
 export const Route = createFileRoute('/(app)/billing/')({
 	loader: ({ context }) => context.queryClient.ensureQueryData(billingStatusQueryOptions),
@@ -140,8 +140,6 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 
 				<SeatsCard seats={status.seats} state={status.state} />
 
-				{/* MOCK — next-invoice + past-invoices have no backend yet (see billing-invoices.mock.ts). */}
-				<NextInvoiceCard invoice={MOCK_NEXT_INVOICE} />
 			</Stack>
 
 			<Dialog
@@ -212,7 +210,6 @@ function StatusPanel({
 				<BodySmall color='textSecondary'>{secondaryLine(state, isPaymentProcessing)}</BodySmall>
 			)}
 
-			<StripeCustomerIdRow customerId={MOCK_STRIPE_CUSTOMER_ID} />
 
 			{showCancellationBanner && (
 				<Banner
