@@ -26,9 +26,10 @@ const MAX_VISIBLE = 2;
 // follow-up produces a fresh signature → the banner returns.
 const DISMISS_STORAGE_KEY = 'offertum.pendingFollowups.dismissed';
 
-// Identifies one pending check-in; `lastActivity.at` is the check-in draft's createdAt for a
-// pending-check-in opp, so it changes when a new follow-up is drafted.
-const checkInSignature = (op: Opportunity) => `${op.id}:${op.lastActivity?.at ?? ''}`;
+// Stable identifier for one pending check-in batch. Uses checkInDraftCreatedAt (the draft's own
+// timestamp) rather than lastActivity.at, which changes on any field edit and would otherwise
+// re-show a dismissed banner with no new check-in present.
+const checkInSignature = (op: Opportunity) => `${op.id}:${op.checkInDraftCreatedAt ?? ''}`;
 
 function readDismissed(): Set<string> {
 	try {

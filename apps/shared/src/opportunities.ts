@@ -87,6 +87,13 @@ export interface Opportunity {
 	 */
 	hasPendingCheckIn: boolean;
 	/**
+	 * ISO timestamp of the pending check-in draft's own `createdAt`, or `null` when there
+	 * is no pending check-in. Used as the stable part of the banner dismiss-signature so
+	 * that editing other opportunity fields (which bumps `lastActivity.at`) does not
+	 * invalidate a previously dismissed banner.
+	 */
+	checkInDraftCreatedAt: string | null;
+	/**
 	 * Most recent activity on this opportunity, discriminated by actor kind so the list
 	 * row can show the right icon + label: a customer reply (`customer` — "Naam (klant)",
 	 * reply icon), an Offertum/system action (`system` — "Offertum", sparkles; e.g. a
