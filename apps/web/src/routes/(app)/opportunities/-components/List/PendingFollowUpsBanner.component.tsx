@@ -2,6 +2,7 @@ import { AppIcon } from '@/components/AppIcon.component';
 import { FlowingGradient } from '@/components/FlowingGradient.component';
 import { Body, BodySmall } from '@/components/Text.component';
 import { opportunitiesListQueryOptions } from '@/lib/queries/opportunities.queries';
+import { toDaysSinceLabel } from '@/lib/utils/date.utils';
 import { opportunityCustomerLabel } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -181,7 +182,7 @@ export function PendingFollowUpsBanner() {
 function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen: () => void }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
-	const silentDays = daysSince(opportunity.replyDraftSentAt);
+	const silentDaysLabel = opportunity.replyDraftSentAt ? toDaysSinceLabel(opportunity.replyDraftSentAt) : null;
 
 	return (
 		<Box
@@ -222,14 +223,14 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 						<AppIcon name='file-text' size='small' />
 						Concept gereed
 					</Box>
-					{silentDays !== null && (
+					{silentDaysLabel !== null && (
 						<>
 							<Box component='span' sx={{ color: c.lineStrong }}>
 								·
 							</Box>
 							<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
 								<AppIcon name='clock' size='small' />
-								Stil sinds {silentDays} {silentDays === 1 ? 'dag' : 'dagen'}
+								Stil sinds {silentDaysLabel}
 							</Box>
 						</>
 					)}
@@ -253,11 +254,3 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 	);
 }
 
-// Whole days since `iso` (the last sent reply), or null when there's no timestamp.
-function daysSince(iso: string | null): number | null {
-	if (!iso) {
-		return null;
-	}
-	const ms = Date.now() - new Date(iso).getTime();
-	return Math.max(0, Math.floor(ms / 86_400_000));
-}

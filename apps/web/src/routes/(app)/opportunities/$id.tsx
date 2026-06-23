@@ -20,7 +20,7 @@ import {
 } from '@/lib/queries/opportunities.queries';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
-import { toReadableTimestamp } from '@/lib/utils/date.utils';
+import { toDaysSinceLabel, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
 	getStatusOptionsForCurrent,
 	OPPORTUNITY_STATUS_LABELS_NL,
@@ -59,16 +59,6 @@ import { WonComposerState } from './-components/Details/WonComposerState.compone
 import { DismissDialog } from './-components/DismissDialog.component';
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
-
-// "X dagen" since the last sent reply (the check-in's silence window), or null when there's no
-// sent timestamp. Module-level so the impure `Date.now()` isn't read during component render.
-function silentSinceLabel(iso: string | null): string | null {
-	if (!iso) {
-		return null;
-	}
-	const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
-	return days <= 0 ? null : `${days} ${days === 1 ? 'dag' : 'dagen'}`;
-}
 
 /**
  * Opportunity detail view + AI reply-draft editor. Side panel renders the
@@ -145,7 +135,7 @@ function OpportunityDetailPage() {
 	// The detail page's check-in variant: the current draft is an Offertum auto follow-up that
 	// hasn't been sent yet → show the prominent review ribbon + a filled badge.
 	const isPendingCheckIn = replyDraft?.kind === 'check_in' && replyDraft.status !== 'sent';
-	const checkInSilentSince = silentSinceLabel(opportunity.replyDraftSentAt);
+	const checkInSilentSince = opportunity.replyDraftSentAt ? toDaysSinceLabel(opportunity.replyDraftSentAt) : null;
 	// The writing-style-change banner offers its own "Regenereer in mijn stijl" — when it's shown
 	// we hide the composer header's duplicate regenerate button so there's only one call to action.
 	const showRegenerateHint = Boolean(
