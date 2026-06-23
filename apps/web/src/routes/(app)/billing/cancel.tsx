@@ -16,7 +16,7 @@ function BillingCancelPage() {
 		<Container maxWidth='sm' sx={{ py: 6 }}>
 			<Paper variant='outlined' sx={{ p: 5, textAlign: 'center' }}>
 				<H1 sx={{ mb: 1 }}>Checkout canceled</H1>
-				<Body color='text.secondary' sx={{ mb: 4 }}>
+				<Body color='textSecondary' sx={{ mb: 4 }}>
 					No payment was processed. You can start your trial whenever you're ready.
 				</Body>
 				<Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

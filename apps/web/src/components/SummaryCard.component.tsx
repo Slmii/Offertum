@@ -18,7 +18,7 @@ export interface SummaryCardProps {
 export function SummaryCard({ label, value }: SummaryCardProps) {
 	return (
 		<Paper variant='outlined' sx={{ p: 2, flex: 1 }}>
-			<BodySmall color='text.secondary' sx={{ display: 'block' }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block' }}>
 				{label}
 			</BodySmall>
 			<H2 sx={{ fontSize: 22, mt: 0.5 }}>{value}</H2>

@@ -62,7 +62,7 @@ function CatalogSettingsPage() {
 
 			{data.items.length === 0 ? (
 				<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, textAlign: 'center' }}>
-					<BodySmall color='text.secondary' sx={{ display: 'block', mb: 3 }}>
+					<BodySmall color='textSecondary' sx={{ display: 'block', mb: 3 }}>
 						Nog geen items in je catalogus.
 					</BodySmall>
 					<Button variant='outlined' onClick={() => setCreating(true)}>
@@ -106,11 +106,11 @@ function CatalogItemRow({ item, onEdit, onDelete }: CatalogItemRowProps) {
 						{item.sku && <Chip label={`SKU: ${item.sku}`} size='small' variant='outlined' />}
 					</Stack>
 					{item.description && (
-						<BodySmall color='text.secondary' sx={{ mb: 1 }}>
+						<BodySmall color='textSecondary' sx={{ mb: 1 }}>
 							{item.description}
 						</BodySmall>
 					)}
-					<BodySmall color='text.secondary'>
+					<BodySmall color='textSecondary'>
 						{toReadableEuro(Number(item.defaultPriceEur))} / {CATALOG_ITEM_UNIT_LABELS_NL[item.unit]} · BTW{' '}
 						{item.defaultVatRate}%
 					</BodySmall>

@@ -1,5 +1,8 @@
 import type { CSSObject, Shadows } from '@mui/material/styles';
 import { createTheme, type PaletteColorOptions } from '@mui/material/styles';
+// Pull in the MUI X date-picker component keys (MuiPickerDay, MuiDigitalClock, …) so the
+// `components` overrides below typecheck.
+import type {} from '@mui/x-date-pickers/themeAugmentation';
 
 /**
  * Design tokens — faithful port of the Claude Design project
@@ -81,36 +84,45 @@ export const tokens = {
  */
 const darkTokenOverrides = {
 	color: {
-		paper: '#0B0E1A', // page background
-		paper2: '#121523', // sunken / sidebar
-		paper3: '#1E2235', // hover surface
-		line: '#262A40', // hairlines, dividers
-		lineStrong: '#3A3F5C', // input borders
-		ink4: '#6E7490', // placeholder, disabled
-		ink3: '#9CA1B8', // tertiary text
-		ink2: '#C9CCDB', // secondary text, labels
-		ink1: '#F2F3F8', // primary text
-		surface: '#161A2B', // card / sheet
-		surfaceSunk: '#10131F', // sunken / nested card
-		overlay: 'rgba(0, 0, 0, 0.60)',
+		// Exact values from the design's `[data-theme="dark"]` (styles.css) — "Investment Indigo,
+		// after dark". The -50/-700 pairs invert lightness so tint-bg/ink-on-tint contrast holds.
+		paper: '#0E1018', // page background
+		paper2: '#151823', // sunken / sidebar
+		paper3: '#1E2230', // hover surface
+		line: '#272C3B', // hairlines, dividers
+		lineStrong: '#3A4154', // input borders
+		ink4: '#6E7488', // placeholder, disabled
+		ink3: '#9AA0B5', // tertiary text
+		ink2: '#C9CDDC', // secondary text, labels
+		ink1: '#F3F4F9', // primary text
+		surface: '#171B26', // card / sheet
+		surfaceSunk: '#11141D', // sunken / nested card
+		overlay: 'rgba(3, 4, 9, 0.62)',
 		accent: {
-			50: '#1F2547', // accent tint bg (dark)
-			100: '#2A3160',
-			200: '#3D478A',
-			300: '#5C6BC0',
-			500: '#7986CB', // primary (lifted for contrast on dark)
-			600: '#9FA8DA', // hover
-			700: '#C5CAE9', // pressed / text-on-tint
-			fg: '#0B0E1A'
-		}
+			50: '#20264A', // accent tint bg (dark)
+			100: '#2A3157',
+			200: '#3C4778',
+			300: '#515D9C', // tint borders
+			500: '#6675CC', // primary
+			600: '#7886D6', // hover (lighter on dark)
+			700: '#AEB7E8', // ink on tint
+			fg: '#0E1018'
+		},
+		// Status — keep desaturated character, lift mids, invert -50/-700 pairs.
+		won: { 50: '#15281B', 500: '#6FA567', 700: '#A9D2A0' },
+		pending: { 50: '#2C2410', 500: '#D2A53C', 700: '#E8C77E' },
+		lost: { 50: '#2C1611', 500: '#D26A52', 700: '#E8A593' },
+		cold: { 50: '#1A1F26', 500: '#8A95A6', 700: '#B9C1CF' },
+		info: { 50: '#172026', 500: '#6E8A9C', 700: '#A9C0CE' }
 	},
 	shadow: {
-		1: '0 1px 0 rgba(0, 0, 0, 0.30), 0 1px 2px rgba(0, 0, 0, 0.40)',
-		2: '0 1px 0 rgba(0, 0, 0, 0.30), 0 8px 24px -6px rgba(0, 0, 0, 0.55)',
-		3: '0 24px 48px -12px rgba(0, 0, 0, 0.70), 0 8px 16px -6px rgba(0, 0, 0, 0.40)',
-		inset: 'inset 0 0 0 1px rgba(255, 255, 255, 0.06)'
+		// Cast in true black, deeper, so cards separate from the field.
+		1: '0 1px 2px rgba(0, 0, 0, 0.40)',
+		2: '0 8px 24px -6px rgba(0, 0, 0, 0.55)',
+		3: '0 24px 48px -12px rgba(0, 0, 0, 0.66), 0 8px 16px -6px rgba(0, 0, 0, 0.40)',
+		inset: 'inset 0 0 0 1px rgba(255, 255, 255, 0.05)'
 	},
-	focusRing: '0 0 0 3px rgba(121, 134, 203, 0.36)'
+	focusRing: '0 0 0 3px rgba(102, 117, 204, 0.40)'
 } as const;
 
 export const darkTokens = {
@@ -298,7 +310,7 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			background: { default: t.color.paper, paper: t.color.surface },
 			text: {
 				primary: t.color.ink1,
-				secondary: t.color.ink2,
+				secondary: t.color.ink4,
 				disabled: t.color.ink4
 			},
 			divider: t.color.line,
@@ -391,9 +403,9 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			MuiButton: {
 				defaultProps: { disableElevation: true },
 				styleOverrides: {
-					root: { borderRadius: t.radius.md, paddingInline: 14 },
+					root: ({ theme }) => ({ borderRadius: t.radius.md, paddingInline: theme.spacing(1.75) }),
 					outlined: { borderColor: t.color.lineStrong },
-					sizeSmall: { paddingInline: 10, minHeight: 30 }
+					sizeSmall: ({ theme }) => ({ paddingInline: theme.spacing(1.25), minHeight: 30 })
 				},
 				// `containedPrimary` is no longer a styleOverrides key in this MUI version — use the
 				// `variants` API to give the primary action its accent hover/active colors.
@@ -430,7 +442,7 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			},
 			MuiOutlinedInput: {
 				styleOverrides: {
-					root: {
+					root: ({ theme }) => ({
 						borderRadius: t.radius.md,
 						backgroundColor: t.color.surface,
 						// Label lives ABOVE the field, so drop MUI's -5px notch offset: the border box
@@ -449,22 +461,28 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 						// DS disabled state — sunken paper fill.
 						'&.Mui-disabled': { backgroundColor: t.color.paper2 },
 						// DS single-line input is 36px tall (8px vertical padding + 13.5px text).
-						'& .MuiOutlinedInput-input': { padding: '8px 12px' },
+						'& .MuiOutlinedInput-input': { padding: theme.spacing(1, 1.5) },
 						// Multiline (textarea): padding belongs on the root; the textarea itself gets none,
 						// otherwise the two stack and leave a large empty gap above the text.
-						'&.MuiInputBase-multiline': { padding: '8px 12px' },
+						'&.MuiInputBase-multiline': { padding: theme.spacing(1, 1.5) },
 						'&.MuiInputBase-multiline .MuiOutlinedInput-input': { padding: 0 },
 						// Label sits above the field (DS), so the notch gap is removed for a solid top border.
 						'& .MuiOutlinedInput-notchedOutline legend': { display: 'none' }
-					}
+					})
 				}
 			},
 			MuiSwitch: {
 				styleOverrides: {
 					// DS switch — 30×18 track, 14px knob, accent-500 when on.
-					root: { width: 30, height: 18, padding: 0, display: 'flex', marginRight: 8 },
-					switchBase: {
-						padding: 2,
+					root: ({ theme }) => ({
+						width: 30,
+						height: 18,
+						padding: 0,
+						display: 'flex',
+						marginRight: theme.spacing(1)
+					}),
+					switchBase: ({ theme }) => ({
+						padding: theme.spacing(0.25),
 						color: '#fff',
 						'&.Mui-checked': {
 							transform: 'translateX(12px)',
@@ -472,7 +490,7 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							'& + .MuiSwitch-track': { backgroundColor: t.color.accent[500], opacity: 1 }
 						},
 						'&.Mui-disabled + .MuiSwitch-track': { opacity: 0.45 }
-					},
+					}),
 					thumb: { width: 14, height: 14, boxShadow: 'none' },
 					track: { borderRadius: 9, backgroundColor: t.color.lineStrong, opacity: 1 }
 				}
@@ -484,18 +502,18 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 				styleOverrides: {
 					// DS renders the field label ABOVE the control (static, 12px/500/ink-2) rather than
 					// as MUI's floating notched label. Done in the theme so every Field/Select inherits it.
-					root: {
+					root: ({ theme }) => ({
 						position: 'relative',
 						transform: 'none',
 						fontSize: '0.75rem',
 						fontWeight: 500,
 						lineHeight: 1.4,
 						color: t.color.ink2,
-						marginBottom: 5,
+						marginBottom: theme.spacing(0.625),
 						maxWidth: '100%',
 						'&.Mui-focused, &.Mui-error, &.Mui-disabled': { color: t.color.ink2 },
 						'& .MuiFormLabel-asterisk': { color: '#DC2D1D' }
-					},
+					}),
 					outlined: {
 						transform: 'none',
 						'&.MuiInputLabel-sizeSmall': { transform: 'none' },
@@ -506,18 +524,143 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			MuiFormHelperText: {
 				styleOverrides: {
 					// DS helper text — 11.5px ink-3, aligned to the field's left edge; error red.
-					root: {
+					root: ({ theme }) => ({
 						fontSize: '0.71875rem',
 						color: t.color.ink3,
 						marginLeft: 0,
-						marginTop: 5,
+						marginTop: theme.spacing(0.625),
 						'&.Mui-error': { color: '#B71C1C' }
-					}
+					})
 				}
 			},
 			MuiChip: {
 				styleOverrides: {
-					root: { borderRadius: t.radius.sm, fontWeight: 500, fontSize: '0.75rem' }
+					root: {
+						borderRadius: t.radius.sm,
+						fontWeight: 500,
+						fontSize: '0.75rem',
+						'& .MuiChip-deleteIcon': {
+							fontSize: 16
+						}
+					}
+				}
+			},
+			// ── Date / date-time picker popover (MUI X) — "Calendar popover (NL, Monday-first)" ──
+			// Playfair month label, uppercase weekday headers, indigo rounded-square selection, an
+			// outlined "today", strikethrough disabled days, and an indigo time-slot column.
+			MuiPickersCalendarHeader: {
+				styleOverrides: {
+					label: {
+						fontFamily: t.font.display,
+						fontSize: '1.25rem',
+						fontWeight: 500,
+						letterSpacing: '-0.012em',
+						color: t.color.ink1
+					},
+					// The design shows just "Maand Jaar" with no year-view caret.
+					switchViewButton: { display: 'none' }
+				}
+			},
+			MuiDayCalendar: {
+				styleOverrides: {
+					weekDayLabel: {
+						textTransform: 'uppercase',
+						fontWeight: 600,
+						fontSize: '0.75rem',
+						letterSpacing: '0.04em',
+						color: t.color.ink3
+					}
+				}
+			},
+			MuiPickerDay: {
+				styleOverrides: {
+					root: {
+						borderRadius: t.radius.md,
+						fontSize: '0.875rem',
+						color: t.color.ink1,
+						'&.Mui-selected': {
+							backgroundColor: t.color.accent[500],
+							color: t.color.accent.fg,
+							fontWeight: 700,
+							'&:hover, &:focus': { backgroundColor: t.color.accent[600] }
+						},
+						'&.Mui-disabled:not(.Mui-selected)': {
+							color: t.color.ink4,
+							textDecoration: 'line-through'
+						}
+					},
+					// Outlined indigo ring for today (unless it's also the selected day).
+					today: {
+						'&:not(.Mui-selected)': {
+							border: `1px solid ${t.color.accent[300]}`,
+							fontWeight: 700
+						}
+					},
+					dayOutsideMonth: { color: t.color.ink4 }
+				}
+			},
+			MuiPickersArrowSwitcher: {
+				styleOverrides: { button: { color: t.color.ink2 } }
+			},
+			MuiDigitalClock: {
+				styleOverrides: {
+					root: { borderLeft: `1px solid ${t.color.line}` },
+					item: {
+						borderRadius: t.radius.sm,
+						fontSize: '0.875rem',
+						'&.Mui-selected': {
+							backgroundColor: t.color.accent[500],
+							color: t.color.accent.fg,
+							fontWeight: 700,
+							'&:hover, &:focus': { backgroundColor: t.color.accent[600] }
+						}
+					}
+				}
+			},
+			MuiAccordion: {
+				// DS accordion — flat, hairline-bordered card with a hover-tinted summary band and a
+				// divider above the details. Shared by every accordion so they all read the same.
+				// Spacing uses the theme's 8px scale (theme.spacing) rather than hardcoded px.
+				defaultProps: { disableGutters: true, elevation: 0, square: false },
+				styleOverrides: {
+					root: ({ theme }) => ({
+						border: `1px solid ${t.color.line}`,
+						borderRadius: t.radius.md,
+						backgroundColor: t.color.surface,
+						boxShadow: t.shadow[1],
+						overflow: 'hidden',
+						// Remove MUI's default top divider pseudo-element.
+						'&::before': { display: 'none' },
+						'& .MuiAccordionSummary-root': {
+							padding: theme.spacing(0, 2),
+							minHeight: 0,
+							backgroundColor: t.color.paper2,
+							'&:hover': { backgroundColor: t.color.paper3 },
+							'& .MuiAccordionSummary-content': {
+								margin: theme.spacing(1.5, 0),
+								display: 'flex',
+								alignItems: 'center',
+								gap: theme.spacing(1),
+								flexWrap: 'wrap',
+								rowGap: theme.spacing(0.5),
+								minWidth: 0
+							},
+							'& .MuiAccordionSummary-expandIconWrapper': { color: t.color.ink4 }
+						},
+						'& .MuiAccordionDetails-root': { padding: 0, borderTop: `1px solid ${t.color.line}` },
+						// Conversation-thread bubble (Werkruimte): stretches to fill its row; the `--out`
+						// modifier (our own reply) swaps the neutral chrome for the accent tint.
+						'&.OppThreadBubble': { flex: 1, minWidth: 0 },
+						'&.OppThreadBubble--out': {
+							backgroundColor: t.color.accent[50],
+							borderColor: t.color.accent[300],
+							'& .MuiAccordionSummary-root': {
+								backgroundColor: 'transparent',
+								'&:hover': { backgroundColor: t.color.accent[100] }
+							},
+							'& .MuiAccordionDetails-root': { borderTopColor: t.color.accent[300] }
+						}
+					})
 				}
 			},
 			MuiAppBar: {
@@ -540,12 +683,16 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			},
 			MuiTooltip: {
 				styleOverrides: {
-					tooltip: {
+					tooltip: ({ theme }) => ({
 						backgroundColor: t.color.ink1,
+						// ink1 is near-white in dark mode, so the default white text vanishes.
+						// `paper` is the inverse of ink1 in both modes → always reads cleanly.
+						color: t.color.paper,
 						fontSize: '0.75rem',
 						borderRadius: t.radius.sm,
-						padding: '6px 8px'
-					}
+						padding: theme.spacing(0.75, 1)
+					}),
+					arrow: { color: t.color.ink1 }
 				}
 			},
 			MuiLink: {
@@ -573,17 +720,17 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 				styleOverrides: {
 					// DS dropdown panel — radius-md, hairline border, soft shadow, 4px list padding.
 					paper: { borderRadius: t.radius.md, border: `1px solid ${t.color.line}`, boxShadow: t.shadow[2] },
-					list: { padding: 4 }
+					list: ({ theme }) => ({ padding: theme.spacing(0.5) })
 				}
 			},
 			MuiMenuItem: {
 				styleOverrides: {
 					// DS panel-item — 7/8 padding, radius-sm, hover paper-2, selected accent-50/700.
-					root: {
+					root: ({ theme }) => ({
 						borderRadius: t.radius.sm,
-						padding: '7px 8px',
+						padding: theme.spacing(0.875, 1),
 						fontSize: '0.8125rem',
-						gap: 10,
+						gap: theme.spacing(1.25),
 						'&:hover': { backgroundColor: t.color.paper2 },
 						'&.Mui-selected': { backgroundColor: t.color.accent[50], color: t.color.accent[700] },
 						'&.Mui-selected:hover': { backgroundColor: t.color.accent[100] },
@@ -596,10 +743,14 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							lineHeight: 1.3,
 							color: t.color.ink3
 						},
-						'& .MuiListItemIcon-root': { minWidth: 0, marginRight: 10, color: t.color.ink3 },
+						'& .MuiListItemIcon-root': {
+							minWidth: 0,
+							marginRight: theme.spacing(1.25),
+							color: t.color.ink3
+						},
 						'&.Mui-selected .MuiListItemText-secondary': { color: t.color.accent[600] },
 						'&.Mui-selected .MuiListItemIcon-root': { color: t.color.accent[500] }
-					}
+					})
 				}
 			},
 			MuiDialog: {
@@ -615,48 +766,55 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 				styleOverrides: {
 					// DS modal header: 18px/bold ink-1 title row with a bottom hairline; the DRY
 					// Dialog drops a close button in here, so it's a space-between flex row.
-					root: {
+					root: ({ theme }) => ({
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'space-between',
-						gap: 16,
-						padding: '20px 24px',
+						gap: theme.spacing(2),
+						padding: theme.spacing(2.5, 3),
 						borderBottom: `1px solid ${t.color.line}`,
 						fontFamily: t.font.sans,
 						fontSize: '1.125rem',
 						fontWeight: 700,
 						lineHeight: 1.3,
 						color: t.color.ink1
-					}
+					})
 				}
 			},
 			MuiDialogContent: {
 				styleOverrides: {
 					// MUI zeroes top padding when content follows a title; restore the DS 20px.
-					root: { padding: '20px 24px', '.MuiDialogTitle-root + &': { paddingTop: '20px' } }
+					root: ({ theme }) => ({
+						padding: theme.spacing(2.5, 3),
+						'.MuiDialogTitle-root + &': { paddingTop: theme.spacing(2.5) }
+					})
 				}
 			},
 			MuiDialogActions: {
 				styleOverrides: {
 					// DS modal footer: top hairline, right-aligned buttons.
-					root: { padding: '16px 24px', borderTop: `1px solid ${t.color.line}`, gap: 8 }
+					root: ({ theme }) => ({
+						padding: theme.spacing(2, 3),
+						borderTop: `1px solid ${t.color.line}`,
+						gap: theme.spacing(1)
+					})
 				}
 			},
 			MuiAlert: {
 				defaultProps: { variant: 'standard' },
 				styleOverrides: {
 					// DS inline-banner shell (used via the Banner component). Tone colors per severity below.
-					root: {
+					root: ({ theme }) => ({
 						borderRadius: t.radius.md,
 						border: '1px solid',
-						padding: '11px 14px',
+						padding: theme.spacing(1.375, 1.75),
 						alignItems: 'center',
 						// marginTop nudges the icon to optically centre on the first text line (the glyph
 						// sits ~2px below its line-box top); flex-start keeps it by the title on multi-line.
 						'& .MuiAlert-icon': {
 							padding: 0,
-							marginRight: 10,
-							marginTop: '2px',
+							marginRight: theme.spacing(1.25),
+							marginTop: theme.spacing(0.25),
 							opacity: 1,
 							color: 'inherit'
 						},
@@ -667,7 +825,7 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							padding: 0,
 							marginRight: 0,
 							marginLeft: 'auto',
-							paddingLeft: 12,
+							paddingLeft: theme.spacing(1.5),
 							alignItems: 'flex-start'
 						},
 						// Tone colors (this MUI version splits variant + color classes). info = Investment-Indigo
@@ -692,12 +850,18 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							borderColor: '#DC2D1D',
 							color: '#7F1810'
 						}
-					}
+					})
 				}
 			},
 			MuiAlertTitle: {
 				styleOverrides: {
-					root: { fontWeight: 700, color: 'inherit', marginTop: 0, marginBottom: 1, fontSize: '0.9375rem' }
+					root: ({ theme }) => ({
+						fontWeight: 700,
+						color: 'inherit',
+						marginTop: 0,
+						marginBottom: theme.spacing(0.125),
+						fontSize: '0.9375rem'
+					})
 				}
 			}
 		}

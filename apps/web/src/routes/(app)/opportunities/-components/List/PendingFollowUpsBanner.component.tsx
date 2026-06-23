@@ -58,11 +58,15 @@ export function PendingFollowUpsBanner() {
 	const { data } = useSuspenseQuery(pendingFollowUpsQueryOptions());
 
 	// Read the persisted dismissals after mount (kept out of the initializer so SSR + the first
-	// client render agree — same pattern as the app shell).
+	// client render agree — same pattern as the app shell). `hydrated` gates the render until that
+	// read lands: without it the banner paints once with an empty dismissed set, then disappears a
+	// tick later when the effect runs — a visible flash on every refresh for already-dismissed batches.
+	const [hydrated, setHydrated] = useState(false);
 	const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setDismissed(readDismissed());
+		setHydrated(true);
 	}, []);
 
 	const opps = data.opportunities;
@@ -75,7 +79,9 @@ export function PendingFollowUpsBanner() {
 		writeDismissed(signatures);
 	};
 
-	if (undismissed.length === 0) {
+	// Wait for the localStorage read (the `hydrated` gate) so an already-dismissed batch doesn't
+	// flash on refresh, then render only while at least one undismissed check-in remains.
+	if (!hydrated || undismissed.length === 0) {
 		return null;
 	}
 
@@ -206,7 +212,7 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 					<Box component='span' sx={{ color: c.ink4 }}>
 						·
 					</Box>
-					<BodySmall color='text.secondary' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+					<BodySmall color='textSecondary' sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
 						{opportunity.requestType}
 					</BodySmall>
 				</Box>

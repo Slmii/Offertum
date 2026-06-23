@@ -99,13 +99,13 @@ function ClassifierQualityPage() {
 			<PrecisionTable rows={data.precision} />
 
 			<H3 sx={{ mt: 4, mb: 1 }}>Recent dismissals (last 5)</H3>
-			<BodySmall color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 				Most-recent dismissed opportunities in the selected window, any reason. Use{' '}
 				<code>classifiedAiCallId</code> to look up the exact prompt + response that produced the call.
 			</BodySmall>
 			<RecentDismissalsTable rows={data.recentDismissals} />
 
-			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 2 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mt: 2 }}>
 				Window: {toReadableDateTime(data.rangeStart)} to {toReadableDateTime(data.rangeEnd)}
 			</BodySmall>
 		</Stack>
@@ -118,14 +118,14 @@ function DismissReasonBreakdown({ counts }: { counts: DismissReasonCounts }) {
 	if (total === 0) {
 		return (
 			<Box sx={{ mb: 3 }}>
-				<BodySmall color='text.secondary'>No dismissals in this window yet.</BodySmall>
+				<BodySmall color='textSecondary'>No dismissals in this window yet.</BodySmall>
 			</Box>
 		);
 	}
 
 	return (
 		<Stack direction='row' useFlexGap spacing={1} sx={{ mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-			<BodySmall color='text.secondary' sx={{ mr: 1 }}>
+			<BodySmall color='textSecondary' sx={{ mr: 1 }}>
 				By reason:
 			</BodySmall>
 			{OPPORTUNITY_DISMISS_REASONS.map(reason => (
@@ -186,7 +186,7 @@ function PrecisionTable({ rows }: { rows: readonly ClassifierPrecisionRow[] }) {
 				<TableBody>
 					{rows.length === 0 ? (
 						<TableRow>
-							<TableCell colSpan={7} align='center' sx={{ py: 6, color: 'text.secondary' }}>
+							<TableCell colSpan={7} align='center' sx={{ py: 6 }}>
 								No opportunities in this range.
 							</TableCell>
 						</TableRow>
@@ -223,7 +223,7 @@ function PrecisionTable({ rows }: { rows: readonly ClassifierPrecisionRow[] }) {
 function ReasonChipsCompact({ counts }: { counts: DismissReasonCounts }) {
 	const visible = OPPORTUNITY_DISMISS_REASONS.filter(r => counts[r] > 0);
 	if (visible.length === 0) {
-		return <BodySmall color='text.secondary'>(none)</BodySmall>;
+		return <BodySmall color='textSecondary'>(none)</BodySmall>;
 	}
 	return (
 		<Stack direction='row' useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap' }}>
@@ -257,7 +257,7 @@ function RecentDismissalsTable({ rows }: { rows: readonly ClassifierDismissedRow
 				<TableBody>
 					{rows.length === 0 ? (
 						<TableRow>
-							<TableCell colSpan={7} align='center' sx={{ py: 6, color: 'text.secondary' }}>
+							<TableCell colSpan={7} align='center' sx={{ py: 6 }}>
 								No dismissals in this range.
 							</TableCell>
 						</TableRow>
@@ -277,11 +277,11 @@ function RecentDismissalsTable({ rows }: { rows: readonly ClassifierDismissedRow
 								</TableCell>
 								<TableCell>
 									<BodySmall fontWeight='medium'>{row.subject ?? '(no subject)'}</BodySmall>
-									<BodySmall color='text.secondary'>{row.fromEmail ?? '—'}</BodySmall>
+									<BodySmall color='textSecondary'>{row.fromEmail ?? '—'}</BodySmall>
 								</TableCell>
 								<TableCell>
 									<BodySmall>{row.customerName ?? '(none)'}</BodySmall>
-									<BodySmall color='text.secondary'>{row.requestType}</BodySmall>
+									<BodySmall color='textSecondary'>{row.requestType}</BodySmall>
 								</TableCell>
 								<TableCell>
 									{row.classifierProvider && row.classifierModel ? (

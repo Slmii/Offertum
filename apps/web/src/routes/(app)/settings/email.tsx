@@ -161,7 +161,7 @@ function EmailSettingsPage() {
 				/>
 			</Stack>
 
-			<BodySmall color='text.secondary' sx={{ display: 'block', mt: 5 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block', mt: 5 }}>
 				Offertum vraagt alleen lees- en verzendrechten aan. We lezen nooit berichten buiten je
 				offerteaanvraag-flow, en de tokens worden versleuteld opgeslagen.
 			</BodySmall>
@@ -255,7 +255,7 @@ function ProviderSection({
 
 			{disconnectNote && hasAccounts && (
 				<Box sx={{ px: 3, pb: 3 }}>
-					<BodySmall color='text.secondary'>{disconnectNote}</BodySmall>
+					<BodySmall color='textSecondary'>{disconnectNote}</BodySmall>
 				</Box>
 			)}
 		</Card>
@@ -304,7 +304,7 @@ function MailboxRow({ mailbox, isLast, billingEntitled, isDisconnecting, onRecon
 						</Body>
 						<StatusBadge connected={isConnected} />
 					</Box>
-					<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.25 }}>
+					<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.25 }}>
 						{mailbox.connectedAt
 							? `Verbonden op ${toReadableDate(mailbox.connectedAt, 'D MMM YYYY')} · Laatste sync ${mailbox.lastSync}`
 							: `Laatste sync ${mailbox.lastSync}`}

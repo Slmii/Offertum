@@ -91,7 +91,7 @@ function IntegrationsUpsell({ isOwner }: { isOwner: boolean }) {
 						<LockGlyph />
 						<H3 component='h2'>Koppel je boekhouding en meer</H3>
 					</Stack>
-					<BodySmall color='text.secondary'>Met een abonnement krijg je:</BodySmall>
+					<BodySmall color='textSecondary'>Met een abonnement krijg je:</BodySmall>
 					<Stack useFlexGap spacing={0.5}>
 						{UPSELL_BULLETS.map(bullet => (
 							<Stack
@@ -150,7 +150,7 @@ function IntegrationSummary() {
 					<Body fontWeight='medium'>
 						{connected.length} {connected.length === 1 ? 'actieve verbinding' : 'actieve verbindingen'}
 					</Body>
-					<BodySmall color='text.secondary'>
+					<BodySmall color='textSecondary'>
 						{toReadableNumber(totalSynced)} concept-facturen aangemaakt deze maand · alle koppelingen
 						draaien
 					</BodySmall>
@@ -186,7 +186,7 @@ function ConnectedCard({ integration }: { integration: Integration }) {
 						<StatusPill tone='accent' label='Verbonden' />
 						<CategoryChip integration={integration} />
 					</Stack>
-					<BodySmall color='text.secondary' sx={{ mt: 0.5 }}>
+					<BodySmall color='textSecondary' sx={{ mt: 0.5 }}>
 						<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
 							<AppIcon
 								name={integration.lastSyncOk ? 'circle-check' : 'alert-circle'}
@@ -224,7 +224,7 @@ function ConnectedCard({ integration }: { integration: Integration }) {
 					alignItems: 'center'
 				}}
 			>
-				<BodySmall color='text.secondary'>{integration.description}</BodySmall>
+				<BodySmall color='textSecondary'>{integration.description}</BodySmall>
 				<Metric value={integration.invoicesThisMonth ?? 0} label='Concept-facturen — deze maand' />
 				<Metric value={integration.contactsSynced ?? 0} label='Contacten gesynchroniseerd' />
 			</Box>
@@ -232,7 +232,7 @@ function ConnectedCard({ integration }: { integration: Integration }) {
 			{expanded && (
 				<Box sx={{ borderTop: `1px solid ${tokens.color.line}` }}>
 					<Box sx={{ px: 3, py: 2 }}>
-						<Overline color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+						<Overline color='textSecondary' sx={{ display: 'block', mb: 1 }}>
 							Verbonden account
 						</Overline>
 						<Stack
@@ -247,7 +247,7 @@ function ConnectedCard({ integration }: { integration: Integration }) {
 									{integration.connectedAccountName && (
 										<Body fontWeight='medium'>{integration.connectedAccountName}</Body>
 									)}
-									<BodySmall color='text.secondary'>{integration.connectedAs}</BodySmall>
+									<BodySmall color='textSecondary'>{integration.connectedAs}</BodySmall>
 								</Box>
 							</Stack>
 							<Button
@@ -260,7 +260,7 @@ function ConnectedCard({ integration }: { integration: Integration }) {
 						</Stack>
 					</Box>
 					<Box sx={{ px: 3, py: 2, borderTop: `1px solid ${tokens.color.line}` }}>
-						<Overline color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+						<Overline color='textSecondary' sx={{ display: 'block', mb: 1 }}>
 							Wat synchroniseren
 						</Overline>
 						<Stack useFlexGap spacing={0}>
@@ -345,7 +345,7 @@ function AvailableCard({ integration }: { integration: Integration }) {
 						{isBeta && <StatusPill tone='pending' label='Bèta' />}
 						<CategoryChip integration={integration} />
 					</Stack>
-					<BodySmall color='text.secondary' sx={{ mt: 0.75, maxWidth: 540 }}>
+					<BodySmall color='textSecondary' sx={{ mt: 0.75, maxWidth: 540 }}>
 						{integration.description}
 					</BodySmall>
 				</Box>
@@ -459,7 +459,7 @@ function AccountAvatar({ name }: { name: string }) {
 
 function CategoryChip({ integration }: { integration: Integration }) {
 	return (
-		<BodySmall color='text.secondary'>
+		<BodySmall color='textSecondary'>
 			{integration.category} · {integration.region}
 		</BodySmall>
 	);
@@ -512,7 +512,7 @@ function Metric({ value, label }: { value: number; label: string }) {
 			>
 				{toReadableNumber(value)}
 			</Box>
-			<BodySmall color='text.secondary' sx={{ mt: 0.5 }}>
+			<BodySmall color='textSecondary' sx={{ mt: 0.5 }}>
 				{label}
 			</BodySmall>
 		</Box>

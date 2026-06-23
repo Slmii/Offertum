@@ -476,7 +476,7 @@ export function GlobalSearch() {
 								<BodySmall fontWeight='medium' sx={{ display: 'block' }}>
 									Niks gevonden voor "{debounced}"
 								</BodySmall>
-								<BodySmall color='text.secondary' sx={{ display: 'block', mt: 0.25 }}>
+								<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.25 }}>
 									Probeer een ander zoekwoord, of zoek op klantnaam of adres.
 								</BodySmall>
 							</Box>
@@ -660,7 +660,7 @@ function OpportunityRow({
 				</BodySmall>
 				{op.address && (
 					<BodySmall
-						color='text.secondary'
+						color='textSecondary'
 						sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
 					>
 						{highlightMatch(op.address, query, tokens)}
@@ -739,7 +739,7 @@ function NavRow({
 			</Box>
 			<Box sx={{ flex: 1, minWidth: 0 }}>
 				<BodySmall fontWeight='medium'>{highlightMatch(shortcut.label, query, tokens)}</BodySmall>
-				<BodySmall color='text.secondary'>{shortcut.hint}</BodySmall>
+				<BodySmall color='textSecondary'>{shortcut.hint}</BodySmall>
 			</Box>
 			<AppIcon name='arrow-up-right' size='small' style={{ color: tokens.color.ink4 }} />
 		</Box>

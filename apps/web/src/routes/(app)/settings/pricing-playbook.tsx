@@ -131,7 +131,7 @@ function PricingPlaybookUpsell({ isOwner }: { isOwner: boolean }) {
 		<Stack useFlexGap spacing={3}>
 			<Box>
 				<H2 component='h1'>Prijsregels</H2>
-				<BodySmall color='text.secondary' sx={{ mt: 0.75, maxWidth: 640 }}>
+				<BodySmall color='textSecondary' sx={{ mt: 0.75, maxWidth: 640 }}>
 					Schrijf je tarieven, opslagen en BTW in gewone taal — Offertum zet ze om in regels en prijst je
 					offertes automatisch.
 				</BodySmall>
@@ -143,7 +143,7 @@ function PricingPlaybookUpsell({ isOwner }: { isOwner: boolean }) {
 						<LockGlyph />
 						<H3 component='h2'>Beschrijf je prijsbeleid in je eigen woorden</H3>
 					</Stack>
-					<BodySmall color='text.secondary'>Met een abonnement krijg je:</BodySmall>
+					<BodySmall color='textSecondary'>Met een abonnement krijg je:</BodySmall>
 					<Stack useFlexGap spacing={0.5}>
 						{UPSELL_BULLETS.map(bullet => (
 							<Stack
@@ -214,7 +214,7 @@ function PricingPlaybookEditor() {
 					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
 						<Chip size='small' label={compileStatus.label} color={compileStatus.color} variant='outlined' />
 						{data.compiledAt && (
-							<BodySmall color='text.secondary'>
+							<BodySmall color='textSecondary'>
 								· Laatst verwerkt {toReadableTimestamp(data.compiledAt)}
 							</BodySmall>
 						)}
@@ -271,10 +271,10 @@ function PricingPlaybookEditor() {
 			<CompiledRulesPanel />
 
 			<Box sx={{ mt: 6 }}>
-				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+				<Overline color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 					Voorbeelden
 				</Overline>
-				<BodySmall color='text.secondary' sx={{ mb: 3 }}>
+				<BodySmall color='textSecondary' sx={{ mb: 3 }}>
 					Klik open om te zien hoe andere ondernemers hun prijsregels in eigen woorden hebben opgeschreven.
 				</BodySmall>
 				<Stack useFlexGap spacing={1}>
@@ -289,8 +289,7 @@ function PricingPlaybookEditor() {
 									sx={{
 										whiteSpace: 'pre-wrap',
 										fontFamily: 'inherit',
-										m: 0,
-										color: 'text.secondary'
+										m: 0
 									}}
 								>
 									{example.body}
@@ -328,10 +327,10 @@ function CompiledRulesPanel() {
 	if (rules.length === 0) {
 		return (
 			<Box sx={{ mt: 6 }}>
-				<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+				<Overline color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 					Regels
 				</Overline>
-				<BodySmall color='text.secondary'>
+				<BodySmall color='textSecondary'>
 					Nog geen regels. Sla je tekst hierboven op, Offertum maakt de regels in de achtergrond.
 				</BodySmall>
 			</Box>
@@ -340,7 +339,7 @@ function CompiledRulesPanel() {
 
 	return (
 		<Box sx={{ mt: 6 }}>
-			<Overline color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+			<Overline color='textSecondary' sx={{ display: 'block', mb: 2 }}>
 				Regels ({rules.filter(r => r.active).length} actief, {rules.length} totaal)
 			</Overline>
 			<Stack useFlexGap spacing={1}>
@@ -390,7 +389,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 					<BodySmall fontWeight='medium' sx={{ mt: 0.5 }}>
 						{rule.description}
 					</BodySmall>
-					<BodySmall color='text.secondary' sx={{ mt: 0.5 }}>
+					<BodySmall color='textSecondary' sx={{ mt: 0.5 }}>
 						{effectSummary}
 						{conditionSummary && ` · ${conditionSummary}`}
 					</BodySmall>
@@ -406,7 +405,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 								sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap', rowGap: 0.5 }}
 							>
 								<Chip size='small' label='AI-controleert' color='warning' variant='outlined' />
-								<BodySmall color='text.secondary' sx={{ fontStyle: 'italic' }}>
+								<BodySmall color='textSecondary' sx={{ fontStyle: 'italic' }}>
 									"{rule.conditionNarrative}"
 								</BodySmall>
 							</Stack>

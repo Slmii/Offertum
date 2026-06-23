@@ -6,6 +6,7 @@ import {
 	IconAlertCircleFilled,
 	IconAlertTriangle,
 	IconAlertTriangleFilled,
+	IconArrowLeft,
 	IconArrowRight,
 	IconArrowsSort,
 	IconArrowUpRight,
@@ -34,8 +35,10 @@ import {
 	IconDownload,
 	IconExternalLink,
 	IconExternalLinkFilled,
+	IconFilePlus,
 	IconFileText,
 	IconFileTextFilled,
+	IconFileX,
 	IconFlask2,
 	IconFlask2Filled,
 	IconInbox,
@@ -57,7 +60,10 @@ import {
 	IconMoon,
 	IconMoonFilled,
 	IconPackage,
+	IconPaperclip,
 	IconPencil,
+	IconPhone,
+	IconPhoneFilled,
 	IconPlug,
 	IconPlus,
 	IconPuzzle,
@@ -66,6 +72,8 @@ import {
 	IconSearch,
 	IconSearchOff,
 	IconSelector,
+	IconSend,
+	IconSendFilled,
 	IconSettings,
 	IconSettingsFilled,
 	IconShieldCheck,
@@ -79,8 +87,13 @@ import {
 	IconSunriseFilled,
 	IconTarget,
 	IconTrendingUp,
+	IconTrophy,
+	IconTrophyFilled,
 	IconUnlink,
 	IconUser,
+	IconUserCheck,
+	IconUserPlus,
+	IconUserX,
 	IconUserFilled,
 	IconUsers,
 	IconX
@@ -117,7 +130,11 @@ export type AppIconName =
 	| 'check'
 	| 'plus'
 	| 'user'
+	| 'user-check'
+	| 'user-plus'
+	| 'user-x'
 	| 'pen-line'
+	| 'phone'
 	| 'chevron-up'
 	| 'dots-vertical'
 	| 'external-link'
@@ -133,9 +150,15 @@ export type AppIconName =
 	| 'alert-triangle'
 	| 'arrow-up-right'
 	| 'arrow-right'
+	| 'arrow-left'
+	| 'send'
+	| 'trophy'
+	| 'paperclip'
 	| 'map-pin'
 	| 'corner-up-left'
 	| 'file-text'
+	| 'file-plus'
+	| 'file-x'
 	| 'message'
 	| 'code'
 	| 'flask'
@@ -183,7 +206,12 @@ const ICONS: Record<AppIconName, IconPair> = {
 	check: { outline: IconCheck, filled: IconCheck },
 	plus: { outline: IconPlus, filled: IconPlus },
 	user: { outline: IconUser, filled: IconUserFilled },
+	// Tabler ships no filled user-check / user-plus / user-x — outline doubles as the filled slot.
+	'user-check': { outline: IconUserCheck, filled: IconUserCheck },
+	'user-plus': { outline: IconUserPlus, filled: IconUserPlus },
+	'user-x': { outline: IconUserX, filled: IconUserX },
 	'pen-line': { outline: IconPencil, filled: IconPencil },
+	phone: { outline: IconPhone, filled: IconPhoneFilled },
 	'chevron-up': { outline: IconChevronUp, filled: IconChevronUp },
 	'dots-vertical': { outline: IconDotsVertical, filled: IconDotsVertical },
 	'external-link': { outline: IconExternalLink, filled: IconExternalLinkFilled },
@@ -201,10 +229,19 @@ const ICONS: Record<AppIconName, IconPair> = {
 	'arrow-up-right': { outline: IconArrowUpRight, filled: IconArrowUpRight },
 	// Tabler ships no filled arrow-right — outline doubles as the filled slot.
 	'arrow-right': { outline: IconArrowRight, filled: IconArrowRight },
+	// Tabler ships no filled arrow-left — outline doubles as the filled slot.
+	'arrow-left': { outline: IconArrowLeft, filled: IconArrowLeft },
+	send: { outline: IconSend, filled: IconSendFilled },
+	trophy: { outline: IconTrophy, filled: IconTrophyFilled },
+	// Tabler ships no filled paperclip — outline doubles as the filled slot.
+	paperclip: { outline: IconPaperclip, filled: IconPaperclip },
 	'map-pin': { outline: IconMapPin, filled: IconMapPinFilled },
 	// Tabler ships no filled corner-up-left — outline doubles as the filled slot.
 	'corner-up-left': { outline: IconCornerUpLeft, filled: IconCornerUpLeft },
 	'file-text': { outline: IconFileText, filled: IconFileTextFilled },
+	// Tabler ships no filled file-plus / file-x — outline doubles as the filled slot.
+	'file-plus': { outline: IconFilePlus, filled: IconFilePlus },
+	'file-x': { outline: IconFileX, filled: IconFileX },
 	message: { outline: IconMessageCircle, filled: IconMessageCircleFilled },
 	code: { outline: IconCode, filled: IconCode },
 	flask: { outline: IconFlask2, filled: IconFlask2Filled },

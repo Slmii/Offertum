@@ -47,7 +47,7 @@ function NoOrganizationPage() {
 		<Container maxWidth='sm' sx={{ py: 6 }}>
 			<Paper variant='outlined' sx={{ p: 5 }}>
 				<H1 sx={{ mb: 1 }}>No active organization</H1>
-				<BodySmall color='text.secondary' sx={{ display: 'block', mb: 4 }}>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mb: 4 }}>
 					{user?.email ? `You're signed in as ${user.email}, ` : ''}but you're not currently part of any
 					organization.
 				</BodySmall>
@@ -57,7 +57,7 @@ function NoOrganizationPage() {
 						<Body>
 							If you were expecting an invitation, check your email, the link expires after 7 days.
 						</Body>
-						<BodySmall color='text.secondary'>
+						<BodySmall color='textSecondary'>
 							Otherwise, sign out and sign up with a different email to start a new organization.
 						</BodySmall>
 						<Box>

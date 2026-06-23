@@ -142,7 +142,7 @@ function CalendarPage() {
 								backgroundColor: calendarEventColor(type)
 							}}
 						/>
-						<BodySmall color='text.secondary'>{calendarEventLabel(type)}</BodySmall>
+						<BodySmall color='textSecondary'>{calendarEventLabel(type)}</BodySmall>
 					</Box>
 				))}
 			</Stack>
