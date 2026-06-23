@@ -67,8 +67,7 @@ export function PendingFollowUpsBanner() {
 
 	const opps = data.opportunities;
 	const signatures = opps.map(checkInSignature);
-	// Show while there's at least one pending check-in the user hasn't dismissed yet.
-	const hasUndismissed = signatures.some(sig => !dismissed.has(sig));
+	const undismissed = opps.filter(op => !dismissed.has(checkInSignature(op)));
 
 	const onDismiss = () => {
 		// Snapshot exactly the current batch — drops stale signatures and keeps the set bounded.
@@ -76,17 +75,17 @@ export function PendingFollowUpsBanner() {
 		writeDismissed(signatures);
 	};
 
-	if (opps.length === 0 || !hasUndismissed) {
+	if (undismissed.length === 0) {
 		return null;
 	}
 
 	const c = tokens.color;
-	const visible = opps.slice(0, MAX_VISIBLE);
-	const overflow = opps.length - visible.length;
+	const visible = undismissed.slice(0, MAX_VISIBLE);
+	const overflow = undismissed.length - visible.length;
 	const title =
-		opps.length === 1
+		undismissed.length === 1
 			? '1 follow-up wacht op je beoordeling'
-			: `${opps.length} follow-ups wachten op je beoordeling`;
+			: `${undismissed.length} follow-ups wachten op je beoordeling`;
 
 	return (
 		<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden', mb: 3, borderColor: c.accent[300] }}>
@@ -165,7 +164,7 @@ export function PendingFollowUpsBanner() {
 						'&:hover': { backgroundColor: c.paper2 }
 					}}
 				>
-					Toon alle {opps.length} follow-ups <AppIcon name='arrow-right' size='small' />
+					Toon alle {undismissed.length} follow-ups <AppIcon name='arrow-right' size='small' />
 				</Box>
 			)}
 		</Paper>
