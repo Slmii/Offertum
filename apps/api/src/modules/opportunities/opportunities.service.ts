@@ -1976,6 +1976,13 @@ function toOpportunityResponseDto(opportunity: OpportunityRecord): OpportunityRe
 		// pill would be noise (and a stale CHECK_IN could exist from a race where the
 		// opp was dismissed between scheduler enumeration and processor run).
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
+		// Stable timestamp for the banner dismiss-signature. Uses the draft's own createdAt
+		// rather than lastActivity.at, which changes on any field edit and would otherwise
+		// re-show a dismissed banner with no new check-in present.
+		checkInDraftCreatedAt:
+			opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts)
+				? (opportunity.replyDrafts[0]?.createdAt.toISOString() ?? null)
+				: null,
 		// Both resolved by `list()` (it has the org email set needed to tell customer-side
 		// messages from own-org outbound). Single-row endpoints don't drive the list badge —
 		// the web invalidates + refetches the list after every mutation — so they default here.
@@ -2121,6 +2128,10 @@ function toOpportunityDetailResponseDto(
 		// `replyDrafts` is 1:N. See the list mapper for the same `find` logic.
 		replyDraftSentAt: opportunity.replyDrafts.find(d => d.sentAt !== null)?.sentAt?.toISOString() ?? null,
 		hasPendingCheckIn: opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts),
+		checkInDraftCreatedAt:
+			opportunity.dismissedAt === null && hasPendingCheckIn(opportunity.replyDrafts)
+				? (opportunity.replyDrafts[0]?.createdAt.toISOString() ?? null)
+				: null,
 		// Detail view has its own timeline panel that surfaces the per-event actor —
 		// no need to duplicate the badge here.
 		lastActivity: null,

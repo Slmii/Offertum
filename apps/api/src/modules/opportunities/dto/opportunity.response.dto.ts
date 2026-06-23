@@ -41,6 +41,7 @@ export class OpportunityResponseDto implements Opportunity {
 	assignedToName!: string | null;
 	replyDraftSentAt!: string | null;
 	hasPendingCheckIn!: boolean;
+	checkInDraftCreatedAt!: string | null;
 	lastActivity!: OpportunityLastActivity | null;
 	customerReplyCount!: number;
 }
