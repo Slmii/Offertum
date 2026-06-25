@@ -33,6 +33,7 @@ export * from './calendar.js';
 export * from './catalog-items.js';
 export * from './opportunities.js';
 export * from './patterns.js';
+export * from './pluralize.js';
 export * from './pricing-playbook.js';
 export * from './quote-drafts.js';
 export * from './quote-line-items.js';

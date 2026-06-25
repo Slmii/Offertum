@@ -1,4 +1,4 @@
-import { BUSINESS_TIME_ZONE } from '@offertum/shared';
+import { BUSINESS_TIME_ZONE, pluralize } from '@offertum/shared';
 import dayjs from 'dayjs';
 import 'dayjs/locale/nl';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -47,7 +47,18 @@ export const toDaysUntilLabel = (date: Date | string) => {
 	if (days === 0) {
 		return 'vandaag';
 	}
-	return `nog ${days} ${days === 1 ? 'dag' : 'dagen'}`;
+	return `nog ${days} ${pluralize(days, 'dag', 'dagen')}`;
+};
+
+/**
+ * Whole calendar days from today until `date` in Amsterdam time (negative if past, 0 if today).
+ * The numeric counterpart to `toDaysUntilLabel` — same timezone-pinned day arithmetic — for
+ * callers that need the count itself (e.g. an "expires soon" threshold), not the phrased label.
+ */
+export const toDaysUntil = (date: Date | string): number => {
+	const target = dayjs(date).tz(BUSINESS_TIME_ZONE).startOf('day');
+	const today = dayjs().tz(BUSINESS_TIME_ZONE).startOf('day');
+	return target.diff(today, 'day');
 };
 
 /**
@@ -62,7 +73,7 @@ export const toDaysSinceLabel = (date: Date | string): string | null => {
 	if (days <= 0) {
 		return null;
 	}
-	return `${days} ${days === 1 ? 'dag' : 'dagen'}`;
+	return `${days} ${pluralize(days, 'dag', 'dagen')}`;
 };
 
 /**

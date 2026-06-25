@@ -59,6 +59,8 @@ export interface QuotePdf {
 	quoteDraftId: string | null;
 	filename: string;
 	sizeBytes: number;
+	/** Quote total incl. btw (cents) snapshotted when the PDF was generated. Null for older PDFs. */
+	totalCents: number | null;
 	createdAt: string;
 }
 

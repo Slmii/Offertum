@@ -1,8 +1,7 @@
 import { AppIcon } from '@/components/AppIcon.component';
-import { Banner } from '@/components/Banner.component';
+import { BannerStack, type BannerStackItem } from '@/components/BannerStack.component';
 import { patternsQueryOptions, useDismissPattern } from '@/lib/queries/patterns.queries';
 import IconButton from '@mui/material/IconButton';
-import Stack from '@mui/material/Stack';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
 /**
@@ -19,33 +18,35 @@ export function PatternBanners() {
 	const { data: patterns } = useSuspenseQuery(patternsQueryOptions);
 	const dismiss = useDismissPattern();
 
-	if (patterns.length === 0) {
+	// Collapse the error notice + each detected pattern into one framed stack.
+	const banners: BannerStackItem[] = [];
+	if (dismiss.isError) {
+		banners.push({ key: 'dismiss-error', tone: 'error', body: 'Verbergen is niet gelukt. Probeer het opnieuw.' });
+	}
+
+	for (const pattern of patterns) {
+		banners.push({
+			key: pattern.patternKey,
+			tone: 'info',
+			title: pattern.headline,
+			body: pattern.detail,
+			action: (
+				<IconButton
+					size='small'
+					aria-label='Verbergen'
+					disabled={dismiss.isPending}
+					onClick={() => dismiss.mutate({ key: pattern.patternKey })}
+					sx={{ color: 'inherit' }}
+				>
+					<AppIcon name='x' size='medium' />
+				</IconButton>
+			)
+		});
+	}
+
+	if (banners.length === 0) {
 		return null;
 	}
 
-	return (
-		<Stack useFlexGap spacing={1} sx={{ mb: 3 }}>
-			{dismiss.isError && <Banner tone='error'>Verbergen is niet gelukt. Probeer het opnieuw.</Banner>}
-			{patterns.map(pattern => (
-				<Banner
-					key={pattern.patternKey}
-					tone='info'
-					title={pattern.headline}
-					action={
-						<IconButton
-							size='small'
-							aria-label='Verbergen'
-							disabled={dismiss.isPending}
-							onClick={() => dismiss.mutate({ key: pattern.patternKey })}
-							sx={{ color: 'inherit', mt: -0.5, mr: -0.5 }}
-						>
-							<AppIcon name='x' size='medium' />
-						</IconButton>
-					}
-				>
-					{pattern.detail}
-				</Banner>
-			))}
-		</Stack>
-	);
+	return <BannerStack banners={banners} />;
 }

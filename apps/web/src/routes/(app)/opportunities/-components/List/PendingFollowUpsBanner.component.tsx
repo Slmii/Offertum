@@ -1,10 +1,10 @@
 import { AppIcon } from '@/components/AppIcon.component';
-import { FlowingGradient } from '@/components/FlowingGradient.component';
 import { Body, BodySmall } from '@/components/Text.component';
 import { opportunitiesListQueryOptions } from '@/lib/queries/opportunities.queries';
 import { toDaysSinceLabel } from '@/lib/utils/date.utils';
 import { opportunityCustomerLabel } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import { useTheme } from '@mui/material/styles';
@@ -50,19 +50,16 @@ function writeDismissed(signatures: string[]): void {
 }
 
 /**
- * Review banner for pending auto follow-ups — Offertum-drafted check-ins for opportunities that
- * have gone silent. Sits below the page header on the opportunities list and renders nothing
- * when there are none. Each row deep-links to the opportunity's draft for one-click review.
+ * Query + client-side per-batch dismissal for pending check-ins. The single owner of the
+ * dismissal state, so the insights summary count and the expanded banner never diverge:
+ * `OppInsights` calls this once and passes `undismissed` + `dismiss` down to the banner.
+ *
+ * `hydrated` gates rendering until the localStorage read lands (kept out of the initializer so
+ * SSR + the first client render agree) — without it an already-dismissed batch flashes on refresh.
  */
-export function PendingFollowUpsBanner() {
-	const { tokens } = useTheme();
-	const navigate = useNavigate();
+export function usePendingFollowUps() {
 	const { data } = useSuspenseQuery(pendingFollowUpsQueryOptions());
 
-	// Read the persisted dismissals after mount (kept out of the initializer so SSR + the first
-	// client render agree — same pattern as the app shell). `hydrated` gates the render until that
-	// read lands: without it the banner paints once with an empty dismissed set, then disappears a
-	// tick later when the effect runs — a visible flash on every refresh for already-dismissed batches.
 	const [hydrated, setHydrated] = useState(false);
 	const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 	useEffect(() => {
@@ -72,41 +69,59 @@ export function PendingFollowUpsBanner() {
 	}, []);
 
 	const opps = data.opportunities;
-	const signatures = opps.map(checkInSignature);
 	const undismissed = opps.filter(op => !dismissed.has(checkInSignature(op)));
 
-	const onDismiss = () => {
+	const dismiss = () => {
 		// Snapshot exactly the current batch — drops stale signatures and keeps the set bounded.
+		const signatures = opps.map(checkInSignature);
 		setDismissed(new Set(signatures));
 		writeDismissed(signatures);
 	};
 
-	// Wait for the localStorage read (the `hydrated` gate) so an already-dismissed batch doesn't
-	// flash on refresh, then render only while at least one undismissed check-in remains.
-	if (!hydrated || undismissed.length === 0) {
-		return null;
-	}
+	return { hydrated, undismissed, dismiss };
+}
+
+/**
+ * Review banner for pending auto follow-ups — Offertum-drafted check-ins for opportunities that
+ * have gone silent. Presentational: receives the already-undismissed list + a dismiss handler from
+ * {@link usePendingFollowUps} (owned by `OppInsights`). Renders nothing when the list is empty.
+ * Each row deep-links to the opportunity's draft for one-click review.
+ */
+export function PendingFollowUpsBanner({
+	opportunities,
+	onDismiss
+}: {
+	opportunities: Opportunity[];
+	onDismiss: () => void;
+}) {
+	const { tokens } = useTheme();
+	const navigate = useNavigate();
 
 	const c = tokens.color;
-	const visible = undismissed.slice(0, MAX_VISIBLE);
-	const overflow = undismissed.length - visible.length;
-	const title =
-		undismissed.length === 1
-			? '1 follow-up wacht op je beoordeling'
-			: `${undismissed.length} follow-ups wachten op je beoordeling`;
+	const visible = opportunities.slice(0, MAX_VISIBLE);
+	const overflow = opportunities.length - visible.length;
 
 	return (
-		<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden', mb: 3, borderColor: c.accent[300] }}>
-			{/* Header band — flowing accent gradient (ported from the design's `.qm-followup-flow`),
-			    white text on top, to catch the eye. */}
-			<FlowingGradient sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, px: 2 }}>
+		<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden', borderColor: c.accent[300] }}>
+			{/* Slim header — plain accent (the flowing gradient now lives on the insights toggle).
+			    Carries the context line + the dismiss control; the count itself is on the toggle. */}
+			<Box
+				sx={{
+					display: 'flex',
+					alignItems: 'center',
+					gap: 1.5,
+					py: 1.25,
+					px: 2,
+					backgroundColor: c.accent[50],
+					borderBottom: `1px solid ${c.accent[300]}`
+				}}
+			>
 				<Box
 					sx={{
-						width: 30,
-						height: 30,
+						width: 28,
+						height: 28,
 						borderRadius: `${tokens.radius.sm}px`,
-						backgroundColor: 'rgba(255, 255, 255, 0.16)',
-						border: '1px solid rgba(255, 255, 255, 0.30)',
+						backgroundColor: c.accent[500],
 						color: '#fff',
 						display: 'inline-flex',
 						alignItems: 'center',
@@ -116,29 +131,18 @@ export function PendingFollowUpsBanner() {
 				>
 					<AppIcon name='sparkles' size='small' />
 				</Box>
-				<Box sx={{ minWidth: 0, flex: 1 }}>
-					<Body fontWeight='bold' sx={{ color: '#fff' }}>
-						{title}
-					</Body>
-					<BodySmall sx={{ color: 'rgba(255, 255, 255, 0.82)' }}>
-						Offertum heeft concepten klaarstaan voor klanten die stil zijn geworden.
-					</BodySmall>
-				</Box>
+				<BodySmall color={c.accent[700]} sx={{ minWidth: 0, flex: 1 }}>
+					Offertum heeft concepten klaarstaan voor klanten die stil zijn geworden.
+				</BodySmall>
 				<IconButton
 					aria-label='Verberg tot een nieuwe follow-up'
 					onClick={onDismiss}
 					size='small'
-					sx={{
-						color: '#fff',
-						flexShrink: 0,
-						alignSelf: 'flex-start',
-						mr: -0.5,
-						'&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.16)' }
-					}}
+					sx={{ color: c.ink3, flexShrink: 0, mr: -0.5 }}
 				>
 					<AppIcon name='x' size='small' />
 				</IconButton>
-			</FlowingGradient>
+			</Box>
 
 			{visible.map(op => (
 				<PendingRow
@@ -149,9 +153,7 @@ export function PendingFollowUpsBanner() {
 			))}
 
 			{overflow > 0 && (
-				<Box
-					component='button'
-					type='button'
+				<ButtonBase
 					onClick={() => navigate({ to: '/opportunities', search: { pendingFollowup: true } })}
 					sx={{
 						width: '100%',
@@ -173,8 +175,8 @@ export function PendingFollowUpsBanner() {
 						'&:hover': { backgroundColor: c.paper2 }
 					}}
 				>
-					Toon alle {undismissed.length} follow-ups <AppIcon name='arrow-right' size='small' />
-				</Box>
+					Toon alle {opportunities.length} follow-ups <AppIcon name='arrow-right' size='small' />
+				</ButtonBase>
 			)}
 		</Paper>
 	);
@@ -186,8 +188,7 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 	const silentDaysLabel = opportunity.replyDraftSentAt ? toDaysSinceLabel(opportunity.replyDraftSentAt) : null;
 
 	return (
-		<Box
-			role='button'
+		<ButtonBase
 			tabIndex={0}
 			onClick={onOpen}
 			onKeyDown={e => {
@@ -197,6 +198,7 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 				}
 			}}
 			sx={{
+				width: '100%',
 				display: 'flex',
 				alignItems: 'center',
 				gap: 2,
@@ -252,6 +254,6 @@ function PendingRow({ opportunity, onOpen }: { opportunity: Opportunity; onOpen:
 			>
 				Beoordeel <AppIcon name='arrow-right' size='small' />
 			</Box>
-		</Box>
+		</ButtonBase>
 	);
 }

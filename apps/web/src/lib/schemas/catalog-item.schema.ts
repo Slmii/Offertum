@@ -35,3 +35,6 @@ export const CatalogItemSchema = z.object({
 });
 
 export type CatalogItemForm = z.infer<typeof CatalogItemSchema>;
+
+export const CatalogItemsSchema = z.object({ items: z.array(CatalogItemSchema) });
+export type CatalogItemsForm = z.infer<typeof CatalogItemsSchema>;

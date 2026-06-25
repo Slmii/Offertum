@@ -8,6 +8,7 @@ import { PrismaService } from '@/modules/prisma/prisma.service';
 import { BadRequestException, Controller, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import { pluralize } from '@offertum/shared';
 import type { Request, Response } from 'express';
 
 interface GraphChangeNotification {
@@ -161,7 +162,7 @@ export class MicrosoftWebhookController {
 
 			this.logService.logAction({
 				action: 'microsoft.webhook.received',
-				message: `Microsoft push received for ${account.email} (${notes.length} notification${notes.length === 1 ? '' : 's'})`,
+				message: `Microsoft push received for ${account.email} (${notes.length} ${pluralize(notes.length, 'notification', 'notifications')})`,
 				metadata: {
 					emailAccountId: account.id,
 					organizationId: account.organizationId,

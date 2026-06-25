@@ -36,6 +36,7 @@ import Tooltip from '@mui/material/Tooltip';
 import { useTheme } from '@mui/material/styles';
 import {
 	isPricingEffectType,
+	pluralize,
 	PRICING_PLAYBOOK_TEXT_MAX_LENGTH,
 	type PricingRule,
 	type PricingRuleJsonObject,
@@ -200,7 +201,10 @@ function PricingPlaybookEditor() {
 		? { label: 'Nog niet gevuld', color: 'default' }
 		: compileBehind
 			? { label: 'Regels worden bijgewerkt…', color: 'info' }
-			: { label: `${data.rulesCount} regel${data.rulesCount === 1 ? '' : 's'} gevonden`, color: 'success' };
+			: {
+					label: `${data.rulesCount} ${pluralize(data.rulesCount, 'regel', 'regels')} gevonden`,
+					color: 'success'
+				};
 
 	return (
 		<Stack>
@@ -316,8 +320,8 @@ const RULE_TYPE_LABELS_NL: Record<PricingRuleType, string> = {
 /**
  * Card list under the editor. Renders compiled + manually-added rules with
  * inline toggle (active), delete, and edit affordance. Rules carrying a
- * `conditionNarrative` show an "AI-controleert" badge + the narrative text —
- * the AI verifies at quote time whether the narrative applies to the incoming
+ * `conditionNarrative` show an "Offertum controleert" badge + the narrative text —
+ * Offertum verifies at quote time whether the narrative applies to the incoming
  * opportunity before committing the rule's effect.
  */
 function CompiledRulesPanel() {
@@ -395,7 +399,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 					</BodySmall>
 					{rule.conditionNarrative && (
 						<Tooltip
-							title='Bij elke offerte controleert de AI of deze conditie van toepassing is op de aanvraag. Alleen dan past de regel toe.'
+							title='Bij elke offerte controleert Offertum of deze conditie van toepassing is op de aanvraag. Alleen dan past de regel toe.'
 							arrow
 						>
 							<Stack
@@ -404,7 +408,7 @@ function RuleCard({ rule }: { rule: PricingRule }) {
 								spacing={0.5}
 								sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap', rowGap: 0.5 }}
 							>
-								<Chip size='small' label='AI-controleert' color='warning' variant='outlined' />
+								<Chip size='small' label='Offertum controleert' color='warning' variant='outlined' />
 								<BodySmall color='textSecondary' sx={{ fontStyle: 'italic' }}>
 									"{rule.conditionNarrative}"
 								</BodySmall>
@@ -527,8 +531,8 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 					/>
 					<Field
 						name='conditionNarrative'
-						label='AI-conditie (optioneel)'
-						helperText='Vrije tekst waaraan de AI elke offerte toetst voordat de regel wordt toegepast, bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
+						label='Offertum-conditie (optioneel)'
+						helperText='Vrije tekst waaraan Offertum elke offerte toetst voordat de regel wordt toegepast, bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
 						fullWidth
 						multiline
 						minRows={2}

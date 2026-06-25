@@ -187,9 +187,7 @@ function FilterTab({
 }) {
 	const { tokens } = useTheme();
 	return (
-		<Box
-			component='button'
-			type='button'
+		<ButtonBase
 			onClick={onClick}
 			sx={{
 				display: 'inline-flex',
@@ -229,7 +227,7 @@ function FilterTab({
 					{count}
 				</Box>
 			)}
-		</Box>
+		</ButtonBase>
 	);
 }
 

@@ -9,6 +9,7 @@ import { LogService } from '@/modules/logger/log.service';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
 import { Injectable } from '@nestjs/common';
+import { pluralize } from '@offertum/shared';
 import type { InngestFunction } from 'inngest';
 
 /**
@@ -133,7 +134,7 @@ export class AutoColdSchedulerFunction {
 										organizationId: target.organizationId,
 										eventType: PrismaNotificationEventType.OPPORTUNITY_AUTO_COLD,
 										title: `Aanvraag van ${customer} op koud`,
-										body: `${target.requestType} — ${target.daysSinceSent} dag${target.daysSinceSent === 1 ? '' : 'en'} geen reactie`,
+										body: `${target.requestType} — ${target.daysSinceSent} ${pluralize(target.daysSinceSent, 'dag', 'dagen')} geen reactie`,
 										link: `/opportunities/${target.opportunityId}`,
 										metadata: {
 											daysSinceSent: target.daysSinceSent,

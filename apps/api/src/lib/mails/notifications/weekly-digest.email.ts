@@ -1,5 +1,6 @@
 import { formatEmailEuros } from '@/lib/mails/format';
 import { renderNotificationEmail, type RenderedEmail } from '@/lib/mails/notifications/template-shell';
+import { pluralize } from '@offertum/shared';
 
 export interface WeeklyDigestEmailInput {
 	openCount: number;
@@ -20,7 +21,7 @@ export function buildWeeklyDigestEmail(input: WeeklyDigestEmailInput): RenderedE
 
 	const paragraphs: string[] = [
 		`Je hebt deze week <strong>${openCount}</strong> open offerteaanvragen, waarvan <strong>${coldCount}</strong> koud.`,
-		`<strong>${pendingFollowUpCount}</strong> automatische follow-up${pendingFollowUpCount === 1 ? '' : 's'} wacht op je beoordeling.`,
+		`<strong>${pendingFollowUpCount}</strong> automatische ${pluralize(pendingFollowUpCount, 'follow-up', 'follow-ups')} wacht op je beoordeling.`,
 		valuePart
 	];
 

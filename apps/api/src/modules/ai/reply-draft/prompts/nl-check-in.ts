@@ -1,4 +1,5 @@
 import type { ReplyDraftInput } from '@/modules/ai/reply-draft/reply-draft.types';
+import { pluralize } from '@offertum/shared';
 import dedent from 'dedent';
 
 /**
@@ -70,7 +71,7 @@ export function buildCheckInPromptNL(input: CheckInPromptInput): string {
 			`;
 
 	const senderLabel = input.senderName?.trim() || input.organizationName;
-	const daysText = `${input.daysSinceSent} ${input.daysSinceSent === 1 ? 'dag' : 'dagen'}`;
+	const daysText = `${input.daysSinceSent} ${pluralize(input.daysSinceSent, 'dag', 'dagen')}`;
 
 	return dedent`
 		Je bent een assistent die een korte, beleefde follow-up schrijft. De afzender heeft

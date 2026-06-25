@@ -11,7 +11,9 @@ import {
 } from '@/lib/queries/team.queries';
 import type { ThemeMode } from '@/lib/utils/theme.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
@@ -232,9 +234,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 function NavToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
 	return (
 		<Tooltip title={collapsed ? 'Uitvouwen' : 'Inklappen'} placement='right'>
-			<Box
-				component='button'
-				type='button'
+			<IconButton
 				onClick={onToggle}
 				aria-label={collapsed ? 'Zijbalk uitvouwen' : 'Zijbalk inklappen'}
 				sx={{
@@ -252,7 +252,7 @@ function NavToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () =
 				}}
 			>
 				<AppIcon name={collapsed ? 'chevron-right' : 'chevron-left'} size='medium' />
-			</Box>
+			</IconButton>
 		</Tooltip>
 	);
 }
@@ -369,9 +369,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
 	if (collapsed) {
 		return (
 			<Tooltip title={isDark ? 'Lichte modus' : 'Donkere modus'} placement='right'>
-				<Box
-					component='button'
-					type='button'
+				<IconButton
 					onClick={toggleMode}
 					aria-label={isDark ? 'Schakel naar lichte modus' : 'Schakel naar donkere modus'}
 					sx={{
@@ -390,7 +388,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
 					}}
 				>
 					<AppIcon name={isDark ? 'sun' : 'moon'} size='medium' />
-				</Box>
+				</IconButton>
 			</Tooltip>
 		);
 	}
@@ -416,10 +414,8 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
 			{options.map(option => {
 				const active = mode === option.id;
 				return (
-					<Box
+					<ButtonBase
 						key={option.id}
-						component='button'
-						type='button'
 						onClick={() => setMode(option.id)}
 						aria-pressed={active}
 						sx={{
@@ -444,7 +440,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
 					>
 						<AppIcon name={option.icon} size='small' filled={active} />
 						{option.label}
-					</Box>
+					</ButtonBase>
 				);
 			})}
 		</Box>
@@ -475,9 +471,7 @@ function OrgSwitcher({
 
 	return (
 		<>
-			<Box
-				component='button'
-				type='button'
+			<ButtonBase
 				onClick={(e: MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}
 				title={collapsed ? currentOrgName : undefined}
 				sx={{
@@ -532,14 +526,14 @@ function OrgSwitcher({
 						<AppIcon name='chevrons-up-down' size='small' style={{ color: tokens.color.ink4 }} />
 					</>
 				)}
-			</Box>
+			</ButtonBase>
 			<Menu
 				anchorEl={anchorEl}
 				open={Boolean(anchorEl)}
 				onClose={() => setAnchorEl(null)}
 				anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
 				transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-				slotProps={{ paper: { sx: { minWidth: 220 } } }}
+				slotProps={{ paper: { sx: { minWidth: 230, marginTop: -0.5, marginLeft: -1 } } }}
 			>
 				{organizations.map(membership => {
 					const isCurrent = membership.organization.id === currentOrgId;
@@ -568,9 +562,7 @@ function UserMenu({ collapsed, name, email }: { collapsed: boolean; name: string
 	const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 	return (
 		<>
-			<Box
-				component='button'
-				type='button'
+			<ButtonBase
 				onClick={(e: MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}
 				title={collapsed ? name : undefined}
 				sx={{
@@ -620,14 +612,14 @@ function UserMenu({ collapsed, name, email }: { collapsed: boolean; name: string
 						<AppIcon name='chevron-down' size='small' style={{ color: tokens.color.ink4 }} />
 					</>
 				)}
-			</Box>
+			</ButtonBase>
 			<Menu
 				anchorEl={anchorEl}
 				open={Boolean(anchorEl)}
 				onClose={() => setAnchorEl(null)}
 				anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
 				transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-				slotProps={{ paper: { sx: { minWidth: 200 } } }}
+				slotProps={{ paper: { sx: { minWidth: 230, marginTop: -0.5, marginLeft: -1 } } }}
 			>
 				<MenuItem
 					onClick={() => {

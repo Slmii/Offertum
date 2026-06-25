@@ -1199,6 +1199,9 @@ model QuotePdf {
   filename       String
   contentType    String   @default("application/pdf")
   sizeBytes      Int
+  // Quote total incl. btw (in cents) at generation time — a snapshot, since the draft's lines
+  // can change after the PDF is produced. Null for PDFs generated before this field existed.
+  totalCents     Int?
   storageKey     String   @db.Text
   storageDriver  String   @default("local")
   createdAt      DateTime @default(now())

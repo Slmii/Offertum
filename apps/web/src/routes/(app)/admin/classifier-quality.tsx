@@ -171,7 +171,7 @@ function BulkMailFilterPanel({
 function PrecisionTable({ rows }: { rows: readonly ClassifierPrecisionRow[] }) {
 	return (
 		<TableContainer component={Paper} variant='outlined'>
-			<Table size='small'>
+			<Table>
 				<TableHead>
 					<TableRow>
 						<TableCell>Org</TableCell>
@@ -242,7 +242,7 @@ function ReasonChipsCompact({ counts }: { counts: DismissReasonCounts }) {
 function RecentDismissalsTable({ rows }: { rows: readonly ClassifierDismissedRow[] }) {
 	return (
 		<TableContainer component={Paper} variant='outlined'>
-			<Table size='small'>
+			<Table>
 				<TableHead>
 					<TableRow>
 						<TableCell>Dismissed</TableCell>

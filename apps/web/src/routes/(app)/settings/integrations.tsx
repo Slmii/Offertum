@@ -14,6 +14,7 @@ import Card from '@mui/material/Card';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import { useTheme } from '@mui/material/styles';
+import { pluralize } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -148,7 +149,7 @@ function IntegrationSummary() {
 				</Box>
 				<Box sx={{ flex: 1, minWidth: 0 }}>
 					<Body fontWeight='medium'>
-						{connected.length} {connected.length === 1 ? 'actieve verbinding' : 'actieve verbindingen'}
+						{connected.length} {pluralize(connected.length, 'actieve verbinding', 'actieve verbindingen')}
 					</Body>
 					<BodySmall color='textSecondary'>
 						{toReadableNumber(totalSynced)} concept-facturen aangemaakt deze maand · alle koppelingen

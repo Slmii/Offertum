@@ -9,6 +9,7 @@ export interface QuotePdfRow {
 	filename: string;
 	contentType: string;
 	sizeBytes: number;
+	totalCents: number | null;
 	storageKey: string;
 	storageDriver: string;
 	createdAt: Date;
@@ -21,6 +22,7 @@ export interface CreateQuotePdfInput {
 	filename: string;
 	contentType: string;
 	sizeBytes: number;
+	totalCents: number | null;
 	storageKey: string;
 	storageDriver: string;
 }

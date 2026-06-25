@@ -13,11 +13,12 @@ import {
 	opportunityCustomerLabel
 } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import { useTheme } from '@mui/material/styles';
-import type { Opportunity } from '@offertum/shared';
+import { pluralize, type Opportunity } from '@offertum/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Fragment, useState } from 'react';
 import { DismissDialog } from '../DismissDialog.component';
@@ -74,8 +75,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 
 	return (
 		<>
-			<Box
-				role='button'
+			<ButtonBase
 				tabIndex={0}
 				aria-label={`Open ${customerLabel}`}
 				onClick={goToDetail}
@@ -90,6 +90,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					overflow: 'hidden',
 					display: 'flex',
 					alignItems: 'center',
+					width: '100%',
 					gap: 2,
 					pt: 1.75,
 					pr: 2.25,
@@ -239,7 +240,9 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 								fontStyle: 'italic',
 								overflow: 'hidden',
 								textOverflow: 'ellipsis',
-								whiteSpace: 'nowrap'
+								whiteSpace: 'nowrap',
+								textAlign: 'left',
+								mt: 0.75
 							}}
 						>
 							{opportunity.subject}
@@ -298,7 +301,7 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 					>
 						<AppIcon name='corner-up-left' size='small' />
 						{opportunity.customerReplyCount}{' '}
-						{opportunity.customerReplyCount === 1 ? 'antwoord' : 'antwoorden'}
+						{pluralize(opportunity.customerReplyCount, 'antwoord', 'antwoorden')}
 					</Box>
 				)}
 
@@ -400,15 +403,14 @@ export function OpportunityRow({ opportunity }: { opportunity: Opportunity }) {
 						)}
 					</Menu>
 				</Box>
-			</Box>
+			</ButtonBase>
 
-			{dismissOpen && (
-				<DismissDialog
-					opportunityId={opportunity.id}
-					replyDraftSentAt={opportunity.replyDraftSentAt}
-					onClose={() => setDismissOpen(false)}
-				/>
-			)}
+			<DismissDialog
+				opportunityId={opportunity.id}
+				replyDraftSentAt={opportunity.replyDraftSentAt}
+				isOpen={dismissOpen}
+				onClose={() => setDismissOpen(false)}
+			/>
 		</>
 	);
 }

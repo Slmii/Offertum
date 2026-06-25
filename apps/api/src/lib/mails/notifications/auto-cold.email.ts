@@ -1,5 +1,6 @@
 import { escapeHtml } from '@/lib/mails/escape';
 import { renderNotificationEmail, type RenderedEmail } from '@/lib/mails/notifications/template-shell';
+import { pluralize } from '@offertum/shared';
 
 interface AutoColdEmailInput {
 	customerName: string | null;
@@ -20,7 +21,7 @@ export function buildAutoColdEmail(input: AutoColdEmailInput): RenderedEmail {
 	const safeRequestType = escapeHtml(requestType);
 
 	const paragraphs: string[] = [
-		`Offertum heeft de offerteaanvraag voor <strong>${safeRequestType}</strong>${customerName ? ` van <strong>${safeCustomer}</strong>` : ''} automatisch op <strong>Koud</strong> gezet — er is ${daysSinceSent} dag${daysSinceSent === 1 ? '' : 'en'} geen reactie gekomen na je laatste bericht en alle automatische herinneringen zijn verstuurd.`,
+		`Offertum heeft de offerteaanvraag voor <strong>${safeRequestType}</strong>${customerName ? ` van <strong>${safeCustomer}</strong>` : ''} automatisch op <strong>Koud</strong> gezet — er is ${daysSinceSent} ${pluralize(daysSinceSent, 'dag', 'dagen')} geen reactie gekomen na je laatste bericht en alle automatische herinneringen zijn verstuurd.`,
 		'Open de aanvraag als je toch nog een vervolg wilt sturen of als je de status wilt aanpassen.'
 	];
 

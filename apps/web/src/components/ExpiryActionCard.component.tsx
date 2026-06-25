@@ -9,7 +9,9 @@ import {
 } from '@/lib/queries/expiry.queries';
 import { toDaysUntilLabel, toReadableDate } from '@/lib/utils/date.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
+import IconButton from '@mui/material/IconButton';
 import { alpha, useTheme } from '@mui/material/styles';
 import { EXPIRY_ACTION_KINDS, type ExpiryActionKindValue } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -86,9 +88,7 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 					Verloopt op {toReadableDate(expiryAction.validUntil)}
 				</H3>
 				{isOwner && (
-					<Box
-						component='button'
-						type='button'
+					<IconButton
 						aria-label='Negeren'
 						onClick={() => dismiss.mutate({ id: expiryAction.id }, { onError: onActionError })}
 						disabled={isPending}
@@ -107,7 +107,7 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 						}}
 					>
 						<AppIcon name='x' size='small' />
-					</Box>
+					</IconButton>
 				)}
 			</Box>
 
@@ -139,10 +139,8 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 						const isThisPending = takeAction.isPending && takeAction.variables?.kind === kind;
 
 						return (
-							<Box
+							<ButtonBase
 								key={kind}
-								component='button'
-								type='button'
 								onClick={() =>
 									takeAction.mutate({ id: expiryAction.id, kind }, { onError: onActionError })
 								}
@@ -212,7 +210,7 @@ export function ExpiryActionCard({ opportunityId, isOwner }: { opportunityId: st
 										Aanbevolen
 									</Box>
 								)}
-							</Box>
+							</ButtonBase>
 						);
 					})}
 				</Box>

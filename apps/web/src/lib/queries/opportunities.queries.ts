@@ -247,7 +247,7 @@ export function useRegenerateReplyDraft(opportunityId: string) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		meta: { billingMessage: 'om AI-antwoorden te genereren' },
+		meta: { billingMessage: 'om antwoorden te genereren' },
 		mutationFn: () =>
 			api<ReplyDraft>(`/api/opportunities/${opportunityId}/reply-draft/regenerate`, {
 				method: 'POST'

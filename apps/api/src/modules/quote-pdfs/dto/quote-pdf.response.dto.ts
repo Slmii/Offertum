@@ -6,5 +6,6 @@ export class QuotePdfResponseDto implements QuotePdf {
 	quoteDraftId!: string | null;
 	filename!: string;
 	sizeBytes!: number;
+	totalCents!: number | null;
 	createdAt!: string;
 }

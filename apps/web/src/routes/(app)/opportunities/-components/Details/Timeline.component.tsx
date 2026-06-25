@@ -4,7 +4,12 @@ import { toReadableDate, toReadableDateTime } from '@/lib/utils/date.utils';
 import { OPPORTUNITY_STATUS_LABELS_NL, OPPORTUNITY_URGENCY_LABELS_NL } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
-import type { OpportunityFieldChange, OpportunityTimelineEvent, OpportunityUrgency } from '@offertum/shared';
+import {
+	pluralize,
+	type OpportunityFieldChange,
+	type OpportunityTimelineEvent,
+	type OpportunityUrgency
+} from '@offertum/shared';
 import type { ReactNode } from 'react';
 
 const TIMELINE_DISMISS_REASON_LABELS_NL: Record<'not_a_quote' | 'duplicate' | 'spam' | 'other', string> = {
@@ -105,7 +110,7 @@ function headlineForEvent(event: OpportunityTimelineEvent): ReactNode {
 			);
 		}
 		case 'auto_cold':
-			return `Automatisch op Koud gezet na ${event.daysSinceSent} dag${event.daysSinceSent === 1 ? '' : 'en'} stilte`;
+			return `Automatisch op Koud gezet na ${event.daysSinceSent} ${pluralize(event.daysSinceSent, 'dag', 'dagen')} stilte`;
 		case 'dismissed': {
 			const reason = TIMELINE_DISMISS_REASON_LABELS_NL[event.reason];
 			return event.actorName ? (
@@ -127,13 +132,13 @@ function headlineForEvent(event: OpportunityTimelineEvent): ReactNode {
 				'Aanvraag teruggezet uit afgewezen'
 			);
 		case 'fields_updated': {
-			const suffix = `wijzigde ${event.changes.length} veld${event.changes.length === 1 ? '' : 'en'}`;
+			const suffix = `wijzigde ${event.changes.length} ${pluralize(event.changes.length, 'veld', 'velden')}`;
 			return event.actorName ? (
 				<>
 					<Strong>{event.actorName}</Strong> {suffix}
 				</>
 			) : (
-				`${event.changes.length} veld${event.changes.length === 1 ? '' : 'en'} gewijzigd`
+				`${event.changes.length} ${pluralize(event.changes.length, 'veld', 'velden')} gewijzigd`
 			);
 		}
 		case 'assigned': {
@@ -161,7 +166,7 @@ function headlineForEvent(event: OpportunityTimelineEvent): ReactNode {
 			);
 		}
 		case 'quote_created': {
-			const label = `Offerte opgesteld (${event.lineCount} ${event.lineCount === 1 ? 'regel' : 'regels'})`;
+			const label = `Offerte opgesteld (${event.lineCount} ${pluralize(event.lineCount, 'regel', 'regels')})`;
 			return event.actorName ? (
 				<>
 					{`${label} door `}
@@ -328,7 +333,7 @@ function TimelineDetail({ event }: { event: OpportunityTimelineEvent }) {
 	if (event.kind === 'auto_cold') {
 		return (
 			<Box sx={{ mt: 0.5, fontSize: 13, color: c.ink4 }}>
-				Drempel: {event.coldAfterDays} dag{event.coldAfterDays === 1 ? '' : 'en'}.
+				Drempel: {event.coldAfterDays} {pluralize(event.coldAfterDays, 'dag', 'dagen')}.
 			</Box>
 		);
 	}

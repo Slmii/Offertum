@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 			<Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
 			<Box component='main' sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 				<TopBar />
-				<Container maxWidth='xl' sx={{ py: 6 }}>
+				<Container maxWidth='xl' sx={{ py: 4 }}>
 					<Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
 				</Container>
 			</Box>

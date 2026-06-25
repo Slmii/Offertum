@@ -20,7 +20,7 @@ export function LockedReplyPanel({ isOwner }: { isOwner: boolean }) {
 				<Label fontWeight='bold'>Abonneer om te versturen</Label>
 			</Stack>
 			<BodySmall color='textSecondary'>
-				Abonneer om AI-antwoorden te versturen en deze aanvraag op te volgen.
+				Abonneer om antwoorden te versturen en deze aanvraag op te volgen.
 			</BodySmall>
 			<SubscribeCta isOwner={isOwner} />
 		</Paper>

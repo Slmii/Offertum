@@ -18,7 +18,7 @@ import {
 	useUpdateReplyDraft,
 	useUploadReplyDraftAttachment
 } from '@/lib/queries/opportunities.queries';
-import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
+import { quoteDraftsQueryOptions, useGenerateQuoteDraft } from '@/lib/queries/quote-drafts.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { toDaysSinceLabel, toReadableTimestamp } from '@/lib/utils/date.utils';
 import {
@@ -37,9 +37,9 @@ import Collapse from '@mui/material/Collapse';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import { useTheme } from '@mui/material/styles';
-import { type OpportunityStatus } from '@offertum/shared';
+import { pluralize, type OpportunityStatus } from '@offertum/shared';
 import { useIsMutating, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { AssigneePicker } from './-components/Details/AssigneePicker.component';
 import { AttachmentsPanel } from './-components/Details/AttachmentsPanel.component';
@@ -93,12 +93,15 @@ export const Route = createFileRoute('/(app)/opportunities/$id')({
 
 function OpportunityDetailPage() {
 	const { id } = Route.useParams();
+	const navigate = useNavigate();
+	const openQuote = () => navigate({ to: '/opportunities/$id/quote', params: { id } });
 	const { data: opportunity } = useSuspenseQuery(opportunityDetailQueryOptions(id));
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
 	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 	const { data: quoteDrafts } = useSuspenseQuery(quoteDraftsQueryOptions(id));
 	// Drives the composer's quote affordance: view an existing offerte vs. generate the first one.
 	const hasQuote = quoteDrafts.drafts.length > 0;
+	const generateQuote = useGenerateQuoteDraft(id);
 	const isEntitled = isBillingEntitled(billing.state);
 	const isOwner = me.role === 'OWNER';
 	const updateStatus = useUpdateOpportunityStatus();
@@ -332,7 +335,7 @@ function OpportunityDetailPage() {
 						<AppIcon name='message' size='medium' />
 						<H2 sx={{ fontSize: 18 }}>Gesprek</H2>
 						<BodySmall color='textSecondary' sx={{ ml: 'auto' }}>
-							{messageCount} {messageCount === 1 ? 'bericht' : 'berichten'}
+							{messageCount} {pluralize(messageCount, 'bericht', 'berichten')}
 						</BodySmall>
 						{isThreadCollapsible && (
 							<Box
@@ -607,17 +610,44 @@ function OpportunityDetailPage() {
 												rowGap: 1
 											}}
 										>
-											{/* Quote affordance — view the existing offerte, or generate the first
-											    one when none exists yet. Its own page is still deferred, so no-op for now. */}
+											{/* Quote affordance — generate the quote draft when none exists yet; "Offerte
+											    bekijken" (view) is still deferred to the quote builder page, so it's a no-op. */}
 											<Button
 												variant='outlined'
 												color='inherit'
 												size='medium'
+												disabled={generateQuote.isPending}
+												onClick={() => {
+													if (hasQuote) {
+														openQuote();
+														return;
+													}
+													generateQuote.mutate(undefined, {
+														onError: err =>
+															toast.error(
+																'Genereren mislukt',
+																err instanceof Error
+																	? err.message
+																	: 'Probeer het opnieuw.'
+															)
+													});
+												}}
 												startIcon={
-													<AppIcon name={hasQuote ? 'file-text' : 'file-plus'} size='small' />
+													generateQuote.isPending ? (
+														<CircularProgress size={14} />
+													) : (
+														<AppIcon
+															name={hasQuote ? 'file-text' : 'file-plus'}
+															size='small'
+														/>
+													)
 												}
 											>
-												{hasQuote ? 'Offerte bekijken' : 'Genereer offerte'}
+												{generateQuote.isPending
+													? 'Bezig…'
+													: hasQuote
+														? 'Offerte bekijken'
+														: 'Genereer offerte'}
 											</Button>
 											<Button
 												variant='contained'
@@ -662,7 +692,7 @@ function OpportunityDetailPage() {
 								<H2 sx={{ fontSize: 18 }}>Tijdlijn</H2>
 								<BodySmall color='textSecondary' sx={{ ml: 'auto' }}>
 									{opportunity.timeline.length}{' '}
-									{opportunity.timeline.length === 1 ? 'gebeurtenis' : 'gebeurtenissen'}
+									{pluralize(opportunity.timeline.length, 'gebeurtenis', 'gebeurtenissen')}
 								</BodySmall>
 							</Stack>
 							<Paper variant='outlined' sx={{ p: 3 }}>
@@ -679,7 +709,7 @@ function OpportunityDetailPage() {
 							customerPhone={opportunity.customerPhone}
 						/>
 						{isEntitled && <ExpiryActionCard opportunityId={id} isOwner={isOwner} />}
-						<RailQuoteCard opportunityId={id} />
+						<RailQuoteCard opportunityId={id} onOpen={openQuote} />
 						<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} />
 						<AssigneePicker
 							opportunityId={id}
@@ -727,13 +757,12 @@ function OpportunityDetailPage() {
 					});
 				}}
 			/>
-			{dismissOpen && (
-				<DismissDialog
-					opportunityId={id}
-					replyDraftSentAt={opportunity.replyDraftSentAt}
-					onClose={() => setDismissOpen(false)}
-				/>
-			)}
+			<DismissDialog
+				opportunityId={id}
+				replyDraftSentAt={opportunity.replyDraftSentAt}
+				isOpen={dismissOpen}
+				onClose={() => setDismissOpen(false)}
+			/>
 		</Stack>
 	);
 }

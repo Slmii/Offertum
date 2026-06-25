@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { Pill, pillTonePalette, type PillTone } from '@/components/Pill.component';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import { useTheme } from '@mui/material/styles';
@@ -46,9 +47,7 @@ export function PillSelect<T extends string>({
 
 	return (
 		<>
-			<Box
-				component='button'
-				type='button'
+			<ButtonBase
 				aria-label={ariaLabel}
 				aria-haspopup='listbox'
 				disabled={disabled}
@@ -65,7 +64,7 @@ export function PillSelect<T extends string>({
 					{current.label}
 					<AppIcon name='chevron-down' size='small' />
 				</Pill>
-			</Box>
+			</ButtonBase>
 			<Menu
 				anchorEl={anchor}
 				open={Boolean(anchor)}

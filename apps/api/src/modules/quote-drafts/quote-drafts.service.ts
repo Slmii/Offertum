@@ -22,6 +22,7 @@ import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-ite
 import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
 import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { computeQuoteTotals } from '@offertum/shared';
 import type {
 	CatalogItemUnit,
 	CreateQuoteLineItemInput,
@@ -239,7 +240,24 @@ export class QuoteDraftsService {
 			validUntil
 		});
 
-		const pdf = await this.quotePdfs.storeVersion(organizationId, draft.opportunityId, quoteDraftId, rendered);
+		// Snapshot the total incl. btw at generation time — all lines are priced (checked above),
+		// so this is the final amount the customer sees on this PDF version.
+		const totals = computeQuoteTotals(
+			draft.lineItems.map(line => ({
+				quantity: line.quantity.toString(),
+				unitPriceEur: line.unitPriceEur === null ? null : line.unitPriceEur.toString(),
+				vatRate: line.vatRate,
+				vatReverseCharged: line.vatReverseCharged
+			}))
+		);
+
+		const pdf = await this.quotePdfs.storeVersion(
+			organizationId,
+			draft.opportunityId,
+			quoteDraftId,
+			rendered,
+			totals.grossCents
+		);
 
 		this.logService.logAction({
 			action: 'opportunity.quote_pdf_generated',

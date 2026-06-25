@@ -14,6 +14,7 @@ import {
 	IconBellFilled,
 	IconBrandGmail,
 	IconBrandOffice,
+	IconCalculator,
 	IconCalendar,
 	IconCalendarFilled,
 	IconCheck,
@@ -88,6 +89,7 @@ import {
 	IconSunrise,
 	IconSunriseFilled,
 	IconTarget,
+	IconTrash,
 	IconTrendingUp,
 	IconTrophy,
 	IconTrophyFilled,
@@ -117,6 +119,8 @@ export type AppIconName =
 	| 'inbox'
 	| 'calendar'
 	| 'package'
+	| 'calculator'
+	| 'trash'
 	| 'settings'
 	| 'users'
 	| 'credit-card'
@@ -195,6 +199,9 @@ const ICONS: Record<AppIconName, IconPair> = {
 	inbox: { outline: IconInbox, filled: IconInbox },
 	calendar: { outline: IconCalendar, filled: IconCalendarFilled },
 	package: { outline: IconPackage, filled: IconPackage },
+	// Tabler ships no filled calculator/trash — outline doubles as the filled slot.
+	calculator: { outline: IconCalculator, filled: IconCalculator },
+	trash: { outline: IconTrash, filled: IconTrash },
 	settings: { outline: IconSettings, filled: IconSettingsFilled },
 	users: { outline: IconUsers, filled: IconUsers },
 	'credit-card': { outline: IconCreditCard, filled: IconCreditCardFilled },

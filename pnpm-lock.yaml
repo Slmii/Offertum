@@ -230,6 +230,9 @@ importers:
       dedent:
         specifier: ^1.7.2
         version: 1.7.2(babel-plugin-macros@3.1.0)
+      pluralize:
+        specifier: 8.0.0
+        version: 8.0.0
       react:
         specifier: ^19.2.6
         version: 19.2.6

@@ -4,6 +4,7 @@ import { useToast } from '@/lib/hooks/use-toast';
 import { quoteDraftsQueryOptions, useAttachQuotePdf } from '@/lib/queries/quote-drafts.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import InputLabel from '@mui/material/InputLabel';
@@ -97,9 +98,7 @@ export function QuotePdfAttachSelect({
 	return (
 		<Box>
 			<InputLabel sx={{ mb: 0.5 }}>Offerte-PDF meesturen</InputLabel>
-			<Box
-				component='button'
-				type='button'
+			<ButtonBase
 				disabled={disabled}
 				onClick={event => setAnchorEl(event.currentTarget)}
 				sx={{
@@ -177,7 +176,7 @@ export function QuotePdfAttachSelect({
 						<AppIcon name='chevron-down' size='small' />
 					</Box>
 				)}
-			</Box>
+			</ButtonBase>
 
 			<Menu
 				anchorEl={anchorEl}

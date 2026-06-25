@@ -37,7 +37,7 @@ export function buildOpportunityCreatedEmail(input: OpportunityCreatedEmailInput
 	const paragraphs: string[] = [
 		opener,
 		`Urgentie: <strong>${urgencyLabel}</strong>${safeDeadline ? ` &middot; Deadline: <strong>${safeDeadline}</strong>` : ''}`,
-		'Open de aanvraag om het AI-concept te bekijken en te versturen.'
+		'Open de aanvraag om het concept van Offertum te bekijken en te versturen.'
 	];
 
 	return renderNotificationEmail({

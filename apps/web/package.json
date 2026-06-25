@@ -33,6 +33,7 @@
 		"@tanstack/react-virtual": "3.14.3",
 		"dayjs": "^1.11.20",
 		"dedent": "^1.7.2",
+		"pluralize": "8.0.0",
 		"react": "^19.2.6",
 		"react-dom": "^19.2.6",
 		"react-hook-form": "^7.75.0",

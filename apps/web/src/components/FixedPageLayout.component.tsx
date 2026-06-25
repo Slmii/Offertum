@@ -17,7 +17,7 @@ interface FixedPageLayoutProps {
 	/**
 	 * Vertical space the app shell occupies around the routed page, subtracted from the
 	 * viewport so the page never triggers window scroll. Defaults to the sticky TopBar
-	 * height + the AppShell `Container` vertical padding (`py: 6` = 96px).
+	 * height + the AppShell `Container` vertical padding (`py: 4` = 64px).
 	 */
 	offsetPx?: number;
 	/** Extra styling for the scroll area (e.g. padding). */
@@ -45,8 +45,10 @@ interface FixedPageLayoutProps {
  */
 export function FixedPageLayout({ header, children, scrollRef, offsetPx, bodySx }: FixedPageLayoutProps) {
 	const { tokens } = useTheme();
-	// AppShell `Container` uses `py: 6` (48px top + bottom = 96) below the sticky TopBar.
-	const offset = offsetPx ?? tokens.layout.topbarHeight + 96;
+	// AppShell `Container` uses `py: 4` (32px top + bottom = 64) below the sticky TopBar, so the
+	// fixed region ends exactly at the container's content box (only the container padding gaps
+	// below it). Override `offsetPx` for other contexts.
+	const offset = offsetPx ?? tokens.layout.topbarHeight + 64;
 
 	return (
 		<Box sx={{ display: 'flex', flexDirection: 'column', height: `calc(100dvh - ${offset}px)` }}>

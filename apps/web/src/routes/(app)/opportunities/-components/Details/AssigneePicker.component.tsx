@@ -5,6 +5,7 @@ import { useToast } from '@/lib/hooks/use-toast';
 import { useAssignOpportunity } from '@/lib/queries/opportunities.queries';
 import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Divider from '@mui/material/Divider';
 import InputLabel from '@mui/material/InputLabel';
 import Menu from '@mui/material/Menu';
@@ -88,9 +89,7 @@ export function AssigneePicker({
 	return (
 		<Paper variant='outlined' sx={{ p: 2.25 }}>
 			<InputLabel sx={{ mb: 0.75 }}>Toegewezen aan</InputLabel>
-			<Box
-				component='button'
-				type='button'
+			<ButtonBase
 				disabled={assign.isPending}
 				onClick={event => setAnchorEl(event.currentTarget)}
 				sx={{
@@ -146,7 +145,7 @@ export function AssigneePicker({
 				<Box component='span' sx={{ display: 'inline-flex', color: c.ink3, flexShrink: 0 }}>
 					<AppIcon name='chevron-down' size='small' />
 				</Box>
-			</Box>
+			</ButtonBase>
 
 			{mailboxOwnerName && mailboxOwnerUserId !== selectedUserId && (
 				<BodySmall

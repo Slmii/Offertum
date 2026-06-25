@@ -7,6 +7,7 @@ import {
 } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
@@ -202,9 +203,7 @@ function FilterChip({
 
 	return (
 		<>
-			<Box
-				component='button'
-				type='button'
+			<ButtonBase
 				onClick={e => setAnchor(e.currentTarget)}
 				sx={{
 					display: 'inline-flex',
@@ -232,7 +231,7 @@ function FilterChip({
 					{selected?.label}
 				</Box>
 				<AppIcon name='chevron-down' size='small' />
-			</Box>
+			</ButtonBase>
 			<Menu
 				anchorEl={anchor}
 				open={Boolean(anchor)}

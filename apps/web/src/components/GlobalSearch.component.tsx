@@ -11,7 +11,9 @@ import {
 } from '@/lib/utils/opportunity.utils';
 import type { tokens as designTokens } from '@/lib/utils/theme.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import { useTheme } from '@mui/material/styles';
 import type { Opportunity } from '@offertum/shared';
@@ -87,7 +89,7 @@ const NAV_SHORTCUTS: NavShortcut[] = [
 	{
 		to: '/settings/writing-style',
 		label: 'Schrijfstijl',
-		hint: 'Hoe de AI in jouw stem schrijft',
+		hint: 'Hoe Offertum in jouw stem schrijft',
 		icon: 'pen-line',
 		keywords: 'schrijfstijl toon stem playbook',
 		ownerOnly: false
@@ -332,9 +334,7 @@ export function GlobalSearch() {
 					}}
 				/>
 				{query && (
-					<Box
-						component='button'
-						type='button'
+					<IconButton
 						aria-label='Wis zoekopdracht'
 						onClick={e => {
 							e.stopPropagation();
@@ -357,7 +357,7 @@ export function GlobalSearch() {
 						}}
 					>
 						<AppIcon name='x' size='small' />
-					</Box>
+					</IconButton>
 				)}
 				<Box
 					component='kbd'
@@ -622,9 +622,7 @@ function OpportunityRow({
 	const { tokens } = useTheme();
 	const chip = OPPORTUNITY_STATUS_CHIP_COLORS[op.status];
 	return (
-		<Box
-			component='button'
-			type='button'
+		<ButtonBase
 			onClick={onClick}
 			onMouseEnter={onHover}
 			sx={{
@@ -683,7 +681,7 @@ function OpportunityRow({
 			>
 				{OPPORTUNITY_STATUS_LABELS_NL[op.status]}
 			</Box>
-		</Box>
+		</ButtonBase>
 	);
 }
 
@@ -702,9 +700,7 @@ function NavRow({
 }) {
 	const { tokens } = useTheme();
 	return (
-		<Box
-			component='button'
-			type='button'
+		<ButtonBase
 			onClick={onClick}
 			onMouseEnter={onHover}
 			sx={{
@@ -742,6 +738,6 @@ function NavRow({
 				<BodySmall color='textSecondary'>{shortcut.hint}</BodySmall>
 			</Box>
 			<AppIcon name='arrow-up-right' size='small' style={{ color: tokens.color.ink4 }} />
-		</Box>
+		</ButtonBase>
 	);
 }

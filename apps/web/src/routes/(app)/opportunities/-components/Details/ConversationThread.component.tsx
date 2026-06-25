@@ -5,6 +5,7 @@ import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import { useTheme } from '@mui/material/styles';
 import type { CustomerReplyEntry, ReplyDraft } from '@offertum/shared';
 
@@ -321,10 +322,8 @@ function ThreadBubble({
 					{bubble.attachments.length > 0 && (
 						<Box sx={{ px: 2, pb: 1.5, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
 							{bubble.attachments.map(attachment => (
-								<Box
+								<ButtonBase
 									key={attachment.id}
-									component='button'
-									type='button'
 									onClick={() =>
 										window.open(
 											`/api/opportunities/${opportunityId}/reply-draft/attachments/${attachment.id}/download`,
@@ -356,7 +355,7 @@ function ThreadBubble({
 									>
 										{attachment.filename}
 									</Box>
-								</Box>
+								</ButtonBase>
 							))}
 						</Box>
 					)}

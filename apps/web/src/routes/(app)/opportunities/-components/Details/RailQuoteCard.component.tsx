@@ -2,8 +2,9 @@ import { AppIcon } from '@/components/AppIcon.component';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
 import { toReadableEuro } from '@/lib/utils/number.utils';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import { useTheme } from '@mui/material/styles';
-import { computeQuoteTotals } from '@offertum/shared';
+import { computeQuoteTotals, pluralize } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
 /**
@@ -31,13 +32,12 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 	const statusLabel = draft.status === 'sent' ? 'Verzonden' : 'Concept';
 
 	return (
-		<Box
-			component='button'
-			type='button'
+		<ButtonBase
 			onClick={onOpen}
 			sx={{
 				display: 'flex',
 				flexDirection: 'column',
+				alignItems: 'flex-start',
 				gap: 1.25,
 				width: '100%',
 				textAlign: 'left',
@@ -92,7 +92,7 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 
 			<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', fontSize: 12.5, color: c.ink3 }}>
 				<Box component='span'>
-					{lineCount} {lineCount === 1 ? 'regel' : 'regels'}
+					{lineCount} {pluralize(lineCount, 'regel', 'regels')}
 				</Box>
 				{unpricedCount > 0 && (
 					<>
@@ -127,6 +127,6 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 					Open <AppIcon name='arrow-right' size='small' />
 				</Box>
 			</Box>
-		</Box>
+		</ButtonBase>
 	);
 }

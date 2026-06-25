@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { PatternBanner, PatternKey } from '@offertum/shared';
+import { pluralize, type PatternBanner, type PatternKey } from '@offertum/shared';
 
 import { isPatternVisible } from './pattern-visibility';
 import { PatternsRepository } from './patterns.repository';
@@ -154,7 +154,7 @@ export class PatternsService {
 	private formatDaysWithUnit(value: number): string {
 		const rounded = Math.round(value * 10) / 10;
 		const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
-		return `${formatted} ${rounded === 1 ? 'dag' : 'dagen'}`;
+		return `${formatted} ${pluralize(rounded, 'dag', 'dagen')}`;
 	}
 
 	// Reply speed in human units: sub-day averages render in hours so we never show

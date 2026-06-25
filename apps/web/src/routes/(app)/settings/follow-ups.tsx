@@ -12,6 +12,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import { pluralize } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -175,7 +176,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 					<Box sx={{ width: 120 }}>
 						<Field name='maxCount' type='number' fullWidth />
 					</Box>
-					<BodySmall color='textSecondary'>{maxCount === 1 ? 'herinnering' : 'herinneringen'}</BodySmall>
+					<BodySmall color='textSecondary'>{pluralize(maxCount, 'herinnering', 'herinneringen')}</BodySmall>
 				</Stack>
 				<BodySmall color='textSecondary' sx={{ mt: 2, fontStyle: 'italic', display: 'block' }}>
 					Bestaande aanvragen die al op <strong>Koud</strong> staan worden niet automatisch herstart als je
@@ -198,7 +199,7 @@ function SettingsBody({ isSaving, savedFlash, error }: SettingsBodyProps) {
 						<Field name='coldAfterDays' type='number' fullWidth />
 					</Box>
 					<BodySmall color='textSecondary'>
-						{coldAfterDays === 1 ? 'dag' : 'dagen'} na laatste verzending
+						{pluralize(coldAfterDays, 'dag', 'dagen')} na laatste verzending
 					</BodySmall>
 				</Stack>
 				{coldAfterDays === 0 && (

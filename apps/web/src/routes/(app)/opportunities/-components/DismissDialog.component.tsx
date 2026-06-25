@@ -22,10 +22,12 @@ const DISMISS_FORM_ID = 'dismiss-opportunity-form';
 export function DismissDialog({
 	opportunityId,
 	replyDraftSentAt,
+	isOpen,
 	onClose
 }: {
 	opportunityId: string;
 	replyDraftSentAt: string | null;
+	isOpen: boolean;
 	onClose: () => void;
 }) {
 	const dismiss = useDismissOpportunity();
@@ -48,7 +50,7 @@ export function DismissDialog({
 	// linked across the DOM gap via the `form=<id>` attribute on the button.
 	return (
 		<Dialog
-			open
+			open={isOpen}
 			title='Waarom afwijzen?'
 			width={520}
 			onClose={onClose}

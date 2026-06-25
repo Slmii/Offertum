@@ -1,6 +1,7 @@
 import { escapeHtml } from '@/lib/mails/escape';
 import { formatEmailEuros } from '@/lib/mails/format';
 import { renderNotificationEmail, type RenderedEmail } from '@/lib/mails/notifications/template-shell';
+import { pluralize } from '@offertum/shared';
 
 interface DailyDigestRankedItem {
 	customerName: string | null;
@@ -36,7 +37,7 @@ function renderRankedRow(item: DailyDigestRankedItem, dashboardUrl: string): str
 
 function renderExpiringRow(item: DailyDigestExpiringItem): string {
 	const name = escapeHtml(item.customerName ?? 'Aanvraag');
-	const dayLabel = item.daysUntilExpiry === 1 ? 'dag' : 'dagen';
+	const dayLabel = pluralize(item.daysUntilExpiry, 'dag', 'dagen');
 	return `<a href="${item.opportunityUrl}" target="_blank" rel="noopener noreferrer" style="display: block; margin: 0 0 8px; font-size: 14px; color: #1A237E; text-decoration: none;">${name} — verloopt over ${item.daysUntilExpiry} ${dayLabel}</a>`;
 }
 

@@ -45,7 +45,8 @@ export class QuotePdfsService {
 		organizationId: string,
 		opportunityId: string,
 		quoteDraftId: string | null,
-		pdf: { buffer: Buffer; filename: string }
+		pdf: { buffer: Buffer; filename: string },
+		totalCents: number | null
 	): Promise<QuotePdf> {
 		const { storageKey } = await this.storage.put({
 			storageKey: `quote-pdfs/${opportunityId}/${randomUUID()}-${pdf.filename}`,
@@ -59,6 +60,7 @@ export class QuotePdfsService {
 			filename: pdf.filename,
 			contentType: 'application/pdf',
 			sizeBytes: pdf.buffer.length,
+			totalCents,
 			storageKey,
 			storageDriver: this.storage.driver
 		});
@@ -172,6 +174,7 @@ function toQuotePdfWire(row: QuotePdfRow): QuotePdf {
 		quoteDraftId: row.quoteDraftId,
 		filename: row.filename,
 		sizeBytes: row.sizeBytes,
+		totalCents: row.totalCents,
 		createdAt: row.createdAt.toISOString()
 	};
 }

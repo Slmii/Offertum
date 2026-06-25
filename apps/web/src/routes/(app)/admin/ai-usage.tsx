@@ -94,7 +94,7 @@ function AIUsagePage() {
 			)}
 
 			<TableContainer component={Paper} variant='outlined'>
-				<Table size='small'>
+				<Table>
 					<TableHead>
 						<TableRow>
 							<TableCell>Provider</TableCell>

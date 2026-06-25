@@ -289,6 +289,18 @@ const statusColor = (c: { 50: string; 500: string; 700: string }): PaletteColorO
 });
 
 /**
+ * Outlined-button style for a color ramp — border + text in the 500, tinted 50 hover/active with a
+ * darker border. The `outlined` slot override forces a neutral lineStrong border on every outlined
+ * button, so each palette color needs this to restore its own border (see the MuiButton variants).
+ */
+const outlinedRampStyle = (r: { 50: string; 500: string; 700: string }, hoverBorder: string): CSSObject => ({
+	borderColor: r[500],
+	color: r[500],
+	'&:hover': { borderColor: hoverBorder, backgroundColor: r[50] },
+	'&:active': { borderColor: r[700], backgroundColor: r[50] }
+});
+
+/**
  * Build the MUI theme from a token set + palette mode. The light theme uses `tokens`; the
  * dark theme uses `darkTokens` (same shape, inverted surfaces). Component code never reads the
  * mode directly — it reads `theme.tokens`, which carries the correct (light or dark) values.
@@ -430,20 +442,46 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 							'&:active': { backgroundColor: t.color.accent[700] }
 						}
 					},
+					// Outlined buttons match their border + text to the color (the `outlined` slot override
+					// forces a neutral lineStrong border, which these restore). `color="inherit"` stays neutral.
+					{
+						props: { variant: 'outlined', color: 'primary' },
+						style: outlinedRampStyle(t.color.accent, t.color.accent[600])
+					},
+					{
+						props: { variant: 'outlined', color: 'secondary' },
+						style: outlinedRampStyle(
+							{ 50: t.color.paper3, 500: t.color.ink2, 700: t.color.ink1 },
+							t.color.ink1
+						)
+					},
 					{
 						props: { variant: 'outlined', color: 'error' },
-						style: {
-							borderColor: t.color.lost[500],
-							color: t.color.lost[500],
-							'&:hover': {
-								borderColor: t.color.lost[700],
-								backgroundColor: t.color.lost[50]
-							},
-							'&:active': {
-								borderColor: t.color.lost[700],
-								backgroundColor: t.color.lost[50]
-							}
-						}
+						style: outlinedRampStyle(t.color.lost, t.color.lost[700])
+					},
+					{
+						props: { variant: 'outlined', color: 'warning' },
+						style: outlinedRampStyle(t.color.pending, t.color.pending[700])
+					},
+					{
+						props: { variant: 'outlined', color: 'success' },
+						style: outlinedRampStyle(t.color.won, t.color.won[700])
+					},
+					{
+						props: { variant: 'outlined', color: 'info' },
+						style: outlinedRampStyle(t.color.info, t.color.info[700])
+					},
+					{
+						props: { variant: 'outlined', color: 'won' },
+						style: outlinedRampStyle(t.color.won, t.color.won[700])
+					},
+					{
+						props: { variant: 'outlined', color: 'pending' },
+						style: outlinedRampStyle(t.color.pending, t.color.pending[700])
+					},
+					{
+						props: { variant: 'outlined', color: 'cold' },
+						style: outlinedRampStyle(t.color.cold, t.color.cold[700])
 					}
 				]
 			},
@@ -727,7 +765,8 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 						padding: theme.spacing(0.75, 1)
 					}),
 					arrow: { color: t.color.ink1 }
-				}
+				},
+				defaultProps: { arrow: true }
 			},
 			MuiLink: {
 				defaultProps: { underline: 'hover' },
@@ -738,15 +777,50 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 					root: { textTransform: 'none', fontWeight: 500, minHeight: 44, fontSize: '0.875rem' }
 				}
 			},
+			// ── DS "Data table" (design system → components-table) ──────────────────────────
+			// One recipe so every MUI <Table> reads the same: paper-2 uppercase header band, hairline
+			// row borders, 13px ink-2 cells, hover-tinted body rows, accent-50 selected row with a
+			// left accent bar, and a borderless last row (the frame's bottom edge does the job).
+			MuiTable: {
+				styleOverrides: { root: { borderCollapse: 'collapse' } }
+			},
+			MuiTableContainer: {
+				// Clip the header band + row borders to the frame's rounded corners.
+				styleOverrides: { root: { overflow: 'hidden' } }
+			},
 			MuiTableCell: {
 				styleOverrides: {
-					root: { borderColor: t.color.line },
-					head: {
+					root: ({ theme }) => ({
+						borderColor: t.color.line,
+						color: t.color.ink2,
+						fontSize: '0.8125rem',
+						padding: theme.spacing(1.5, 1.75)
+					}),
+					head: ({ theme }) => ({
+						backgroundColor: t.color.paper2,
 						color: t.color.ink3,
 						fontWeight: 600,
-						fontSize: '0.75rem',
+						fontSize: '0.6875rem',
+						letterSpacing: '0.06em',
 						textTransform: 'uppercase',
-						letterSpacing: '0.04em'
+						whiteSpace: 'nowrap',
+						borderBottom: `1px solid ${t.color.line}`,
+						padding: theme.spacing(1.25, 1.75)
+					})
+				}
+			},
+			MuiTableBody: {
+				styleOverrides: {
+					root: {
+						'& .MuiTableRow-root:hover': { backgroundColor: t.color.paper2 },
+						'& .MuiTableRow-root:last-of-type .MuiTableCell-root': { borderBottom: 0 },
+						'& .MuiTableRow-root.Mui-selected': { backgroundColor: t.color.accent[50] },
+						'& .MuiTableRow-root.Mui-selected:hover': { backgroundColor: t.color.accent[100] },
+						'& .MuiTableRow-root.Mui-selected .MuiTableCell-root': { color: t.color.ink1 },
+						// Indigo left bar on the selected row's first cell (design's `td.lead`).
+						'& .MuiTableRow-root.Mui-selected .MuiTableCell-root:first-of-type': {
+							boxShadow: `inset 2px 0 0 ${t.color.accent[500]}`
+						}
 					}
 				}
 			},

@@ -4,15 +4,16 @@ import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { InfiniteList } from '@/components/InfiniteList/InfiniteList.component';
 import { PageHeader } from '@/components/PageHeader.component';
-import { PatternBanners } from '@/components/PatternBanners.component';
 import { SectionError } from '@/components/SectionError.component';
 import { UpsellTeaser } from '@/components/UpsellTeaser.component';
 import { listOpportunitiesServer } from '@/lib/api/opportunities.api';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { opportunitiesListQueryOptions, type OpportunityListAttributes } from '@/lib/queries/opportunities.queries';
+import { patternsQueryOptions } from '@/lib/queries/patterns.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { OPPORTUNITY_SORT_OPTIONS, sortOpportunities, type OpportunitySortOption } from '@/lib/utils/opportunity.utils';
+import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import {
@@ -29,11 +30,9 @@ import { z } from 'zod';
 import { EmptyState } from './-components/List/EmptyState.component';
 import { FilterChipRow } from './-components/List/FilterChipRow.component';
 import { OpportunitiesListSkeleton } from './-components/List/OpportunitiesListSkeleton.component';
+import { OppInsights } from './-components/List/OppInsights.component';
 import { OpportunityRow } from './-components/List/OpportunityRow.component';
-import {
-	PendingFollowUpsBanner,
-	pendingFollowUpsQueryOptions
-} from './-components/List/PendingFollowUpsBanner.component';
+import { pendingFollowUpsQueryOptions } from './-components/List/PendingFollowUpsBanner.component';
 import { StatusFilterTabs } from './-components/List/StatusFilterTabs.component';
 
 // Every field carries `.catch(undefined)` so a malformed/hand-edited URL param degrades
@@ -95,9 +94,9 @@ export const Route = createFileRoute('/(app)/opportunities/')({
 			),
 			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
-			// Pending follow-ups banner — independent of the page's filters; prefetch so it
-			// doesn't waterfall.
-			context.queryClient.ensureQueryData(pendingFollowUpsQueryOptions())
+			// Insights bar inputs — independent of the page's filters; prefetch so they don't waterfall.
+			context.queryClient.ensureQueryData(pendingFollowUpsQueryOptions()),
+			context.queryClient.ensureQueryData(patternsQueryOptions)
 		]),
 	component: OpportunitiesIndexPage,
 	pendingComponent: OpportunitiesListSkeleton,
@@ -257,11 +256,16 @@ function OpportunitiesIndexPage() {
 						caption='Inkomende offerteaanvragen uit je verbonden mailbox. Nieuwe e-mails verschijnen meestal binnen een paar minuten nadat ze binnenkomen.'
 					/>
 
-					{/* Auto follow-ups (check-in drafts) awaiting review — renders nothing when there are none. */}
-					<PendingFollowUpsBanner />
-
-					{/* Smart-prioritization slot: entitled orgs see AI pattern insights, others the upsell. */}
-					{isEntitled ? <PatternBanners /> : <UpsellTeaser isOwner={isOwner} />}
+					{/* Smart prioritization — one collapsible insights bar (pending follow-ups + AI tips),
+					    collapsed by default so the list stays above the fold. Entitled orgs only;
+					    others see the upsell teaser. */}
+					{isEntitled ? (
+						<OppInsights />
+					) : (
+						<Box sx={{ mb: 3 }}>
+							<UpsellTeaser isOwner={isOwner} />
+						</Box>
+					)}
 
 					<StatusFilterTabs
 						active={activeStatus}
