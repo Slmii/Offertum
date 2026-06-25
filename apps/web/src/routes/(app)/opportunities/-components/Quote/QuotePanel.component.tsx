@@ -1059,6 +1059,7 @@ function QuoteDraftEditor({
 	onRegenerate: () => void;
 	regenerating: boolean;
 }) {
+	const toast = useToast();
 	const addLine = useAddQuoteLineItem(opportunityId);
 	const replaceLines = useReplaceQuoteLines(opportunityId);
 	const { data: catalog } = useSuspenseQuery(catalogItemsQueryOptions);
@@ -1184,7 +1185,11 @@ function QuoteDraftEditor({
 				quoteDraftId: draft.id,
 				lines: draft.lineItems.filter(line => !selectedIds.has(line.id)).map(currentLineToReplaceInput)
 			},
-			{ onSuccess: clearSelection }
+			{
+				onSuccess: clearSelection,
+				onError: error =>
+					toast.error('Verwijderen mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+			}
 		);
 
 	return (
@@ -1257,16 +1262,25 @@ function QuoteDraftEditor({
 						variant='text'
 						startIcon={<AppIcon name='plus' size='small' />}
 						onClick={() =>
-							addLine.mutate({
-								quoteDraftId: draft.id,
-								input: {
-									description: 'Nieuwe regel',
-									quantity: '1',
-									unitPriceEur: null,
-									vatRate: 21,
-									vatReverseCharged: false
+							addLine.mutate(
+								{
+									quoteDraftId: draft.id,
+									input: {
+										description: 'Nieuwe regel',
+										quantity: '1',
+										unitPriceEur: null,
+										vatRate: 21,
+										vatReverseCharged: false
+									}
+								},
+								{
+									onError: error =>
+										toast.error(
+											'Regel toevoegen mislukt',
+											error instanceof Error ? error.message : 'Probeer het opnieuw.'
+										)
 								}
-							})
+							)
 						}
 						disabled={addLine.isPending}
 					>
@@ -1418,6 +1432,7 @@ function QuoteLineRow({
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
+	const toast = useToast();
 	const update = useUpdateQuoteLineItem(opportunityId);
 	const remove = useDeleteQuoteLineItem(opportunityId);
 
@@ -1434,7 +1449,13 @@ function QuoteLineRow({
 	const vatValue = line.vatReverseCharged ? 'verlegd' : String(line.vatRate);
 
 	const commit = (input: Parameters<typeof update.mutate>[0]['input']) =>
-		update.mutate({ quoteDraftId, lineItemId: line.id, input });
+		update.mutate(
+			{ quoteDraftId, lineItemId: line.id, input },
+			{
+				onError: error =>
+					toast.error('Opslaan mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+			}
+		);
 
 	return (
 		<TableRow
@@ -1565,7 +1586,18 @@ function QuoteLineRow({
 				<IconButton
 					aria-label='Regel verwijderen'
 					disabled={remove.isPending}
-					onClick={() => remove.mutate({ quoteDraftId, lineItemId: line.id })}
+					onClick={() =>
+						remove.mutate(
+							{ quoteDraftId, lineItemId: line.id },
+							{
+								onError: error =>
+									toast.error(
+										'Verwijderen mislukt',
+										error instanceof Error ? error.message : 'Probeer het opnieuw.'
+									)
+							}
+						)
+					}
 					sx={{
 						display: 'inline-flex',
 						p: 0.5,
