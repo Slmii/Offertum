@@ -41,3 +41,4 @@ export * from './quote-totals.js';
 export * from './reply-drafts.js';
 export * from './team.js';
 export * from './tone-playbook.js';
+export * from './vat.js';

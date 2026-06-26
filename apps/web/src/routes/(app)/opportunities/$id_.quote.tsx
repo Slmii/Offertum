@@ -4,6 +4,7 @@ import { SectionError } from '@/components/SectionError.component';
 import { catalogItemsQueryOptions } from '@/lib/queries/catalog-items.queries';
 import { opportunityDetailQueryOptions } from '@/lib/queries/opportunities.queries';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
+import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { QuotePanel } from '@/routes/(app)/opportunities/-components/Quote/QuotePanel.component';
 import Button from '@mui/material/Button';
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -20,7 +21,9 @@ export const Route = createFileRoute('/(app)/opportunities/$id_/quote')({
 			context.queryClient.ensureQueryData(opportunityDetailQueryOptions(params.id)),
 			context.queryClient.ensureQueryData(quoteDraftsQueryOptions(params.id)),
 			// The editor reads the live catalog to compute the "niet in je catalogus" count.
-			context.queryClient.ensureQueryData(catalogItemsQueryOptions)
+			context.queryClient.ensureQueryData(catalogItemsQueryOptions),
+			// VAT config drives the quote-line VAT select + catalog add forms.
+			context.queryClient.ensureQueryData(vatSettingsQueryOptions)
 		]),
 	component: QuotePage,
 	errorComponent: SectionError

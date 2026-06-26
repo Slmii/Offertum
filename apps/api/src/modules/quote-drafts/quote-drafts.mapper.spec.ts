@@ -10,9 +10,9 @@ import { describe, expect, it } from '@jest/globals';
  * conversion is the load-bearing assertion here.
  */
 
-// `Decimal` exposes `.toString()`; fake it so the test needs no DB / Prisma runtime.
+// `Decimal` exposes `.toString()` + `.toNumber()`; fake both so the test needs no DB / Prisma runtime.
 function decimal(value: string): never {
-	return { toString: () => value } as never;
+	return { toString: () => value, toNumber: () => Number(value) } as never;
 }
 
 function row(overrides: Partial<QuoteDraftWithLines> = {}): QuoteDraftWithLines {
@@ -35,7 +35,7 @@ function row(overrides: Partial<QuoteDraftWithLines> = {}): QuoteDraftWithLines 
 				unit: 'hour',
 				quantity: decimal('4.00'),
 				unitPriceEur: decimal('85.00'),
-				vatRate: 21,
+				vatRate: decimal('21'),
 				vatReverseCharged: false,
 				source: QuoteLineSource.CATALOG_MATCH,
 				catalogItemId: 'cat-1',
@@ -85,7 +85,7 @@ describe('toQuoteDraftWire', () => {
 						unit: 'piece',
 						quantity: decimal('5.00'),
 						unitPriceEur: null,
-						vatRate: 21,
+						vatRate: decimal('21'),
 						vatReverseCharged: false,
 						source: QuoteLineSource.INFERRED,
 						catalogItemId: null,

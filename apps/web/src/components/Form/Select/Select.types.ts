@@ -38,6 +38,7 @@ export interface Option<T = string> {
 	disabled?: boolean;
 	image?: string;
 	groupBy?: string;
+	divider?: boolean;
 	/**
 	 * Optional label for the groupBy field, used for display purposes.
 	 * If not provided, the groupBy value will be used as the label.

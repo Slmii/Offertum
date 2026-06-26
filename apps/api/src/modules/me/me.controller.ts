@@ -12,6 +12,8 @@ import { TonePlaybookResponseDto } from '@/modules/me/dto/tone-playbook.response
 import { UpdateBusinessDetailsDto } from '@/modules/me/dto/update-business-details.dto';
 import { UpdateFollowUpSettingsDto } from '@/modules/me/dto/update-follow-up-settings.dto';
 import { UpdateTonePlaybookDto } from '@/modules/me/dto/update-tone-playbook.dto';
+import { UpdateVatSettingsDto } from '@/modules/me/dto/update-vat-settings.dto';
+import { VatSettingsResponseDto } from '@/modules/me/dto/vat-settings.response.dto';
 import { MeService } from '@/modules/me/me.service';
 import {
 	Body,
@@ -123,6 +125,27 @@ export class MeController {
 			cadenceDays: body.cadenceDays,
 			maxCount: body.maxCount,
 			coldAfterDays: body.coldAfterDays
+		});
+	}
+
+	@ApiOperation({ summary: 'Read the active organization’s VAT configuration' })
+	@ApiOkResponse({ type: VatSettingsResponseDto })
+	@UseGuards(OrganizationGuard)
+	@Get('vat-settings')
+	getVatSettings(@Req() request: Request): Promise<VatSettingsResponseDto> {
+		return this.me.getVatSettings(request.organizationId!);
+	}
+
+	@ApiOperation({ summary: 'Update the active organization’s VAT configuration (owner-only)' })
+	@ApiOkResponse({ type: VatSettingsResponseDto })
+	@UseGuards(OwnerGuard)
+	@Patch('vat-settings')
+	updateVatSettings(@Req() request: Request, @Body() body: UpdateVatSettingsDto): Promise<VatSettingsResponseDto> {
+		return this.me.updateVatSettings(this.userId(request), request.organizationId!, {
+			rates: body.rates,
+			defaultRate: body.defaultRate,
+			reverseChargeEnabled: body.reverseChargeEnabled,
+			reverseChargeLabel: body.reverseChargeLabel
 		});
 	}
 

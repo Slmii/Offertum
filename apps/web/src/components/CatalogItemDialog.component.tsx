@@ -5,16 +5,19 @@ import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
 import { useCreateCatalogItem, useUpdateCatalogItem } from '@/lib/queries/catalog-items.queries';
+import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { CatalogItemSchema, type CatalogItemForm } from '@/lib/schemas/catalog-item.schema';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import {
+	buildCatalogVatOptions,
 	CATALOG_ITEM_UNIT_DEFAULT,
 	CATALOG_ITEM_UNIT_LABELS_NL,
 	CATALOG_ITEM_UNITS,
 	type CatalogItem,
 	type CatalogItemUnit
 } from '@offertum/shared';
+import { useSuspenseQuery } from '@tanstack/react-query';
 
 const UNIT_OPTIONS = CATALOG_ITEM_UNITS.map(unit => ({ id: unit, label: CATALOG_ITEM_UNIT_LABELS_NL[unit] }));
 
@@ -56,6 +59,8 @@ interface CatalogItemDialogProps {
 export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: CatalogItemDialogProps) {
 	const create = useCreateCatalogItem();
 	const update = useUpdateCatalogItem();
+	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
+	const vatOptions = buildCatalogVatOptions(vatConfig);
 	const isPending = mode === 'create' ? create.isPending : update.isPending;
 	const error = mode === 'create' ? create.error : update.error;
 
@@ -64,7 +69,8 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 			name: values.name,
 			description: values.description.trim().length === 0 ? null : values.description.trim(),
 			defaultPriceEur: values.defaultPriceEur,
-			defaultVatRate: values.defaultVatRate,
+			// The form holds the VAT select id as a string; the API expects a number.
+			defaultVatRate: Number(values.defaultVatRate),
 			sku: values.sku.trim().length === 0 ? null : values.sku.trim(),
 			unit: values.unit,
 			active: values.active
@@ -83,7 +89,7 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 					name: item.name,
 					description: item.description ?? '',
 					defaultPriceEur: item.defaultPriceEur,
-					defaultVatRate: item.defaultVatRate,
+					defaultVatRate: String(item.defaultVatRate),
 					sku: item.sku ?? '',
 					unit: item.unit,
 					active: item.active
@@ -92,7 +98,7 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 					name: '',
 					description: '',
 					defaultPriceEur: '0.00',
-					defaultVatRate: 21,
+					defaultVatRate: String(vatConfig.defaultRate),
 					sku: '',
 					unit: CATALOG_ITEM_UNIT_DEFAULT,
 					active: true,
@@ -129,7 +135,7 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 					<Stack direction='row' useFlexGap spacing={2}>
 						<Field name='defaultPriceEur' label='Prijs (€)' fullWidth />
 						<Select name='unit' label='Eenheid' options={UNIT_OPTIONS} fullWidth />
-						<Field name='defaultVatRate' label='BTW (%)' type='number' fullWidth />
+						<Select name='defaultVatRate' label='BTW' options={vatOptions} fullWidth />
 					</Stack>
 					<Field name='sku' label='SKU (optioneel)' fullWidth />
 					<FormSwitch name='active' label='Actief' />

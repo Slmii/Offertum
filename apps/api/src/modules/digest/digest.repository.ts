@@ -78,7 +78,7 @@ export class DigestRepository {
 				(line): QuoteValueLine => ({
 					quantity: line.quantity.toString(),
 					unitPriceEur: line.unitPriceEur === null ? null : line.unitPriceEur.toString(),
-					vatRate: line.vatRate,
+					vatRate: line.vatRate.toNumber(),
 					vatReverseCharged: line.vatReverseCharged
 				})
 			);

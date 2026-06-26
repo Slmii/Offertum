@@ -104,7 +104,7 @@ function toCatalogItemRow(row: {
 	name: string;
 	description: string | null;
 	defaultPriceEur: Prisma.Decimal;
-	defaultVatRate: number;
+	defaultVatRate: Prisma.Decimal;
 	sku: string | null;
 	unit: string;
 	active: boolean;
@@ -117,7 +117,8 @@ function toCatalogItemRow(row: {
 		name: row.name,
 		description: row.description,
 		defaultPriceEur: row.defaultPriceEur.toString(),
-		defaultVatRate: row.defaultVatRate,
+		// Column is now Decimal(5,2); the wire format stays a number.
+		defaultVatRate: row.defaultVatRate.toNumber(),
 		sku: row.sku,
 		// API DTO validation guarantees only `CatalogItemUnit` values are written; the
 		// DB column is TEXT for forward-compat. Cast at the read boundary.

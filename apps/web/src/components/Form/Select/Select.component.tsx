@@ -84,7 +84,7 @@ export function StandaloneSelect({
 
 				items.push(
 					...groupedValue.options.map(option => (
-						<MenuItem key={option.id} value={option.id} disabled={option.disabled}>
+						<MenuItem key={option.id} value={option.id} disabled={option.disabled} divider={option.divider}>
 							{option.icon && (
 								<ListItemIcon>
 									<AppIcon name={option.icon} size='medium' />

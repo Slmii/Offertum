@@ -3,6 +3,7 @@ import { BannerStack, type BannerStackItem } from '@/components/BannerStack.comp
 import { Dialog } from '@/components/Dialog.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
+import { type Option } from '@/components/Form/Select/Select.types';
 import { BodySmall, H1, H3, Label } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
 import { catalogItemsQueryOptions } from '@/lib/queries/catalog-items.queries';
@@ -17,6 +18,7 @@ import {
 	useReplaceQuoteLines,
 	useUpdateQuoteLineItem
 } from '@/lib/queries/quote-drafts.queries';
+import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { toDaysUntil, toReadableDate } from '@/lib/utils/date.utils';
 import { toReadableBytes, toReadableEuro } from '@/lib/utils/number.utils';
 import { AddCatalogItemsDialog } from '@/routes/(app)/opportunities/-components/Quote/AddCatalogItemsDialog.component';
@@ -43,9 +45,12 @@ import TableRow from '@mui/material/TableRow';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import {
+	buildQuoteVatOptions,
 	computeQuoteTotals,
 	lineNetCents,
 	pluralize,
+	quoteVatLineToOptionId,
+	quoteVatOptionToLine,
 	type ProposedQuoteLine,
 	type QuoteDraft,
 	type QuoteLineItem,
@@ -54,6 +59,7 @@ import {
 	type ReplaceQuoteLineInput
 } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 
 // Leading `-` allowed for discount ("Korting") lines; quantity stays non-negative.
@@ -67,23 +73,22 @@ const EMPTY_PROPOSED: ProposedQuoteLine[] = [];
 // Surface the expiry notice only once the quote's validity is within this many days (or past).
 const QUOTE_EXPIRY_WARN_DAYS = 14;
 
+// Sentinel option appended to the quote-line VAT dropdown — selecting it doesn't set a rate but
+// jumps to the BTW-tarieven settings section so the owner can add a new rate.
+const VAT_ADD_OPTION_ID = '__add_vat__';
+
 // Title for the expiry notice, phrased by how many days remain on the quote's validity.
 function expiryBannerTitle(days: number): string {
 	if (days < 0) {
 		return 'Aanvraag is verlopen';
 	}
+
 	if (days === 0) {
 		return 'Aanvraag verloopt vandaag';
 	}
-	return `Aanvraag verloopt over ${days} ${pluralize(days, 'dag', 'dagen')}`;
-}
 
-const VAT_OPTIONS = [
-	{ id: '21', label: '21%' },
-	{ id: '9', label: '9%' },
-	{ id: '0', label: '0%' },
-	{ id: 'verlegd', label: 'BTW verlegd' }
-];
+	return `Aanvraag verloopt over ${days} ${pluralize(days, 'dag', 'dagen')} (${toReadableDate(new Date(Date.now() + days * 24 * 60 * 60 * 1000), 'DD MMM')})`;
+}
 
 type QuoteSource = QuoteLineItem['source'];
 
@@ -334,21 +339,23 @@ export function QuotePanel({
 				</Box>
 				{latest && (
 					<Stack direction='row' useFlexGap spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
-						<Button
-							variant='outlined'
-							size='large'
-							onClick={openRegenerate}
-							disabled={preview.isPending}
-							startIcon={
-								preview.isPending ? (
-									<CircularProgress size={14} />
-								) : (
-									<AppIcon name='refresh' size='small' />
-								)
-							}
-						>
-							{preview.isPending ? 'Bezig…' : 'Opnieuw genereren'}
-						</Button>
+						<Tooltip title='Offertum stelt de offerte opnieuw op aan de hand van de aanvraag en je huidige catalogusprijzen. Regels en bedragen kunnen hierdoor wijzigen.'>
+							<Button
+								variant='outlined'
+								size='large'
+								onClick={openRegenerate}
+								disabled={preview.isPending}
+								startIcon={
+									preview.isPending ? (
+										<CircularProgress size={14} />
+									) : (
+										<AppIcon name='refresh' size='small' />
+									)
+								}
+							>
+								{preview.isPending ? 'Bezig…' : 'Opnieuw genereren'}
+							</Button>
+						</Tooltip>
 						<Button
 							variant='contained'
 							size='large'
@@ -1063,6 +1070,16 @@ function QuoteDraftEditor({
 	const addLine = useAddQuoteLineItem(opportunityId);
 	const replaceLines = useReplaceQuoteLines(opportunityId);
 	const { data: catalog } = useSuspenseQuery(catalogItemsQueryOptions);
+	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
+	const navigate = useNavigate();
+	const vatOptions = buildQuoteVatOptions(vatConfig) as Option[];
+
+	// Rows get an extra "add a rate" action that jumps to the BTW-tarieven settings section.
+	const vatRowOptions: Option[] = [
+		...vatOptions.map((option, index) => ({ ...option, divider: index === vatOptions.length - 1 })),
+		{ id: VAT_ADD_OPTION_ID, icon: 'plus', label: 'Nieuw BTW-tarief' }
+	];
+	const goToVatSettings = () => navigate({ to: '/settings/business-details', hash: 'btw-tarieven' });
 	const totals = computeQuoteTotals(draft.lineItems);
 	const unpriced = totals.unpricedLineCount;
 
@@ -1132,7 +1149,7 @@ function QuoteDraftEditor({
 		notices.push({
 			key: 'vat-reverse',
 			tone: 'info',
-			title: `BTW verlegd op ${reverseChargedCount} ${pluralize(reverseChargedCount, 'regel', 'regels')}`,
+			title: `${vatConfig.reverseChargeLabel} op ${reverseChargedCount} ${pluralize(reverseChargedCount, 'regel', 'regels')}`,
 			body: 'Controleer of de verleggingsregeling hier van toepassing is.'
 		});
 	}
@@ -1245,8 +1262,10 @@ function QuoteDraftEditor({
 									line={line}
 									opportunityId={opportunityId}
 									quoteDraftId={draft.id}
+									vatOptions={vatRowOptions}
 									selected={selectedIds.has(line.id)}
 									onToggleSelect={() => toggleOne(line.id)}
+									onAddVatRate={goToVatSettings}
 								/>
 							))}
 						</TableBody>
@@ -1289,7 +1308,7 @@ function QuoteDraftEditor({
 				</Box>
 
 				<Box sx={{ flexShrink: 0 }}>
-					<QuoteTotals totals={totals} />
+					<QuoteTotals totals={totals} reverseChargeLabel={vatConfig.reverseChargeLabel} />
 				</Box>
 			</Paper>
 
@@ -1322,7 +1341,13 @@ function QuoteTotalsLine({ label, value, muted = false }: { label: string; value
 	);
 }
 
-function QuoteTotals({ totals }: { totals: ReturnType<typeof computeQuoteTotals> }) {
+function QuoteTotals({
+	totals,
+	reverseChargeLabel
+}: {
+	totals: ReturnType<typeof computeQuoteTotals>;
+	reverseChargeLabel: string;
+}) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 	const unpriced = totals.unpricedLineCount;
@@ -1345,7 +1370,7 @@ function QuoteTotals({ totals }: { totals: ReturnType<typeof computeQuoteTotals>
 					<QuoteTotalsLine
 						key={bracket.key}
 						muted
-						label={`${bracketVatLabel(bracket)} (over ${toReadableEuro(bracket.netCents / 100)})`}
+						label={`${bracketVatLabel(bracket, reverseChargeLabel)} (over ${toReadableEuro(bracket.netCents / 100)})`}
 						value={toReadableEuro(bracket.vatCents / 100)}
 					/>
 				))}
@@ -1421,14 +1446,18 @@ function QuoteLineRow({
 	line,
 	opportunityId,
 	quoteDraftId,
+	vatOptions,
 	selected,
-	onToggleSelect
+	onToggleSelect,
+	onAddVatRate
 }: {
 	line: QuoteLineItem;
 	opportunityId: string;
 	quoteDraftId: string;
+	vatOptions: Option[];
 	selected: boolean;
 	onToggleSelect: () => void;
+	onAddVatRate: () => void;
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
@@ -1446,7 +1475,7 @@ function QuoteLineRow({
 	const [editingPrice, setEditingPrice] = useState(false);
 
 	const unpriced = line.unitPriceEur === null;
-	const vatValue = line.vatReverseCharged ? 'verlegd' : String(line.vatRate);
+	const vatValue = quoteVatLineToOptionId(line);
 
 	const commit = (input: Parameters<typeof update.mutate>[0]['input']) =>
 		update.mutate(
@@ -1566,14 +1595,13 @@ function QuoteLineRow({
 					value={vatValue}
 					size='small'
 					fullWidth
-					options={VAT_OPTIONS}
+					options={vatOptions}
 					onChange={event => {
-						const value = event.target.value;
-						commit(
-							value === 'verlegd'
-								? { vatReverseCharged: true }
-								: { vatReverseCharged: false, vatRate: Number(value) }
-						);
+						if (event.target.value === VAT_ADD_OPTION_ID) {
+							onAddVatRate();
+							return;
+						}
+						commit(quoteVatOptionToLine(event.target.value));
 					}}
 				/>
 			</TableCell>
@@ -1616,6 +1644,6 @@ function QuoteLineRow({
 	);
 }
 
-function bracketVatLabel(bracket: QuoteVatBracketTotal): string {
-	return bracket.reverseCharged ? 'BTW verlegd' : `BTW ${bracket.vatRate}%`;
+function bracketVatLabel(bracket: QuoteVatBracketTotal, reverseChargeLabel: string): string {
+	return bracket.reverseCharged ? reverseChargeLabel : `BTW ${bracket.vatRate}%`;
 }

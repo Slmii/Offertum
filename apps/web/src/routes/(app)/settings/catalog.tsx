@@ -6,6 +6,7 @@ import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, Label } from '@/components/Text.component';
 import { catalogItemsQueryOptions, useDeleteCatalogItem } from '@/lib/queries/catalog-items.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
+import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { toReadableEuro } from '@/lib/utils/number.utils';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -25,7 +26,12 @@ export const Route = createFileRoute('/(app)/settings/catalog')({
 			throw redirect({ to: '/' });
 		}
 	},
-	loader: ({ context }) => context.queryClient.ensureQueryData(catalogItemsQueryOptions),
+	loader: ({ context }) =>
+		Promise.all([
+			context.queryClient.ensureQueryData(catalogItemsQueryOptions),
+			// The create/edit dialog reads the org VAT config for its BTW dropdown.
+			context.queryClient.ensureQueryData(vatSettingsQueryOptions)
+		]),
 	component: CatalogSettingsPage,
 	errorComponent: SectionError
 });

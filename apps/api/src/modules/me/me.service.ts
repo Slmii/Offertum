@@ -8,6 +8,7 @@ import {
 	CANNOT_REMOVE_SELF,
 	MEMBERSHIP_NOT_FOUND,
 	ORGANIZATION_DELETE_CONFIRMATION_MISMATCH,
+	VAT_DEFAULT_RATE_NOT_IN_RATES,
 	attachmentFileTooLarge,
 	attachmentMimeNotAllowed
 } from '@/lib/errors';
@@ -31,9 +32,11 @@ import {
 	UnsupportedMediaTypeException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DEFAULT_NL_VAT_CONFIG } from '@offertum/shared';
 import type {
 	BusinessDetails,
 	FollowUpSettings,
+	OrgVatConfig,
 	TonePlaybook,
 	UpdateBusinessDetailsInput,
 	VerticalValue
@@ -280,6 +283,81 @@ export class MeService {
 			cadenceDays: updated.followUpCadenceDays,
 			maxCount: updated.followUpMaxCount,
 			coldAfterDays: updated.coldAfterDays
+		};
+	}
+
+	/**
+	 * Read the active org's VAT configuration (allowed rates, default rate, reverse-charge
+	 * availability + label). Falls back to the NL default when the org hasn't configured rates
+	 * yet (empty `vatRates`), so existing orgs keep working without a save.
+	 */
+	async getVatSettings(organizationId: string): Promise<OrgVatConfig> {
+		const row = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: {
+				vatRates: true,
+				vatDefaultRate: true,
+				vatReverseChargeEnabled: true,
+				vatReverseChargeLabel: true
+			}
+		});
+
+		if (row.vatRates.length === 0) {
+			return DEFAULT_NL_VAT_CONFIG;
+		}
+
+		return {
+			rates: row.vatRates.map(rate => rate.toNumber()),
+			defaultRate: row.vatDefaultRate.toNumber(),
+			reverseChargeEnabled: row.vatReverseChargeEnabled,
+			reverseChargeLabel: row.vatReverseChargeLabel
+		};
+	}
+
+	/**
+	 * Update the active org's VAT configuration (owner-only). De-duplicates the rate list and
+	 * enforces the cross-field rule that the default rate is one of the configured rates.
+	 */
+	async updateVatSettings(actingUserId: string, organizationId: string, input: OrgVatConfig): Promise<OrgVatConfig> {
+		const rates = [...new Set(input.rates)];
+		if (!rates.includes(input.defaultRate)) {
+			throw new BadRequestException(VAT_DEFAULT_RATE_NOT_IN_RATES);
+		}
+
+		const updated = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: {
+				vatRates: rates,
+				vatDefaultRate: input.defaultRate,
+				vatReverseChargeEnabled: input.reverseChargeEnabled,
+				vatReverseChargeLabel: input.reverseChargeLabel.trim()
+			},
+			select: {
+				vatRates: true,
+				vatDefaultRate: true,
+				vatReverseChargeEnabled: true,
+				vatReverseChargeLabel: true
+			}
+		});
+
+		this.logService.logAction({
+			action: 'organization.vat_settings_updated',
+			message: `VAT settings updated for org ${organizationId} → rates=[${rates.join(', ')}], default=${input.defaultRate}, reverseCharge=${input.reverseChargeEnabled}`,
+			metadata: {
+				organizationId,
+				updatedBy: actingUserId,
+				rates,
+				defaultRate: input.defaultRate,
+				reverseChargeEnabled: input.reverseChargeEnabled
+			},
+			context: 'MeService'
+		});
+
+		return {
+			rates: updated.vatRates.map(rate => rate.toNumber()),
+			defaultRate: updated.vatDefaultRate.toNumber(),
+			reverseChargeEnabled: updated.vatReverseChargeEnabled,
+			reverseChargeLabel: updated.vatReverseChargeLabel
 		};
 	}
 

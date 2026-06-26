@@ -14,7 +14,9 @@ import {
 	useUploadBusinessAsset
 } from '@/lib/queries/business-details.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
+import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { BusinessDetailsSchema, type BusinessDetailsForm } from '@/lib/schemas/business-details.schema';
+import { VatSettingsSection } from './-VatSettingsSection.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
@@ -30,7 +32,8 @@ export const Route = createFileRoute('/(app)/settings/business-details')({
 	loader: async ({ context }) => {
 		await Promise.all([
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
-			context.queryClient.ensureQueryData(businessDetailsQueryOptions)
+			context.queryClient.ensureQueryData(businessDetailsQueryOptions),
+			context.queryClient.ensureQueryData(vatSettingsQueryOptions)
 		]);
 	},
 	component: BusinessDetailsSettingsPage,
@@ -297,6 +300,10 @@ function BusinessDetailsSettingsPage() {
 					</Box>
 				</Stack>
 			</Paper>
+
+			<Box sx={{ mt: 4 }}>
+				<VatSettingsSection isOwner={isOwner} />
+			</Box>
 
 			{isOwner && (
 				<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4, borderColor: 'error.light' }}>

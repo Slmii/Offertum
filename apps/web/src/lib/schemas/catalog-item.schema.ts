@@ -24,11 +24,7 @@ export const CatalogItemSchema = z.object({
 		.string()
 		.trim()
 		.regex(/^\d+(\.\d{1,2})?$/, 'Gebruik een prijs met maximaal 2 decimalen, bijv. 9.95'),
-	defaultVatRate: z.coerce
-		.number({ message: 'Vul een BTW-percentage in' })
-		.int('Geen decimalen')
-		.min(0, 'Minimaal 0%')
-		.max(30, 'Maximaal 30%'),
+	defaultVatRate: z.string().min(1, 'Kies een BTW-tarief'),
 	sku: z.string().trim().max(CATALOG_ITEM_SKU_MAX_LENGTH, `Maximaal ${CATALOG_ITEM_SKU_MAX_LENGTH} tekens`),
 	unit: z.enum(CATALOG_ITEM_UNITS, { message: 'Kies een geldige eenheid' }),
 	active: z.boolean()

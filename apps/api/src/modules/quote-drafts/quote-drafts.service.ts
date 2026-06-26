@@ -246,7 +246,7 @@ export class QuoteDraftsService {
 			draft.lineItems.map(line => ({
 				quantity: line.quantity.toString(),
 				unitPriceEur: line.unitPriceEur === null ? null : line.unitPriceEur.toString(),
-				vatRate: line.vatRate,
+				vatRate: line.vatRate.toNumber(),
 				vatReverseCharged: line.vatReverseCharged
 			}))
 		);
@@ -321,7 +321,7 @@ function toPdfLineItem(line: QuoteDraftWithLines['lineItems'][number]): QuotePdf
 		unit: line.unit as CatalogItemUnit,
 		unitPriceEur: (line.unitPriceEur ?? '0').toString(),
 		quantity: Number(line.quantity.toString()),
-		vatRate: line.vatRate,
+		vatRate: line.vatRate.toNumber(),
 		vatReverseCharged: line.vatReverseCharged
 	};
 }

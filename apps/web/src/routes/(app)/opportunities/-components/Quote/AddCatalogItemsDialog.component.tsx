@@ -8,26 +8,35 @@ import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component'
 import { BodySmall } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
 import { useCreateCatalogItem } from '@/lib/queries/catalog-items.queries';
+import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { CatalogItemsSchema, type CatalogItemForm, type CatalogItemsForm } from '@/lib/schemas/catalog-item.schema';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
-import { CATALOG_ITEM_UNIT_LABELS_NL, CATALOG_ITEM_UNITS, pluralize, type QuoteLineItem } from '@offertum/shared';
+import {
+	buildCatalogVatOptions,
+	CATALOG_ITEM_UNIT_LABELS_NL,
+	CATALOG_ITEM_UNITS,
+	pluralize,
+	type QuoteLineItem,
+	type VatSelectOption
+} from '@offertum/shared';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 const UNIT_OPTIONS = CATALOG_ITEM_UNITS.map(unit => ({ id: unit, label: CATALOG_ITEM_UNIT_LABELS_NL[unit] }));
 const FORM_ID = 'add-catalog-items-form';
 
-/** Seed one catalog-item form from a not-in-catalog quote line. */
-function lineToForm(line: QuoteLineItem): CatalogItemForm {
+/** Seed one catalog-item form from a not-in-catalog quote line. `defaultVatRate` is the VAT
+ * select id (a string); reverse-charged lines carry no rate, so fall back to the org default. */
+function lineToForm(line: QuoteLineItem, defaultRate: number): CatalogItemForm {
 	return {
 		name: line.description,
 		description: '',
 		defaultPriceEur: line.unitPriceEur ?? '0.00',
-		// Reverse-charged lines carry no rate; fall back to 21 so the catalog item has a sane default.
-		defaultVatRate: line.vatReverseCharged ? 21 : line.vatRate,
+		defaultVatRate: String(line.vatReverseCharged ? defaultRate : line.vatRate),
 		sku: '',
 		unit: toCatalogUnit(line.unit),
 		active: true
@@ -51,10 +60,12 @@ export function AddCatalogItemsDialog({
 }) {
 	const toast = useToast();
 	const create = useCreateCatalogItem();
+	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
+	const vatOptions = buildCatalogVatOptions(vatConfig);
 	const [submitting, setSubmitting] = useState(false);
 
 	const single = lines.length === 1;
-	const defaultValues: CatalogItemsForm = { items: lines.map(lineToForm) };
+	const defaultValues: CatalogItemsForm = { items: lines.map(line => lineToForm(line, vatConfig.defaultRate)) };
 	// Re-seed the form whenever the target lines change (they shrink after a successful add).
 	const formKey = lines.map(line => line.id).join('|');
 
@@ -67,7 +78,8 @@ export function AddCatalogItemsDialog({
 						name: item.name,
 						description: item.description.trim().length === 0 ? null : item.description.trim(),
 						defaultPriceEur: item.defaultPriceEur,
-						defaultVatRate: item.defaultVatRate,
+						// Form holds the VAT select id as a string; the API expects a number.
+						defaultVatRate: Number(item.defaultVatRate),
 						sku: item.sku.trim().length === 0 ? null : item.sku.trim(),
 						unit: item.unit,
 						active: item.active
@@ -117,7 +129,7 @@ export function AddCatalogItemsDialog({
 				defaultValues={defaultValues}
 			>
 				{single ? (
-					<CatalogItemFields index={0} skipPadding />
+					<CatalogItemFields index={0} vatOptions={vatOptions} skipPadding />
 				) : (
 					<Stack useFlexGap spacing={1}>
 						{lines.map((line, index) => (
@@ -126,7 +138,7 @@ export function AddCatalogItemsDialog({
 									<BodySmall fontWeight='bold'>{line.description || `Regel ${index + 1}`}</BodySmall>
 								</AccordionSummary>
 								<AccordionDetails>
-									<CatalogItemFields index={index} />
+									<CatalogItemFields index={index} vatOptions={vatOptions} />
 								</AccordionDetails>
 							</Accordion>
 						))}
@@ -138,7 +150,15 @@ export function AddCatalogItemsDialog({
 }
 
 /** The catalog-item fields for one array entry (`items.<index>.*`). */
-function CatalogItemFields({ index, skipPadding }: { index: number; skipPadding?: boolean }) {
+function CatalogItemFields({
+	index,
+	vatOptions,
+	skipPadding
+}: {
+	index: number;
+	vatOptions: VatSelectOption[];
+	skipPadding?: boolean;
+}) {
 	const prefix = `items.${index}` as const;
 	return (
 		<Stack useFlexGap spacing={3} sx={{ p: skipPadding ? 0 : 2 }}>
@@ -147,7 +167,7 @@ function CatalogItemFields({ index, skipPadding }: { index: number; skipPadding?
 			<Stack direction='row' useFlexGap spacing={2}>
 				<Field name={`${prefix}.defaultPriceEur`} label='Prijs (€)' fullWidth />
 				<Select name={`${prefix}.unit`} label='Eenheid' options={UNIT_OPTIONS} fullWidth />
-				<Field name={`${prefix}.defaultVatRate`} label='BTW (%)' type='number' fullWidth />
+				<Select name={`${prefix}.defaultVatRate`} label='BTW' options={vatOptions} fullWidth />
 			</Stack>
 			<Field name={`${prefix}.sku`} label='SKU (optioneel)' fullWidth />
 			<FormSwitch name={`${prefix}.active`} label='Actief' />

@@ -283,6 +283,15 @@ model Organization {
   // Drives the calendar `expiry` event (QuoteDraft.sentAt + quoteValidityDays).
   // 30-day default mirrors followUpCadenceDays/coldAfterDays. Owner-configurable later.
   quoteValidityDays         Int      @default(30)
+  // Per-org VAT configuration so rate options aren't hardcoded NL presets (supports other
+  // countries). `vatRates` is the allowed set in display order; empty = the app falls back to the
+  // NL default (21/9/0). Decimal so non-NL rates (5.5, 13.5) are representable. `vatDefaultRate`
+  // preselects new quote lines / catalog items. Reverse charge ("BTW verlegd") stays a per-line
+  // boolean; these two fields only control whether the option is offered and its label.
+  vatRates                  Decimal[] @db.Decimal(5, 2)
+  vatDefaultRate            Decimal   @default(21) @db.Decimal(5, 2)
+  vatReverseChargeEnabled   Boolean   @default(true)
+  vatReverseChargeLabel     String    @default("BTW verlegd")
   // W13 — seeds the ranking win-probability baseline. Default OVERIG so existing
   // rows backfill cleanly; owner refines it in business-details settings.
   vertical                  Vertical @default(OVERIG)
@@ -1026,7 +1035,8 @@ model CatalogItem {
   // Default VAT rate as an integer percentage (0 / 9 / 21). Matches the
   // PricingRule.vat shape so the engine can apply the right bracket. Per-line
   // overrides at quote time still possible.
-  defaultVatRate  Int      @default(21)
+  // Decimal(5,2) so non-NL rates (e.g. 5.5%) are representable; the wire format stays a number.
+  defaultVatRate  Decimal  @default(21) @db.Decimal(5, 2)
   // Owner-set SKU / article code. Optional, NOT unique (different orgs can
   // share the same SKU; same org may want to reuse an SKU for variants).
   sku             String?
@@ -1160,9 +1170,10 @@ model QuoteLineItem {
   quantity        Decimal         @db.Decimal(12, 2)
   // Null when the AI proposed an inferred line with no price — owner sets it (W10.3).
   unitPriceEur    Decimal?        @db.Decimal(10, 2)
-  // VAT rate as integer percentage (0 / 9 / 21). Ignored for display when
-  // `vatReverseCharged` is true (reverse-charge lines carry no VAT amount).
-  vatRate         Int             @default(21)
+  // VAT rate as a percentage (e.g. 21 / 9 / 0 / 5.5). Ignored for display when
+  // `vatReverseCharged` is true (reverse-charge lines carry no VAT amount). Decimal(5,2) so
+  // non-integer rates are representable; the wire format stays a number.
+  vatRate         Decimal         @default(21) @db.Decimal(5, 2)
   // BTW verlegd (reverse charge): the customer self-accounts the VAT. The line
   // contributes its net to the subtotal but adds €0 VAT, and prints a legal note.
   // A boolean rather than overloading `vatRate` because verlegd is a mechanism,
