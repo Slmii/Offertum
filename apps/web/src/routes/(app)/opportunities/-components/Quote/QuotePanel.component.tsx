@@ -1288,7 +1288,7 @@ function QuoteDraftEditor({
 										description: 'Nieuwe regel',
 										quantity: '1',
 										unitPriceEur: null,
-										vatRate: 21,
+										vatRate: vatConfig.defaultRate,
 										vatReverseCharged: false
 									}
 								},
