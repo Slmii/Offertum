@@ -8,6 +8,7 @@ import { LogService } from '@/modules/logger/log.service';
 import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 import { Injectable } from '@nestjs/common';
+import { pluralize } from '@offertum/shared';
 import { randomUUID } from 'node:crypto';
 import { DigestRepository } from './digest.repository';
 import { rankOpportunities, type RankedOpportunity } from './ranking';
@@ -117,8 +118,8 @@ export class DigestService {
 					userIds: orgRecipients,
 					organizationId: org.id,
 					eventType: PrismaNotificationEventType.DAILY_DIGEST,
-					title: `Vandaag belangrijk: ${topItems.length} offerteaanvragen`,
-					body: `${topItems.length} aanvragen vragen vandaag aandacht`,
+					title: `Vandaag belangrijk: ${topItems.length} ${pluralize(topItems.length, 'offerteaanvraag', 'offerteaanvragen')}`,
+					body: `${topItems.length} ${pluralize(topItems.length, 'aanvraag vraagt', 'aanvragen vragen')} vandaag aandacht`,
 					link: '/',
 					metadata: { ranked: topItems.length, totalOpenValueEuros },
 					email
