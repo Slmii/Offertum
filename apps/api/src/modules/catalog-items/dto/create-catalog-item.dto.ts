@@ -3,6 +3,7 @@ import {
 	CATALOG_ITEM_NAME_MAX_LENGTH,
 	CATALOG_ITEM_SKU_MAX_LENGTH,
 	CATALOG_ITEM_UNITS,
+	VAT_RATE_MAX_DECIMALS,
 	type CatalogItemUnit,
 	type CreateCatalogItemInput
 } from '@offertum/shared';
@@ -14,7 +15,7 @@ import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators
 import {
 	IsBoolean,
 	IsIn,
-	IsInt,
+	IsNumber,
 	IsOptional,
 	IsString,
 	Matches,
@@ -48,7 +49,7 @@ export class CreateCatalogItemDto implements CreateCatalogItemInput {
 	@Matches(CATALOG_ITEM_PRICE_PATTERN, { message: CATALOG_ITEM_PRICE_MESSAGE })
 	defaultPriceEur!: string;
 
-	@IsInt()
+	@IsNumber({ maxDecimalPlaces: VAT_RATE_MAX_DECIMALS })
 	@Min(0)
 	@Max(30)
 	defaultVatRate!: number;
