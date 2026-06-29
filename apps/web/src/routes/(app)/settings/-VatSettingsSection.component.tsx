@@ -110,8 +110,9 @@ export function VatSettingsSection({ isOwner }: { isOwner: boolean }) {
 		rates.length > 0 &&
 		rates.length <= VAT_RATES_MAX_COUNT &&
 		rates.includes(defaultRate) &&
-		reverseLabel.trim().length > 0 &&
-		reverseLabel.trim().length <= VAT_REVERSE_CHARGE_LABEL_MAX_LENGTH;
+		(!reverseEnabled ||
+			(reverseLabel.trim().length > 0 &&
+				reverseLabel.trim().length <= VAT_REVERSE_CHARGE_LABEL_MAX_LENGTH));
 
 	return (
 		<Paper id='btw-tarieven' variant='outlined' sx={{ p: 6, borderRadius: 2, scrollMarginTop: 80 }}>

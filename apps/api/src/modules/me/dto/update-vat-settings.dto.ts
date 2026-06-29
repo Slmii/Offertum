@@ -16,7 +16,8 @@ import {
 	Max,
 	MaxLength,
 	Min,
-	MinLength
+	MinLength,
+	ValidateIf
 } from 'class-validator';
 
 /**
@@ -41,6 +42,7 @@ export class UpdateVatSettingsDto implements OrgVatConfig {
 	reverseChargeEnabled!: boolean;
 
 	@IsString()
+	@ValidateIf(o => o.reverseChargeEnabled)
 	@MinLength(1)
 	@MaxLength(VAT_REVERSE_CHARGE_LABEL_MAX_LENGTH)
 	reverseChargeLabel!: string;
