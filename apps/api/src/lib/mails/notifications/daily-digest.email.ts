@@ -43,7 +43,7 @@ function renderExpiringRow(item: DailyDigestExpiringItem): string {
 
 export function buildDailyDigestEmail(input: DailyDigestEmailInput): RenderedEmail {
 	const { rankedItems, expiringItems, totalOpenValueEuros, dashboardUrl } = input;
-	const subject = `Vandaag belangrijk: ${rankedItems.length} offerteaanvragen`;
+	const subject = `Vandaag belangrijk: ${rankedItems.length} ${pluralize(rankedItems.length, 'offerteaanvraag', 'offerteaanvragen')}`;
 
 	const rankedHtml =
 		rankedItems.length > 0
