@@ -8,6 +8,7 @@ import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators
 import {
 	QUOTE_LINE_DESCRIPTION_MAX_LENGTH,
 	QUOTE_LINE_SOURCES,
+	VAT_RATE_MAX_DECIMALS,
 	type QuoteLineSource,
 	type ReplaceQuoteLineInput,
 	type ReplaceQuoteLinesInput
@@ -18,7 +19,7 @@ import {
 	IsArray,
 	IsBoolean,
 	IsIn,
-	IsInt,
+	IsNumber,
 	IsString,
 	Matches,
 	Max,
@@ -56,7 +57,7 @@ class ReplaceQuoteLineItemDto implements ReplaceQuoteLineInput {
 	@Matches(MONEY_DECIMAL_PATTERN, { message: `unitPriceEur ${MONEY_DECIMAL_MESSAGE}` })
 	unitPriceEur!: string | null;
 
-	@IsInt()
+	@IsNumber({ maxDecimalPlaces: VAT_RATE_MAX_DECIMALS })
 	@Min(MIN_VAT_RATE)
 	@Max(MAX_VAT_RATE)
 	vatRate!: number;
