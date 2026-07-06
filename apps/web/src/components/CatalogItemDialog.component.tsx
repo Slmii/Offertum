@@ -1,9 +1,9 @@
-import { Banner } from '@/components/Banner.component';
 import { Dialog } from '@/components/Dialog.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
 import { Switch as FormSwitch } from '@/components/Form/Switch/Switch.component';
+import { useToast } from '@/lib/hooks/use-toast';
 import { useCreateCatalogItem, useUpdateCatalogItem } from '@/lib/queries/catalog-items.queries';
 import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { CatalogItemSchema, type CatalogItemForm } from '@/lib/schemas/catalog-item.schema';
@@ -57,12 +57,12 @@ interface CatalogItemDialogProps {
  * not-in-catalog line). On success the create/update mutation invalidates the catalog list.
  */
 export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: CatalogItemDialogProps) {
+	const toast = useToast();
 	const create = useCreateCatalogItem();
 	const update = useUpdateCatalogItem();
 	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
 	const vatOptions = buildCatalogVatOptions(vatConfig);
 	const isPending = mode === 'create' ? create.isPending : update.isPending;
-	const error = mode === 'create' ? create.error : update.error;
 
 	const handleSubmit = (values: CatalogItemForm) => {
 		const payload = {
@@ -75,11 +75,13 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 			unit: values.unit,
 			active: values.active
 		};
+		const onError = (error: unknown) =>
+			toast.error('Opslaan mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.');
 
 		if (mode === 'create') {
-			create.mutate(payload, { onSuccess: onClose });
+			create.mutate(payload, { onSuccess: onClose, onError });
 		} else if (item) {
-			update.mutate({ id: item.id, patch: payload }, { onSuccess: onClose });
+			update.mutate({ id: item.id, patch: payload }, { onSuccess: onClose, onError });
 		}
 	};
 
@@ -139,9 +141,6 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 					</Stack>
 					<Field name='sku' label='SKU (optioneel)' fullWidth />
 					<FormSwitch name='active' label='Actief' />
-					{error && (
-						<Banner tone='error'>{error instanceof Error ? error.message : 'Opslaan mislukt.'}</Banner>
-					)}
 				</Stack>
 			</Form>
 		</Dialog>
