@@ -173,6 +173,10 @@ export const QUOTE_LINE_ITEM_NOT_FOUND = 'Quote line item not found.';
 // User-facing — surfaced when generating a PDF for a draft that still has lines
 // without a price. Set the prices first so the quote total is correct.
 export const QUOTE_DRAFT_HAS_UNPRICED_LINES = 'Er zijn nog regels zonder prijs. Stel eerst alle prijzen in.';
+// User-facing — surfaced when a mutation targets a quote draft that's already been
+// sent to the customer (status = SENT). Editing lines after send would desync the
+// app's view of the quote from what the customer actually received.
+export const QUOTE_DRAFT_ALREADY_SENT = 'Deze offerte is al verzonden en kan niet meer worden bewerkt.';
 // User-facing — the chosen default VAT rate must be one of the configured rates.
 export const VAT_DEFAULT_RATE_NOT_IN_RATES = 'Het standaard BTW-tarief moet één van de ingestelde tarieven zijn.';
 // User-facing — surfaced when the editor tries to save edits to a draft that

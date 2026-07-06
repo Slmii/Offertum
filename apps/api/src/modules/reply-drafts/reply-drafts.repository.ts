@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma/client';
 import {
 	EmailProvider,
 	OpportunityStatus as PrismaOpportunityStatus,
+	QuoteDraftStatus as PrismaQuoteDraftStatus,
 	ReplyDraftKind as PrismaReplyDraftKind,
 	ReplyDraftStatus as PrismaReplyDraftStatus
 } from '@/generated/prisma/enums';
@@ -854,7 +855,7 @@ export class ReplyDraftsRepository {
 				? [
 						this.prisma.quoteDraft.updateMany({
 							where: { id: { in: quoteDraftIds }, sentAt: null },
-							data: { sentAt: now }
+							data: { sentAt: now, status: PrismaQuoteDraftStatus.SENT }
 						})
 					]
 				: [])
