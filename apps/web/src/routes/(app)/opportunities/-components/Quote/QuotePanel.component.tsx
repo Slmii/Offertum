@@ -1072,7 +1072,15 @@ function QuoteDraftEditor({
 	const { data: catalog } = useSuspenseQuery(catalogItemsQueryOptions);
 	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
 	const navigate = useNavigate();
-	const vatOptions = buildQuoteVatOptions(vatConfig) as Option[];
+	// A rate can be removed from the org's VAT settings after a line was saved at it (nothing
+	// prevents this). Union the line's own rate back in so the row's BTW select always has a
+	// matching option instead of falling through to the untranslated MUI placeholder.
+	const configuredRates = new Set(vatConfig.rates);
+	const usedRates = [...new Set(draft.lineItems.filter(line => !line.vatReverseCharged).map(line => line.vatRate))];
+	const missingRates = usedRates.filter(rate => !configuredRates.has(rate));
+	const vatOptions = buildQuoteVatOptions(
+		missingRates.length > 0 ? { ...vatConfig, rates: [...vatConfig.rates, ...missingRates] } : vatConfig
+	) as Option[];
 
 	// Rows get an extra "add a rate" action that jumps to the BTW-tarieven settings section.
 	const vatRowOptions: Option[] = [
