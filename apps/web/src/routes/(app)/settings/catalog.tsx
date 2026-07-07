@@ -1,9 +1,9 @@
-import { Banner } from '@/components/Banner.component';
 import { CatalogItemDialog } from '@/components/CatalogItemDialog.component';
 import { Dialog } from '@/components/Dialog.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, Label } from '@/components/Text.component';
+import { useToast } from '@/lib/hooks/use-toast';
 import { catalogItemsQueryOptions, useDeleteCatalogItem } from '@/lib/queries/catalog-items.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
@@ -138,11 +138,16 @@ interface DeleteConfirmDialogProps {
 }
 
 function DeleteConfirmDialog({ isOpen, item, onClose }: DeleteConfirmDialogProps) {
+	const toast = useToast();
 	const remove = useDeleteCatalogItem();
 
 	const confirm = () => {
 		if (item) {
-			remove.mutate(item.id, { onSuccess: onClose });
+			remove.mutate(item.id, {
+				onSuccess: onClose,
+				onError: error =>
+					toast.error('Verwijderen mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+			});
 		}
 	};
 
@@ -168,11 +173,6 @@ function DeleteConfirmDialog({ isOpen, item, onClose }: DeleteConfirmDialogProps
 				Weet je zeker dat je <strong>{item?.name ?? 'dit item'}</strong> wilt verwijderen? Eerder opgestelde
 				offertes behouden hun regels, alleen toekomstige voorstellen worden geraakt.
 			</DialogContentText>
-			{remove.error && (
-				<Banner tone='error' sx={{ mt: 2 }}>
-					{remove.error instanceof Error ? remove.error.message : 'Verwijderen mislukt.'}
-				</Banner>
-			)}
 		</Dialog>
 	);
 }
