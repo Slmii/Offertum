@@ -94,3 +94,12 @@ export const CATALOG_ITEM_NAME_MAX_LENGTH = 200;
 export const CATALOG_ITEM_DESCRIPTION_MAX_LENGTH = 2_000;
 /** Owner-set SKU max length. */
 export const CATALOG_ITEM_SKU_MAX_LENGTH = 64;
+
+/**
+ * `defaultPriceEur` shape, shared by the web form (Zod) and the API DTO (class-validator)
+ * so the two layers can never drift: up to 8 digits before the decimal and up to 2 after,
+ * matching the `Decimal(10, 2)` DB column.
+ */
+export const CATALOG_ITEM_PRICE_PATTERN = /^\d{1,8}(\.\d{1,2})?$/;
+export const CATALOG_ITEM_PRICE_MESSAGE =
+	'defaultPriceEur must fit Decimal(10, 2): up to 8 digits before the decimal and up to 2 after';
