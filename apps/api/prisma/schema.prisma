@@ -288,7 +288,7 @@ model Organization {
   // NL default (21/9/0). Decimal so non-NL rates (5.5, 13.5) are representable. `vatDefaultRate`
   // preselects new quote lines / catalog items. Reverse charge ("BTW verlegd") stays a per-line
   // boolean; these two fields only control whether the option is offered and its label.
-  vatRates                  Decimal[] @db.Decimal(5, 2)
+  vatRates                  Decimal[] @default([]) @db.Decimal(5, 2)
   vatDefaultRate            Decimal   @default(21) @db.Decimal(5, 2)
   vatReverseChargeEnabled   Boolean   @default(true)
   vatReverseChargeLabel     String    @default("BTW verlegd")

@@ -302,7 +302,7 @@ export class MeService {
 			}
 		});
 
-		if (row.vatRates.length === 0) {
+		if (!row.vatRates || row.vatRates.length === 0) {
 			return DEFAULT_NL_VAT_CONFIG;
 		}
 
