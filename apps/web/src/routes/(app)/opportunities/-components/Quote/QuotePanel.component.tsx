@@ -78,7 +78,7 @@ const QUOTE_EXPIRY_WARN_DAYS = 14;
 const VAT_ADD_OPTION_ID = '__add_vat__';
 
 // Title for the expiry notice, phrased by how many days remain on the quote's validity.
-function expiryBannerTitle(days: number): string {
+function expiryBannerTitle(days: number, validUntil: string): string {
 	if (days < 0) {
 		return 'Aanvraag is verlopen';
 	}
@@ -87,7 +87,7 @@ function expiryBannerTitle(days: number): string {
 		return 'Aanvraag verloopt vandaag';
 	}
 
-	return `Aanvraag verloopt over ${days} ${pluralize(days, 'dag', 'dagen')} (${toReadableDate(new Date(Date.now() + days * 24 * 60 * 60 * 1000), 'DD MMM')})`;
+	return `Aanvraag verloopt over ${days} ${pluralize(days, 'dag', 'dagen')} (${toReadableDate(validUntil)})`;
 }
 
 type QuoteSource = QuoteLineItem['source'];
@@ -1148,7 +1148,7 @@ function QuoteDraftEditor({
 		notices.push({
 			key: 'expiry',
 			tone: 'warning',
-			title: expiryBannerTitle(expiryDays),
+			title: expiryBannerTitle(expiryDays, draft.validUntil!),
 			body: 'Stuur de offerte op tijd om de aanvraag warm te houden.'
 		});
 	}
