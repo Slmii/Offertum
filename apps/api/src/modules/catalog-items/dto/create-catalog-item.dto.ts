@@ -3,6 +3,7 @@ import {
 	CATALOG_ITEM_NAME_MAX_LENGTH,
 	CATALOG_ITEM_SKU_MAX_LENGTH,
 	CATALOG_ITEM_UNITS,
+	VAT_RATE_MAX,
 	type CatalogItemUnit,
 	type CreateCatalogItemInput
 } from '@offertum/shared';
@@ -50,7 +51,7 @@ export class CreateCatalogItemDto implements CreateCatalogItemInput {
 
 	@IsInt()
 	@Min(0)
-	@Max(30)
+	@Max(VAT_RATE_MAX)
 	defaultVatRate!: number;
 
 	@ValidateIf((_, value) => value !== null)
