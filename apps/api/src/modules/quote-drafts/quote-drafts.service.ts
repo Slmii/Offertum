@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import {
 	OPPORTUNITY_NOT_FOUND,
+	QUOTE_DRAFT_ALREADY_SENT,
 	QUOTE_DRAFT_HAS_UNPRICED_LINES,
 	QUOTE_DRAFT_NOT_FOUND,
 	QUOTE_LINE_ITEM_NOT_FOUND
@@ -115,7 +116,7 @@ export class QuoteDraftsService {
 		quoteDraftId: string,
 		lines: ReplaceQuoteLineInput[]
 	): Promise<QuoteDraft> {
-		await this.loadDraft(organizationId, quoteDraftId);
+		this.assertEditable(await this.loadDraft(organizationId, quoteDraftId));
 		// Drop provenance ids the client can't prove belong to this org, so a crafted
 		// request can't poison the year-2 AI-accuracy analytics with dangling/foreign refs.
 		const [catalogIds, ruleIds] = await Promise.all([
@@ -162,7 +163,7 @@ export class QuoteDraftsService {
 
 	/** Add an owner-authored line to a draft (W10.3). */
 	async addLine(organizationId: string, quoteDraftId: string, input: CreateQuoteLineItemInput): Promise<QuoteDraft> {
-		await this.loadDraft(organizationId, quoteDraftId);
+		this.assertEditable(await this.loadDraft(organizationId, quoteDraftId));
 		await this.repository.addLine(quoteDraftId, {
 			description: input.description,
 			unit: input.unit ?? DEFAULT_LINE_UNIT,
@@ -284,11 +285,19 @@ export class QuoteDraftsService {
 		return draft;
 	}
 
-	/** Assert the line belongs to the tenant-scoped draft or 404. */
+	/** Assert the line belongs to the tenant-scoped draft or 404, and that the draft is still editable. */
 	private async requireLine(organizationId: string, quoteDraftId: string, lineItemId: string): Promise<void> {
 		const draft = await this.loadDraft(organizationId, quoteDraftId);
 		if (!draft.lineItems.some(line => line.id === lineItemId)) {
 			throw new NotFoundException(QUOTE_LINE_ITEM_NOT_FOUND);
+		}
+		this.assertEditable(draft);
+	}
+
+	/** Reject mutations against a quote draft that's already been sent to the customer. */
+	private assertEditable(draft: QuoteDraftWithLines): void {
+		if (draft.status === 'SENT') {
+			throw new BadRequestException(QUOTE_DRAFT_ALREADY_SENT);
 		}
 	}
 
