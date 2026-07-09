@@ -1,13 +1,12 @@
 // apps/shared/src/calendar.ts
 
-/** The five date kinds Offertum projects onto the calendar. */
-export type CalendarEventType = 'sent' | 'expiry' | 'appointment' | 'deadline' | 'follow_up';
+/** The four date kinds Offertum projects onto the calendar. */
+export type CalendarEventType = 'expiry' | 'appointment' | 'deadline' | 'follow_up';
 
 /** Whose opportunities the calendar/feed shows. `mine` = assigned to the requesting user. */
 export type CalendarEventScope = 'mine' | 'all';
 
 export const CALENDAR_EVENT_TYPES: readonly CalendarEventType[] = [
-	'sent',
 	'expiry',
 	'appointment',
 	'deadline',

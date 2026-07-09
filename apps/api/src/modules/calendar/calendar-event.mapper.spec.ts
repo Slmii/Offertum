@@ -59,8 +59,7 @@ describe('toCalendarEvents', () => {
 			}),
 			CFG
 		);
-		// `expiry` is all-day (Amsterdam date-only string). `sent` is never projected onto the calendar.
-		expect(events.some(e => e.type === 'sent')).toBe(false);
+		// `expiry` is all-day (Amsterdam date-only string).
 		expect(events.find(e => e.type === 'expiry')).toMatchObject({
 			id: 'qd-1:expiry',
 			at: '2026-06-12',

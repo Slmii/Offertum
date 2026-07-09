@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import { useTheme } from '@mui/material/styles';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 // `useLayoutEffect` measures the active tab to position the indicator; fall back to `useEffect` on
 // the server so SSR doesn't warn (the indicator simply settles on first client paint).
@@ -70,15 +70,41 @@ export function Segmented<T extends string>({
 					}}
 				/>
 			)}
-			{options.map(option => {
+			{options.map((option, index) => {
 				const active = option.id === value;
+				// Roving tabindex (WAI-ARIA APG tabs pattern): only the active tab is in the Tab
+				// order; arrow keys move focus + selection between tabs.
+				const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+					let nextIndex: number | null = null;
+					if (event.key === 'ArrowRight') {
+						nextIndex = (index + 1) % options.length;
+					} else if (event.key === 'ArrowLeft') {
+						nextIndex = (index - 1 + options.length) % options.length;
+					} else if (event.key === 'Home') {
+						nextIndex = 0;
+					} else if (event.key === 'End') {
+						nextIndex = options.length - 1;
+					}
+					if (nextIndex === null) {
+						return;
+					}
+					const next = options[nextIndex];
+					if (!next) {
+						return;
+					}
+					event.preventDefault();
+					onChange(next.id);
+					containerRef.current?.querySelector<HTMLElement>(`[data-segmented-id="${next.id}"]`)?.focus();
+				};
 				return (
 					<ButtonBase
 						key={option.id}
 						data-segmented-id={option.id}
 						role='tab'
 						aria-selected={active}
+						tabIndex={active ? 0 : -1}
 						onClick={() => onChange(option.id)}
+						onKeyDown={handleKeyDown}
 						sx={{
 							position: 'relative',
 							zIndex: 1,

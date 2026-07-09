@@ -462,6 +462,94 @@ describe('OpportunitiesService.list pagination', () => {
 	});
 });
 
+describe('OpportunitiesService.list assignee multiselect resolution', () => {
+	it('resolves "me" + "unassigned" + a specific user id into a deduped userIds + includeUnassigned filter', async () => {
+		const repository = makeRepository({
+			listByOrganization: jest.fn().mockReturnValue(Promise.resolve([]))
+		});
+		const service = makeService({ repository });
+
+		await service.list('org-1', {
+			cursor: null,
+			limit: 25,
+			status: null,
+			search: null,
+			dismissed: null,
+			owner: null,
+			assignee: ['me', 'unassigned', 'user-2', 'me'],
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
+			requestingUserId: 'user-1'
+		});
+
+		expect(repository.listByOrganization).toHaveBeenCalledWith(
+			'org-1',
+			expect.objectContaining({
+				assignee: { userIds: ['user-1', 'user-2'], includeUnassigned: true }
+			})
+		);
+	});
+
+	it('drops "me" when there is no requesting user (defensive, should not reach this endpoint)', async () => {
+		const repository = makeRepository({
+			listByOrganization: jest.fn().mockReturnValue(Promise.resolve([]))
+		});
+		const service = makeService({ repository });
+
+		await service.list('org-1', {
+			cursor: null,
+			limit: 25,
+			status: null,
+			search: null,
+			dismissed: null,
+			owner: null,
+			assignee: ['me'],
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
+			requestingUserId: null
+		});
+
+		expect(repository.listByOrganization).toHaveBeenCalledWith(
+			'org-1',
+			expect.objectContaining({ assignee: null })
+		);
+	});
+
+	it('passes assignee: null when the filter is omitted/empty', async () => {
+		const repository = makeRepository({
+			listByOrganization: jest.fn().mockReturnValue(Promise.resolve([]))
+		});
+		const service = makeService({ repository });
+
+		await service.list('org-1', {
+			cursor: null,
+			limit: 25,
+			status: null,
+			search: null,
+			dismissed: null,
+			owner: null,
+			assignee: [],
+			hasReplies: null,
+			urgency: null,
+			deadline: null,
+			pendingFollowup: null,
+			hasAppointment: null,
+			requestingUserId: 'user-1'
+		});
+
+		expect(repository.listByOrganization).toHaveBeenCalledWith(
+			'org-1',
+			expect.objectContaining({ assignee: null })
+		);
+	});
+});
+
 describe('OpportunitiesService.updateStatus', () => {
 	it('allows legal transitions and returns wire-format status', async () => {
 		const current = makeOpportunityRecord(PrismaOpportunityStatus.NEW);

@@ -124,3 +124,64 @@ describe('OpportunitiesRepository.createOpportunityFromRawMessage', () => {
 		});
 	});
 });
+
+describe('OpportunitiesRepository.listByOrganization assignee filter', () => {
+	function makeListPrisma(): { prisma: PrismaService; findMany: jest.Mock } {
+		const findMany = jest.fn().mockReturnValue(Promise.resolve([]));
+		const prisma = { opportunity: { findMany } };
+		return { prisma: prisma as unknown as PrismaService, findMany };
+	}
+
+	it('OR-combines specific user ids with unassigned when both are set', async () => {
+		const { prisma, findMany } = makeListPrisma();
+		const repository = new OpportunitiesRepository(prisma);
+
+		await repository.listByOrganization('org-1', {
+			take: 10,
+			cursor: null,
+			status: null,
+			search: null,
+			assignee: { userIds: ['user-1', 'user-2'], includeUnassigned: true }
+		});
+
+		const { where } = findMany.mock.calls[0]?.[0] as { where: { AND?: object[] } };
+		expect(where.AND).toEqual(
+			expect.arrayContaining([
+				{ OR: [{ assignedToUserId: { in: ['user-1', 'user-2'] } }, { assignedToUserId: null }] }
+			])
+		);
+	});
+
+	it('filters by userIds only when includeUnassigned is false', async () => {
+		const { prisma, findMany } = makeListPrisma();
+		const repository = new OpportunitiesRepository(prisma);
+
+		await repository.listByOrganization('org-1', {
+			take: 10,
+			cursor: null,
+			status: null,
+			search: null,
+			assignee: { userIds: ['user-1'], includeUnassigned: false }
+		});
+
+		const { where } = findMany.mock.calls[0]?.[0] as { where: { AND?: object[] } };
+		expect(where.AND).toEqual(expect.arrayContaining([{ OR: [{ assignedToUserId: { in: ['user-1'] } }] }]));
+	});
+
+	it('adds no assignee constraint when the filter is absent', async () => {
+		const { prisma, findMany } = makeListPrisma();
+		const repository = new OpportunitiesRepository(prisma);
+
+		await repository.listByOrganization('org-1', {
+			take: 10,
+			cursor: null,
+			status: null,
+			search: null,
+			assignee: null
+		});
+
+		const { where } = findMany.mock.calls[0]?.[0] as { where: { AND?: object[] } };
+		const hasAssigneeCondition = (where.AND ?? []).some(condition => JSON.stringify(condition).includes('assignedToUserId'));
+		expect(hasAssigneeCondition).toBe(false);
+	});
+});

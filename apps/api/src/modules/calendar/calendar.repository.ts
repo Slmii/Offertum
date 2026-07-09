@@ -36,12 +36,10 @@ export class CalendarRepository {
 				customerDeadline: true,
 				customerAppointment: true,
 				quoteDrafts: {
-					// Newest-first; we read the current (latest) draft for expiry and scan for the
-					// most recent SENT draft for the 'sent' marker. Capped — an opp rarely has many
-					// repriced versions; the cap just bounds the scan.
+					// Newest-first; only the current (latest) draft drives the `expiry` marker.
 					orderBy: { createdAt: 'desc' },
-					take: 20,
-					select: { id: true, sentAt: true, validUntil: true, createdAt: true }
+					take: 1,
+					select: { id: true, validUntil: true, createdAt: true }
 				},
 				replyDrafts: {
 					where: { status: ReplyDraftStatus.SENT, sentAt: { not: null } },
