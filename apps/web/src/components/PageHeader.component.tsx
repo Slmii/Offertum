@@ -17,7 +17,7 @@ export function PageHeader({ title, caption, actions, disableMargin }: PageHeade
 		<Box
 			sx={{
 				display: 'flex',
-				alignItems: 'flex-start',
+				alignItems: 'flex-end',
 				justifyContent: 'space-between',
 				gap: 3,
 				mb: disableMargin ? 0 : 3

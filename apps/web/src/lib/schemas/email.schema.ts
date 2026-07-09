@@ -8,12 +8,16 @@ import z from 'zod';
  * TanStack Router parses search values with `JSON.parse(value)`-then-fallback-to-string,
  * so `?connected=1` arrives as the NUMBER 1 here (not the string "1"). `z.coerce.string()`
  * normalizes both shapes so the component can do a stable `search.connected === '1'` check.
+ *
+ * Every field carries `.catch(undefined)` so a malformed/hand-edited param (e.g. an
+ * `adminConsentUrl` that fails `.url()`) degrades to its default instead of throwing in
+ * `validateSearch` (which would render the error page).
  */
 export const EmailSettingsSearchSchema = z.object({
-	connected: z.coerce.string().optional(),
-	error: z.coerce.string().optional(),
+	connected: z.coerce.string().optional().catch(undefined),
+	error: z.coerce.string().optional().catch(undefined),
 	// Populated when the Microsoft callback detects an admin-consent-required error
 	// (Entra AADSTS65001 / 90094 / 900971). The web layer renders the link as-is —
 	// the URL is built server-side so we don't need MICROSOFT_CLIENT_ID in the browser bundle.
-	adminConsentUrl: z.coerce.string().url().optional()
+	adminConsentUrl: z.coerce.string().url().optional().catch(undefined)
 });

@@ -13,9 +13,6 @@ export interface CalendarEventSource {
 	customerAppointment: Date | null;
 	// The opp's current (latest) quote draft — drives the `expiry` marker.
 	currentQuoteDraft: { id: string; validUntil: Date | null; createdAt: Date } | null;
-	// The most recently SENT quote draft (may differ from current if a newer draft was repriced
-	// but not yet sent) — drives the `sent` marker so it survives a post-send reprice.
-	latestSentQuoteDraft: { id: string; sentAt: Date } | null;
 	latestSentReplyDraftAt: Date | null;
 	priorCheckInCount: number;
 }
@@ -96,23 +93,10 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		);
 	}
 
-	// Quote markers are suppressed on terminal deals — a WON quote is accepted and a LOST one is
-	// dead, so "Offerte verstuurd / verloopt" would just be noise on the calendar.
+	// The expiry marker is suppressed on terminal deals — a WON quote is accepted and a LOST one is
+	// dead, so "Offerte verloopt" would just be noise on the calendar.
 	const isTerminalStatus = src.status === 'WON' || src.status === 'LOST';
 	if (!isTerminalStatus) {
-		// `sent` marks the day the quote went out — from the most recently SENT draft, so it
-		// survives a later unsent reprice (which would otherwise become the "current" draft).
-		if (src.latestSentQuoteDraft) {
-			events.push(
-				buildEvent(
-					`${src.latestSentQuoteDraft.id}:sent`,
-					src.opportunityId,
-					'sent',
-					label,
-					src.latestSentQuoteDraft.sentAt
-				)
-			);
-		}
 		// `expiry` shows as soon as a quote exists (sent or not), from the current draft's stored
 		// validUntil — the same date the PDF prints + the opp detail shows. Legacy drafts (no stored
 		// value) fall back to createdAt + the org window.

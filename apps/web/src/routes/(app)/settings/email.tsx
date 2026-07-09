@@ -1,8 +1,9 @@
-import { AppIcon } from '@/components/AppIcon.component';
+import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Body, BodySmall, Label } from '@/components/Text.component';
+import { useToast } from '@/lib/hooks/use-toast';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
 	gmailStatusQueryOptions,
@@ -23,12 +24,13 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
+import Tooltip from '@mui/material/Tooltip';
 import { useTheme } from '@mui/material/styles';
 import type { BillingState, EmailProvider, MailboxStatus } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { toMailboxRows, type MailboxRowView } from './-email.mock';
+import { toMailboxRows, type MailboxRowView } from './-email';
 
 export const Route = createFileRoute('/(app)/settings/email')({
 	validateSearch: EmailSettingsSearchSchema,
@@ -46,10 +48,12 @@ export const Route = createFileRoute('/(app)/settings/email')({
 function EmailSettingsPage() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
+
 	const { data: gmailStatus } = useSuspenseQuery(gmailStatusQueryOptions);
 	const { data: msStatus } = useSuspenseQuery(microsoftStatusQueryOptions);
 	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+	const toast = useToast();
 
 	// Mirror the API's EntitlementGuard set: connect/disconnect will 402 outside this set.
 	const billingEntitled = billing.state === 'trialing' || billing.state === 'active' || billing.state === 'past_due';
@@ -70,16 +74,25 @@ function EmailSettingsPage() {
 			return;
 		}
 
+		// Surface the one-shot OAuth result as a toast. Success + generic connect errors are
+		// transient action feedback → toasts. The `microsoft_admin_consent_required` case stays an
+		// inline banner (rendered below) because it carries a copyable admin-consent link.
+		if (oauthFeedback.connected === '1' && (gmailStatus.connected || msStatus.connected)) {
+			toast.success('Mailbox verbonden', 'Offertum importeert op de achtergrond je laatste 90 dagen.');
+		}
+
+		if (oauthFeedback.error && oauthFeedback.error !== 'microsoft_admin_consent_required') {
+			const copy = getEmailConnectErrorCopy(oauthFeedback.error);
+			if (copy) {
+				toast.error(copy.title, copy.description);
+			}
+		}
+
 		void navigate({ to: '/settings/email', search: {}, replace: true });
 		// Run once on mount only, we intentionally do NOT depend on `search` because the
-		// effect's job is to clear the URL once, not to react to ongoing changes.
+		// effect's job is to fire the one-shot toast + clear the URL once, not to react to changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
-
-	// `connected=1` only ever fires once per OAuth round-trip; we can't tell from the
-	// URL which provider just connected, so the success Alert just says "connected"
-	// and the user sees which section is now green.
-	const showSuccessAlert = Boolean(oauthFeedback.connected === '1' && (gmailStatus.connected || msStatus.connected));
 
 	return (
 		<Stack>
@@ -89,27 +102,14 @@ function EmailSettingsPage() {
 			/>
 
 			<Stack useFlexGap spacing={3}>
-				{showSuccessAlert && (
-					<Banner tone='success'>
-						Mailbox verbonden. Offertum importeert op de achtergrond je laatste 90 dagen.
-					</Banner>
-				)}
+				<Banner tone='info' title='Offertum vraagt alleen lees- en verzendrechten aan'>
+					We lezen nooit berichten buiten je offerteaanvraag-flow, en de tokens worden versleuteld opgeslagen.
+				</Banner>
 
-				{oauthFeedback.error === 'microsoft_admin_consent_required' && oauthFeedback.adminConsentUrl ? (
+				{/* The admin-consent case stays an inline banner (it carries a copyable link); the
+				    plain success + connect-error feedback is fired as a toast in the mount effect. */}
+				{oauthFeedback.error === 'microsoft_admin_consent_required' && oauthFeedback.adminConsentUrl && (
 					<AdminConsentAlert adminConsentUrl={oauthFeedback.adminConsentUrl} />
-				) : (
-					(() => {
-						const copy = getEmailConnectErrorCopy(oauthFeedback.error);
-						if (!copy) {
-							return null;
-						}
-
-						return (
-							<Banner tone='error' title={copy.title}>
-								<BodySmall sx={{ mt: 0.5 }}>{copy.description}</BodySmall>
-							</Banner>
-						);
-					})()
 				)}
 
 				{!billingEntitled && (
@@ -160,11 +160,6 @@ function EmailSettingsPage() {
 					}
 				/>
 			</Stack>
-
-			<BodySmall color='textSecondary' sx={{ display: 'block', mt: 5 }}>
-				Offertum vraagt alleen lees- en verzendrechten aan. We lezen nooit berichten buiten je
-				offerteaanvraag-flow, en de tokens worden versleuteld opgeslagen.
-			</BodySmall>
 		</Stack>
 	);
 }
@@ -183,14 +178,6 @@ interface ProviderSectionProps {
 	disconnectNote?: React.ReactNode;
 }
 
-/**
- * One provider section — a Card with a header row (provider mark + label + add-account
- * action) and the stacked mailbox rows beneath it. Owns its own connect/disconnect lifecycle.
- *
- * The backend models a single mailbox per provider, so `accounts` is 0 or 1 row today; the
- * design's multi-account layout is preserved so a future API change is a data swap, not a
- * rewrite (see `email.mock.ts`).
- */
 function ProviderSection({
 	provider,
 	label,
@@ -223,18 +210,36 @@ function ProviderSection({
 			>
 				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
 					<ProviderMark provider={provider} />
-					<Label fontWeight='bold' sx={{ fontSize: 16 }}>
+					<Label fontWeight='bold' sx={{ fontSize: 16, fontFamily: 'Playfair Display' }}>
 						{label}
 					</Label>
 				</Box>
-				<Button
-					variant={hasAccounts ? 'outlined' : 'contained'}
-					startIcon={<AppIcon name='plus' size='medium' />}
-					onClick={handleConnect}
-					disabled={!billingEntitled}
-				>
-					{hasAccounts ? 'Voeg account toe' : `Verbind ${label}-account`}
-				</Button>
+				{/* One mailbox per provider is supported today — a second account per provider is a
+				    planned backend capability, so once one is connected the add button is disabled
+				    with a "Binnenkort" hint rather than offering an action that would fail. */}
+				<Stack direction='row' useFlexGap spacing={1.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+					{hasAccounts && <SoonBadge />}
+					<Tooltip
+						title={
+							hasAccounts
+								? 'Eén mailbox per provider wordt nu ondersteund. Meerdere accounts per provider komt binnenkort.'
+								: ''
+						}
+						disableHoverListener={!hasAccounts}
+					>
+						{/* span wrapper so the tooltip still fires on the disabled button. */}
+						<Box component='span' sx={{ display: 'inline-flex' }}>
+							<Button
+								variant={hasAccounts ? 'outlined' : 'contained'}
+								startIcon={<AppIcon name='plus' size='medium' />}
+								onClick={handleConnect}
+								disabled={!billingEntitled || hasAccounts}
+							>
+								{hasAccounts ? 'Voeg account toe' : `Verbind ${label}-account`}
+							</Button>
+						</Box>
+					</Tooltip>
+				</Stack>
 			</Box>
 
 			{hasAccounts && (
@@ -271,12 +276,6 @@ interface MailboxRowProps {
 	onDisconnect: () => void;
 }
 
-/**
- * One connected mailbox row: provider mark, address, status badge, sync metadata, and a kebab
- * menu (Opnieuw verbinden / Verbreken). The degraded "Verbroken" badge + error Alert render
- * when the row view-model carries `status: 'disconnected'` / `error`; the real API never
- * produces that state today (see `email.mock.ts`).
- */
 function MailboxRow({ mailbox, isLast, billingEntitled, isDisconnecting, onReconnect, onDisconnect }: MailboxRowProps) {
 	const { tokens } = useTheme();
 	const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -304,11 +303,12 @@ function MailboxRow({ mailbox, isLast, billingEntitled, isDisconnecting, onRecon
 						</Body>
 						<StatusBadge connected={isConnected} />
 					</Box>
-					<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.25 }}>
-						{mailbox.connectedAt
-							? `Verbonden op ${toReadableDate(mailbox.connectedAt, 'D MMM YYYY')} · Laatste sync ${mailbox.lastSync}`
-							: `Laatste sync ${mailbox.lastSync}`}
-					</BodySmall>
+
+					{mailbox.connectedAt ? (
+						<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.25 }}>
+							Verbonden op {toReadableDate(mailbox.connectedAt, 'D MMM YYYY')}
+						</BodySmall>
+					) : null}
 				</Box>
 				<IconButton
 					aria-label='Acties voor mailbox'
@@ -402,13 +402,39 @@ function StatusBadge({ connected }: { connected: boolean }) {
 	);
 }
 
+/** Muted "Binnenkort" pill — flags multi-account-per-provider as a planned (not-yet-live) capability. */
+function SoonBadge() {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	return (
+		<Box
+			component='span'
+			sx={{
+				display: 'inline-flex',
+				alignItems: 'center',
+				px: 0.75,
+				py: 0.25,
+				borderRadius: `${tokens.radius.sm}px`,
+				backgroundColor: c.paper3,
+				border: `1px solid ${c.lineStrong}`,
+				color: c.ink3,
+				fontSize: 11,
+				fontWeight: 'bold',
+				whiteSpace: 'nowrap'
+			}}
+		>
+			Binnenkort
+		</Box>
+	);
+}
+
 /**
  * Provider logo placeholder block. The design uses simple wordmark blocks (a single letter),
  * not the real Gmail/Outlook logos — kept as a placeholder until real brand marks are added.
  */
 function ProviderMark({ provider, size = 36 }: { provider: EmailProvider; size?: number }) {
 	const { tokens } = useTheme();
-	const glyph = provider === 'GMAIL' ? 'G' : 'O';
+	const glyph: AppIconName = provider === 'GMAIL' ? 'brand-gmail' : 'brand-office';
 
 	return (
 		<Box
@@ -430,7 +456,7 @@ function ProviderMark({ provider, size = 36 }: { provider: EmailProvider; size?:
 				fontSize: Math.round(size * 0.45)
 			}}
 		>
-			{glyph}
+			<AppIcon name={glyph} />
 		</Box>
 	);
 }
@@ -481,7 +507,7 @@ function AdminConsentAlert({ adminConsentUrl }: { adminConsentUrl: string }) {
 			>
 				{adminConsentUrl}
 			</Box>
-			<Button size='small' variant='outlined' color='inherit' onClick={handleCopy}>
+			<Button size='small' variant='contained' color='warning' onClick={handleCopy}>
 				{copied ? 'Gekopieerd!' : 'Kopieer link'}
 			</Button>
 		</Banner>

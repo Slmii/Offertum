@@ -27,10 +27,12 @@ export function AssigneePicker({
 	opportunityId,
 	assignedToUserId,
 	mailboxOwnerUserId,
-	mailboxOwnerName
+	mailboxOwnerName,
+	disabled = false
 }: {
 	opportunityId: string;
 	assignedToUserId: string | null;
+	disabled?: boolean;
 	mailboxOwnerUserId?: string | null;
 	mailboxOwnerName?: string | null;
 }) {
@@ -90,7 +92,7 @@ export function AssigneePicker({
 		<Paper variant='outlined' sx={{ p: 2.25 }}>
 			<InputLabel sx={{ mb: 0.75 }}>Toegewezen aan</InputLabel>
 			<ButtonBase
-				disabled={assign.isPending}
+				disabled={disabled || assign.isPending}
 				onClick={event => setAnchorEl(event.currentTarget)}
 				sx={{
 					display: 'flex',
@@ -99,14 +101,15 @@ export function AssigneePicker({
 					width: '100%',
 					minHeight: 36,
 					padding: '0 10px 0 8px',
-					backgroundColor: c.surface,
+					// Disabled → the same sunken paper fill as a disabled text field / select / picker.
+					backgroundColor: disabled ? c.paper2 : c.surface,
 					border: `1px solid ${isOpen ? c.accent[500] : c.lineStrong}`,
 					borderRadius: `${tokens.radius.md}px`,
 					boxShadow: isOpen ? tokens.focusRing : 'none',
 					fontFamily: tokens.font.sans,
 					fontSize: 14,
 					textAlign: 'left',
-					cursor: assign.isPending ? 'default' : 'pointer'
+					cursor: disabled || assign.isPending ? 'default' : 'pointer'
 				}}
 			>
 				{selected ? (

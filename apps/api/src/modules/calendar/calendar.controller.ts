@@ -8,7 +8,6 @@ import { IcalFeedResponseDto } from '@/modules/calendar/dto/ical-feed.response.d
 import {
 	BadRequestException,
 	Controller,
-	DefaultValuePipe,
 	Delete,
 	Get,
 	HttpCode,
@@ -20,7 +19,6 @@ import {
 	UseGuards
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { CalendarEventScope } from '@offertum/shared';
 import type { Request } from 'express';
 
 @ApiTags('calendar')
@@ -36,23 +34,26 @@ export class CalendarController {
 	// could relax this. Only the iCal-sync (feed-token) endpoints below are additionally
 	// subscription-gated via CalendarEntitlementGuard, so phone sync can't be set up without
 	// an active subscription (and stops when one is cancelled).
-	@ApiOperation({ summary: 'Calendar events for the active org within a date window' })
+	@ApiOperation({ summary: 'Calendar events assigned to the requesting user, within a date window' })
 	@ApiOkResponse({ type: [CalendarEventDto] })
 	@Get('events')
 	getEvents(
 		@Req() request: Request,
 		@Query('from') from: string,
-		@Query('to') to: string,
-		@Query('scope', new DefaultValuePipe('all')) scope: CalendarEventScope
+		@Query('to') to: string
 	): Promise<CalendarEventDto[]> {
 		const fromDate = new Date(from);
 		const toDate = new Date(to);
 		if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
 			throw new BadRequestException(CALENDAR_INVALID_DATE_RANGE);
 		}
+		// The in-app agenda always shows ONLY the requesting user's own assignments — there is no
+		// org-wide view here (which also means a `?scope=all` request can't widen it). `userId()`
+		// guarantees a real user so the `assignedToUserId` filter can never silently fall back to
+		// the whole org.
 		return this.calendar.getEvents(request.organizationId!, {
-			scope: scope === 'mine' ? 'mine' : 'all',
-			requestingUserId: request.authSession?.user?.id ?? null,
+			scope: 'mine',
+			requestingUserId: this.userId(request),
 			from: fromDate,
 			to: toDate
 		});

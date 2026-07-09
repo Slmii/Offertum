@@ -55,8 +55,14 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 	const endTrial = useEndTrial();
 	const [confirmUpgradeOpen, setConfirmUpgradeOpen] = useState(false);
 
-	const showUpgrade = shouldShowUpgrade(status);
-	const hasPrimaryAction = shouldShowSubscribe(status) || showUpgrade;
+	const hasPaymentMethod = Boolean(status.paymentMethodLast4);
+	// Trialing WITH a card on file → can end the trial early ("Nu naar betaald upgraden", charges
+	// the saved card). Trialing WITHOUT a card (the card-less trial) → the primary CTA is
+	// "Abonneren", which opens the Portal to add a payment method; Stripe then converts
+	// trialing → active at trial end automatically.
+	const showUpgrade = status.state === 'trialing' && hasPaymentMethod;
+	const showAddPayment = status.state === 'trialing' && !hasPaymentMethod;
+	const hasPrimaryAction = shouldShowSubscribe(status) || showUpgrade || showAddPayment;
 
 	const confirmUpgrade = () =>
 		endTrial.mutate(undefined, {
@@ -108,6 +114,18 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 							</Button>
 						)}
 
+						{showAddPayment && (
+							<Button
+								variant='contained'
+								size='large'
+								startIcon={<AppIcon name='external-link' size='medium' />}
+								onClick={() => openPortal.mutate()}
+								disabled={openPortal.isPending}
+							>
+								{openPortal.isPending ? 'Openen...' : 'Abonneren'}
+							</Button>
+						)}
+
 						{showUpgrade && (
 							<Button
 								variant='contained'
@@ -119,7 +137,7 @@ function BillingManagePage({ status }: { status: BillingStatus }) {
 							</Button>
 						)}
 
-						{shouldShowManage(status) && (
+						{shouldShowManage(status) && !showAddPayment && (
 							<Button
 								variant={hasPrimaryAction ? 'outlined' : 'contained'}
 								size={hasPrimaryAction ? 'medium' : 'large'}
@@ -206,6 +224,13 @@ function StatusPanel({
 			<Body sx={{ mb: 0.5 }}>{primaryLine(state, endDate, isPaymentProcessing)}</Body>
 			{secondaryLine(state, isPaymentProcessing) && (
 				<BodySmall color='textSecondary'>{secondaryLine(state, isPaymentProcessing)}</BodySmall>
+			)}
+			{state === 'trialing' && (
+				<BodySmall color='textSecondary'>
+					{paymentMethodLast4
+						? 'We starten je betaalde abonnement automatisch zodra de proefperiode afloopt.'
+						: 'Geen betaalmethode nodig tijdens de proef. Voeg er één toe om na de proefperiode verder te gaan — anders pauzeert je toegang.'}
+				</BodySmall>
 			)}
 
 			{showCancellationBanner && (
@@ -371,10 +396,26 @@ const BILLING_FEATURES: { icon: AppIconName; title: string; detail: string }[] =
  * "here's what a subscription unlocks", never an error. Owners get a "Start abonnement"
  * action; non-owners get the "ask the owner" line instead (the API blocks owner-only
  * actions, so non-owners can browse this page but never trigger a charge).
+ *
+ * `paused` (card-less trial that lapsed) and `incomplete` still have a LIVE Stripe sub, so a
+ * new Checkout is rejected server-side (`subscriptionAlreadyActive`). For those the owner CTA
+ * opens the Portal to add a payment method / finish setup and resume — never a dead-end Checkout.
  */
 function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOwner: boolean }) {
 	const { tokens } = useTheme();
 	const startCheckout = useStartCheckout();
+	const openPortal = useOpenPortal();
+
+	const recoverViaPortal = status.state === 'paused' || status.state === 'incomplete';
+	const ctaError = recoverViaPortal ? openPortal.error : startCheckout.error;
+	const ctaPending = recoverViaPortal ? openPortal.isPending : startCheckout.isPending;
+	const ctaLabel = ctaPending
+		? 'Doorverwijzen...'
+		: recoverViaPortal
+			? status.state === 'paused'
+				? 'Betaalmethode toevoegen'
+				: 'Abonnement afronden'
+			: 'Start abonnement';
 
 	return (
 		<Stack useFlexGap spacing={3}>
@@ -406,12 +447,17 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 						Je gebruikt nu de basis van Offertum. Met een abonnement zet Offertum je belangrijkste aanvragen
 						vooraan en handelt het de opvolging voor je af — zodat geen enkele offerte stilletjes verloopt.
 					</Body>
+					{recoverViaPortal && (
+						<Body color='textSecondary' sx={{ mt: 1, maxWidth: 560 }}>
+							{status.state === 'paused'
+								? 'Je proefperiode is afgelopen. Voeg een betaalmethode toe om Offertum weer te activeren.'
+								: 'Je abonnement is nog niet helemaal ingesteld. Rond het af om verder te gaan.'}
+						</Body>
+					)}
 
-					{startCheckout.isError && (
+					{ctaError && (
 						<Banner tone='error' sx={{ mt: 2 }}>
-							{startCheckout.error instanceof Error
-								? startCheckout.error.message
-								: 'Er ging iets mis. Probeer het opnieuw.'}
+							{ctaError instanceof Error ? ctaError.message : 'Er ging iets mis. Probeer het opnieuw.'}
 						</Banner>
 					)}
 
@@ -421,10 +467,10 @@ function BillingUpsellLanding({ status, isOwner }: { status: BillingStatus; isOw
 								variant='contained'
 								size='large'
 								startIcon={<AppIcon name='external-link' size='medium' />}
-								onClick={() => startCheckout.mutate()}
-								disabled={startCheckout.isPending}
+								onClick={() => (recoverViaPortal ? openPortal.mutate() : startCheckout.mutate())}
+								disabled={ctaPending}
 							>
-								{startCheckout.isPending ? 'Doorverwijzen...' : 'Start abonnement'}
+								{ctaLabel}
 							</Button>
 						) : (
 							<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
@@ -538,7 +584,7 @@ function primaryLine(state: BillingStatus['state'], endDate: Date | null, isPaym
 		case 'none':
 			return 'Je bent je proefperiode nog niet gestart.';
 		case 'trialing':
-			return `Gratis proefperiode — eerste afschrijving op ${endDate ? toReadableDate(endDate, 'D MMM YYYY') : '-'}`;
+			return `Gratis proefperiode — loopt af op ${endDate ? toReadableDate(endDate, 'D MMM YYYY') : '-'}`;
 		case 'active':
 			return `Abonnement actief — verlengt op ${endDate ? toReadableDate(endDate, 'D MMM YYYY') : '-'}`;
 		case 'past_due':
@@ -561,7 +607,7 @@ function primaryLine(state: BillingStatus['state'], endDate: Date | null, isPaym
 function secondaryLine(state: BillingStatus['state'], isPaymentProcessing: boolean): string | null {
 	switch (state) {
 		case 'none':
-			return 'Start je 14-daagse gratis proefperiode. Een kaart is vereist bij aanmelding, maar je wordt 14 dagen niet belast. Annuleer op elk moment daarvoor.';
+			return 'Start je 14-daagse gratis proefperiode. Geen betaalmethode nodig om te starten — die voeg je pas toe als je na de proefperiode verdergaat.';
 		case 'past_due':
 			return isPaymentProcessing
 				? 'Geen actie nodig — we bevestigen zodra je bank de betaling afrondt.'
@@ -587,12 +633,6 @@ const SUBSCRIBE_STATES: ReadonlyArray<BillingStatus['state']> = ['none', 'cancel
 
 function shouldShowSubscribe(status: BillingStatus): boolean {
 	return SUBSCRIBE_STATES.includes(status.state);
-}
-
-// "Nu naar betaald upgraden" converts a trial to an active subscription early (ends the Stripe
-// trial + charges the saved card) — the only in-product path past the trial seat cap.
-function shouldShowUpgrade(status: BillingStatus): boolean {
-	return status.state === 'trialing';
 }
 
 function shouldShowManage(status: BillingStatus): boolean {

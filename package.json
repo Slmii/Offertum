@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"packageManager": "pnpm@10.0.0",
+	"packageManager": "pnpm@11.9.0",
 	"engines": {
 		"node": ">=22.0.0",
 		"pnpm": ">=10.0.0"
@@ -30,10 +30,5 @@
 		"turbo": "^2.9.12",
 		"typescript": "^5.7.2",
 		"typescript-eslint": "^8.18.0"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"inngest-cli"
-		]
 	}
 }

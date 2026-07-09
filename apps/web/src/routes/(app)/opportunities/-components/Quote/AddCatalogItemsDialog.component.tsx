@@ -162,14 +162,27 @@ function CatalogItemFields({
 	const prefix = `items.${index}` as const;
 	return (
 		<Stack useFlexGap spacing={3} sx={{ p: skipPadding ? 0 : 2 }}>
-			<Field name={`${prefix}.name`} label='Naam' fullWidth />
-			<Field name={`${prefix}.description`} label='Omschrijving (optioneel)' fullWidth multiline />
+			<Field
+				name={`${prefix}.name`}
+				label='Naam'
+				fullWidth
+				required
+				placeholder='Bijv. "Consultancy-uur" of "Koffiebonen"'
+			/>
+			<Field
+				name={`${prefix}.description`}
+				label='Omschrijving'
+				fullWidth
+				multiline
+				minRows={5}
+				placeholder='Bijv. "Uurtarief voor consultancy, inclusief voorbereiding en rapportage."'
+			/>
 			<Stack direction='row' useFlexGap spacing={2}>
-				<Field name={`${prefix}.defaultPriceEur`} label='Prijs (€)' fullWidth />
-				<Select name={`${prefix}.unit`} label='Eenheid' options={UNIT_OPTIONS} fullWidth />
-				<Select name={`${prefix}.defaultVatRate`} label='BTW' options={vatOptions} fullWidth />
+				<Field name={`${prefix}.defaultPriceEur`} label='Prijs (€)' fullWidth required placeholder='0.00' />
+				<Select name={`${prefix}.unit`} label='Eenheid' options={UNIT_OPTIONS} fullWidth required />
+				<Select name={`${prefix}.defaultVatRate`} label='BTW' options={vatOptions} fullWidth required />
 			</Stack>
-			<Field name={`${prefix}.sku`} label='SKU (optioneel)' fullWidth />
+			<Field name={`${prefix}.sku`} label='SKU' fullWidth />
 			<FormSwitch name={`${prefix}.active`} label='Actief' />
 		</Stack>
 	);

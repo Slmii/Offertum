@@ -17,7 +17,7 @@ const noop = () => {};
 const ZERO_COUNTS: OpportunityStatusCounts = { new: 0, replied: 0, waiting: 0, cold: 0, won: 0, lost: 0 };
 const DEFAULT_FILTERS: OpportunityFilterValues = {
 	owner: null,
-	assignee: null,
+	assignee: [],
 	sort: 'newest_first',
 	hasReplies: null,
 	urgency: null,

@@ -40,7 +40,8 @@ function BillingSuccessPage() {
 					<Box>
 						<H1 sx={{ mb: 1 }}>You're all set</H1>
 						<Body color='textSecondary' sx={{ mb: 4 }}>
-							Your trial has started. We'll only charge after 14 days, and you can cancel any time.
+							Your trial has started. No card needed — add a payment method when you're ready to continue
+							after the 14 days. Cancel any time.
 						</Body>
 						<Button variant='contained' size='large' onClick={() => navigate({ to: '/' })}>
 							Go to dashboard

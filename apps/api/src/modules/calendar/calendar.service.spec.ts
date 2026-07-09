@@ -43,7 +43,6 @@ describe('CalendarService', () => {
 					customerDeadline: new Date('2026-06-15T00:00:00.000Z'), // in window
 					customerAppointment: new Date('2026-09-01T00:00:00.000Z'), // out of window
 					currentQuoteDraft: null,
-					latestSentQuoteDraft: null,
 					latestSentReplyDraftAt: null,
 					priorCheckInCount: 0
 				}
@@ -115,7 +114,6 @@ describe('CalendarService', () => {
 					customerDeadline: new Date(),
 					customerAppointment: null,
 					currentQuoteDraft: null,
-					latestSentQuoteDraft: null,
 					latestSentReplyDraftAt: null,
 					priorCheckInCount: 0
 				}
@@ -124,6 +122,8 @@ describe('CalendarService', () => {
 			const ics = await service.renderFeed('valid-token');
 			expect(ics).toContain('BEGIN:VEVENT');
 			expect(ics).toContain('Deadline klant — Jansen');
+			// The feed is scoped to the token owner's own assignments, never the whole org.
+			expect(repo.findActiveSources).toHaveBeenCalledWith('org-1', 'mine', 'user-1');
 		});
 
 		it('throws NotFound when the token owner is no longer a member of the org', async () => {
@@ -146,7 +146,6 @@ describe('CalendarService', () => {
 					customerDeadline: new Date(),
 					customerAppointment: null,
 					currentQuoteDraft: null,
-					latestSentQuoteDraft: null,
 					latestSentReplyDraftAt: null,
 					priorCheckInCount: 0
 				}

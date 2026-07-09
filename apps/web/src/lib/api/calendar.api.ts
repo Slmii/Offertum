@@ -1,21 +1,20 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { CalendarEvent, CalendarEventScope, IcalFeed } from '@offertum/shared';
+import type { CalendarEvent, IcalFeed } from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export interface ListCalendarEventsInput {
 	from: string; // ISO
 	to: string; // ISO
-	scope: CalendarEventScope;
 }
 
-/** GET /api/calendar/events — isomorphic SSR + client read for FullCalendar. */
+/**
+ * GET /api/calendar/events — isomorphic SSR + client read for FullCalendar. The API always scopes
+ * results to the requesting user's own assignments; there is no scope parameter.
+ */
 export const listCalendarEventsServer = createServerFn({ method: 'GET' })
 	.inputValidator((data: ListCalendarEventsInput) => data)
 	.handler(async ({ data }): Promise<CalendarEvent[]> => {
 		const params = new URLSearchParams({ from: data.from, to: data.to });
-		if (data.scope !== 'all') {
-			params.set('scope', data.scope);
-		}
 		const response = await serverFetch(`/api/calendar/events?${params.toString()}`);
 		if (!response.ok) {
 			throw new Error(`Failed to load calendar events (${response.status})`);

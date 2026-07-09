@@ -27,9 +27,11 @@ import { useEffect, useState, type ReactNode } from 'react';
  */
 export function ExtractedFieldsPanel({
 	opportunityId,
-	opportunity
+	opportunity,
+	disabled = false
 }: {
 	opportunityId: string;
+	disabled?: boolean;
 	opportunity: {
 		customerName: string | null;
 		customerEmail: string | null;
@@ -114,6 +116,7 @@ export function ExtractedFieldsPanel({
 						minRows={4}
 						maxRows={8}
 						maxLength={500}
+						disabled={disabled}
 					/>
 				</RailField>
 				<RailField label='Urgentie' icon='alert-triangle'>
@@ -122,6 +125,7 @@ export function ExtractedFieldsPanel({
 						value={opportunity.urgency}
 						fullWidth
 						size='small'
+						disabled={disabled}
 						options={OPPORTUNITY_URGENCIES.map(u => ({
 							id: u,
 							label: OPPORTUNITY_URGENCY_LABELS_NL[u]
@@ -135,6 +139,7 @@ export function ExtractedFieldsPanel({
 						value={opportunity.customerDeadline ? dayjs(opportunity.customerDeadline) : null}
 						fullWidth
 						size='small'
+						disabled={disabled}
 						onAccept={commitDeadline}
 						minDate={dayjs()}
 					/>
@@ -145,6 +150,7 @@ export function ExtractedFieldsPanel({
 						value={opportunity.customerAppointment ? dayjs(opportunity.customerAppointment) : null}
 						fullWidth
 						size='small'
+						disabled={disabled}
 						onAccept={commitAppointment}
 						minDate={dayjs()}
 					/>

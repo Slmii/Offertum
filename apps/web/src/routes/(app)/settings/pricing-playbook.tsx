@@ -531,7 +531,7 @@ function RuleEditDialog({ rule, open, onClose }: { rule: PricingRule; open: bool
 					/>
 					<Field
 						name='conditionNarrative'
-						label='Offertum-conditie (optioneel)'
+						label='Offertum-conditie'
 						helperText='Vrije tekst waaraan Offertum elke offerte toetst voordat de regel wordt toegepast, bv. "renovaties van woningen ouder dan 2 jaar". Laat leeg als de structuurregel boven al voldoende is.'
 						fullWidth
 						multiline

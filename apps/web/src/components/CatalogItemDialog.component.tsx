@@ -132,14 +132,27 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 				defaultValues={defaultValues}
 			>
 				<Stack useFlexGap spacing={3} sx={{ pt: 1 }}>
-					<Field name='name' label='Naam' fullWidth autoFocus />
-					<Field name='description' label='Omschrijving (optioneel)' fullWidth multiline />
+					<Field
+						required
+						name='name'
+						label='Naam'
+						fullWidth
+						placeholder='Bijv. "Consultancy-uur" of "Koffiebonen"'
+					/>
+					<Field
+						name='description'
+						label='Omschrijving'
+						fullWidth
+						multiline
+						minRows={5}
+						placeholder='Bijv. "Uurtarief voor consultancy, inclusief voorbereiding en rapportage."'
+					/>
 					<Stack direction='row' useFlexGap spacing={2}>
-						<Field name='defaultPriceEur' label='Prijs (€)' fullWidth />
-						<Select name='unit' label='Eenheid' options={UNIT_OPTIONS} fullWidth />
-						<Select name='defaultVatRate' label='BTW' options={vatOptions} fullWidth />
+						<Field name='defaultPriceEur' label='Prijs (€)' fullWidth required placeholder='0.00' />
+						<Select name='unit' label='Eenheid' options={UNIT_OPTIONS} fullWidth required />
+						<Select name='defaultVatRate' label='BTW' options={vatOptions} fullWidth required />
 					</Stack>
-					<Field name='sku' label='SKU (optioneel)' fullWidth />
+					<Field name='sku' label='SKU' fullWidth placeholder='Bijv. "CONSULT-001" of "KOFFIEBONEN-XL"' />
 					<FormSwitch name='active' label='Actief' />
 				</Stack>
 			</Form>

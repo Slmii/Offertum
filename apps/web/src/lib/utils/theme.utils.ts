@@ -674,6 +674,14 @@ const buildTheme = (t: AppTokens, mode: ThemeMode) =>
 			MuiPickersArrowSwitcher: {
 				styleOverrides: { button: { color: t.color.ink2 } }
 			},
+			// MUI X pickers use their own input component (not MuiOutlinedInput), so the disabled
+			// "sunken paper" fill from MuiOutlinedInput doesn't reach them — mirror it here so a
+			// disabled date / date-time field matches a disabled text field / select.
+			MuiPickersOutlinedInput: {
+				styleOverrides: {
+					root: { '&.Mui-disabled': { backgroundColor: t.color.paper2 } }
+				}
+			},
 			MuiDigitalClock: {
 				styleOverrides: {
 					root: { borderLeft: `1px solid ${t.color.line}` },

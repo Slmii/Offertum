@@ -295,13 +295,25 @@ export class BillingService {
 				},
 				success_url: `${webOrigin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
 				cancel_url: `${webOrigin}/billing/cancel`,
+				// Card-less trial: the first invoice is fully covered by the 14-day trial (€0 due
+				// now), so `if_required` tells Checkout to SKIP payment-method collection. A card
+				// is only collected later, at subscribe-time, via the Customer Portal. (Address +
+				// VAT ID are still collected above for `automatic_tax`; those aren't a card.)
+				payment_method_collection: 'if_required',
 				subscription_data: {
 					metadata: { organizationId },
-					// Every new subscription starts with 14 days free. Stripe charges
-					// the saved payment method at the end of the trial automatically. The
-					// `Subscription.status` flips from "trialing" → "active" at that moment;
-					// our sync function picks that up via `customer.subscription.updated`.
-					trial_period_days: 14
+					// Every new subscription starts with 14 days free — no card required to start.
+					// The `Subscription.status` flips "trialing" → "active" at trial end; our sync
+					// function picks that up via `customer.subscription.updated`.
+					trial_period_days: 14,
+					// If the trial ends with NO payment method on file, PAUSE the subscription
+					// instead of letting Stripe raise an unpayable invoice. `paused` is excluded
+					// from ENTITLED_STRIPE_STATUSES, so writes correctly re-gate to /billing. Once
+					// the owner adds a card via the Portal, Stripe converts trialing → active at
+					// trial end automatically (no pause).
+					trial_settings: {
+						end_behavior: { missing_payment_method: 'pause' }
+					}
 				}
 			},
 			{ idempotencyKey: `checkout-create:${organizationId}:${idempotencySalt}` }

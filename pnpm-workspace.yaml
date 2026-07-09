@@ -1,12 +1,33 @@
 packages:
-    - 'apps/*'
-    - 'packages/*'
+  - 'apps/*'
+  - 'packages/*'
 
-# Post-install build scripts must be explicitly opted in under pnpm 10+.
-onlyBuiltDependencies:
-    - '@prisma/client'
-    - '@prisma/engines'
-    - prisma
-    - '@swc/core'
-    - esbuild
-    - inngest-cli
+# pnpm v11: every non-auth setting lives HERE in camelCase. `.npmrc` is read only for auth and
+# registry settings now — the keys below used to live there as kebab-case (node-linker, etc.).
+
+# Flat node_modules. The codebase imports some transitive deps directly (e.g. `@jest/globals`
+# via `jest`), which only resolves in a hoisted layout.
+nodeLinker: hoisted
+
+# Supply-chain guard: refuse versions published less than 7 days ago (minutes).
+minimumReleaseAge: 10080
+
+# Pin exact versions on `pnpm add` (no `^` ranges).
+saveExact: true
+
+# Build-script approval. v11 consolidates the old onlyBuiltDependencies / ignoredBuiltDependencies
+# into this single map: `true` runs the dep's build/postinstall, `false` skips it. Any dep that
+# has a build script and isn't listed makes `pnpm install` fail until you decide.
+allowBuilds:
+  '@nestjs/core': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@swc/core': true
+  core-js-pure: true
+  esbuild: true
+  inngest-cli: true
+  prisma: true
+  protobufjs: true
+  unrs-resolver: true
+  # Analytics-only telemetry — deliberately skipped.
+  '@scarf/scarf': false

@@ -21,7 +21,7 @@ import Tooltip from '@mui/material/Tooltip';
 import { useTheme } from '@mui/material/styles';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { useState, type MouseEvent } from 'react';
+import { Fragment, useState, type MouseEvent } from 'react';
 
 // The concrete routes the shell links to. Typing `to` as this union (not `string`) keeps
 // it assignable to TanStack Router's strictly-typed `Link.to` without per-call casts.
@@ -29,9 +29,15 @@ type AppRoute =
 	| '/'
 	| '/opportunities'
 	| '/calendar'
-	| '/settings/catalog'
+	| '/catalog'
 	| '/settings/email'
 	| '/settings/writing-style'
+	| '/settings/organization'
+	| '/settings/pricing-playbook'
+	| '/settings/follow-ups'
+	| '/settings/notifications'
+	| '/settings/calendar'
+	| '/settings/integrations'
 	| '/team'
 	| '/billing'
 	| '/admin/ai-usage'
@@ -50,7 +56,7 @@ const PRIMARY_NAV: NavEntry[] = [
 	{ to: '/', label: 'Dashboard', icon: 'dashboard' },
 	{ to: '/opportunities', label: 'Offerteaanvragen', icon: 'inbox' },
 	{ to: '/calendar', label: 'Kalender', icon: 'calendar', gated: true },
-	{ to: '/settings/catalog', label: 'Catalogus', icon: 'package', gated: true },
+	{ to: '/catalog', label: 'Catalogus', icon: 'package', gated: true },
 	{ to: '/settings/email', label: 'Instellingen', icon: 'settings' },
 	{ to: '/team', label: 'Team', icon: 'users' },
 	{ to: '/billing', label: 'Abonnement', icon: 'credit-card' }
@@ -62,6 +68,62 @@ const ADMIN_NAV: NavEntry[] = [
 	{ to: '/admin/ai-usage', label: 'AI-gebruik', icon: 'activity' },
 	{ to: '/admin/classifier-quality', label: 'Classifier-kwaliteit', icon: 'target' }
 ];
+
+// The `/settings/email` primary item is the "Instellingen" parent; while the user is on any
+// settings route it expands these children inline beneath it (design "Variant B").
+interface SettingsSubEntry {
+	to: AppRoute;
+	label: string;
+	icon: AppIconName;
+	// Owner-only pages redirect non-owners to `/`, so hide their sub-item for members.
+	ownerOnly: boolean;
+	// Subscription-gated pages show a padlock when the org isn't entitled (the page hosts the upsell).
+	lockedWhenNotEntitled: boolean;
+}
+
+const SETTINGS_SUB_NAV: SettingsSubEntry[] = [
+	{ to: '/settings/email', label: 'E-mailaccounts', icon: 'mail', ownerOnly: false, lockedWhenNotEntitled: false },
+	{
+		to: '/settings/writing-style',
+		label: 'Schrijfstijl',
+		icon: 'pen-line',
+		ownerOnly: false,
+		lockedWhenNotEntitled: false
+	},
+	{
+		to: '/settings/organization',
+		label: 'Organisatie',
+		icon: 'building',
+		ownerOnly: false,
+		lockedWhenNotEntitled: false
+	},
+	{
+		to: '/settings/pricing-playbook',
+		label: 'Prijsregels',
+		icon: 'calculator',
+		ownerOnly: true,
+		lockedWhenNotEntitled: true
+	},
+	{ to: '/settings/follow-ups', label: 'Follow-ups', icon: 'clock', ownerOnly: true, lockedWhenNotEntitled: false },
+	{
+		to: '/settings/notifications',
+		label: 'Notificaties',
+		icon: 'bell',
+		ownerOnly: false,
+		lockedWhenNotEntitled: false
+	},
+	{
+		to: '/settings/calendar',
+		label: 'Agenda-synchronisatie',
+		icon: 'calendar',
+		ownerOnly: false,
+		lockedWhenNotEntitled: false
+	},
+	{ to: '/settings/integrations', label: 'Integraties', icon: 'plug', ownerOnly: false, lockedWhenNotEntitled: true }
+];
+
+// The primary-nav "Instellingen" item points here; used to detect the settings parent in the render.
+const SETTINGS_PARENT_ROUTE: AppRoute = '/settings/email';
 
 interface SidebarProps {
 	collapsed: boolean;
@@ -76,6 +138,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
 	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 	const isAdmin = me.user.isAdmin;
+	const isOwner = me.role === 'OWNER';
 	const isEntitled = isBillingEntitled(billing.state);
 
 	// `/` must match exactly; everything else matches by path prefix so child routes
@@ -176,14 +239,18 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 				)}
 				{PRIMARY_NAV.map(entry => {
 					const locked = Boolean(entry.gated) && !isEntitled;
+					const isSettingsParent = entry.to === SETTINGS_PARENT_ROUTE;
+					// The Instellingen parent stays active on ANY /settings subpage, not just /settings/email.
+					const active = !locked && isActive(isSettingsParent ? '/settings' : entry.to);
+					// Expand the settings children inline while on a settings route (design "Variant B").
+					const showSettingsSub = isSettingsParent && !collapsed && isActive('/settings');
 					return (
-						<NavItem
-							key={entry.to}
-							entry={entry}
-							active={!locked && isActive(entry.to)}
-							collapsed={collapsed}
-							locked={locked}
-						/>
+						<Fragment key={entry.to}>
+							<NavItem entry={entry} active={active} collapsed={collapsed} locked={locked} />
+							{showSettingsSub && (
+								<SettingsSubNav pathname={pathname} isOwner={isOwner} isEntitled={isEntitled} />
+							)}
+						</Fragment>
 					);
 				})}
 
@@ -353,6 +420,109 @@ function NavItem({
 		</Tooltip>
 	) : (
 		item
+	);
+}
+
+/**
+ * Inline settings sub-navigation (design "Variant B"). Rendered beneath the "Instellingen" item
+ * while on any settings route (expanded sidebar only) — replaces the old horizontal settings tab
+ * bar. A guide line links the children to the parent; owner-only pages are hidden for members and
+ * subscription-gated pages show a padlock (the page itself hosts the upsell).
+ */
+function SettingsSubNav({
+	pathname,
+	isOwner,
+	isEntitled
+}: {
+	pathname: string;
+	isOwner: boolean;
+	isEntitled: boolean;
+}) {
+	const { tokens } = useTheme();
+	const items = SETTINGS_SUB_NAV.filter(item => isOwner || !item.ownerOnly);
+	// Bare `/settings` (no subpage) resolves to the first child, matching the parent's destination.
+	const activePath = pathname === '/settings' ? SETTINGS_PARENT_ROUTE : pathname;
+
+	return (
+		<Box
+			sx={{
+				position: 'relative',
+				display: 'flex',
+				flexDirection: 'column',
+				gap: 0.25,
+				mt: 0.25,
+				mb: 0.75,
+				'@keyframes settingsSubFade': {
+					from: { opacity: 0, transform: 'translateY(-4px)' },
+					to: { opacity: 1, transform: 'translateY(0)' }
+				},
+				animation: `settingsSubFade ${tokens.motion.durBase}ms ${tokens.motion.easeOut}`
+			}}
+		>
+			{/* Guide line linking the children to the parent item. */}
+			<Box
+				aria-hidden='true'
+				sx={{
+					position: 'absolute',
+					left: 21,
+					top: 3,
+					bottom: 3,
+					width: '1px',
+					backgroundColor: tokens.color.line
+				}}
+			/>
+			{items.map(item => (
+				<SettingsSubItem
+					key={item.to}
+					item={item}
+					active={activePath.startsWith(item.to)}
+					locked={item.lockedWhenNotEntitled && !isEntitled}
+				/>
+			))}
+		</Box>
+	);
+}
+
+function SettingsSubItem({ item, active, locked }: { item: SettingsSubEntry; active: boolean; locked: boolean }) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	return (
+		<Box
+			component={Link}
+			to={item.to}
+			aria-current={active ? 'page' : undefined}
+			sx={{
+				display: 'flex',
+				alignItems: 'center',
+				gap: 1,
+				py: 0.75,
+				pl: 5,
+				pr: 1.5,
+				textDecoration: 'none',
+				borderRadius: `${tokens.radius.md}px`,
+				fontSize: 12.5,
+				fontWeight: active ? 600 : 500,
+				color: active ? c.accent[700] : c.ink3,
+				backgroundColor: active ? c.accent[50] : 'transparent',
+				transition: `background ${tokens.motion.durBase}ms ${tokens.motion.easeOut}, color ${tokens.motion.durBase}ms ${tokens.motion.easeOut}`,
+				'&:hover': active ? {} : { backgroundColor: c.paper3, color: c.ink1 }
+			}}
+		>
+			<Box
+				component='span'
+				sx={{ display: 'inline-flex', flexShrink: 0, color: active ? c.accent[700] : c.ink4 }}
+			>
+				<AppIcon name={item.icon} size='small' />
+			</Box>
+			<Box component='span' sx={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+				{item.label}
+			</Box>
+			{locked && (
+				<Box component='span' aria-hidden='true' sx={{ display: 'inline-flex', flexShrink: 0, color: c.ink4 }}>
+					<AppIcon name='lock' size='small' />
+				</Box>
+			)}
+		</Box>
 	);
 }
 

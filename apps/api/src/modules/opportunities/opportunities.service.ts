@@ -68,7 +68,6 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import type {
 	OpportunityActivityKind,
-	OpportunityAssigneeFilter,
 	OpportunityDeadlineFilter,
 	OpportunityFieldChange,
 	OpportunityMailboxOwnershipFilter,
@@ -148,7 +147,7 @@ export class OpportunitiesService {
 			search: string | null;
 			dismissed: OpportunityDismissedFilter | null;
 			owner: OpportunityMailboxOwnershipFilter | null;
-			assignee: OpportunityAssigneeFilter | null;
+			assignee: string[] | null;
 			hasReplies: boolean | null;
 			urgency: WireOpportunityUrgency | null;
 			deadline: OpportunityDeadlineFilter | null;
@@ -182,12 +181,21 @@ export class OpportunitiesService {
 		// requests (shouldn't reach this endpoint, but defensive) get no-op'd to `all`.
 		const ownerFilter =
 			options.owner === 'mine' && options.requestingUserId ? { userId: options.requestingUserId } : null;
-		const assigneeFilter =
-			options.assignee === 'me' && options.requestingUserId
-				? ({ kind: 'user', userId: options.requestingUserId } as const)
-				: options.assignee === 'unassigned'
-					? ({ kind: 'unassigned' } as const)
-					: null;
+
+		// Multiselect assignee resolution — each token is `'me'`, `'unassigned'`, or a
+		// specific user ID. `'me'` resolves against the requesting user (no-op'd for
+		// anonymous requests, same defensive posture as the owner filter above).
+		const assigneeTokens = options.assignee ?? [];
+		const includeUnassigned = assigneeTokens.includes('unassigned');
+		const userIds = [
+			...new Set(
+				assigneeTokens
+					.filter(t => t !== 'unassigned')
+					.map(t => (t === 'me' ? options.requestingUserId : t))
+					.filter((id): id is string => Boolean(id))
+			)
+		];
+		const assigneeFilter = userIds.length > 0 || includeUnassigned ? { userIds, includeUnassigned } : null;
 
 		// Attribute filters (has-replies / urgency / deadline / pending-follow-up / appointment).
 		// Applied to BOTH the list and the status counts so the tab totals match the visible rows.

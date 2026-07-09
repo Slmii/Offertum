@@ -692,8 +692,8 @@ export class OpportunitiesRepository {
 			dismissed?: OpportunityDismissedFilter;
 			/** when set, restricts to opps where `EmailAccount.userId === userId`. */
 			owner?: { userId: string } | null;
-			/** when set, filters by assignment: a specific user or unassigned-only. */
-			assignee?: { kind: 'user'; userId: string } | { kind: 'unassigned' } | null;
+			/** when set, filters by assignment: any of `userIds` OR (if `includeUnassigned`) unassigned. */
+			assignee?: { userIds: string[]; includeUnassigned: boolean } | null;
 			/** has-replies / urgency / deadline / pending-follow-up / appointment filters. */
 			attributes?: OpportunityAttributeFilters | null;
 		}
@@ -726,6 +726,7 @@ export class OpportunitiesRepository {
 			});
 		}
 		conditions.push(...this.attributeConditions(options.attributes));
+		conditions.push(this.assigneeWhere(options.assignee));
 
 		const dismissedFilter = options.dismissed ?? 'active';
 
@@ -736,8 +737,6 @@ export class OpportunitiesRepository {
 				...(dismissedFilter === 'active' ? { dismissedAt: null } : {}),
 				...(dismissedFilter === 'dismissed' ? { dismissedAt: { not: null } } : {}),
 				...(options.owner ? { emailAccount: { is: { userId: options.owner.userId } } } : {}),
-				...(options.assignee?.kind === 'user' ? { assignedToUserId: options.assignee.userId } : {}),
-				...(options.assignee?.kind === 'unassigned' ? { assignedToUserId: null } : {}),
 				...(conditions.length > 0 ? { AND: conditions } : {})
 			},
 			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -758,7 +757,7 @@ export class OpportunitiesRepository {
 		organizationId: string,
 		filters: {
 			owner?: { userId: string } | null;
-			assignee?: { kind: 'user'; userId: string } | { kind: 'unassigned' } | null;
+			assignee?: { userIds: string[]; includeUnassigned: boolean } | null;
 			attributes?: OpportunityAttributeFilters | null;
 		} = {}
 	): Promise<Record<PrismaOpportunityStatus, number>> {
@@ -769,8 +768,7 @@ export class OpportunitiesRepository {
 				organizationId,
 				dismissedAt: null,
 				...(filters.owner ? { emailAccount: { is: { userId: filters.owner.userId } } } : {}),
-				...(filters.assignee?.kind === 'user' ? { assignedToUserId: filters.assignee.userId } : {}),
-				...(filters.assignee?.kind === 'unassigned' ? { assignedToUserId: null } : {}),
+				...this.assigneeWhere(filters.assignee),
 				...(attributeConditions.length > 0 ? { AND: attributeConditions } : {})
 			},
 			_count: { _all: true }
@@ -787,6 +785,25 @@ export class OpportunitiesRepository {
 			result[row.status] = row._count._all;
 		}
 		return result;
+	}
+
+	/**
+	 * Translate the multiselect assignee filter into a Prisma where-fragment. `userIds`
+	 * (OR'd) and `includeUnassigned` are independent — either or both can be active.
+	 * Returns `{}` (no-op, safe to spread/AND) when the filter is absent or empty.
+	 */
+	private assigneeWhere(a?: { userIds: string[]; includeUnassigned: boolean } | null): Prisma.OpportunityWhereInput {
+		if (!a) {
+			return {};
+		}
+		const or: Prisma.OpportunityWhereInput[] = [];
+		if (a.userIds.length > 0) {
+			or.push({ assignedToUserId: { in: a.userIds } });
+		}
+		if (a.includeUnassigned) {
+			or.push({ assignedToUserId: null });
+		}
+		return or.length > 0 ? { OR: or } : {};
 	}
 
 	/**

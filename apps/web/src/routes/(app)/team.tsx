@@ -367,6 +367,7 @@ function InviteFormBody() {
 				name='role'
 				label='Role'
 				fullWidth
+				required
 				options={ROLE_OPTIONS.map(option => ({ id: option.value, label: option.label }))}
 			/>
 			<BodySmall color='textSecondary'>{ROLE_OPTIONS.find(o => o.value === role)?.hint}</BodySmall>

@@ -13,7 +13,6 @@ function baseSource(overrides: Partial<CalendarEventSource> = {}): CalendarEvent
 		customerDeadline: null,
 		customerAppointment: null,
 		currentQuoteDraft: null,
-		latestSentQuoteDraft: null,
 		latestSentReplyDraftAt: null,
 		priorCheckInCount: 0,
 		...overrides
@@ -49,69 +48,37 @@ describe('toCalendarEvents', () => {
 		expect(events[0]).toMatchObject({ type: 'deadline', allDay: true, title: 'Deadline klant — Jansen' });
 	});
 
-	it('emits sent (from the latest sent draft, timed) + expiry (date-only, from validUntil)', () => {
+	it('emits an expiry event (date-only, from validUntil) for the current quote draft', () => {
 		const events = toCalendarEvents(
 			baseSource({
 				currentQuoteDraft: {
 					id: 'qd-1',
 					createdAt: new Date('2026-06-01T08:00:00.000Z'),
 					validUntil: new Date('2026-06-12T00:00:00.000Z') // stored validity → anchors expiry
-				},
-				latestSentQuoteDraft: { id: 'qd-1', sentAt: new Date('2026-06-05T09:00:00.000Z') }
+				}
 			}),
 			CFG
 		);
-		const byType = Object.fromEntries(events.map(e => [e.type, e]));
-		// `sent` is a timed event (full ISO); `expiry` is all-day (Amsterdam date-only string).
-		expect(byType.sent).toMatchObject({ id: 'qd-1:sent', at: '2026-06-05T09:00:00.000Z', allDay: false });
-		expect(byType.expiry).toMatchObject({ id: 'qd-1:expiry', at: '2026-06-12', allDay: true });
-	});
-
-	it('emits an expiry event for an UNSENT current quote draft (no sent marker)', () => {
-		const events = toCalendarEvents(
-			baseSource({
-				currentQuoteDraft: {
-					id: 'qd-2',
-					createdAt: new Date('2026-06-01T08:00:00.000Z'),
-					validUntil: new Date('2026-06-12T00:00:00.000Z')
-				},
-				latestSentQuoteDraft: null
-			}),
-			CFG
-		);
+		// `expiry` is all-day (Amsterdam date-only string). `sent` is never projected onto the calendar.
 		expect(events.some(e => e.type === 'sent')).toBe(false);
-		expect(events.find(e => e.type === 'expiry')).toMatchObject({ id: 'qd-2:expiry', at: '2026-06-12' });
-	});
-
-	it('keeps the sent marker from an older sent draft when the current draft is an unsent reprice', () => {
-		const events = toCalendarEvents(
-			baseSource({
-				currentQuoteDraft: {
-					id: 'qd-new',
-					createdAt: new Date('2026-06-10T08:00:00.000Z'),
-					validUntil: new Date('2026-07-10T00:00:00.000Z')
-				},
-				latestSentQuoteDraft: { id: 'qd-old', sentAt: new Date('2026-06-02T09:00:00.000Z') }
-			}),
-			CFG
-		);
-		// sent marker survives on the older sent draft; expiry tracks the current (repriced) draft.
-		expect(events.find(e => e.type === 'sent')).toMatchObject({ id: 'qd-old:sent' });
-		expect(events.find(e => e.type === 'expiry')).toMatchObject({ id: 'qd-new:expiry', at: '2026-07-10' });
+		expect(events.find(e => e.type === 'expiry')).toMatchObject({
+			id: 'qd-1:expiry',
+			at: '2026-06-12',
+			allDay: true
+		});
 	});
 
 	it('falls back to createdAt + quoteValidityDays when validUntil is null (legacy draft)', () => {
 		const events = toCalendarEvents(
 			baseSource({
-				currentQuoteDraft: { id: 'qd-3', createdAt: new Date('2026-06-01T08:00:00.000Z'), validUntil: null },
-				latestSentQuoteDraft: null
+				currentQuoteDraft: { id: 'qd-3', createdAt: new Date('2026-06-01T08:00:00.000Z'), validUntil: null }
 			}),
 			CFG // quoteValidityDays: 30
 		);
 		expect(events.find(e => e.type === 'expiry')).toMatchObject({ id: 'qd-3:expiry', at: '2026-07-01' });
 	});
 
-	it('suppresses sent + expiry on terminal (WON/LOST) opportunities', () => {
+	it('suppresses expiry on terminal (WON/LOST) opportunities', () => {
 		for (const status of ['WON', 'LOST'] as const) {
 			const events = toCalendarEvents(
 				baseSource({
@@ -120,12 +87,11 @@ describe('toCalendarEvents', () => {
 						id: 'qd-x',
 						createdAt: new Date('2026-06-01T08:00:00.000Z'),
 						validUntil: new Date('2026-06-12T00:00:00.000Z')
-					},
-					latestSentQuoteDraft: { id: 'qd-x', sentAt: new Date('2026-06-05T09:00:00.000Z') }
+					}
 				}),
 				CFG
 			);
-			expect(events.some(e => e.type === 'sent' || e.type === 'expiry')).toBe(false);
+			expect(events.some(e => e.type === 'expiry')).toBe(false);
 		}
 	});
 

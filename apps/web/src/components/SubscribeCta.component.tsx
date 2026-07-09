@@ -1,3 +1,4 @@
+import { AppIcon } from '@/components/AppIcon.component';
 import { BodySmall } from '@/components/Text.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -29,7 +30,13 @@ export function SubscribeCta({
 
 	return (
 		<Box sx={sx}>
-			<Button component={Link} to='/billing' variant='contained' size='small'>
+			<Button
+				component={Link}
+				to='/billing'
+				variant='contained'
+				size='large'
+				startIcon={<AppIcon name='arrow-right' size='small' />}
+			>
 				Abonneren
 			</Button>
 		</Box>

@@ -1,6 +1,5 @@
 import { serverFetch } from '@/lib/api/server-fetch';
 import type {
-	OpportunityAssigneeFilter,
 	OpportunityDeadlineFilter,
 	OpportunityDetail,
 	OpportunityDismissedFilter,
@@ -18,7 +17,8 @@ export interface ListOpportunitiesInput {
 	search?: string | null;
 	dismissed?: OpportunityDismissedFilter | null;
 	owner?: OpportunityMailboxOwnershipFilter | null;
-	assignee?: OpportunityAssigneeFilter | null;
+	// Multiselect: each entry is `'me'`, `'unassigned'`, or a specific user ID.
+	assignee?: string[] | null;
 	hasReplies?: boolean | null;
 	urgency?: OpportunityUrgency | null;
 	deadline?: OpportunityDeadlineFilter | null;
@@ -58,12 +58,12 @@ export const listOpportunitiesServer = createServerFn({ method: 'GET' })
 			params.set('dismissed', data.dismissed);
 		}
 
-		// `all` is the server default for both owner + assignee filters.
+		// `all` is the server default for the owner filter; empty is the default for assignee.
 		if (data.owner && data.owner !== 'all') {
 			params.set('owner', data.owner);
 		}
-		if (data.assignee && data.assignee !== 'all') {
-			params.set('assignee', data.assignee);
+		for (const a of data.assignee ?? []) {
+			params.append('assignee', a);
 		}
 
 		// Attribute filters — only sent when active (server defaults are off / no filter).

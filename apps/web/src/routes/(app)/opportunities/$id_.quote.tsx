@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/AppIcon.component';
-import { FixedPageLayout } from '@/components/FixedPageLayout.component';
 import { SectionError } from '@/components/SectionError.component';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { catalogItemsQueryOptions } from '@/lib/queries/catalog-items.queries';
 import { opportunityDetailQueryOptions } from '@/lib/queries/opportunities.queries';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
@@ -8,7 +8,7 @@ import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { QuotePanel } from '@/routes/(app)/opportunities/-components/Quote/QuotePanel.component';
 import Button from '@mui/material/Button';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 
 /**
  * Quote builder page (`/opportunities/:id/quote`). Un-nested from the detail route (`$id_`) so it
@@ -16,6 +16,14 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
  * this route just prefetches the draft + opportunity context and frames it with a back link.
  */
 export const Route = createFileRoute('/(app)/opportunities/$id_/quote')({
+	// Quote building is subscription-gated (the API quote endpoints require entitlement). Bounce
+	// non-entitled orgs back to the opportunity detail, where the upsell lives.
+	beforeLoad: async ({ context, params }) => {
+		const status = await context.queryClient.ensureQueryData(billingStatusQueryOptions);
+		if (!isBillingEntitled(status.state)) {
+			throw redirect({ to: '/opportunities/$id', params: { id: params.id } });
+		}
+	},
 	loader: ({ context, params }) =>
 		Promise.all([
 			context.queryClient.ensureQueryData(opportunityDetailQueryOptions(params.id)),
@@ -35,28 +43,24 @@ function QuotePage() {
 	const { data: opportunity } = useSuspenseQuery(opportunityDetailQueryOptions(id));
 
 	return (
-		// Fixed-height page so the quote table fills it and its totals footer pins to the page
-		// bottom; only the table rows scroll. Body scroll is disabled — the table owns scrolling.
-		<FixedPageLayout
-			header={
-				<Button
-					size='small'
-					variant='text'
-					color='inherit'
-					onClick={() => navigate({ to: '/opportunities/$id', params: { id } })}
-					startIcon={<AppIcon name='arrow-left' size='small' />}
-					sx={{ alignSelf: 'flex-start', textTransform: 'none', fontWeight: 'normal', mb: 1 }}
-				>
-					Terug naar aanvraag
-				</Button>
-			}
-			bodySx={{ overflow: 'hidden', px: 0, mx: 0 }}
-		>
+		// The whole page scrolls with the app's document scroll — the back link, the quote header,
+		// the table, and the totals all flow together (nothing pinned, no inner scroll region).
+		<div>
+			<Button
+				size='small'
+				variant='text'
+				color='inherit'
+				onClick={() => navigate({ to: '/opportunities/$id', params: { id } })}
+				startIcon={<AppIcon name='arrow-left' size='small' />}
+				sx={{ textTransform: 'none', fontWeight: 'normal', mb: 1 }}
+			>
+				Terug naar aanvraag
+			</Button>
 			<QuotePanel
 				opportunityId={id}
 				customerName={opportunity.customerName}
 				requestType={opportunity.requestType}
 			/>
-		</FixedPageLayout>
+		</div>
 	);
 }

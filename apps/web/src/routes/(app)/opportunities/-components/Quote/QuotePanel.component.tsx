@@ -1,6 +1,7 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
-import { BannerStack, type BannerStackItem } from '@/components/BannerStack.component';
+import { BannerStack, type BannerStackItem, type BannerTone } from '@/components/BannerStack.component';
 import { Dialog } from '@/components/Dialog.component';
+import { FlowingGradient } from '@/components/FlowingGradient.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { type Option } from '@/components/Form/Select/Select.types';
@@ -28,6 +29,7 @@ import ButtonBase from '@mui/material/ButtonBase';
 import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Collapse from '@mui/material/Collapse';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -294,19 +296,26 @@ export function QuotePanel({
 		if (!latest) {
 			return;
 		}
+
 		generatePdf.mutate(latest.id, {
+			onSuccess: () => {
+				toast.success(
+					'PDF-versie aangemaakt',
+					'Kies hem onder "Bijlagen" om mee te sturen met het concept-antwoord'
+				);
+			},
 			onError: error =>
 				toast.error('PDF genereren mislukt', error instanceof Error ? error.message : 'Onbekende fout')
 		});
 	};
 
 	return (
-		<Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+		<Box>
 			<Stack
 				direction='row'
 				useFlexGap
 				spacing={1}
-				sx={{ alignItems: 'flex-end', justifyContent: 'space-between', mb: 2, flexShrink: 0 }}
+				sx={{ alignItems: 'flex-end', justifyContent: 'space-between', mb: 2 }}
 			>
 				<Box sx={{ minWidth: 0 }}>
 					<H1>Offerte</H1>
@@ -409,13 +418,12 @@ export function QuotePanel({
 				)}
 			</Stack>
 
-			{/* Editor fills the remaining height so its docked totals footer pins to the page bottom. */}
-			<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+			{/* Editor + totals flow below the header; the whole page scrolls (no inner scroll region). */}
+			<Box>
 				{latest ? (
 					<QuoteDraftEditor
 						draft={latest}
 						opportunityId={opportunityId}
-						pdfReady={generatePdf.isSuccess && !generatePdf.isPending}
 						pricingStale={pricingStale}
 						onRegenerate={openRegenerate}
 						regenerating={preview.isPending}
@@ -1051,17 +1059,132 @@ function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineIn
 	};
 }
 
+// Persisted collapse preference for the quote-notice bar (mirrors the opportunities-list insights bar).
+const QUOTE_NOTICES_OPEN_KEY = 'offertum.quoteNotices.open';
+
+function writeQuoteNoticesOpen(open: boolean): void {
+	try {
+		localStorage.setItem(QUOTE_NOTICES_OPEN_KEY, open ? '1' : '0');
+	} catch {
+		// localStorage unavailable (private mode / SSR) — the preference just won't persist.
+	}
+}
+
+const NOTICE_SEVERITY_ICON: Record<BannerTone, AppIconName> = {
+	info: 'info',
+	success: 'circle-check',
+	warning: 'alert-triangle',
+	error: 'alert-circle'
+};
+
+/**
+ * Collapsible wrapper around the quote's notice `BannerStack` — used when there are 2+ notices (a
+ * single one renders inline), mirroring the opportunities list's `OppInsights` bar so a stack tucks
+ * away above the table instead of pushing it down. The summary row (count + flowing accent gradient)
+ * stays visible; expanding reveals the full framed stack. Collapsed by default, preference persisted.
+ */
+function CollapsibleQuoteNotices({ notices }: { notices: BannerStackItem[] }) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+
+	const [open, setOpen] = useState(false);
+
+	if (notices.length === 0) {
+		return null;
+	}
+
+	const toggle = () => {
+		const next = !open;
+		setOpen(next);
+		writeQuoteNoticesOpen(next);
+	};
+
+	// Highest severity present only picks the leading icon; the summary always rides the flowing
+	// accent gradient (white text) — the same eye-catcher the opps-list insights bar uses.
+	const severity: BannerTone = notices.some(notice => notice.tone === 'error')
+		? 'error'
+		: notices.some(notice => notice.tone === 'warning')
+			? 'warning'
+			: 'info';
+
+	return (
+		<Box sx={{ border: `1px solid ${c.accent[300]}`, borderRadius: `${tokens.radius.md}px`, overflow: 'hidden' }}>
+			<FlowingGradient>
+				{/* Summary row — always visible, click to toggle. */}
+				<ButtonBase
+					onClick={toggle}
+					aria-expanded={open}
+					sx={{
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'flex-start',
+						gap: 1.5,
+						width: '100%',
+						py: 1.25,
+						px: 1.75,
+						textAlign: 'left',
+						backgroundColor: 'transparent'
+					}}
+				>
+					<Box
+						component='span'
+						sx={{
+							width: 28,
+							height: 28,
+							borderRadius: `${tokens.radius.sm}px`,
+							flexShrink: 0,
+							backgroundColor: 'rgba(255, 255, 255, 0.16)',
+							border: '1px solid rgba(255, 255, 255, 0.30)',
+							color: '#fff',
+							display: 'inline-flex',
+							alignItems: 'center',
+							justifyContent: 'center'
+						}}
+					>
+						<AppIcon name={NOTICE_SEVERITY_ICON[severity]} size='small' />
+					</Box>
+					<Box sx={{ flex: 1, minWidth: 0 }}>
+						<BodySmall component='span' fontWeight='bold' sx={{ color: '#fff' }}>
+							{notices.length} {pluralize(notices.length, 'melding', 'meldingen')}
+						</BodySmall>
+					</Box>
+					<Box
+						component='span'
+						sx={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 0.5,
+							flexShrink: 0,
+							color: '#fff',
+							fontSize: 13,
+							fontWeight: 'bold'
+						}}
+					>
+						{open ? 'Verberg' : 'Toon'}
+						<AppIcon name={open ? 'chevron-up' : 'chevron-down'} size='small' />
+					</Box>
+				</ButtonBase>
+			</FlowingGradient>
+
+			{/* Expanded detail — the full framed BannerStack, MUI-animated open/closed. */}
+			<Collapse in={open} timeout='auto' unmountOnExit>
+				<Box sx={{ p: 1.5, borderTop: `1px solid ${c.accent[300]}`, backgroundColor: c.surface }}>
+					<BannerStack banners={notices} />
+				</Box>
+			</Collapse>
+		</Box>
+	);
+}
+
 function QuoteDraftEditor({
 	draft,
 	opportunityId,
-	pdfReady,
 	pricingStale,
 	onRegenerate,
 	regenerating
 }: {
 	draft: QuoteDraft;
 	opportunityId: string;
-	pdfReady: boolean;
 	pricingStale: boolean;
 	onRegenerate: () => void;
 	regenerating: boolean;
@@ -1109,15 +1232,6 @@ function QuoteDraftEditor({
 	const expiryDays = draft.validUntil === null ? null : toDaysUntil(draft.validUntil);
 
 	const notices: BannerStackItem[] = [];
-	// Success feedback after a PDF is generated — points the owner to where the PDF is attached.
-	if (pdfReady) {
-		notices.push({
-			key: 'pdf-ready',
-			tone: 'success',
-			title: 'PDF-versie aangemaakt',
-			body: 'Kies hem onder "Bijlagen" om mee te sturen met het concept-antwoord.'
-		});
-	}
 
 	// Pricing rules changed after this draft was generated — offer a non-destructive regenerate.
 	if (pricingStale) {
@@ -1218,14 +1332,12 @@ function QuoteDraftEditor({
 		);
 
 	return (
-		<Stack useFlexGap spacing={3} sx={{ flex: 1, minHeight: 0 }}>
-			{/* Consolidated notice stack — sits above the table (design). */}
-			<BannerStack banners={notices} />
+		<Stack useFlexGap spacing={3}>
+			{/* Notices collapse into the gradient bar above the table (mirrors the opps-list insights
+			    bar) so they don't push the table down — used for any count. */}
+			<CollapsibleQuoteNotices notices={notices} />
 
-			<Paper
-				variant='outlined'
-				sx={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
-			>
+			<Paper variant='outlined' sx={{ overflow: 'hidden' }}>
 				{/* EnhancedTableToolbar — legend when idle, selection actions when rows are checked. */}
 				<QuoteTableToolbar
 					count={selectedCount}
@@ -1233,11 +1345,11 @@ function QuoteDraftEditor({
 					onDelete={deleteSelected}
 					deleting={replaceLines.isPending}
 				/>
-				{/* Only the rows scroll: the table fills the remaining height (stickyHeader pins the
-				    head), and add-line + totals live below as pinned footer rows. sticky header
-				    requires border-collapse: separate (the theme forces collapse globally). */}
-				<TableContainer sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-					<Table stickyHeader sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+				{/* The table renders in full and scrolls with the page (no inner scroll region) —
+				    add-line + totals flow below it as the last rows of the card. Horizontal scroll
+				    stays for narrow viewports. */}
+				<TableContainer sx={{ overflowX: 'auto' }}>
+					<Table>
 						<TableHead sx={{ '& .MuiTableCell-root': { py: 0.5 } }}>
 							<TableRow>
 								<TableCell padding='checkbox'>
@@ -1280,10 +1392,8 @@ function QuoteDraftEditor({
 					</Table>
 				</TableContainer>
 
-				{/* Add-line + totals pinned to the bottom of the card (= page bottom); only the rows
-				    above scroll. A sticky <tfoot> can't bottom-pin when the quote is short, so these
-				    live as flex-fixed footer rows instead. */}
-				<Box sx={{ flexShrink: 0, px: 1, py: 0.5, borderTop: theme => `1px solid ${theme.tokens.color.line}` }}>
+				{/* Add-line + totals flow as the last rows of the card, below the table. */}
+				<Box sx={{ px: 1, py: 0.5, borderTop: theme => `1px solid ${theme.tokens.color.line}` }}>
 					<Button
 						size='small'
 						variant='text'
@@ -1315,9 +1425,7 @@ function QuoteDraftEditor({
 					</Button>
 				</Box>
 
-				<Box sx={{ flexShrink: 0 }}>
-					<QuoteTotals totals={totals} reverseChargeLabel={vatConfig.reverseChargeLabel} />
-				</Box>
+				<QuoteTotals totals={totals} reverseChargeLabel={vatConfig.reverseChargeLabel} />
 			</Paper>
 
 			<AddCatalogItemsDialog
@@ -1329,19 +1437,19 @@ function QuoteDraftEditor({
 	);
 }
 
-// One label/value row in the totals footer. Muted = the per-bracket BTW lines (design).
-function QuoteTotalsLine({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) {
+// One label/value row in the totals footer
+function QuoteTotalsLine({ label, value }: { label: string; value: string }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 	return (
 		<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-			<Box component='span' sx={{ fontSize: 13, color: muted ? c.ink3 : c.ink2 }}>
+			<Box component='span' sx={{ fontSize: 13, color: c.ink3 }}>
 				{label}
 			</Box>
 			<Box
 				component='span'
 				className='tabular'
-				sx={{ fontSize: 14, fontWeight: 'medium', color: muted ? c.ink3 : c.ink1, whiteSpace: 'nowrap' }}
+				sx={{ fontSize: 14, fontWeight: 'medium', color: c.ink1, whiteSpace: 'nowrap' }}
 			>
 				{value}
 			</Box>
@@ -1359,25 +1467,24 @@ function QuoteTotals({
 	const { tokens } = useTheme();
 	const c = tokens.color;
 	const unpriced = totals.unpricedLineCount;
+
 	return (
 		// Docked footer band (design's QuoteTotalsFooter): top rule, paper-2 surface, right-aligned column.
 		<Box
 			sx={{
 				borderTop: `1px solid ${c.lineStrong}`,
 				backgroundColor: c.paper2,
-				py: 2.25,
-				px: 2,
+				p: 3,
 				display: 'flex',
 				justifyContent: 'flex-end'
 			}}
 		>
-			<Stack useFlexGap spacing={1.25} sx={{ width: 400, maxWidth: '100%' }}>
+			<Stack useFlexGap spacing={0.5} sx={{ width: 400, maxWidth: '100%' }}>
 				<QuoteTotalsLine label='Subtotaal (excl. btw)' value={toReadableEuro(totals.netCents / 100)} />
 
 				{totals.brackets.map(bracket => (
 					<QuoteTotalsLine
 						key={bracket.key}
-						muted
 						label={`${bracketVatLabel(bracket, reverseChargeLabel)} (over ${toReadableEuro(bracket.netCents / 100)})`}
 						value={toReadableEuro(bracket.vatCents / 100)}
 					/>
@@ -1385,11 +1492,10 @@ function QuoteTotals({
 
 				<Stack
 					useFlexGap
-					spacing={0.5}
 					sx={{
 						mt: 0.5,
-						py: 1.75,
-						px: 2,
+						py: 1,
+						px: 1.5,
 						backgroundColor: c.accent[50],
 						border: `1px solid ${c.accent[300]}`,
 						borderRadius: `${tokens.radius.md}px`
@@ -1560,6 +1666,7 @@ function QuoteLineRow({
 							alignItems: 'center',
 							gap: 0.5,
 							px: 0.75,
+							pr: 1,
 							py: 0.5,
 							border: 'none',
 							borderRadius: `${tokens.radius.sm}px`,

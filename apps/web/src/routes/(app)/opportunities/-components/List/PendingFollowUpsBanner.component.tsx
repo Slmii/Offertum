@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 // Query for the opps with an auto follow-up (check-in) draft awaiting review — independent of
 // the page's current filters. Prefetch this in the route loader so the banner doesn't waterfall.
 export const pendingFollowUpsQueryOptions = () =>
-	opportunitiesListQueryOptions(null, null, 'active', null, null, { pendingFollowup: true });
+	opportunitiesListQueryOptions(null, null, 'active', null, [], { pendingFollowup: true });
 
 // At most this many rows render inline; the rest collapse into a "Toon alle …" button so the
 // fixed page header stays compact.

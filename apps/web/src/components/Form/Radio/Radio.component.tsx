@@ -12,12 +12,12 @@ import type { RadioGroupProps as FormRadioGroupProps, StandaloneRadioGroupProps 
  * split. Renders one labelled radio per option; styled via the theme (MUI Radio uses the
  * accent/primary color).
  */
-export const RadioGroup = ({ name, label, options, disabled, row, onChange }: FormRadioGroupProps) => {
+export const RadioGroup = ({ name, label, options, disabled, required, row, onChange }: FormRadioGroupProps) => {
 	return (
 		<Controller
 			name={name}
 			render={({ field }) => (
-				<FormControl disabled={disabled}>
+				<FormControl disabled={disabled} required={required}>
 					{label && <InputLabel>{label}</InputLabel>}
 					<MuiRadioGroup
 						row={row}

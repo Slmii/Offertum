@@ -16,7 +16,6 @@ import {
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { BusinessDetailsSchema, type BusinessDetailsForm } from '@/lib/schemas/business-details.schema';
-import { VatSettingsSection } from './-VatSettingsSection.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
@@ -27,8 +26,9 @@ import { type VerticalValue } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { VatSettingsSection } from './-VatSettingsSection.component';
 
-export const Route = createFileRoute('/(app)/settings/business-details')({
+export const Route = createFileRoute('/(app)/settings/organization')({
 	loader: async ({ context }) => {
 		await Promise.all([
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
@@ -158,7 +158,7 @@ function BusinessDetailsSettingsPage() {
 	return (
 		<Stack>
 			<PageHeader
-				title='Bedrijfsgegevens'
+				title='Organisatie'
 				caption='De klantgerichte gegevens die op je offertes en facturen verschijnen. Bewaar je officiële bedrijfsnaam, adres, contactgegevens, merkbestanden en standaard betalingstermijn hier.'
 			/>
 
@@ -182,11 +182,11 @@ function BusinessDetailsSettingsPage() {
 					<Stack useFlexGap spacing={4}>
 						{!isOwner && (
 							<Banner tone='info'>
-								Alleen eigenaren kunnen bedrijfsgegevens, logo en briefpapier aanpassen.
+								Alleen eigenaren kunnen organisatiegegevens, logo en briefpapier aanpassen.
 							</Banner>
 						)}
 
-						<Field name='name' label='Bedrijfsnaam' fullWidth disabled={!isOwner} />
+						<Field name='name' label='Bedrijfsnaam' fullWidth disabled={!isOwner} required />
 						<Stack direction='row' useFlexGap spacing={2}>
 							<Field name='companyRegistrationNumber' label='KvK-nummer' fullWidth disabled={!isOwner} />
 							<Field name='companyVatNumber' label='BTW-nummer' fullWidth disabled={!isOwner} />
@@ -202,6 +202,7 @@ function BusinessDetailsSettingsPage() {
 							type='number'
 							fullWidth
 							disabled={!isOwner}
+							required
 						/>
 						<Field
 							name='quoteValidityDays'
@@ -209,6 +210,7 @@ function BusinessDetailsSettingsPage() {
 							type='number'
 							fullWidth
 							disabled={!isOwner}
+							required
 						/>
 						<Select
 							name='vertical'
@@ -216,10 +218,11 @@ function BusinessDetailsSettingsPage() {
 							options={VERTICAL_OPTIONS}
 							fullWidth
 							disabled={!isOwner}
+							required
 						/>
 						<Field
 							name='companyFooter'
-							label='Footer (optioneel)'
+							label='Footer'
 							helperText='Tekst onderaan je offerte- en factuur-PDF.'
 							fullWidth
 							multiline

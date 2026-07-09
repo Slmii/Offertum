@@ -13,7 +13,7 @@ export interface StandaloneRadioGroupProps {
 	onChange: (value: string) => void;
 	label?: ReactNode;
 	disabled?: boolean;
-	// Lay the options out horizontally instead of stacked.
+	required?: boolean;
 	row?: boolean;
 }
 

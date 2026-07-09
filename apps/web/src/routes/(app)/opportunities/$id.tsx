@@ -710,12 +710,13 @@ function OpportunityDetailPage() {
 						/>
 						{isEntitled && <ExpiryActionCard opportunityId={id} isOwner={isOwner} />}
 						<RailQuoteCard opportunityId={id} onOpen={openQuote} />
-						<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} />
+						<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} disabled={!isEntitled} />
 						<AssigneePicker
 							opportunityId={id}
 							assignedToUserId={opportunity.assignedToUserId}
 							mailboxOwnerUserId={mailboxOwnerUserId}
 							mailboxOwnerName={mailboxOwnerName}
+							disabled={!isEntitled}
 						/>
 					</Stack>
 				</Box>

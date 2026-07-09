@@ -4,7 +4,6 @@ import type {
 	AssignOpportunityInput,
 	DismissOpportunityInput,
 	Opportunity,
-	OpportunityAssigneeFilter,
 	OpportunityDeadlineFilter,
 	OpportunityDetail,
 	OpportunityDismissedFilter,
@@ -43,7 +42,7 @@ export const OpportunityKeys = {
 		search: string | null,
 		dismissed: OpportunityDismissedFilter | null,
 		owner: OpportunityMailboxOwnershipFilter | null = null,
-		assignee: OpportunityAssigneeFilter | null = null,
+		assignee: string[] = [],
 		attributes: OpportunityListAttributes | null = null
 	) =>
 		[
@@ -54,7 +53,8 @@ export const OpportunityKeys = {
 				search: search?.trim() || null,
 				dismissed: dismissed ?? 'active',
 				owner: owner ?? 'all',
-				assignee: assignee ?? 'all',
+				// Sorted copy so `[a,b]` and `[b,a]` share one cache entry.
+				assignee: [...assignee].sort(),
 				attributes: normalizeAttributes(attributes)
 			}
 		] as const,
@@ -96,7 +96,7 @@ export const opportunitiesListQueryOptions = (
 	search: string | null = null,
 	dismissed: OpportunityDismissedFilter | null = null,
 	owner: OpportunityMailboxOwnershipFilter | null = null,
-	assignee: OpportunityAssigneeFilter | null = null,
+	assignee: string[] = [],
 	attributes: OpportunityListAttributes | null = null
 ) =>
 	queryOptions({

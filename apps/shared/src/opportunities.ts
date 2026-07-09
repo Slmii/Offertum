@@ -160,11 +160,13 @@ export const OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS = ['mine', 'all'] as const;
 export type OpportunityMailboxOwnershipFilter = (typeof OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS)[number];
 
 /**
- * Assignment filter on the list endpoint. `me` restricts to opps where
+ * Assignment filter tokens on the list endpoint. `me` restricts to opps where
  * `assignedToUserId === currentUserId`. `unassigned` shows only opps with no
- * assignee. `all` is the default.
+ * assignee. A specific team-member's user ID is also a valid token (see
+ * `ListOpportunitiesQuery.assignee`, which is a multiselect array of these tokens).
+ * Absence (empty array / omitted) = no filter (everyone).
  */
-export const OPPORTUNITY_ASSIGNEE_FILTERS = ['me', 'unassigned', 'all'] as const;
+export const OPPORTUNITY_ASSIGNEE_FILTERS = ['me', 'unassigned'] as const;
 export type OpportunityAssigneeFilter = (typeof OPPORTUNITY_ASSIGNEE_FILTERS)[number];
 
 /**
@@ -183,7 +185,9 @@ export interface ListOpportunitiesQuery {
 	search?: string;
 	dismissed?: OpportunityDismissedFilter;
 	owner?: OpportunityMailboxOwnershipFilter;
-	assignee?: OpportunityAssigneeFilter;
+	// Multiselect: each entry is `'me'`, `'unassigned'`, or a specific user ID.
+	// Empty/omitted = no filter (everyone).
+	assignee?: string[];
 	// Only opps where the customer has replied beyond the original request.
 	hasReplies?: boolean;
 	// Restrict to a single urgency level.

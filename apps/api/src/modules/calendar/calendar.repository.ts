@@ -55,7 +55,6 @@ export class CalendarRepository {
 			const latestSentReplyDraftAt = opp.replyDrafts[0]?.sentAt ?? null;
 			const priorCheckInCount = opp.replyDrafts.filter(draft => draft.kind === ReplyDraftKind.CHECK_IN).length;
 			const current = opp.quoteDrafts[0] ?? null;
-			const latestSent = opp.quoteDrafts.find(draft => draft.sentAt !== null) ?? null;
 			return {
 				opportunityId: opp.id,
 				status: opp.status,
@@ -66,8 +65,6 @@ export class CalendarRepository {
 				currentQuoteDraft: current
 					? { id: current.id, validUntil: current.validUntil, createdAt: current.createdAt }
 					: null,
-				latestSentQuoteDraft:
-					latestSent && latestSent.sentAt !== null ? { id: latestSent.id, sentAt: latestSent.sentAt } : null,
 				latestSentReplyDraftAt,
 				priorCheckInCount
 			};

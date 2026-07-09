@@ -94,10 +94,11 @@ export function DismissDialog({
 						value: r,
 						label: OPPORTUNITY_DISMISS_REASON_LABELS_NL[r]
 					}))}
+					required
 				/>
 				<Field
 					name='notes'
-					label='Toelichting (optioneel)'
+					label='Toelichting'
 					placeholder='Vul hier eventuele aanvullende informatie in'
 					multiline
 					fullWidth

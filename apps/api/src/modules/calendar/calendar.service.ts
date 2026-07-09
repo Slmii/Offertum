@@ -75,10 +75,12 @@ export class CalendarService {
 		}
 		const from = new Date(now.getTime() - FEED_WINDOW_PAST_DAYS * DAY_MS);
 		const to = new Date(now.getTime() + FEED_WINDOW_FUTURE_DAYS * DAY_MS);
-		// Feed always shows the whole org (a subscribed feed has no per-user toggle).
+		// The feed is scoped to the token owner's own assignments — same "mine only" rule as the
+		// in-app agenda. The token is per-user, so this user's id drives the `assignedToUserId`
+		// filter; a subscribed phone calendar shows exactly what its owner sees in-app.
 		const events = await this.getEvents(user.currentOrganizationId, {
-			scope: 'all',
-			requestingUserId: null,
+			scope: 'mine',
+			requestingUserId: user.id,
 			from,
 			to
 		});

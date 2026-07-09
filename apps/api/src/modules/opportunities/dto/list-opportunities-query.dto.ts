@@ -1,12 +1,10 @@
 import {
-	OPPORTUNITY_ASSIGNEE_FILTERS,
 	OPPORTUNITY_DEADLINE_FILTERS,
 	OPPORTUNITY_DISMISSED_FILTERS,
 	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
 	OPPORTUNITY_SORTS,
 	OPPORTUNITY_STATUSES,
 	OPPORTUNITY_URGENCIES,
-	type OpportunityAssigneeFilter,
 	type OpportunityDeadlineFilter,
 	type OpportunityDismissedFilter,
 	type OpportunityMailboxOwnershipFilter,
@@ -15,7 +13,18 @@ import {
 	type OpportunityUrgency
 } from '@offertum/shared';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+	ArrayMaxSize,
+	IsArray,
+	IsBoolean,
+	IsIn,
+	IsInt,
+	IsOptional,
+	IsString,
+	Max,
+	MaxLength,
+	Min
+} from 'class-validator';
 
 // Query params arrive as strings; treat the literal "true" as boolean true, everything else false.
 const toBool = ({ value }: { value: unknown }) => value === true || value === 'true';
@@ -78,12 +87,22 @@ export class ListOpportunitiesQueryDto {
 	owner?: OpportunityMailboxOwnershipFilter;
 
 	/**
-	 * Assignment filter. `me` → only opps where `assignedToUserId === currentUserId`.
-	 * `unassigned` → only opps with no assignee. `all` (or omitted) → no filter.
+	 * Assignment filter — multiselect. Each entry is `'me'`, `'unassigned'`, or a
+	 * specific team member's user ID. Omitted/empty → no filter (everyone). A lone
+	 * query-string value (`?assignee=me`) arrives as a scalar string, not an array —
+	 * the transform normalizes it to a single-element array. The legacy `'all'` token
+	 * (old single-select "everyone") is stripped so a direct `?assignee=all` API call
+	 * degrades to "no filter" instead of being matched as a literal user ID (zero rows).
 	 */
 	@IsOptional()
-	@IsIn(OPPORTUNITY_ASSIGNEE_FILTERS)
-	assignee?: OpportunityAssigneeFilter;
+	@Transform(({ value }) => {
+		const arr = Array.isArray(value) ? value : value == null ? value : [value];
+		return Array.isArray(arr) ? [...new Set(arr.filter(token => token !== 'all'))] : arr;
+	})
+	@IsArray()
+	@ArrayMaxSize(50)
+	@IsString({ each: true })
+	assignee?: string[];
 
 	/** `true` → only opps where the customer replied beyond the original request. */
 	@IsOptional()

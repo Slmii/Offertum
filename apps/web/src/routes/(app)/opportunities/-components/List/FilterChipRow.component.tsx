@@ -1,4 +1,6 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
+import { Avatar } from '@/components/Avatar.component';
+import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import {
 	OPPORTUNITY_SORT_LABELS_NL,
 	OPPORTUNITY_SORT_OPTIONS,
@@ -14,12 +16,13 @@ import Stack from '@mui/material/Stack';
 import { useTheme } from '@mui/material/styles';
 import {
 	OPPORTUNITY_URGENCIES,
-	type OpportunityAssigneeFilter,
+	pluralize,
 	type OpportunityDeadlineFilter,
 	type OpportunityMailboxOwnershipFilter,
 	type OpportunityUrgency
 } from '@offertum/shared';
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
 
 /**
  * Current value of every list filter the chip row controls. `null`/`false` = inactive
@@ -27,7 +30,8 @@ import { useState } from 'react';
  */
 export interface OpportunityFilterValues {
 	owner: OpportunityMailboxOwnershipFilter | null;
-	assignee: OpportunityAssigneeFilter | null;
+	/** Multiselect: each entry is `'me'`, `'unassigned'`, or a specific user ID. */
+	assignee: string[];
 	sort: OpportunitySortOption;
 	hasReplies: boolean | null;
 	urgency: OpportunityUrgency | null;
@@ -39,7 +43,7 @@ export interface OpportunityFilterValues {
 /** A patch of URL search params — `undefined` removes a param (back to its default). */
 export type OpportunityFilterPatch = {
 	owner?: OpportunityMailboxOwnershipFilter;
-	assignee?: OpportunityAssigneeFilter;
+	assignee?: string[] | undefined;
 	sort?: OpportunitySortOption;
 	hasReplies?: true;
 	urgency?: OpportunityUrgency;
@@ -70,14 +74,37 @@ export function FilterChipRow({
 	onClear: () => void;
 }) {
 	const { tokens } = useTheme();
+	// Non-suspense reads: this component also renders inside `OpportunitiesListSkeleton`
+	// (the route's `pendingComponent`), which is shown WHILE the loader — the thing that
+	// prefetches these queries — is still in flight. `useSuspenseQuery` there would throw
+	// a promise with no ancestor `<Suspense>` boundary to catch it. On the real page the
+	// route loader has already prefetched both via `ensureQueryData`, so `data` is
+	// available on first render regardless.
+	const { data: memberships = [] } = useQuery(membershipsQueryOptions);
+	const { data: me } = useQuery(myMembershipQueryOptions);
 	const anyActive =
 		values.owner !== null ||
-		values.assignee !== null ||
+		values.assignee.length > 0 ||
 		values.hasReplies === true ||
 		values.urgency !== null ||
 		(values.deadline !== null && values.deadline !== 'all') ||
 		values.pendingFollowup === true ||
 		values.hasAppointment === true;
+
+	const assigneeOptions = [
+		{ value: 'unassigned', label: 'Niet toegewezen', avatar: <UnassignedAvatar /> },
+		...memberships
+			.filter(m => m.role !== 'EXTERNAL')
+			.map(m => {
+				const displayName = m.user.name?.trim() || m.user.email;
+				const isMe = m.user.id === me?.user.id;
+				return {
+					value: m.user.id,
+					label: displayName + (isMe ? ' · jij' : ''),
+					avatar: <Avatar name={displayName} size={24} accent={isMe} />
+				};
+			})
+	];
 
 	return (
 		<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center', mt: 2 }}>
@@ -91,16 +118,15 @@ export function FilterChipRow({
 				]}
 				onChange={v => onChange({ owner: v === 'all' ? undefined : (v as OpportunityMailboxOwnershipFilter) })}
 			/>
-			<FilterChip
+			<MultiFilterChip
 				label='Toegewezen'
 				icon='user'
-				value={values.assignee ?? 'all'}
-				options={[
-					{ value: 'all', label: 'Iedereen' },
-					{ value: 'me', label: 'Aan mij' },
-					{ value: 'unassigned', label: 'Niet toegewezen' }
-				]}
-				onChange={v => onChange({ assignee: v === 'all' ? undefined : (v as OpportunityAssigneeFilter) })}
+				value={values.assignee}
+				options={assigneeOptions}
+				emptyLabel='Iedereen'
+				itemSingular='persoon'
+				itemPlural='personen'
+				onChange={v => onChange({ assignee: v.length > 0 ? v : undefined })}
 			/>
 			<FilterChip
 				label='Urgentie'
@@ -251,6 +277,127 @@ function FilterChip({
 						<Box component='span' sx={{ width: 16, display: 'inline-flex', flexShrink: 0 }}>
 							{o.value === value && <AppIcon name='check' size='small' />}
 						</Box>
+						{o.label}
+					</MenuItem>
+				))}
+			</Menu>
+		</>
+	);
+}
+
+/** Dashed placeholder avatar for the "Niet toegewezen" option — matches the AssigneePicker glyph. */
+function UnassignedAvatar({ size = 24 }: { size?: number }) {
+	const { tokens } = useTheme();
+	return (
+		<Box
+			component='span'
+			aria-hidden='true'
+			sx={{
+				width: size,
+				height: size,
+				borderRadius: `${tokens.radius.sm}px`,
+				border: `1px dashed ${tokens.color.lineStrong}`,
+				display: 'inline-flex',
+				alignItems: 'center',
+				justifyContent: 'center',
+				flexShrink: 0,
+				color: tokens.color.ink4
+			}}
+		>
+			<AppIcon name='user' size='small' />
+		</Box>
+	);
+}
+
+/**
+ * Multiselect variant of `FilterChip`. Toggling an option keeps the menu open (so the
+ * owner can pick several team members in one go) — it only closes on backdrop click or
+ * Escape (native `Menu` `onClose` behavior). Trigger label collapses to the single
+ * option's label when exactly one is selected, or `"N personen"` otherwise.
+ */
+function MultiFilterChip({
+	label,
+	icon,
+	value,
+	options,
+	onChange,
+	emptyLabel,
+	itemSingular,
+	itemPlural
+}: {
+	label: string;
+	icon: AppIconName;
+	value: string[];
+	options: { value: string; label: string; avatar?: ReactNode }[];
+	onChange: (value: string[]) => void;
+	emptyLabel: string;
+	itemSingular: string;
+	itemPlural: string;
+}) {
+	const { tokens } = useTheme();
+	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+
+	const c = tokens.color;
+	const active = value.length > 0;
+	const triggerLabel =
+		value.length === 0
+			? emptyLabel
+			: value.length === 1
+				? (options.find(o => o.value === value[0])?.label ?? emptyLabel)
+				: `${value.length} ${pluralize(value.length, itemSingular, itemPlural)}`;
+
+	const toggle = (optionValue: string) => {
+		onChange(value.includes(optionValue) ? value.filter(v => v !== optionValue) : [...value, optionValue]);
+	};
+
+	return (
+		<>
+			<ButtonBase
+				onClick={e => setAnchor(e.currentTarget)}
+				sx={{
+					display: 'inline-flex',
+					alignItems: 'center',
+					gap: 0.75,
+					height: 28,
+					px: 1.25,
+					backgroundColor: active ? c.accent[50] : c.surface,
+					border: `1px solid ${active ? c.accent[500] : c.lineStrong}`,
+					borderRadius: `${tokens.radius.sm}px`,
+					color: active ? c.accent[700] : c.ink2,
+					fontSize: 12,
+					fontWeight: 'medium',
+					fontFamily: tokens.font.sans,
+					cursor: 'pointer',
+					whiteSpace: 'nowrap',
+					transition: `background ${tokens.motion.durFast}ms, border-color ${tokens.motion.durFast}ms`
+				}}
+			>
+				<AppIcon name={icon} size='small' />
+				<Box component='span' sx={{ color: active ? c.accent[700] : c.ink4 }}>
+					{label}:
+				</Box>
+				<Box component='span' sx={{ fontWeight: 'bold' }}>
+					{triggerLabel}
+				</Box>
+				<AppIcon name='chevron-down' size='small' />
+			</ButtonBase>
+			<Menu
+				anchorEl={anchor}
+				open={Boolean(anchor)}
+				onClose={() => setAnchor(null)}
+				anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+				transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+			>
+				{options.map(o => (
+					<MenuItem key={o.value} selected={value.includes(o.value)} onClick={() => toggle(o.value)}>
+						<Box component='span' sx={{ width: 16, display: 'inline-flex', flexShrink: 0 }}>
+							{value.includes(o.value) && <AppIcon name='check' size='small' />}
+						</Box>
+						{o.avatar && (
+							<Box component='span' sx={{ mr: 1, display: 'inline-flex' }}>
+								{o.avatar}
+							</Box>
+						)}
 						{o.label}
 					</MenuItem>
 				))}

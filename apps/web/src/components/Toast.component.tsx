@@ -3,7 +3,6 @@ import { Body, BodySmall } from '@/components/Text.component';
 import type { AppTokens } from '@/lib/utils/theme.utils';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
-import { keyframes } from '@mui/material/styles';
 
 /**
  * Toast tone — drives the left accent border + leading icon. Faithful port of the design's
@@ -17,11 +16,6 @@ export interface ToastProps {
 	body?: string;
 	onDismiss?: () => void;
 }
-
-const slideUp = keyframes`
-	from { opacity: 0; transform: translateY(12px); }
-	to { opacity: 1; transform: translateY(0); }
-`;
 
 const TONE_ICON: Record<ToastTone, AppIconName> = {
 	info: 'info',
@@ -43,9 +37,9 @@ function toneAccent(tokens: AppTokens, tone: ToastTone): string {
 /**
  * Transient notification surface. `role="status"` + `aria-live="polite"` so screen readers
  * announce the message without stealing focus; a left accent border keyed by `tone` mirrors
- * the design. Stacking + auto-dismiss are owned by `ToastProvider` (`use-toast`); this
- * component is the presentational atom and is exported separately so it can be previewed and
- * reused in isolation.
+ * the design. Stacking, auto-dismiss, and enter/exit motion are owned by `ToastProvider`
+ * (`use-toast`, backed by react-toastify); this component is the presentational atom and is
+ * exported separately so it can be previewed and reused in isolation.
  */
 export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 	return (
@@ -64,8 +58,7 @@ export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 				px: 2,
 				minWidth: 280,
 				maxWidth: 360,
-				boxShadow: theme.tokens.shadow[2],
-				animation: `${slideUp} ${theme.tokens.motion.durBase}ms ${theme.tokens.motion.easeOut}`
+				boxShadow: theme.tokens.shadow[2]
 			})}
 		>
 			<Box

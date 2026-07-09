@@ -1,6 +1,7 @@
 /**
  * Stripe Subscription.status values that entitle the org to write access.
- * - `trialing`: free trial period with a saved payment method.
+ * - `trialing`: free trial period (may or may not have a saved payment method — the trial
+ *    can start card-less; a card is only added at subscribe-time via the Portal).
  * - `active`: paid and current.
  * - `past_due`: last invoice failed; Stripe is retrying. Don't lock the customer out
  *    mid-retry — billing dunning will handle it. If retries are exhausted, Stripe flips

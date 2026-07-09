@@ -10,8 +10,7 @@ import { useNavigate, useRouterState } from '@tanstack/react-router';
 type SettingsRoute =
 	| '/settings/email'
 	| '/settings/writing-style'
-	| '/settings/business-details'
-	| '/settings/catalog'
+	| '/settings/organization'
 	| '/settings/pricing-playbook'
 	| '/settings/follow-ups'
 	| '/settings/notifications'
@@ -30,8 +29,7 @@ interface SettingsTab {
 const SETTINGS_TABS: SettingsTab[] = [
 	{ to: '/settings/email', label: 'E-mailaccounts', ownerOnly: false, lockedWhenNotEntitled: false },
 	{ to: '/settings/writing-style', label: 'Schrijfstijl', ownerOnly: false, lockedWhenNotEntitled: false },
-	{ to: '/settings/business-details', label: 'Bedrijfsgegevens', ownerOnly: false, lockedWhenNotEntitled: false },
-	{ to: '/settings/catalog', label: 'Catalogus', ownerOnly: true, lockedWhenNotEntitled: false },
+	{ to: '/settings/organization', label: 'Organisatie', ownerOnly: false, lockedWhenNotEntitled: false },
 	{ to: '/settings/pricing-playbook', label: 'Prijsregels', ownerOnly: true, lockedWhenNotEntitled: true },
 	{ to: '/settings/follow-ups', label: 'Follow-ups', ownerOnly: true, lockedWhenNotEntitled: false },
 	{ to: '/settings/notifications', label: 'Notificaties', ownerOnly: false, lockedWhenNotEntitled: false },

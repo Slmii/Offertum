@@ -14,6 +14,7 @@ import {
 	IconBellFilled,
 	IconBrandGmail,
 	IconBrandOffice,
+	IconBuilding,
 	IconCalculator,
 	IconCalendar,
 	IconCalendarFilled,
@@ -94,6 +95,7 @@ import {
 	IconTrophy,
 	IconTrophyFilled,
 	IconUnlink,
+	IconUpload,
 	IconUser,
 	IconUserCheck,
 	IconUserPlus,
@@ -119,6 +121,7 @@ export type AppIconName =
 	| 'inbox'
 	| 'calendar'
 	| 'package'
+	| 'building'
 	| 'calculator'
 	| 'trash'
 	| 'settings'
@@ -149,6 +152,7 @@ export type AppIconName =
 	| 'info'
 	| 'plug'
 	| 'unlink'
+	| 'upload'
 	| 'puzzle'
 	| 'circle-check'
 	| 'clock'
@@ -199,7 +203,8 @@ const ICONS: Record<AppIconName, IconPair> = {
 	inbox: { outline: IconInbox, filled: IconInbox },
 	calendar: { outline: IconCalendar, filled: IconCalendarFilled },
 	package: { outline: IconPackage, filled: IconPackage },
-	// Tabler ships no filled calculator/trash — outline doubles as the filled slot.
+	// Tabler ships no filled building/calculator/trash — outline doubles as the filled slot.
+	building: { outline: IconBuilding, filled: IconBuilding },
 	calculator: { outline: IconCalculator, filled: IconCalculator },
 	trash: { outline: IconTrash, filled: IconTrash },
 	settings: { outline: IconSettings, filled: IconSettingsFilled },
@@ -231,6 +236,8 @@ const ICONS: Record<AppIconName, IconPair> = {
 	info: { outline: IconInfoCircle, filled: IconInfoCircleFilled },
 	plug: { outline: IconPlug, filled: IconPlug },
 	unlink: { outline: IconUnlink, filled: IconUnlink },
+	// Tabler ships no filled upload — outline doubles as the filled slot.
+	upload: { outline: IconUpload, filled: IconUpload },
 	puzzle: { outline: IconPuzzle, filled: IconPuzzleFilled },
 	'circle-check': { outline: IconCircleCheck, filled: IconCircleCheckFilled },
 	clock: { outline: IconClock, filled: IconClockFilled },

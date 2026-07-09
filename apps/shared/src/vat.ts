@@ -38,7 +38,6 @@ export const VAT_REVERSE_CHARGE_OPTION_ID = 'reverse';
 export interface VatSelectOption {
 	id: string;
 	label: string;
-	icon?: string;
 }
 
 /** Format a numeric rate as a percentage label, NL-style: 21 → "21%", 5.5 → "5,5%". */

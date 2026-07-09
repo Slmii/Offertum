@@ -15,7 +15,7 @@ import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
-import { useTheme } from '@mui/material/styles';
+import { keyframes, useTheme } from '@mui/material/styles';
 import type { Opportunity } from '@offertum/shared';
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -24,12 +24,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 type NavRoute =
 	| '/opportunities'
 	| '/calendar'
+	| '/catalog'
 	| '/team'
 	| '/billing'
 	| '/settings/email'
 	| '/settings/writing-style'
-	| '/settings/business-details'
-	| '/settings/catalog'
+	| '/settings/organization'
 	| '/settings/pricing-playbook'
 	| '/settings/follow-ups'
 	| '/settings/notifications'
@@ -95,8 +95,8 @@ const NAV_SHORTCUTS: NavShortcut[] = [
 		ownerOnly: false
 	},
 	{
-		to: '/settings/business-details',
-		label: 'Bedrijfsgegevens',
+		to: '/settings/organization',
+		label: 'Organisatie',
 		hint: 'KvK, adres, logo',
 		icon: 'settings',
 		keywords: 'bedrijf organisatie kvk adres logo',
@@ -119,7 +119,7 @@ const NAV_SHORTCUTS: NavShortcut[] = [
 		ownerOnly: false
 	},
 	{
-		to: '/settings/catalog',
+		to: '/catalog',
 		label: 'Catalogus',
 		hint: 'Producten en standaardprijzen',
 		icon: 'package',
@@ -158,6 +158,12 @@ interface FlatResult {
 	run: () => void;
 }
 
+// Dropdown entrance — the design's `.qm-pop-in` (scale 0.98 → 1 + fade, `--dur-fast`).
+const popIn = keyframes`
+	from { opacity: 0; transform: scale(0.98); }
+	to { opacity: 1; transform: scale(1); }
+`;
+
 /**
  * Global search in the top bar (⌘K) — ported from the design's `GlobalSearch`. Searches real
  * opportunities via the existing list endpoint (debounced) and offers role-aware navigation
@@ -173,7 +179,9 @@ export function GlobalSearch() {
 
 	const [query, setQuery] = useState('');
 	const [open, setOpen] = useState(false);
-	const [activeIndex, setActiveIndex] = useState(0);
+	// -1 = no row highlighted (matches the design's resting state — rows light up only on hover
+	// or once the user arrows into the list), not 0 which would paint the first row on open.
+	const [activeIndex, setActiveIndex] = useState(-1);
 	const debounced = useDebouncedValue(query.trim(), 250);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -270,13 +278,16 @@ export function GlobalSearch() {
 		}
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
+			// From the resting state (-1) this lands on the first row; otherwise it wraps.
 			setActiveIndex((safeActiveIndex + 1) % flatResults.length);
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
-			setActiveIndex((safeActiveIndex - 1 + flatResults.length) % flatResults.length);
+			// From the resting state (-1) or the top, wrap to the last row.
+			setActiveIndex(safeActiveIndex <= 0 ? flatResults.length - 1 : safeActiveIndex - 1);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-			const active = flatResults[safeActiveIndex];
+			// Enter with nothing highlighted yet opens the top result (standard ⌘K behaviour).
+			const active = flatResults[safeActiveIndex < 0 ? 0 : safeActiveIndex];
 			if (active) {
 				select(active.run);
 			}
@@ -306,7 +317,7 @@ export function GlobalSearch() {
 					borderRadius: `${tokens.radius.md}px`,
 					boxShadow: open ? tokens.focusRing : 'none',
 					cursor: 'text',
-					transition: 'border-color 120ms, box-shadow 120ms'
+					transition: 'background-color 120ms, border-color 120ms, box-shadow 120ms'
 				}}
 			>
 				<AppIcon name='search' size='small' style={{ color: open ? tokens.color.ink2 : tokens.color.ink4 }} />
@@ -315,7 +326,7 @@ export function GlobalSearch() {
 					value={query}
 					onChange={e => {
 						setQuery(e.target.value);
-						setActiveIndex(0);
+						setActiveIndex(-1);
 						setOpen(true);
 					}}
 					onFocus={() => setOpen(true)}
@@ -353,7 +364,8 @@ export function GlobalSearch() {
 							justifyContent: 'center',
 							borderRadius: '4px',
 							flexShrink: 0,
-							'&:hover': { color: tokens.color.ink2, backgroundColor: tokens.color.paper3 }
+							// Design's clear button is plain — no hover treatment.
+							'&:hover': { backgroundColor: 'transparent' }
 						}}
 					>
 						<AppIcon name='x' size='small' />
@@ -390,7 +402,12 @@ export function GlobalSearch() {
 						maxHeight: 'min(560px, calc(100vh - 100px))',
 						display: 'flex',
 						flexDirection: 'column',
-						boxShadow: tokens.shadow[2]
+						overflow: 'hidden',
+						backgroundColor: tokens.color.surface,
+						border: `1px solid ${tokens.color.line}`,
+						borderRadius: `${tokens.radius.md}px`,
+						boxShadow: tokens.shadow[2],
+						animation: `${popIn} ${tokens.motion.durFast}ms ${tokens.motion.easeOut}`
 					}}
 				>
 					<Box sx={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
@@ -473,8 +490,12 @@ export function GlobalSearch() {
 								>
 									<AppIcon name='search-off' size='medium' />
 								</Box>
-								<BodySmall fontWeight='medium' sx={{ display: 'block' }}>
-									Niks gevonden voor "{debounced}"
+								<BodySmall fontWeight='medium' sx={{ display: 'block', color: tokens.color.ink2 }}>
+									Niks gevonden voor "
+									<Box component='span' sx={{ color: tokens.color.ink1 }}>
+										{debounced}
+									</Box>
+									"
 								</BodySmall>
 								<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.25 }}>
 									Probeer een ander zoekwoord, of zoek op klantnaam of adres.
@@ -586,7 +607,6 @@ function highlightMatch(text: string, query: string, tokens: typeof designTokens
 }
 
 function SearchSectionHeader({ label, count }: { label: string; count?: number }) {
-	const { tokens } = useTheme();
 	return (
 		<Box
 			sx={{
@@ -595,13 +615,15 @@ function SearchSectionHeader({ label, count }: { label: string; count?: number }
 				pb: 0.75,
 				display: 'flex',
 				alignItems: 'baseline',
-				justifyContent: 'space-between',
-				borderTop: `1px solid ${tokens.color.line}`,
-				'&:first-of-type': { borderTop: 'none' }
+				justifyContent: 'space-between'
 			}}
 		>
 			<Overline color='text.disabled'>{label}</Overline>
-			{count != null && <BodySmall color='text.disabled'>{count}</BodySmall>}
+			{count != null && (
+				<Overline color='text.disabled' sx={{ fontVariantNumeric: 'tabular-nums' }}>
+					{count}
+				</Overline>
+			)}
 		</Box>
 	);
 }
@@ -649,13 +671,25 @@ function OpportunityRow({
 				}}
 			/>
 			<Box sx={{ flex: 1, minWidth: 0 }}>
-				<BodySmall
-					fontWeight='medium'
-					sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-				>
-					{highlightMatch(opportunityCustomerLabel(op), query, tokens)} ·{' '}
-					{highlightMatch(op.requestType, query, tokens)}
-				</BodySmall>
+				<Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+					<BodySmall
+						component='span'
+						fontWeight='medium'
+						color='text.primary'
+						sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}
+					>
+						{highlightMatch(opportunityCustomerLabel(op), query, tokens)}
+					</BodySmall>
+					<BodySmall component='span' sx={{ color: tokens.color.ink4, flexShrink: 0 }}>
+						·
+					</BodySmall>
+					<BodySmall
+						component='span'
+						sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+					>
+						{highlightMatch(op.requestType, query, tokens)}
+					</BodySmall>
+				</Box>
 				{op.address && (
 					<BodySmall
 						color='textSecondary'
@@ -734,7 +768,9 @@ function NavRow({
 				<AppIcon name={shortcut.icon} size='small' />
 			</Box>
 			<Box sx={{ flex: 1, minWidth: 0 }}>
-				<BodySmall fontWeight='medium'>{highlightMatch(shortcut.label, query, tokens)}</BodySmall>
+				<BodySmall fontWeight='medium' color='text.primary'>
+					{highlightMatch(shortcut.label, query, tokens)}
+				</BodySmall>
 				<BodySmall color='textSecondary'>{shortcut.hint}</BodySmall>
 			</Box>
 			<AppIcon name='arrow-up-right' size='small' style={{ color: tokens.color.ink4 }} />

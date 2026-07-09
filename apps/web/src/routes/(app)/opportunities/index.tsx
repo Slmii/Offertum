@@ -11,13 +11,12 @@ import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { opportunitiesListQueryOptions, type OpportunityListAttributes } from '@/lib/queries/opportunities.queries';
 import { patternsQueryOptions } from '@/lib/queries/patterns.queries';
-import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
+import { membershipsQueryOptions, myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { OPPORTUNITY_SORT_OPTIONS, sortOpportunities, type OpportunitySortOption } from '@/lib/utils/opportunity.utils';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import {
-	OPPORTUNITY_ASSIGNEE_FILTERS,
 	OPPORTUNITY_DEADLINE_FILTERS,
 	OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS,
 	OPPORTUNITY_STATUSES,
@@ -29,8 +28,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from './-components/List/EmptyState.component';
 import { FilterChipRow } from './-components/List/FilterChipRow.component';
-import { OpportunitiesListSkeleton } from './-components/List/OpportunitiesListSkeleton.component';
 import { OppInsights } from './-components/List/OppInsights.component';
+import { OpportunitiesListSkeleton } from './-components/List/OpportunitiesListSkeleton.component';
 import { OpportunityRow } from './-components/List/OpportunityRow.component';
 import { pendingFollowUpsQueryOptions } from './-components/List/PendingFollowUpsBanner.component';
 import { StatusFilterTabs } from './-components/List/StatusFilterTabs.component';
@@ -51,9 +50,18 @@ const SearchSchema = z.object({
 	// Mailbox-owner filter. `mine` shows only opps from inboxes the current user owns.
 	// Default (omitted) = `all`.
 	owner: z.enum(OPPORTUNITY_MAILBOX_OWNERSHIP_FILTERS).optional().catch(undefined),
-	// Assignment filter. `me` shows opps assigned to the current user; `unassigned`
-	// shows opps with no assignee. Default (omitted) = `all`.
-	assignee: z.enum(OPPORTUNITY_ASSIGNEE_FILTERS).optional().catch(undefined),
+	// Assignment filter — multiselect. Each entry is `'me'`, `'unassigned'`, or a
+	// specific team member's user ID. Default (omitted) = everyone. Accepts either a
+	// scalar or an array from the URL (TanStack Router parses a single repeated param
+	// as a scalar); normalizes to a de-duped array and drops the legacy `'all'` token
+	// for backward compatibility with pre-multiselect URLs.
+	assignee: z
+		.union([z.string(), z.array(z.string())])
+		.transform(v => (Array.isArray(v) ? v : [v]))
+		.transform(v => [...new Set(v.filter(t => t !== 'all'))])
+		.pipe(z.array(z.string()).max(50))
+		.optional()
+		.catch(undefined),
 	// Attribute filters. Booleans omitted when off; urgency/deadline omitted when "all".
 	hasReplies: z.boolean().optional().catch(undefined),
 	urgency: z.enum(OPPORTUNITY_URGENCIES).optional().catch(undefined),
@@ -71,7 +79,7 @@ export const Route = createFileRoute('/(app)/opportunities/')({
 		search: search?.trim() || null,
 		showDismissed: showDismissed ?? false,
 		owner: owner ?? null,
-		assignee: assignee ?? null,
+		assignee: assignee ?? [],
 		attributes: {
 			hasReplies: rest.hasReplies ?? null,
 			urgency: rest.urgency ?? null,
@@ -94,6 +102,7 @@ export const Route = createFileRoute('/(app)/opportunities/')({
 			),
 			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(myMembershipQueryOptions),
+			context.queryClient.ensureQueryData(membershipsQueryOptions),
 			// Insights bar inputs — independent of the page's filters; prefetch so they don't waterfall.
 			context.queryClient.ensureQueryData(pendingFollowUpsQueryOptions()),
 			context.queryClient.ensureQueryData(patternsQueryOptions)
@@ -114,7 +123,9 @@ function OpportunitiesIndexPage() {
 	const showDismissed = urlSearch.showDismissed ?? false;
 	const dismissedFilter = showDismissed ? 'dismissed' : 'active';
 	const ownerFilter = urlSearch.owner ?? null;
-	const assigneeFilter = urlSearch.assignee ?? null;
+	// Memoized so the identity is stable across renders when unset (`urlSearch.assignee ??
+	// []` would otherwise allocate a fresh array every render) — `loadMore` depends on it.
+	const assigneeFilter = useMemo(() => urlSearch.assignee ?? [], [urlSearch.assignee]);
 
 	// Memoized so the identity is stable across renders (only changes when a value changes) —
 	// `loadMore` and the query options depend on it.
@@ -239,7 +250,7 @@ function OpportunitiesIndexPage() {
 		activeStatus ?? 'all',
 		dismissedFilter,
 		ownerFilter ?? 'all',
-		assigneeFilter ?? 'all',
+		assigneeFilter.length ? [...assigneeFilter].sort().join(',') : 'all',
 		attributes.hasReplies ? 'r' : '',
 		attributes.urgency ?? '',
 		attributes.deadline ?? '',

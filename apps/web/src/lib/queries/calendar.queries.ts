@@ -1,20 +1,20 @@
 import { api } from '@/lib/api/client';
 import { getCalendarFeedServer, listCalendarEventsServer } from '@/lib/api/calendar.api';
-import type { CalendarEventScope, IcalFeed } from '@offertum/shared';
+import type { IcalFeed } from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const CalendarKeys = {
 	all: ['calendar'] as const,
-	events: (from: string, to: string, scope: CalendarEventScope) =>
-		['calendar', 'events', { from, to, scope }] as const,
+	events: (from: string, to: string) => ['calendar', 'events', { from, to }] as const,
 	feed: ['calendar', 'feed'] as const
 };
 
-/** Events for a visible window + scope. Short staleTime — fresh quotes/appointments surface fast. */
-export const calendarEventsQueryOptions = (from: string, to: string, scope: CalendarEventScope) =>
+/** Events for a visible window (always the requesting user's own assignments). Short staleTime so
+ * fresh quotes/appointments surface fast. */
+export const calendarEventsQueryOptions = (from: string, to: string) =>
 	queryOptions({
-		queryKey: CalendarKeys.events(from, to, scope),
-		queryFn: () => listCalendarEventsServer({ data: { from, to, scope } }),
+		queryKey: CalendarKeys.events(from, to),
+		queryFn: () => listCalendarEventsServer({ data: { from, to } }),
 		staleTime: 15_000
 	});
 
