@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
-import { StandaloneField } from '@/components/Form/Field/Field.component';
+import { getByteLength, StandaloneField, trimToMaxBytes } from '@/components/Form/Field/Field.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, H3, Label } from '@/components/Text.component';
@@ -106,6 +106,7 @@ function WritingStylePage() {
 
 	const trimmedLength = text.trim().length;
 	const isDirty = text !== serverText;
+	const isOverMaxLength = getByteLength(text) > TONE_PLAYBOOK_MAX_LENGTH;
 
 	const handleSave = () => {
 		update.mutate(
@@ -180,7 +181,7 @@ function WritingStylePage() {
 							<Button
 								variant='contained'
 								onClick={handleSave}
-								disabled={update.isPending || !isDirty || trimmedLength === 0}
+								disabled={update.isPending || !isDirty || trimmedLength === 0 || isOverMaxLength}
 								startIcon={
 									update.isPending ? (
 										<CircularProgress size={14} />
@@ -283,7 +284,7 @@ function WritingStylePage() {
 											variant='contained'
 											onClick={event => {
 												event.stopPropagation();
-												setText(example.body);
+												setText(trimToMaxBytes(example.body, TONE_PLAYBOOK_MAX_LENGTH));
 												setExpanded(null);
 											}}
 										>
