@@ -63,7 +63,7 @@ import {
 } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // Leading `-` allowed for discount ("Korting") lines; quantity stays non-negative.
 const MONEY_PATTERN = /^-?\d{1,8}(\.\d{1,2})?$/;
@@ -1068,6 +1068,14 @@ function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineIn
 // Persisted collapse preference for the quote-notice bar (mirrors the opportunities-list insights bar).
 const QUOTE_NOTICES_OPEN_KEY = 'offertum.quoteNotices.open';
 
+function readQuoteNoticesOpen(): boolean {
+	try {
+		return localStorage.getItem(QUOTE_NOTICES_OPEN_KEY) === '1';
+	} catch {
+		return false;
+	}
+}
+
 function writeQuoteNoticesOpen(open: boolean): void {
 	try {
 		localStorage.setItem(QUOTE_NOTICES_OPEN_KEY, open ? '1' : '0');
@@ -1093,7 +1101,13 @@ function CollapsibleQuoteNotices({ notices }: { notices: BannerStackItem[] }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 
+	// Collapsed by default; the persisted preference is restored after mount so SSR + the first
+	// client render agree (no hydration mismatch).
 	const [open, setOpen] = useState(false);
+	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setOpen(readQuoteNoticesOpen());
+	}, []);
 
 	if (notices.length === 0) {
 		return null;

@@ -14,7 +14,6 @@ interface CalendarEventTypeMeta {
  * `apps/web/src/lib/utils/calendar.utils.ts` (the API doesn't own presentation color).
  */
 export const CALENDAR_EVENT_TYPE_META: Record<CalendarEventType, CalendarEventTypeMeta> = {
-	sent: { labelPrefix: 'Offerte verstuurd', allDay: false },
 	expiry: { labelPrefix: 'Offerte verloopt', allDay: true },
 	appointment: { labelPrefix: 'Afspraak', allDay: false },
 	deadline: { labelPrefix: 'Deadline klant', allDay: true },

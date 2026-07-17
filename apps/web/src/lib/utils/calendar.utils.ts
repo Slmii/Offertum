@@ -2,12 +2,11 @@ import { tokens, type AppTokens } from '@/lib/utils/theme.utils';
 import type { CalendarEventType } from '@offertum/shared';
 
 // Each event type maps to one of the design-system status ramps (the design's Calendar palette:
-// sent→accent, follow_up→pending, customer-side dates→cold/won, expiry→lost). Resolving against a
-// ramp keeps the calendar correct in both light and dark themes.
-type StatusRamp = 'accent' | 'pending' | 'cold' | 'won' | 'lost';
+// follow_up→pending, customer-side dates→cold/won, expiry→lost). Resolving against a ramp keeps
+// the calendar correct in both light and dark themes.
+type StatusRamp = 'pending' | 'cold' | 'won' | 'lost';
 
 const EVENT_RAMP: Record<CalendarEventType, StatusRamp> = {
-	sent: 'accent',
 	follow_up: 'pending',
 	deadline: 'cold',
 	appointment: 'won',
@@ -15,7 +14,6 @@ const EVENT_RAMP: Record<CalendarEventType, StatusRamp> = {
 };
 
 const LABELS: Record<CalendarEventType, string> = {
-	sent: 'Offerte verstuurd',
 	expiry: 'Offerte verloopt',
 	appointment: 'Afspraak',
 	deadline: 'Deadline klant',

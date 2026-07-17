@@ -9,7 +9,6 @@ describe('calendar.utils', () => {
 	});
 
 	it('returns a Dutch label for every event type', () => {
-		expect(calendarEventLabel('sent')).toBe('Offerte verstuurd');
 		expect(calendarEventLabel('expiry')).toBe('Offerte verloopt');
 		expect(calendarEventLabel('appointment')).toBe('Afspraak');
 		expect(calendarEventLabel('deadline')).toBe('Deadline klant');
