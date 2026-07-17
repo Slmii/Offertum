@@ -266,6 +266,12 @@ model User {
 model Organization {
   id                        String   @id @default(uuid()) @db.Uuid
   name                      String
+  // Org locale, surfaced on the business-details / onboarding form. `language` is an ISO-639-1
+  // code (nl default; en/de/fr are the planned AI-prompt siblings + future UI i18n). `timezone`
+  // is an IANA zone (Europe/Amsterdam default) — the eventual source of truth for follow-up /
+  // auto-cold cron scheduling + date formatting, replacing today's hardcoded Amsterdam.
+  language                  String   @default("nl")
+  timezone                  String   @default("Europe/Amsterdam")
   // Per-org follow-up cadence + cap. The scheduler scans REPLIED opps
   // daily; a follow-up draft is generated when `(now − latestSentAt) ≥
   // followUpCadenceDays`, capped at `followUpMaxCount` automatic follow-ups per opp.
@@ -284,14 +290,18 @@ model Organization {
   // 30-day default mirrors followUpCadenceDays/coldAfterDays. Owner-configurable later.
   quoteValidityDays         Int      @default(30)
   // Per-org VAT configuration so rate options aren't hardcoded NL presets (supports other
-  // countries). `vatRates` is the allowed set in display order; empty = the app falls back to the
-  // NL default (21/9/0). Decimal so non-NL rates (5.5, 13.5) are representable. `vatDefaultRate`
-  // preselects new quote lines / catalog items. Reverse charge ("BTW verlegd") stays a per-line
-  // boolean; these two fields only control whether the option is offered and its label.
-  vatRates                  Decimal[] @default([]) @db.Decimal(5, 2)
-  vatDefaultRate            Decimal   @default(21) @db.Decimal(5, 2)
-  vatReverseChargeEnabled   Boolean   @default(true)
-  vatReverseChargeLabel     String    @default("BTW verlegd")
+  // countries). `vatRates` is a JSON array of `VatRateOption[]` (see @offertum/shared) in
+  // display order — each a named, categorised, individually (de)activatable rate with its own
+  // default flag; empty = the app falls back to the NL default (21/9/0). Reverse charge
+  // ("BTW verlegd") stays a per-line boolean; these two fields only control whether the option
+  // is offered and its label.
+  vatRates                  Json    @default("[]")
+  vatReverseChargeEnabled   Boolean @default(true)
+  vatReverseChargeLabel     String  @default("BTW verlegd")
+  // Org-lifetime quote counter. Atomically incremented when a quote first gets a PDF; the value
+  // feeds the customer-facing quote number (OFF-{year}-{seq}). Gaps are expected (lost claim races,
+  // deleted quotes) and fine — numbers must stay unique, not gapless.
+  quoteSequence             Int     @default(0)
   // W13 — seeds the ranking win-probability baseline. Default OVERIG so existing
   // rows backfill cleanly; owner refines it in business-details settings.
   vertical                  Vertical @default(OVERIG)
@@ -1069,6 +1079,9 @@ model QuoteDraft {
   organizationId    String           @db.Uuid
   opportunityId     String           @db.Uuid
   status            QuoteDraftStatus @default(DRAFT)
+  // Customer-facing quote number (OFF-{year}-{seq}), assigned the first time this draft is rendered
+  // to a PDF and reused on every regeneration. Null until the first PDF is generated.
+  quoteNumber       String?
   // Snapshot of the opportunity context used at generation time (JSON object).
   generationContext Json
   // FK to the AICall that ran the proposer. SetNull on AICall retention purge so a
@@ -1208,6 +1221,9 @@ model QuotePdf {
   // the draft is later removed.
   quoteDraftId   String?  @db.Uuid
   filename       String
+  // The quote number printed on this PDF — snapshotted so history survives the draft's deletion.
+  // Null for PDFs generated before quote numbering existed.
+  quoteNumber    String?
   contentType    String   @default("application/pdf")
   sizeBytes      Int
   // Quote total incl. btw (in cents) at generation time — a snapshot, since the draft's lines

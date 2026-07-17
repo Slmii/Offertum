@@ -10,10 +10,11 @@ import { CatalogItemSchema, type CatalogItemForm } from '@/lib/schemas/catalog-i
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import {
-	buildCatalogVatOptions,
+	buildCatalogVatOptionsWithUsed,
 	CATALOG_ITEM_UNIT_DEFAULT,
 	CATALOG_ITEM_UNIT_LABELS_NL,
 	CATALOG_ITEM_UNITS,
+	getDefaultVatRate,
 	type CatalogItem,
 	type CatalogItemUnit
 } from '@offertum/shared';
@@ -61,7 +62,9 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 	const create = useCreateCatalogItem();
 	const update = useUpdateCatalogItem();
 	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
-	const vatOptions = buildCatalogVatOptions(vatConfig);
+	// When editing an item whose rate was later removed/deactivated, union it back so its BTW select
+	// still shows the saved rate instead of a blank placeholder.
+	const vatOptions = buildCatalogVatOptionsWithUsed(vatConfig, item ? [item.defaultVatRate] : []);
 	const isPending = mode === 'create' ? create.isPending : update.isPending;
 
 	const handleSubmit = (values: CatalogItemForm) => {
@@ -100,7 +103,7 @@ export function CatalogItemDialog({ isOpen, mode, item, prefill, onClose }: Cata
 					name: '',
 					description: '',
 					defaultPriceEur: '0.00',
-					defaultVatRate: String(vatConfig.defaultRate),
+					defaultVatRate: String(getDefaultVatRate(vatConfig)),
 					sku: '',
 					unit: CATALOG_ITEM_UNIT_DEFAULT,
 					active: true,

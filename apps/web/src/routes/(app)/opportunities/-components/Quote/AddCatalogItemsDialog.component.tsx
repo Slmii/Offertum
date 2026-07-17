@@ -16,9 +16,10 @@ import AccordionSummary from '@mui/material/AccordionSummary';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import {
-	buildCatalogVatOptions,
+	buildCatalogVatOptionsWithUsed,
 	CATALOG_ITEM_UNIT_LABELS_NL,
 	CATALOG_ITEM_UNITS,
+	getDefaultVatRate,
 	pluralize,
 	type QuoteLineItem,
 	type VatSelectOption
@@ -61,11 +62,16 @@ export function AddCatalogItemsDialog({
 	const toast = useToast();
 	const create = useCreateCatalogItem();
 	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
-	const vatOptions = buildCatalogVatOptions(vatConfig);
+	// Seed lines may carry a rate that has since left the config — union those back so each row's
+	// BTW select still shows the saved rate instead of a blank placeholder.
+	const vatOptions = buildCatalogVatOptionsWithUsed(
+		vatConfig,
+		lines.map(line => line.vatRate)
+	);
 	const [submitting, setSubmitting] = useState(false);
 
 	const single = lines.length === 1;
-	const defaultValues: CatalogItemsForm = { items: lines.map(line => lineToForm(line, vatConfig.defaultRate)) };
+	const defaultValues: CatalogItemsForm = { items: lines.map(line => lineToForm(line, getDefaultVatRate(vatConfig))) };
 	// Re-seed the form whenever the target lines change (they shrink after a successful add).
 	const formKey = lines.map(line => line.id).join('|');
 

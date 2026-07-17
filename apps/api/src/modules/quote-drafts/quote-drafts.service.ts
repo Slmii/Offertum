@@ -4,6 +4,7 @@ import {
 	QUOTE_DRAFT_ALREADY_SENT,
 	QUOTE_DRAFT_HAS_UNPRICED_LINES,
 	QUOTE_DRAFT_NOT_FOUND,
+	QUOTE_EXPIRED_NO_PDF,
 	QUOTE_LINE_ITEM_NOT_FOUND
 } from '@/lib/errors';
 import { CatalogItemsRepository } from '@/modules/catalog-items/catalog-items.repository';
@@ -23,7 +24,6 @@ import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-ite
 import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
 import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { computeQuoteTotals } from '@offertum/shared';
 import type {
 	CatalogItemUnit,
 	CreateQuoteLineItemInput,
@@ -34,6 +34,7 @@ import type {
 	ReplaceQuoteLineInput,
 	UpdateQuoteLineItemInput
 } from '@offertum/shared';
+import { computeQuoteTotals, formatQuoteNumber } from '@offertum/shared';
 
 const DEFAULT_LINE_UNIT = 'piece';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -229,11 +230,25 @@ export class QuoteDraftsService {
 			});
 		}
 
+		// Refuse to produce a PDF from an expired quote — its "Geldig tot"
+		// date would already be in the past. Regenerate the quote first (which resets validUntil).
+		if (validUntil.getTime() < Date.now()) {
+			throw new BadRequestException(QUOTE_EXPIRED_NO_PDF);
+		}
+
+		// Assign (or reuse) the customer-facing quote number before rendering, so it's baked into the PDF.
+		const quoteNumber = await this.resolveQuoteNumber(
+			organizationId,
+			quoteDraftId,
+			draft.quoteNumber,
+			draft.createdAt
+		);
+
 		const rendered = await this.quotePdfs.renderQuote(organizationId, {
 			customerName: opportunity.customerName ?? 'Klant',
 			customerEmail: opportunity.customerEmail,
 			customerAddress: opportunity.address,
-			quoteNumber: null,
+			quoteNumber,
 			lineItems: draft.lineItems.map(toPdfLineItem),
 			// Print the draft's creation date as the issue date and its stored validity deadline as
 			// "Geldig tot" — the same values the calendar expiry event + opp detail read, so all three agree.
@@ -257,7 +272,8 @@ export class QuoteDraftsService {
 			draft.opportunityId,
 			quoteDraftId,
 			rendered,
-			totals.grossCents
+			totals.grossCents,
+			quoteNumber
 		);
 
 		this.logService.logAction({
@@ -277,6 +293,45 @@ export class QuoteDraftsService {
 	}
 
 	/** Load a tenant-scoped draft or 404. */
+	/**
+	 * Assign a stable, org-unique quote number, or reuse the one already stamped on the draft
+	 * (regenerating a PDF keeps the same number). Increments the org's lifetime counter atomically;
+	 * if a concurrent regeneration of the SAME draft claimed the number first, that sequence value is
+	 * skipped (gaps are fine) and the winner's number is reused — never a duplicate.
+	 */
+	private async resolveQuoteNumber(
+		organizationId: string,
+		quoteDraftId: string,
+		existingNumber: string | null,
+		issueDate: Date
+	): Promise<string> {
+		if (existingNumber) {
+			return existingNumber;
+		}
+
+		const { quoteSequence } = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: { quoteSequence: { increment: 1 } },
+			select: { quoteSequence: true }
+		});
+		const quoteNumber = formatQuoteNumber(issueDate.getUTCFullYear(), quoteSequence);
+
+		// Claim the number only if the draft is still unnumbered — guards against a concurrent
+		// regeneration double-assigning.
+		const claim = await this.prisma.quoteDraft.updateMany({
+			where: { id: quoteDraftId, quoteNumber: null },
+			data: { quoteNumber }
+		});
+		if (claim.count === 0) {
+			const row = await this.prisma.quoteDraft.findUniqueOrThrow({
+				where: { id: quoteDraftId },
+				select: { quoteNumber: true }
+			});
+			return row.quoteNumber ?? quoteNumber;
+		}
+		return quoteNumber;
+	}
+
 	private async loadDraft(organizationId: string, quoteDraftId: string): Promise<QuoteDraftWithLines> {
 		const draft = await this.repository.findForOrganization(organizationId, quoteDraftId);
 		if (!draft) {

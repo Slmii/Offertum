@@ -17,6 +17,7 @@ import {
 	IconBuilding,
 	IconCalculator,
 	IconCalendar,
+	IconCalendarClock,
 	IconCalendarFilled,
 	IconCheck,
 	IconChevronDown,
@@ -48,6 +49,7 @@ import {
 	IconInbox,
 	IconInfoCircle,
 	IconInfoCircleFilled,
+	IconLanguage,
 	IconLayoutDashboard,
 	IconLayoutDashboardFilled,
 	IconLink,
@@ -66,8 +68,11 @@ import {
 	IconPackage,
 	IconPaperclip,
 	IconPencil,
+	IconPercentage,
 	IconPhone,
 	IconPhoneFilled,
+	IconPhoto,
+	IconPhotoFilled,
 	IconPlug,
 	IconPlus,
 	IconPuzzle,
@@ -85,6 +90,8 @@ import {
 	IconSnowflake,
 	IconSparkles,
 	IconSparklesFilled,
+	IconStar,
+	IconStarFilled,
 	IconSun,
 	IconSunFilled,
 	IconSunrise,
@@ -102,6 +109,7 @@ import {
 	IconUserX,
 	IconUserFilled,
 	IconUsers,
+	IconWorld,
 	IconX
 } from '@tabler/icons-react';
 import type { CSSProperties } from 'react';
@@ -120,8 +128,11 @@ export type AppIconName =
 	| 'dashboard'
 	| 'inbox'
 	| 'calendar'
+	| 'calendar-clock'
 	| 'package'
 	| 'building'
+	| 'world'
+	| 'language'
 	| 'calculator'
 	| 'trash'
 	| 'settings'
@@ -187,6 +198,9 @@ export type AppIconName =
 	| 'trending-up'
 	| 'sparkles'
 	| 'shield-check'
+	| 'star'
+	| 'percent'
+	| 'image'
 	| 'sun'
 	| 'moon'
 	| 'x';
@@ -202,9 +216,14 @@ const ICONS: Record<AppIconName, IconPair> = {
 	dashboard: { outline: IconLayoutDashboard, filled: IconLayoutDashboardFilled },
 	inbox: { outline: IconInbox, filled: IconInbox },
 	calendar: { outline: IconCalendar, filled: IconCalendarFilled },
+	// Tabler ships no filled calendar-clock — outline doubles as the filled slot.
+	'calendar-clock': { outline: IconCalendarClock, filled: IconCalendarClock },
 	package: { outline: IconPackage, filled: IconPackage },
 	// Tabler ships no filled building/calculator/trash — outline doubles as the filled slot.
 	building: { outline: IconBuilding, filled: IconBuilding },
+	// Tabler ships no filled world/language — outline doubles as the filled slot.
+	world: { outline: IconWorld, filled: IconWorld },
+	language: { outline: IconLanguage, filled: IconLanguage },
 	calculator: { outline: IconCalculator, filled: IconCalculator },
 	trash: { outline: IconTrash, filled: IconTrash },
 	settings: { outline: IconSettings, filled: IconSettingsFilled },
@@ -283,6 +302,10 @@ const ICONS: Record<AppIconName, IconPair> = {
 	'trending-up': { outline: IconTrendingUp, filled: IconTrendingUp },
 	sparkles: { outline: IconSparkles, filled: IconSparklesFilled },
 	'shield-check': { outline: IconShieldCheck, filled: IconShieldCheckFilled },
+	star: { outline: IconStar, filled: IconStarFilled },
+	// Tabler ships no filled percentage — outline doubles as the filled slot.
+	percent: { outline: IconPercentage, filled: IconPercentage },
+	image: { outline: IconPhoto, filled: IconPhotoFilled },
 	sun: { outline: IconSun, filled: IconSunFilled },
 	moon: { outline: IconMoon, filled: IconMoonFilled },
 	// Tabler ships no filled x — outline doubles as the filled slot.

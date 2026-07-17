@@ -1,5 +1,5 @@
 import type { EnvSchema } from '@/config/env.schema';
-import { MembershipRole } from '@/generated/prisma/client';
+import { MembershipRole, type Prisma } from '@/generated/prisma/client';
 import { ATTACHMENT_STORAGE, type AttachmentStorage } from '@/lib/storage/attachment-storage.interface';
 import {
 	ATTACHMENT_FILE_MISSING,
@@ -8,7 +8,7 @@ import {
 	CANNOT_REMOVE_SELF,
 	MEMBERSHIP_NOT_FOUND,
 	ORGANIZATION_DELETE_CONFIRMATION_MISMATCH,
-	VAT_DEFAULT_RATE_NOT_IN_RATES,
+	VAT_NO_ACTIVE_RATE,
 	attachmentFileTooLarge,
 	attachmentMimeNotAllowed
 } from '@/lib/errors';
@@ -21,6 +21,7 @@ import {
 import { BillingService } from '@/modules/billing/billing.service';
 import { LogService } from '@/modules/logger/log.service';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
+import { PurgeIngestedDataResponseDto } from '@/modules/me/dto/purge-ingested-data.response.dto';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import {
 	BadRequestException,
@@ -32,13 +33,14 @@ import {
 	UnsupportedMediaTypeException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DEFAULT_NL_VAT_CONFIG } from '@offertum/shared';
+import { DEFAULT_NL_VAT_CONFIG, vatEnsureDefault } from '@offertum/shared';
 import type {
 	BusinessDetails,
 	FollowUpSettings,
 	OrgVatConfig,
 	TonePlaybook,
 	UpdateBusinessDetailsInput,
+	VatRateOption,
 	VerticalValue
 } from '@offertum/shared';
 
@@ -287,54 +289,55 @@ export class MeService {
 	}
 
 	/**
-	 * Read the active org's VAT configuration (allowed rates, default rate, reverse-charge
-	 * availability + label). Falls back to the NL default when the org hasn't configured rates
-	 * yet (empty `vatRates`), so existing orgs keep working without a save.
+	 * Read the active org's VAT configuration (rate options, reverse-charge availability +
+	 * label). Falls back to the NL default when the org hasn't configured rates yet (empty
+	 * `vatRates`), so existing orgs keep working without a save.
 	 */
 	async getVatSettings(organizationId: string): Promise<OrgVatConfig> {
 		const row = await this.prisma.organization.findUniqueOrThrow({
 			where: { id: organizationId },
 			select: {
 				vatRates: true,
-				vatDefaultRate: true,
 				vatReverseChargeEnabled: true,
 				vatReverseChargeLabel: true
 			}
 		});
 
-		if (!row.vatRates || row.vatRates.length === 0) {
+		const rates = row.vatRates as unknown as VatRateOption[];
+		if (!Array.isArray(rates) || rates.length === 0) {
 			return DEFAULT_NL_VAT_CONFIG;
 		}
 
 		return {
-			rates: row.vatRates.map(rate => rate.toNumber()),
-			defaultRate: row.vatDefaultRate.toNumber(),
+			rates,
 			reverseChargeEnabled: row.vatReverseChargeEnabled,
 			reverseChargeLabel: row.vatReverseChargeLabel
 		};
 	}
 
 	/**
-	 * Update the active org's VAT configuration (owner-only). De-duplicates the rate list and
-	 * enforces the cross-field rule that the default rate is one of the configured rates.
+	 * Update the active org's VAT configuration (owner-only). Normalises the rate list
+	 * (`vatEnsureDefault` guarantees exactly one active default, labels are trimmed) and enforces
+	 * the cross-field rule that at least one active rate exists.
 	 */
 	async updateVatSettings(actingUserId: string, organizationId: string, input: OrgVatConfig): Promise<OrgVatConfig> {
-		const rates = [...new Set(input.rates)];
-		if (!rates.includes(input.defaultRate)) {
-			throw new BadRequestException(VAT_DEFAULT_RATE_NOT_IN_RATES);
+		const rates = vatEnsureDefault(input.rates.map(rate => ({ ...rate, label: rate.label.trim() })));
+		if (!rates.some(rate => rate.active)) {
+			throw new BadRequestException(VAT_NO_ACTIVE_RATE);
 		}
+		// `reverseChargeLabel` validation is skipped when reverse charge is disabled (ValidateIf), so
+		// it can arrive undefined — guard the trim to avoid a 500.
+		const reverseChargeLabel = (input.reverseChargeLabel ?? '').trim();
 
 		const updated = await this.prisma.organization.update({
 			where: { id: organizationId },
 			data: {
-				vatRates: rates,
-				vatDefaultRate: input.defaultRate,
+				vatRates: rates as unknown as Prisma.InputJsonValue,
 				vatReverseChargeEnabled: input.reverseChargeEnabled,
-				vatReverseChargeLabel: input.reverseChargeLabel.trim()
+				vatReverseChargeLabel: reverseChargeLabel
 			},
 			select: {
 				vatRates: true,
-				vatDefaultRate: true,
 				vatReverseChargeEnabled: true,
 				vatReverseChargeLabel: true
 			}
@@ -342,20 +345,18 @@ export class MeService {
 
 		this.logService.logAction({
 			action: 'organization.vat_settings_updated',
-			message: `VAT settings updated for org ${organizationId} → rates=[${rates.join(', ')}], default=${input.defaultRate}, reverseCharge=${input.reverseChargeEnabled}`,
+			message: `VAT settings updated for org ${organizationId} → ${rates.length} rate(s), reverseCharge=${input.reverseChargeEnabled}`,
 			metadata: {
 				organizationId,
 				updatedBy: actingUserId,
 				rates,
-				defaultRate: input.defaultRate,
 				reverseChargeEnabled: input.reverseChargeEnabled
 			},
 			context: 'MeService'
 		});
 
 		return {
-			rates: updated.vatRates.map(rate => rate.toNumber()),
-			defaultRate: updated.vatDefaultRate.toNumber(),
+			rates: updated.vatRates as unknown as VatRateOption[],
 			reverseChargeEnabled: updated.vatReverseChargeEnabled,
 			reverseChargeLabel: updated.vatReverseChargeLabel
 		};
@@ -381,6 +382,8 @@ export class MeService {
 				defaultPaymentTermsDays: true,
 				quoteValidityDays: true,
 				vertical: true,
+				language: true,
+				timezone: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
@@ -397,6 +400,8 @@ export class MeService {
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
 			quoteValidityDays: row.quoteValidityDays,
 			vertical: row.vertical,
+			language: row.language,
+			timezone: row.timezone,
 			hasLogo: row.logoStorageKey !== null,
 			hasLetterhead: row.letterheadStorageKey !== null
 		};
@@ -426,7 +431,9 @@ export class MeService {
 			normalized.companyRegistrationNumber = normalizeBusinessText(input.companyRegistrationNumber);
 		}
 		if (input.companyVatNumber !== undefined) {
-			normalized.companyVatNumber = normalizeBusinessText(input.companyVatNumber);
+			// Store VAT numbers uppercased so `nl..b01` and `NL..B01` don't produce two spellings.
+			const vat = normalizeBusinessText(input.companyVatNumber);
+			normalized.companyVatNumber = vat === null ? null : vat.toUpperCase();
 		}
 		if (input.companyAddress !== undefined) {
 			normalized.companyAddress = normalizeBusinessText(input.companyAddress);
@@ -449,6 +456,12 @@ export class MeService {
 		if (input.vertical !== undefined) {
 			normalized.vertical = input.vertical;
 		}
+		if (input.language !== undefined) {
+			normalized.language = input.language;
+		}
+		if (input.timezone !== undefined) {
+			normalized.timezone = input.timezone;
+		}
 
 		const updated = await this.prisma.organization.update({
 			where: { id: organizationId },
@@ -464,6 +477,8 @@ export class MeService {
 				defaultPaymentTermsDays: true,
 				quoteValidityDays: true,
 				vertical: true,
+				language: true,
+				timezone: true,
 				logoStorageKey: true,
 				letterheadStorageKey: true
 			}
@@ -499,6 +514,8 @@ export class MeService {
 			defaultPaymentTermsDays: updated.defaultPaymentTermsDays,
 			quoteValidityDays: updated.quoteValidityDays,
 			vertical: updated.vertical,
+			language: updated.language,
+			timezone: updated.timezone,
 			hasLogo: updated.logoStorageKey !== null,
 			hasLetterhead: updated.letterheadStorageKey !== null
 		};
@@ -698,6 +715,78 @@ export class MeService {
 	}
 
 	/**
+	 * Wipe all ingested email data for the org — the "Verwijder alle ingelezen e-mails"
+	 * danger action. Deletes RawMessage + Opportunity (which cascades ReplyDraft +
+	 * attachments, QuoteDraft + line items, QuotePdf, ExpiryAction) + Notification.
+	 *
+	 * Deliberately KEEPS: EmailAccount connections + their sync cursors (so only *new*
+	 * mail re-ingests — old mail sits behind the cursor), catalog / pricing / playbook
+	 * config, notification preferences, and AICall / Log audit rows (SetNull-detached
+	 * from the deleted opportunities). Owner-only at the controller layer.
+	 */
+	async purgeIngestedData(actingUserId: string, organizationId: string): Promise<PurgeIngestedDataResponseDto> {
+		// Collect blob keys BEFORE the rows disappear (attachments + quote PDFs share
+		// the same ATTACHMENT_STORAGE). Cleaned up best-effort after the DB commit.
+		const [attachments, quotePdfs] = await Promise.all([
+			this.prisma.replyDraftAttachment.findMany({
+				where: { replyDraft: { opportunity: { organizationId } } },
+				select: { storageKey: true }
+			}),
+			this.prisma.quotePdf.findMany({
+				where: { organizationId },
+				select: { storageKey: true }
+			})
+		]);
+
+		const result = await this.prisma.$transaction(
+			async tx => {
+				// Notifications point at opportunities via link/metadata (no FK), so clear them
+				// too or they'd deep-link to deleted rows.
+				const notifications = await tx.notification.deleteMany({ where: { organizationId } });
+				// Deleting opportunities cascades ReplyDraft (+attachments), QuoteDraft (+line
+				// items), QuotePdf, and ExpiryAction; AICall rows are SetNull-detached, not deleted.
+				const opportunities = await tx.opportunity.deleteMany({ where: { organizationId } });
+				// Finally the ingested emails themselves.
+				const rawMessages = await tx.rawMessage.deleteMany({ where: { organizationId } });
+
+				return {
+					deletedOpportunities: opportunities.count,
+					deletedRawMessages: rawMessages.count,
+					deletedNotifications: notifications.count
+				};
+			},
+			// A long-lived org can have thousands of cascading rows — raise the interactive-transaction
+			// timeout well above Prisma's 5s default so a big purge doesn't roll back mid-delete.
+			{ timeout: 120_000, maxWait: 10_000 }
+		);
+
+		const storageKeys = [...attachments, ...quotePdfs].map(row => row.storageKey);
+		await Promise.all(
+			storageKeys.map(key =>
+				this.storage.delete(key).catch(error => {
+					this.logService.logAction({
+						action: 'organization.data_purge.blob_delete_failed',
+						message: `Blob cleanup failed during data purge: ${error instanceof Error ? error.message : 'unknown'}`,
+						metadata: { organizationId, storageKey: key },
+						level: 'warn',
+						stack: error instanceof Error ? error.stack : undefined,
+						context: 'MeService'
+					});
+				})
+			)
+		);
+
+		this.logService.logAction({
+			action: 'organization.data_purged',
+			message: `Ingested data purged for organization ${organizationId}`,
+			metadata: { organizationId, purgedBy: actingUserId, ...result, blobs: storageKeys.length },
+			context: 'MeService'
+		});
+
+		return result;
+	}
+
+	/**
 	 * Remove a member from the active organization. Owner-only at the controller layer
 	 * (`@UseGuards(OwnerGuard)`). Does NOT require entitlement — an org that's canceled or
 	 * past_due should still be able to clean up its team.
@@ -808,6 +897,8 @@ export class MeService {
 			defaultPaymentTermsDays: true,
 			quoteValidityDays: true,
 			vertical: true,
+			language: true,
+			timezone: true,
 			logoStorageKey: true,
 			letterheadStorageKey: true
 		} as const;
@@ -824,6 +915,8 @@ export class MeService {
 		defaultPaymentTermsDays: number;
 		quoteValidityDays: number;
 		vertical: VerticalValue;
+		language: string;
+		timezone: string;
 		logoStorageKey: string | null;
 		letterheadStorageKey: string | null;
 	}): BusinessDetails {
@@ -838,6 +931,8 @@ export class MeService {
 			defaultPaymentTermsDays: row.defaultPaymentTermsDays,
 			quoteValidityDays: row.quoteValidityDays,
 			vertical: row.vertical,
+			language: row.language,
+			timezone: row.timezone,
 			hasLogo: row.logoStorageKey !== null,
 			hasLetterhead: row.letterheadStorageKey !== null
 		};

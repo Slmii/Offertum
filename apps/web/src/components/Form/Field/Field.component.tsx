@@ -33,6 +33,7 @@ export function StandaloneField({
 	disabled = false,
 	required = false,
 	placeholder,
+	startElement,
 	endElement,
 	fullWidth,
 	readOnly = false,
@@ -151,6 +152,9 @@ export function StandaloneField({
 					...(label ? { 'aria-label': label } : {}),
 					...slotProps?.htmlInput
 				}}
+				startAdornment={
+					startElement ? <InputAdornment position='start'>{startElement}</InputAdornment> : null
+				}
 				endAdornment={
 					isLoading || maxLength || endElement ? (
 						<InputAdornment

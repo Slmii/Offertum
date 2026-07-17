@@ -1,5 +1,6 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
+import { toDaysUntil } from '@/lib/utils/date.utils';
 import { toReadableEuro } from '@/lib/utils/number.utils';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
@@ -30,6 +31,8 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 	const lineCount = draft.lineItems.length;
 	const unpricedCount = totals.unpricedLineCount;
 	const statusLabel = draft.status === 'sent' ? 'Verzonden' : 'Concept';
+	// The quote's validity window has lapsed (validUntil in the past) — surface a red chip.
+	const expired = draft.validUntil !== null && toDaysUntil(draft.validUntil) < 0;
 
 	return (
 		<ButtonBase
@@ -60,21 +63,39 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 				>
 					Offerte
 				</Box>
-				<Box
-					component='span'
-					sx={{
-						ml: 'auto',
-						px: 1,
-						py: 0.25,
-						borderRadius: `${tokens.radius.sm}px`,
-						backgroundColor: c.surface,
-						border: `1px solid ${c.lineStrong}`,
-						color: c.ink2,
-						fontSize: 11,
-						fontWeight: 'bold'
-					}}
-				>
-					{statusLabel}
+				<Box component='span' sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+					{expired && (
+						<Box
+							component='span'
+							sx={{
+								px: 1,
+								py: 0.25,
+								borderRadius: `${tokens.radius.sm}px`,
+								backgroundColor: c.lost[50],
+								border: `1px solid ${c.lost[500]}`,
+								color: c.lost[700],
+								fontSize: 11,
+								fontWeight: 'bold'
+							}}
+						>
+							Verlopen
+						</Box>
+					)}
+					<Box
+						component='span'
+						sx={{
+							px: 1,
+							py: 0.25,
+							borderRadius: `${tokens.radius.sm}px`,
+							backgroundColor: c.surface,
+							border: `1px solid ${c.lineStrong}`,
+							color: c.ink2,
+							fontSize: 11,
+							fontWeight: 'bold'
+						}}
+					>
+						{statusLabel}
+					</Box>
 				</Box>
 			</Box>
 

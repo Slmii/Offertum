@@ -2,7 +2,7 @@ import { AppIcon } from '@/components/AppIcon.component';
 import { BodySmall } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
 import { quoteDraftsQueryOptions, useAttachQuotePdf } from '@/lib/queries/quote-drafts.queries';
-import { toReadableDateTime } from '@/lib/utils/date.utils';
+import { toDaysUntil, toReadableDateTime } from '@/lib/utils/date.utils';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -94,6 +94,11 @@ export function QuotePdfAttachSelect({
 	const selected = data.pdfs.find(pdf => pdf.id === selectedPdfId) ?? null;
 	const isOpen = Boolean(anchorEl);
 	const disabled = readOnly || attach.isPending;
+	// When the quote's validity has lapsed, every existing PDF's "Geldig tot" is already past
+	// (validity only moves forward on regenerate), so none are safe to attach. Block picking a
+	// version — but keep the "Geen offerte-PDF" detach option live so an already-attached one
+	// can still be removed rather than trapped.
+	const quoteExpired = data.drafts[0]?.validUntil != null && toDaysUntil(data.drafts[0].validUntil) < 0;
 
 	return (
 		<Box>
@@ -182,64 +187,78 @@ export function QuotePdfAttachSelect({
 				anchorEl={anchorEl}
 				open={isOpen}
 				onClose={() => setAnchorEl(null)}
-				slotProps={{ paper: { sx: { minWidth: anchorEl?.offsetWidth ?? 320 } } }}
+				slotProps={{ paper: { sx: { minWidth: anchorEl?.offsetWidth ?? 320, overflow: 'hidden' } } }}
 			>
-				<Box
-					sx={{
-						px: 1.25,
-						pt: 0.75,
-						pb: 0.5,
-						fontSize: 10,
-						fontWeight: 'bold',
-						letterSpacing: '0.06em',
-						textTransform: 'uppercase',
-						color: c.ink4
-					}}
-				>
-					PDF-versies
-				</Box>
-				{data.pdfs.map(pdf => {
-					const isSelected = pdf.id === selectedPdfId;
-					return (
-						<MenuItem key={pdf.id} selected={isSelected} onClick={() => commit(pdf.id)} sx={{ gap: 1.25 }}>
-							<Box
-								component='span'
-								sx={{
-									fontSize: 12,
-									fontWeight: 'bold',
-									color: isSelected ? c.accent[700] : c.ink1,
-									backgroundColor: isSelected ? c.surface : c.paper3,
-									px: 1,
-									py: 0.25,
-									borderRadius: `${tokens.radius.sm}px`,
-									flexShrink: 0,
-									fontVariantNumeric: 'tabular-nums'
-								}}
+				{/* PDF versions scroll; the "Geen offerte-PDF" detach option stays pinned below. */}
+				<Box sx={{ maxHeight: 260, overflowY: 'auto' }}>
+					<Box
+						sx={{
+							px: 1.25,
+							pt: 0.75,
+							pb: 0.5,
+							fontSize: 10,
+							fontWeight: 'bold',
+							letterSpacing: '0.06em',
+							textTransform: 'uppercase',
+							color: c.ink4
+						}}
+					>
+						PDF-versies
+					</Box>
+					{quoteExpired && (
+						<Box sx={{ px: 1.25, pb: 0.75, fontSize: 11, color: c.lost[700] }}>
+							Offerte is verlopen — genereer een nieuwe PDF om te versturen.
+						</Box>
+					)}
+					{data.pdfs.map(pdf => {
+						const isSelected = pdf.id === selectedPdfId;
+						return (
+							<MenuItem
+								key={pdf.id}
+								selected={isSelected}
+								disabled={quoteExpired && !isSelected}
+								onClick={() => commit(pdf.id)}
+								sx={{ gap: 1.25 }}
 							>
-								v{versionByPdfId.get(pdf.id)}
-							</Box>
-							<Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
 								<Box
 									component='span'
-									sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+									sx={{
+										fontSize: 12,
+										fontWeight: 'bold',
+										color: isSelected ? c.accent[700] : c.ink1,
+										backgroundColor: isSelected ? c.surface : c.paper3,
+										px: 1,
+										py: 0.25,
+										borderRadius: `${tokens.radius.sm}px`,
+										flexShrink: 0,
+										fontVariantNumeric: 'tabular-nums'
+									}}
 								>
-									{pdf.filename}
+									v{versionByPdfId.get(pdf.id)}
 								</Box>
-								<Box component='span' sx={{ fontSize: 11, color: c.ink4 }}>
-									{toReadableDateTime(pdf.createdAt)}
+								<Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+									<Box
+										component='span'
+										sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+									>
+										{pdf.filename}
+									</Box>
+									<Box component='span' sx={{ fontSize: 11, color: c.ink4 }}>
+										{toReadableDateTime(pdf.createdAt)}
+									</Box>
 								</Box>
-							</Box>
-							{isSelected && (
-								<Box
-									component='span'
-									sx={{ display: 'inline-flex', color: c.accent[500], flexShrink: 0 }}
-								>
-									<AppIcon name='check' size='small' />
-								</Box>
-							)}
-						</MenuItem>
-					);
-				})}
+								{isSelected && (
+									<Box
+										component='span'
+										sx={{ display: 'inline-flex', color: c.accent[500], flexShrink: 0 }}
+									>
+										<AppIcon name='check' size='small' />
+									</Box>
+								)}
+							</MenuItem>
+						);
+					})}
+				</Box>
 				<Divider />
 				<MenuItem selected={selectedPdfId === null} onClick={() => commit(null)} sx={{ gap: 1.25 }}>
 					<Box component='span' sx={{ display: 'inline-flex', color: c.ink4, flexShrink: 0 }}>
