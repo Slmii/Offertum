@@ -104,7 +104,10 @@ type QuoteSettingsForm = Pick<BusinessDetailsForm, 'defaultPaymentTermsDays' | '
 function BusinessDetailsSettingsPage() {
 	const { data } = useSuspenseQuery(businessDetailsQueryOptions);
 	const { data: membership } = useSuspenseQuery(myMembershipQueryOptions);
-	const update = useUpdateBusinessDetails();
+	const updateIdentity = useUpdateBusinessDetails();
+	const updateContact = useUpdateBusinessDetails();
+	const updateLocale = useUpdateBusinessDetails();
+	const updateQuoteSettings = useUpdateBusinessDetails();
 	const uploadLogo = useUploadBusinessAsset('logo');
 	const uploadLetterhead = useUploadBusinessAsset('letterhead');
 	const deleteLogo = useDeleteBusinessAsset('logo');
@@ -180,12 +183,15 @@ function BusinessDetailsSettingsPage() {
 	// Empty / whitespace-only strings collapse to null so the DB never stores "".
 	const orNull = (value: string) => (value.trim().length === 0 ? null : value);
 
-	const commitSection = (fields: UpdateBusinessDetailsInput) => {
+	const commitSection = (
+		mutation: ReturnType<typeof useUpdateBusinessDetails>,
+		fields: UpdateBusinessDetailsInput
+	) => {
 		if (!isOwner) {
 			return;
 		}
 
-		update.mutate(fields, {
+		mutation.mutate(fields, {
 			onSuccess: () => toast.success('Opgeslagen', 'Je wijzigingen zijn bewaard.'),
 			onError: error =>
 				toast.error('Opslaan mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
@@ -193,7 +199,7 @@ function BusinessDetailsSettingsPage() {
 	};
 
 	const saveIdentity = (values: IdentityForm) =>
-		commitSection({
+		commitSection(updateIdentity, {
 			name: values.name,
 			companyRegistrationNumber: orNull(values.companyRegistrationNumber),
 			companyVatNumber: orNull(values.companyVatNumber),
@@ -202,15 +208,16 @@ function BusinessDetailsSettingsPage() {
 		});
 
 	const saveContact = (values: ContactForm) =>
-		commitSection({
+		commitSection(updateContact, {
 			companyPhone: orNull(values.companyPhone),
 			companyWebsite: orNull(values.companyWebsite)
 		});
 
-	const saveLocale = (values: LocaleForm) => commitSection({ language: values.language, timezone: values.timezone });
+	const saveLocale = (values: LocaleForm) =>
+		commitSection(updateLocale, { language: values.language, timezone: values.timezone });
 
 	const saveQuoteSettings = (values: QuoteSettingsForm) =>
-		commitSection({
+		commitSection(updateQuoteSettings, {
 			defaultPaymentTermsDays: values.defaultPaymentTermsDays,
 			quoteValidityDays: values.quoteValidityDays,
 			companyFooter: orNull(values.companyFooter)
@@ -306,7 +313,7 @@ function BusinessDetailsSettingsPage() {
 								/>
 							</Box>
 						</Box>
-						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+						{isOwner && <SectionSaveFooter isPending={updateIdentity.isPending} />}
 					</Form>
 				</CardSection>
 
@@ -338,7 +345,7 @@ function BusinessDetailsSettingsPage() {
 								disabled={!isOwner}
 							/>
 						</Box>
-						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+						{isOwner && <SectionSaveFooter isPending={updateContact.isPending} />}
 					</Form>
 				</CardSection>
 
@@ -374,7 +381,7 @@ function BusinessDetailsSettingsPage() {
 								required
 							/>
 						</Box>
-						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+						{isOwner && <SectionSaveFooter isPending={updateLocale.isPending} />}
 					</Form>
 				</CardSection>
 
@@ -420,7 +427,7 @@ function BusinessDetailsSettingsPage() {
 								/>
 							</Box>
 						</Box>
-						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+						{isOwner && <SectionSaveFooter isPending={updateQuoteSettings.isPending} />}
 					</Form>
 				</CardSection>
 
