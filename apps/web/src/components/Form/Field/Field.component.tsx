@@ -10,7 +10,32 @@ import slugify from 'slugify';
 import type { FieldProps, StandaloneFieldProps } from './Field.types';
 
 const textEncoder = new TextEncoder();
-const getByteLength = (value: string) => textEncoder.encode(value).length;
+export const getByteLength = (value: string) => textEncoder.encode(value).length;
+
+// Trim by UTF-8 byte length to match backend constraints. Exported so callers that write a
+// field's value outside its own `onChange` (e.g. filling a textarea from a preset) can clamp
+// through the same rule the field enforces on keystrokes.
+export const trimToMaxBytes = (value: string, maxBytes: number) => {
+	if (getByteLength(value) <= maxBytes) {
+		return value;
+	}
+
+	let trimmedValue = '';
+	let currentBytes = 0;
+
+	for (const character of value) {
+		const characterBytes = textEncoder.encode(character).length;
+
+		if (currentBytes + characterBytes > maxBytes) {
+			break;
+		}
+
+		currentBytes += characterBytes;
+		trimmedValue += character;
+	}
+
+	return trimmedValue;
+};
 
 /**
  * Composed MUI text field: `FormControl` + `InputLabel` + `OutlinedInput` + `FormHelperText`
@@ -55,29 +80,6 @@ export function StandaloneField({
 	const inputId = `${slugify(name)}-input`;
 	const helperId = `${inputId}-helper-text`;
 	const helperContent = error || helperText;
-
-	const trimToMaxBytes = (value: string, maxBytes: number) => {
-		if (getByteLength(value) <= maxBytes) {
-			return value;
-		}
-
-		// Trim by UTF-8 byte length to match backend constraints.
-		let trimmedValue = '';
-		let currentBytes = 0;
-
-		for (const character of value) {
-			const characterBytes = textEncoder.encode(character).length;
-
-			if (currentBytes + characterBytes > maxBytes) {
-				break;
-			}
-
-			currentBytes += characterBytes;
-			trimmedValue += character;
-		}
-
-		return trimmedValue;
-	};
 
 	const forwardChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
 		if (!maxLength) {
