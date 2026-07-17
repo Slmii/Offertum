@@ -9,7 +9,7 @@ export class CalendarEventDto implements CalendarEvent {
 	@ApiProperty()
 	opportunityId!: string;
 
-	@ApiProperty({ enum: ['sent', 'expiry', 'appointment', 'deadline', 'follow_up'] })
+	@ApiProperty({ enum: ['expiry', 'appointment', 'deadline', 'follow_up'] })
 	type!: CalendarEventType;
 
 	@ApiProperty()

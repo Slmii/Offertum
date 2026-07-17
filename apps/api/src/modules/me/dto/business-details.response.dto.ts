@@ -20,6 +20,9 @@ export class BusinessDetailsResponseDto implements BusinessDetails {
 	@ApiProperty({ enum: VERTICAL_VALUES })
 	vertical!: VerticalValue;
 
+	language!: string;
+	timezone!: string;
+
 	hasLogo!: boolean;
 	hasLetterhead!: boolean;
 }

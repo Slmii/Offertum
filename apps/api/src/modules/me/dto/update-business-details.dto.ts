@@ -6,11 +6,16 @@ import {
 	COMPANY_REGISTRATION_NUMBER_MAX_LENGTH,
 	COMPANY_VAT_MAX_LENGTH,
 	COMPANY_WEBSITE_MAX_LENGTH,
+	KVK_NUMBER_REGEX,
+	NL_VAT_NUMBER_REGEX,
 	PAYMENT_TERMS_DAYS_MAX,
 	PAYMENT_TERMS_DAYS_MIN,
 	QUOTE_VALIDITY_DAYS_MAX,
 	QUOTE_VALIDITY_DAYS_MIN,
+	SUPPORTED_LANGUAGE_VALUES,
+	SUPPORTED_TIMEZONE_VALUES,
 	VERTICAL_VALUES,
+	WEBSITE_REGEX,
 	type UpdateBusinessDetailsInput,
 	type VerticalValue
 } from '@offertum/shared';
@@ -46,16 +51,18 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@Matches(NON_WHITESPACE_PATTERN, { message: `name ${NON_WHITESPACE_MESSAGE}` })
 	name?: string;
 
-	@ValidateIf((_, value) => value !== null)
+	@ValidateIf((_, value) => value !== null && value !== '')
 	@IsOptional()
 	@IsString()
 	@MaxLength(COMPANY_REGISTRATION_NUMBER_MAX_LENGTH)
+	@Matches(KVK_NUMBER_REGEX, { message: 'companyRegistrationNumber must be a valid KvK number (8 digits)' })
 	companyRegistrationNumber?: string | null;
 
-	@ValidateIf((_, value) => value !== null)
+	@ValidateIf((_, value) => value !== null && value !== '')
 	@IsOptional()
 	@IsString()
 	@MaxLength(COMPANY_VAT_MAX_LENGTH)
+	@Matches(NL_VAT_NUMBER_REGEX, { message: 'companyVatNumber must be a valid NL VAT number (e.g. NL123456789B01)' })
 	companyVatNumber?: string | null;
 
 	@ValidateIf((_, value) => value !== null)
@@ -70,10 +77,11 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@MaxLength(COMPANY_PHONE_MAX_LENGTH)
 	companyPhone?: string | null;
 
-	@ValidateIf((_, value) => value !== null)
+	@ValidateIf((_, value) => value !== null && value !== '')
 	@IsOptional()
 	@IsString()
 	@MaxLength(COMPANY_WEBSITE_MAX_LENGTH)
+	@Matches(WEBSITE_REGEX, { message: 'companyWebsite must be a valid website (e.g. jouwbedrijf.nl)' })
 	companyWebsite?: string | null;
 
 	@ValidateIf((_, value) => value !== null)
@@ -97,4 +105,12 @@ export class UpdateBusinessDetailsDto implements UpdateBusinessDetailsInput {
 	@IsOptional()
 	@IsIn(VERTICAL_VALUES)
 	vertical?: VerticalValue;
+
+	@IsOptional()
+	@IsIn(SUPPORTED_LANGUAGE_VALUES)
+	language?: string;
+
+	@IsOptional()
+	@IsIn(SUPPORTED_TIMEZONE_VALUES)
+	timezone?: string;
 }

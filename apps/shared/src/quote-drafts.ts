@@ -133,3 +133,11 @@ export interface UpdateQuoteLineItemInput {
 	unit?: string;
 	position?: number;
 }
+
+/**
+ * Org-unique quote number: `OFF-{year}-{4-digit sequence}` (e.g. `OFF-2026-0007`). The sequence is
+ * an org-lifetime counter, so gaps and cross-year continuity are expected; `year` is the issue year.
+ */
+export function formatQuoteNumber(year: number, sequence: number): string {
+	return `OFF-${year}-${String(sequence).padStart(4, '0')}`;
+}

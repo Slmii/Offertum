@@ -7,6 +7,7 @@ import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { BusinessDetailsResponseDto } from '@/modules/me/dto/business-details.response.dto';
 import { FollowUpSettingsResponseDto } from '@/modules/me/dto/follow-up-settings.response.dto';
 import { MembershipResponseDto } from '@/modules/me/dto/membership.response.dto';
+import { PurgeIngestedDataResponseDto } from '@/modules/me/dto/purge-ingested-data.response.dto';
 import { SwitchOrganizationDto } from '@/modules/me/dto/switch-organization.dto';
 import { TonePlaybookResponseDto } from '@/modules/me/dto/tone-playbook.response.dto';
 import { UpdateBusinessDetailsDto } from '@/modules/me/dto/update-business-details.dto';
@@ -143,7 +144,6 @@ export class MeController {
 	updateVatSettings(@Req() request: Request, @Body() body: UpdateVatSettingsDto): Promise<VatSettingsResponseDto> {
 		return this.me.updateVatSettings(this.userId(request), request.organizationId!, {
 			rates: body.rates,
-			defaultRate: body.defaultRate,
 			reverseChargeEnabled: body.reverseChargeEnabled,
 			reverseChargeLabel: body.reverseChargeLabel
 		});
@@ -244,6 +244,17 @@ export class MeController {
 	@Delete('organization')
 	async deleteOrganization(@Req() request: Request, @Body() body: DeleteOrganizationDto): Promise<void> {
 		await this.me.deleteOrganization(this.userId(request), request.organizationId!, body.confirm);
+	}
+
+	@ApiOperation({
+		summary: 'Purge all ingested email data for the active organization; keeps mailboxes + config (owner-only)'
+	})
+	@ApiOkResponse({ type: PurgeIngestedDataResponseDto })
+	@UseGuards(OwnerGuard)
+	@Header('Cache-Control', 'no-store')
+	@Delete('organization/data')
+	purgeOrganizationData(@Req() request: Request): Promise<PurgeIngestedDataResponseDto> {
+		return this.me.purgeIngestedData(this.userId(request), request.organizationId!);
 	}
 
 	/**

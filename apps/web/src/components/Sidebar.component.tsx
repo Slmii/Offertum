@@ -794,7 +794,7 @@ function UserMenu({ collapsed, name, email }: { collapsed: boolean; name: string
 				<MenuItem
 					onClick={() => {
 						setAnchorEl(null);
-						void navigate({ to: '/settings/business-details' });
+						void navigate({ to: '/settings/organization' });
 					}}
 				>
 					<ListItemIcon sx={{ minWidth: 28 }}>

@@ -50,8 +50,8 @@ const FILTER_OPTIONS: { id: CatalogFilter; label: string }[] = [
 const TABLE_HEADER_HEIGHT = 48;
 
 // Catalogus is a top-level page (its own sidebar item — sibling of Instellingen), NOT a settings
-// sub-tab, so it renders without the SettingsNav tab bar. Owner-only + prefetches the item list and
-// the org VAT config (the create/edit dialog's BTW dropdown reads it).
+// sub-tab, so it renders without the Settings area's inline sub-nav. Owner-only + prefetches the
+// item list and the org VAT config (the create/edit dialog's BTW dropdown reads it).
 export const Route = createFileRoute('/(app)/catalog')({
 	beforeLoad: async ({ context }) => {
 		const me = await context.queryClient.ensureQueryData(myMembershipQueryOptions);
@@ -616,8 +616,9 @@ function DeleteConfirmDialog({ isOpen, item, onClose }: { isOpen: boolean; item?
 		if (item) {
 			remove.mutate(item.id, {
 				onSuccess: onClose,
-				onError: error =>
-					toast.error('Verwijderen mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+				onError: error => {
+					toast.error('Verwijderen mislukt', error instanceof Error ? error.message : undefined);
+				}
 			});
 		}
 	};

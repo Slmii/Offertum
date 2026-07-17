@@ -13,6 +13,7 @@ export interface FieldProps extends Omit<TextFieldProps, 'variant' | 'onChange'>
 	fullWidth?: boolean;
 	readOnly?: boolean;
 	onChange?: (value: string) => void;
+	startElement?: JSX.Element;
 	endElement?: JSX.Element;
 	autoFocus?: boolean;
 	helperText?: string;

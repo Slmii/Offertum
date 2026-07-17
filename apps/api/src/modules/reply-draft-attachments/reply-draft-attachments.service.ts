@@ -90,7 +90,9 @@ export class ReplyDraftAttachmentsService {
 		}
 
 		const pdf = await this.quotePdfs.findForOrganization(organizationId, quotePdfId);
-		if (!pdf) {
+		// Scope to the route's opportunity too — an org-only lookup would let a member attach another
+		// opportunity's quote PDF (a different customer's quote) onto this draft.
+		if (!pdf || pdf.opportunityId !== opportunityId) {
 			throw new NotFoundException(QUOTE_PDF_NOT_FOUND);
 		}
 

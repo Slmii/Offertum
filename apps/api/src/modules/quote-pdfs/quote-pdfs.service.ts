@@ -6,7 +6,7 @@ import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
 import { type QuotePdfRow, QuotePdfsRepository } from '@/modules/quote-pdfs/quote-pdfs.repository';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { QuotePdf } from '@offertum/shared';
+import { formatQuoteNumber, type QuotePdf } from '@offertum/shared';
 import { randomUUID } from 'node:crypto';
 
 /** Inputs that vary per quote; business details + branding are loaded from the org. */
@@ -46,7 +46,8 @@ export class QuotePdfsService {
 		opportunityId: string,
 		quoteDraftId: string | null,
 		pdf: { buffer: Buffer; filename: string },
-		totalCents: number | null
+		totalCents: number | null,
+		quoteNumber: string | null
 	): Promise<QuotePdf> {
 		const { storageKey } = await this.storage.put({
 			storageKey: `quote-pdfs/${opportunityId}/${randomUUID()}-${pdf.filename}`,
@@ -58,6 +59,7 @@ export class QuotePdfsService {
 			opportunityId,
 			quoteDraftId,
 			filename: pdf.filename,
+			quoteNumber,
 			contentType: 'application/pdf',
 			sizeBytes: pdf.buffer.length,
 			totalCents,
@@ -197,8 +199,10 @@ function isoDateCompact(value: Date): string {
 	return value.toISOString().slice(0, 10).replaceAll('-', '');
 }
 
+// Preview / sample fallback only. Real quotes get an org-unique number via the counter in
+// QuoteDraftsService; here we just render a representative sample so the preview looks realistic.
 function buildQuoteNumber(value: Date): string {
-	return `OFF-${isoDateCompact(value)}`;
+	return formatQuoteNumber(value.getUTCFullYear(), 1);
 }
 
 /** `Offerte-<org>-<customer>-<YYYYMMDD>.pdf`, with names slugged to safe characters. */

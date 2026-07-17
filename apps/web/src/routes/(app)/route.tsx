@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/AppShell.component';
 import { BillingRequiredBanner } from '@/components/BillingRequiredBanner.component';
+import { DevRoleToggle } from '@/components/DevRoleToggle.component';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import { notificationsListQueryOptions } from '@/lib/queries/notifications.queries';
 import { myMembershipQueryOptions, myOrganizationsQueryOptions } from '@/lib/queries/team.queries';
@@ -66,6 +67,7 @@ function RouteComponent() {
 			<AppShell>
 				<Outlet />
 			</AppShell>
+			{import.meta.env.DEV && <DevRoleToggle />}
 		</>
 	);
 }

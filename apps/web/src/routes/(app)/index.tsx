@@ -4,7 +4,7 @@ import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, H3 } from '@/components/Text.component';
 import { UpsellTeaser } from '@/components/UpsellTeaser.component';
 import { createPageMeta } from '@/lib/createPageMeta';
-import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { patternsQueryOptions } from '@/lib/queries/patterns.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import Box from '@mui/material/Box';
@@ -43,6 +43,7 @@ interface QuickLink {
 function HomePage() {
 	const { tokens } = useTheme();
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 
 	const isExternal = me.role === 'EXTERNAL';
 	const isOwner = me.role === 'OWNER';
@@ -92,7 +93,7 @@ function HomePage() {
 				caption='Een overzicht van je offerteaanvragen en wat er aandacht nodig heeft.'
 			/>
 
-			<UpsellTeaser isOwner={isOwner} />
+			{!isBillingEntitled(billing.state) && <UpsellTeaser isOwner={isOwner} />}
 
 			<Box
 				sx={{

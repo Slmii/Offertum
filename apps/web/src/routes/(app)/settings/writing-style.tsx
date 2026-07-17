@@ -1,9 +1,10 @@
 import { AppIcon } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
-import { StandaloneField } from '@/components/Form/Field/Field.component';
+import { getByteLength, StandaloneField, trimToMaxBytes } from '@/components/Form/Field/Field.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, H3, Label } from '@/components/Text.component';
+import { useToast } from '@/lib/hooks/use-toast';
 import { tonePlaybookQueryOptions, useUpdateTonePlaybook } from '@/lib/queries/tone-playbook.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import Accordion from '@mui/material/Accordion';
@@ -106,12 +107,17 @@ function WritingStylePage() {
 
 	const trimmedLength = text.trim().length;
 	const isDirty = text !== serverText;
+	const isOverMaxLength = getByteLength(text) > TONE_PLAYBOOK_MAX_LENGTH;
+
+	const toast = useToast();
 
 	const handleSave = () => {
 		update.mutate(
 			{ text },
 			{
-				onSuccess: response => setSavedAt(response.text ? response.updatedAt : null)
+				onSuccess: response => setSavedAt(response.text ? response.updatedAt : null),
+				onError: error =>
+					toast.error('Opslaan mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
 			}
 		);
 	};
@@ -123,7 +129,9 @@ function WritingStylePage() {
 				onSuccess: () => {
 					setText('');
 					setSavedAt(null);
-				}
+				},
+				onError: error =>
+					toast.error('Opslaan mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
 			}
 		);
 	};
@@ -180,7 +188,7 @@ function WritingStylePage() {
 							<Button
 								variant='contained'
 								onClick={handleSave}
-								disabled={update.isPending || !isDirty || trimmedLength === 0}
+								disabled={update.isPending || !isDirty || trimmedLength === 0 || isOverMaxLength}
 								startIcon={
 									update.isPending ? (
 										<CircularProgress size={14} />
@@ -193,12 +201,6 @@ function WritingStylePage() {
 							</Button>
 						</Stack>
 					</Stack>
-
-					{update.error instanceof Error && (
-						<Banner tone='error' sx={{ mt: 2 }}>
-							{update.error.message || 'Opslaan mislukt'}
-						</Banner>
-					)}
 				</Paper>
 
 				{/* Voorbeelden — MUI accordions inside a card, styled to the design: a header + dividered
@@ -283,7 +285,7 @@ function WritingStylePage() {
 											variant='contained'
 											onClick={event => {
 												event.stopPropagation();
-												setText(example.body);
+												setText(trimToMaxBytes(example.body, TONE_PLAYBOOK_MAX_LENGTH));
 												setExpanded(null);
 											}}
 										>

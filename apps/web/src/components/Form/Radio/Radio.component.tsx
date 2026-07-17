@@ -50,10 +50,11 @@ export const StandaloneRadioGroup = ({
 	onChange,
 	label,
 	disabled,
+	required,
 	row
 }: StandaloneRadioGroupProps) => {
 	return (
-		<FormControl disabled={disabled}>
+		<FormControl disabled={disabled} required={required}>
 			{label && <FormLabel>{label}</FormLabel>}
 			<MuiRadioGroup name={name} row={row} value={value} onChange={(_e, next) => onChange(next)}>
 				{options.map(option => (

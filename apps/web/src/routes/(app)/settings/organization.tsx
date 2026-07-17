@@ -1,4 +1,6 @@
+import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
+import { Dialog } from '@/components/Dialog.component';
 import { Field } from '@/components/Form/Field/Field.component';
 import { Form } from '@/components/Form/Form.component';
 import { Select } from '@/components/Form/Select/Select.component';
@@ -6,10 +8,12 @@ import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, H3, Label } from '@/components/Text.component';
 import { apiBlob } from '@/lib/api/client';
+import { useToast } from '@/lib/hooks/use-toast';
 import {
 	businessDetailsQueryOptions,
 	useDeleteBusinessAsset,
 	useDeleteOrganization,
+	usePurgeOrganizationData,
 	useUpdateBusinessDetails,
 	useUploadBusinessAsset
 } from '@/lib/queries/business-details.queries';
@@ -21,11 +25,22 @@ import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import type { Theme } from '@mui/material/styles';
 import TextField from '@mui/material/TextField';
-import { type VerticalValue } from '@offertum/shared';
+import {
+	DEFAULT_LANGUAGE,
+	DEFAULT_TIMEZONE,
+	SUPPORTED_LANGUAGES,
+	SUPPORTED_TIMEZONES,
+	type SupportedLanguage,
+	type SupportedTimezone,
+	type UpdateBusinessDetailsInput,
+	type VerticalValue
+} from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useFormContext } from 'react-hook-form';
 import { VatSettingsSection } from './-VatSettingsSection.component';
 
 export const Route = createFileRoute('/(app)/settings/organization')({
@@ -58,6 +73,34 @@ const VERTICAL_OPTIONS = (Object.entries(VERTICAL_LABELS) as [VerticalValue, str
 	label
 }));
 
+const LANGUAGE_OPTIONS = SUPPORTED_LANGUAGES.map(({ value, label }) => ({ id: value, label }));
+const TIMEZONE_OPTIONS = SUPPORTED_TIMEZONES.map(({ value, label }) => ({ id: value, label }));
+
+// Each card is its own form + partial save (owner picked "per section"), so slice the
+// full business-details schema per card and PATCH only that card's fields on Opslaan.
+const IDENTITY_SCHEMA = BusinessDetailsSchema.pick({
+	name: true,
+	companyRegistrationNumber: true,
+	companyVatNumber: true,
+	companyAddress: true,
+	vertical: true
+});
+const CONTACT_SCHEMA = BusinessDetailsSchema.pick({ companyPhone: true, companyWebsite: true });
+const LOCALE_SCHEMA = BusinessDetailsSchema.pick({ language: true, timezone: true });
+const QUOTE_SETTINGS_SCHEMA = BusinessDetailsSchema.pick({
+	defaultPaymentTermsDays: true,
+	quoteValidityDays: true,
+	companyFooter: true
+});
+
+type IdentityForm = Pick<
+	BusinessDetailsForm,
+	'name' | 'companyRegistrationNumber' | 'companyVatNumber' | 'companyAddress' | 'vertical'
+>;
+type ContactForm = Pick<BusinessDetailsForm, 'companyPhone' | 'companyWebsite'>;
+type LocaleForm = Pick<BusinessDetailsForm, 'language' | 'timezone'>;
+type QuoteSettingsForm = Pick<BusinessDetailsForm, 'defaultPaymentTermsDays' | 'quoteValidityDays' | 'companyFooter'>;
+
 function BusinessDetailsSettingsPage() {
 	const { data } = useSuspenseQuery(businessDetailsQueryOptions);
 	const { data: membership } = useSuspenseQuery(myMembershipQueryOptions);
@@ -67,23 +110,29 @@ function BusinessDetailsSettingsPage() {
 	const deleteLogo = useDeleteBusinessAsset('logo');
 	const deleteLetterhead = useDeleteBusinessAsset('letterhead');
 	const deleteOrganization = useDeleteOrganization();
-	const [savedFlash, setSavedFlash] = useState(false);
+	const purgeData = usePurgeOrganizationData();
+	const toast = useToast();
+
+	const [deleteOpen, setDeleteOpen] = useState(false);
+	const [purgeOpen, setPurgeOpen] = useState(false);
 	const [deleteConfirm, setDeleteConfirm] = useState('');
 	const [assetPreviewVersion, setAssetPreviewVersion] = useState(0);
 	const [pdfPreviewPending, setPdfPreviewPending] = useState(false);
-	const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
 	const isOwner = membership.role === 'OWNER';
 
 	const refreshAssetPreview = () => {
 		setAssetPreviewVersion(version => version + 1);
 	};
 
+	const onAssetError = (error: unknown) =>
+		toast.error('Bestand bijwerken mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.');
+
 	// Render a sample quote PDF (fixed demo line items) so the owner can see how
 	// their logo, letterhead, company details, and footer land on an offerte —
 	// before the real quote pipeline (W10) exists. Opens the PDF in a new tab.
 	const handlePdfPreview = async () => {
-		setPdfPreviewError(null);
 		setPdfPreviewPending(true);
+
 		try {
 			const blob = await apiBlob('/api/quote-pdfs/preview', {
 				method: 'POST',
@@ -116,333 +165,642 @@ function BusinessDetailsSettingsPage() {
 					]
 				}
 			});
+
 			const url = URL.createObjectURL(blob);
 			window.open(url, '_blank', 'noopener,noreferrer');
 			// Revoke after a tick so the new tab has time to load the blob.
 			window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 		} catch (error) {
-			setPdfPreviewError(error instanceof Error ? error.message : 'Voorbeeld-PDF maken mislukt.');
+			toast.error('Voorbeeld-PDF maken mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.');
 		} finally {
 			setPdfPreviewPending(false);
 		}
 	};
 
-	const onSubmit = (values: BusinessDetailsForm) => {
+	// Empty / whitespace-only strings collapse to null so the DB never stores "".
+	const orNull = (value: string) => (value.trim().length === 0 ? null : value);
+
+	const commitSection = (fields: UpdateBusinessDetailsInput) => {
 		if (!isOwner) {
 			return;
 		}
 
-		update.mutate(
-			{
-				name: values.name,
-				companyRegistrationNumber:
-					values.companyRegistrationNumber.length === 0 ? null : values.companyRegistrationNumber,
-				companyVatNumber: values.companyVatNumber.length === 0 ? null : values.companyVatNumber,
-				companyAddress: values.companyAddress.length === 0 ? null : values.companyAddress,
-				companyPhone: values.companyPhone.length === 0 ? null : values.companyPhone,
-				companyWebsite: values.companyWebsite.length === 0 ? null : values.companyWebsite,
-				companyFooter: values.companyFooter.length === 0 ? null : values.companyFooter,
-				defaultPaymentTermsDays: values.defaultPaymentTermsDays,
-				quoteValidityDays: values.quoteValidityDays,
-				vertical: values.vertical
+		update.mutate(fields, {
+			onSuccess: () => toast.success('Opgeslagen', 'Je wijzigingen zijn bewaard.'),
+			onError: error =>
+				toast.error('Opslaan mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+		});
+	};
+
+	const saveIdentity = (values: IdentityForm) =>
+		commitSection({
+			name: values.name,
+			companyRegistrationNumber: orNull(values.companyRegistrationNumber),
+			companyVatNumber: orNull(values.companyVatNumber),
+			companyAddress: orNull(values.companyAddress),
+			vertical: values.vertical
+		});
+
+	const saveContact = (values: ContactForm) =>
+		commitSection({
+			companyPhone: orNull(values.companyPhone),
+			companyWebsite: orNull(values.companyWebsite)
+		});
+
+	const saveLocale = (values: LocaleForm) => commitSection({ language: values.language, timezone: values.timezone });
+
+	const saveQuoteSettings = (values: QuoteSettingsForm) =>
+		commitSection({
+			defaultPaymentTermsDays: values.defaultPaymentTermsDays,
+			quoteValidityDays: values.quoteValidityDays,
+			companyFooter: orNull(values.companyFooter)
+		});
+
+	const closeDeleteDialog = () => {
+		if (deleteOrganization.isPending) {
+			return;
+		}
+
+		setDeleteOpen(false);
+		setDeleteConfirm('');
+	};
+
+	const confirmDeleteOrganization = () => {
+		deleteOrganization.mutate(deleteConfirm, {
+			onError: error =>
+				toast.error('Verwijderen mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+		});
+	};
+
+	const closePurgeDialog = () => {
+		if (purgeData.isPending) {
+			return;
+		}
+
+		setPurgeOpen(false);
+	};
+
+	const confirmPurgeData = () => {
+		purgeData.mutate(undefined, {
+			onSuccess: () => {
+				setPurgeOpen(false);
+				toast.success(
+					'Ingelezen e-mails verwijderd',
+					'Alle aanvragen, concepten en offertes zijn gewist. Nieuwe e-mails worden opnieuw ingelezen.'
+				);
 			},
-			{
-				onSuccess: () => {
-					setSavedFlash(true);
-					window.setTimeout(() => setSavedFlash(false), 2500);
-				}
-			}
-		);
+			onError: error =>
+				toast.error('Verwijderen mislukt', error instanceof Error ? error.message : 'Probeer het opnieuw.')
+		});
 	};
 
 	return (
 		<Stack>
 			<PageHeader
 				title='Organisatie'
-				caption='De klantgerichte gegevens die op je offertes en facturen verschijnen. Bewaar je officiële bedrijfsnaam, adres, contactgegevens, merkbestanden en standaard betalingstermijn hier.'
+				caption='Bedrijfsgegevens en standaardinstellingen. Deze gegevens verschijnen op de afzender van je concept-antwoorden en op offertes.'
 			/>
 
-			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2 }}>
-				<Form<BusinessDetailsForm>
-					action={onSubmit}
-					schema={BusinessDetailsSchema}
-					defaultValues={{
-						name: data.name,
-						companyRegistrationNumber: data.companyRegistrationNumber ?? '',
-						companyVatNumber: data.companyVatNumber ?? '',
-						companyAddress: data.companyAddress ?? '',
-						companyPhone: data.companyPhone ?? '',
-						companyWebsite: data.companyWebsite ?? '',
-						companyFooter: data.companyFooter ?? '',
-						defaultPaymentTermsDays: data.defaultPaymentTermsDays,
-						quoteValidityDays: data.quoteValidityDays,
-						vertical: data.vertical
-					}}
+			<Stack useFlexGap spacing={4}>
+				{!isOwner && (
+					<Banner tone='info'>
+						Alleen eigenaren kunnen organisatiegegevens, logo en briefpapier aanpassen.
+					</Banner>
+				)}
+
+				<CardSection
+					title='Identiteit'
+					caption='De naam en registratiegegevens die klanten zien op je antwoorden en offerte-PDF.'
 				>
-					<Stack useFlexGap spacing={4}>
-						{!isOwner && (
-							<Banner tone='info'>
-								Alleen eigenaren kunnen organisatiegegevens, logo en briefpapier aanpassen.
-							</Banner>
-						)}
+					<Form<IdentityForm>
+						action={saveIdentity}
+						schema={IDENTITY_SCHEMA}
+						defaultValues={{
+							name: data.name,
+							companyRegistrationNumber: data.companyRegistrationNumber ?? '',
+							companyVatNumber: data.companyVatNumber ?? '',
+							companyAddress: data.companyAddress ?? '',
+							vertical: data.vertical
+						}}
+					>
+						<Box sx={{ p: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+							<Field name='name' fullWidth label='Bedrijfsnaam' disabled={!isOwner} required />
+							<Select
+								name='vertical'
+								options={VERTICAL_OPTIONS}
+								fullWidth
+								label='Branche'
+								disabled={!isOwner}
+								required
+							/>
+							<Field name='companyRegistrationNumber' fullWidth label='KvK-nummer' disabled={!isOwner} />
+							<Field name='companyVatNumber' fullWidth label='BTW-nummer' disabled={!isOwner} />
+							<Box sx={{ gridColumn: '1 / -1' }}>
+								<Field
+									name='companyAddress'
+									fullWidth
+									multiline
+									label='Bezoekadres'
+									disabled={!isOwner}
+									minRows={3}
+								/>
+							</Box>
+						</Box>
+						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+					</Form>
+				</CardSection>
 
-						<Field name='name' label='Bedrijfsnaam' fullWidth disabled={!isOwner} required />
-						<Stack direction='row' useFlexGap spacing={2}>
-							<Field name='companyRegistrationNumber' label='KvK-nummer' fullWidth disabled={!isOwner} />
-							<Field name='companyVatNumber' label='BTW-nummer' fullWidth disabled={!isOwner} />
-						</Stack>
-						<Field name='companyAddress' label='Adres' fullWidth multiline disabled={!isOwner} />
-						<Stack direction='row' useFlexGap spacing={2}>
-							<Field name='companyPhone' label='Telefoonnummer' fullWidth disabled={!isOwner} />
-							<Field name='companyWebsite' label='Website' fullWidth disabled={!isOwner} />
-						</Stack>
-						<Field
-							name='defaultPaymentTermsDays'
-							label='Standaard betalingstermijn (dagen)'
-							type='number'
-							fullWidth
-							disabled={!isOwner}
-							required
-						/>
-						<Field
-							name='quoteValidityDays'
-							label='Geldigheidsduur offerte (dagen)'
-							type='number'
-							fullWidth
-							disabled={!isOwner}
-							required
-						/>
-						<Select
-							name='vertical'
-							label='Branche'
-							options={VERTICAL_OPTIONS}
-							fullWidth
-							disabled={!isOwner}
-							required
-						/>
-						<Field
-							name='companyFooter'
-							label='Footer'
-							helperText='Tekst onderaan je offerte- en factuur-PDF.'
-							fullWidth
-							multiline
-							disabled={!isOwner}
-						/>
+				<CardSection
+					title='Contact'
+					caption='Standaard telefoon en website die Offertum in je handtekening verwerkt.'
+				>
+					<Form<ContactForm>
+						action={saveContact}
+						schema={CONTACT_SCHEMA}
+						defaultValues={{
+							companyPhone: data.companyPhone ?? '',
+							companyWebsite: data.companyWebsite ?? ''
+						}}
+					>
+						<Box sx={{ p: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+							<Field
+								name='companyPhone'
+								fullWidth
+								label='Telefoonnummer'
+								startElement={<AppIcon name='phone' />}
+								disabled={!isOwner}
+							/>
+							<Field
+								name='companyWebsite'
+								fullWidth
+								label='Website'
+								startElement={<AppIcon name='world' />}
+								disabled={!isOwner}
+							/>
+						</Box>
+						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+					</Form>
+				</CardSection>
 
-						{isOwner && update.error && (
-							<Banner tone='error'>
-								{update.error instanceof Error ? update.error.message : 'Opslaan mislukt.'}
-							</Banner>
-						)}
-						{isOwner && savedFlash && <Banner tone='success'>Opgeslagen.</Banner>}
+				<CardSection
+					title='Taal & tijdzone'
+					caption='Je standaardtaal en tijdzone voor deze organisatie.'
+				>
+					<Form<LocaleForm>
+						action={saveLocale}
+						schema={LOCALE_SCHEMA}
+						defaultValues={{
+							language: (data.language as SupportedLanguage) ?? DEFAULT_LANGUAGE,
+							timezone: (data.timezone as SupportedTimezone) ?? DEFAULT_TIMEZONE
+						}}
+					>
+						<Box sx={{ p: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+							<Select
+								name='language'
+								options={LANGUAGE_OPTIONS}
+								fullWidth
+								label='Standaardtaal'
+								startElement={<AppIcon name='language' />}
+								disabled={!isOwner}
+								required
+							/>
+							<Select
+								name='timezone'
+								options={TIMEZONE_OPTIONS}
+								fullWidth
+								label='Tijdzone'
+								startElement={<AppIcon name='clock' />}
+								disabled={!isOwner}
+								required
+							/>
+						</Box>
+						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+					</Form>
+				</CardSection>
 
-						{isOwner && (
-							<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
-								<Button type='submit' variant='contained' disabled={update.isPending}>
-									{update.isPending ? 'Opslaan…' : 'Opslaan'}
-								</Button>
-							</Stack>
-						)}
-					</Stack>
-				</Form>
-			</Paper>
+				<CardSection title='Offerte-instellingen' caption='Standaardwaarden voor nieuwe offertes.'>
+					<Form<QuoteSettingsForm>
+						action={saveQuoteSettings}
+						schema={QUOTE_SETTINGS_SCHEMA}
+						defaultValues={{
+							defaultPaymentTermsDays: data.defaultPaymentTermsDays,
+							quoteValidityDays: data.quoteValidityDays,
+							companyFooter: data.companyFooter ?? ''
+						}}
+					>
+						<Box sx={{ p: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+							<Field
+								name='defaultPaymentTermsDays'
+								type='number'
+								fullWidth
+								label='Betalingstermijn (dagen)'
+								helperText='Aantal dagen dat de klant heeft om te betalen na factuurdatum.'
+								startElement={<AppIcon name='calendar-clock' />}
+								disabled={!isOwner}
+								required
+							/>
+							<Field
+								name='quoteValidityDays'
+								type='number'
+								fullWidth
+								label='Geldigheidsduur offerte (dagen)'
+								helperText="Hoe lang de offerte geldig blijft. Daarna krijgt 'ie de status Verlopen."
+								startElement={<AppIcon name='clock' />}
+								disabled={!isOwner}
+								required
+							/>
+							<Box sx={{ gridColumn: '1 / -1' }}>
+								<Field
+									name='companyFooter'
+									fullWidth
+									multiline
+									label='Footer op offerte-PDF'
+									helperText='Verschijnt onderaan elke pagina van de offerte-PDF.'
+									disabled={!isOwner}
+								/>
+							</Box>
+						</Box>
+						{isOwner && <SectionSaveFooter isPending={update.isPending} />}
+					</Form>
+				</CardSection>
 
-			<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4 }}>
-				<Stack useFlexGap spacing={4}>
-					<Box>
-						<H3 component='h2' sx={{ mb: 1 }}>
-							Logo en briefpapier
-						</H3>
-						<BodySmall color='textSecondary'>Deze bestanden worden gebruikt op offerte-PDF's.</BodySmall>
-					</Box>
+				<VatSettingsSection isOwner={isOwner} />
 
-					<Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap spacing={2}>
-						<BusinessAssetControl
-							label='Logo'
+				<CardSection
+					title='Logo & briefpapier'
+					caption='Gebruikt op de offerte-PDF en in de footer van je verzonden e-mails.'
+				>
+					<Box sx={{ display: 'flex', flexDirection: 'column' }}>
+						<BusinessAssetRow
+							icon='image'
 							previewAlt='Logo'
 							previewSrc={`/api/me/business-details/logo?v=${assetPreviewVersion}`}
-							previewVariant='logo'
 							hasAsset={data.hasLogo}
+							stateText={data.hasLogo ? 'Logo ingesteld.' : 'Geen logo geüpload.'}
+							hint='PNG, JPG of WEBP. Minimaal 512×512px, transparante achtergrond aanbevolen.'
+							uploadLabel='Upload logo'
 							isPending={uploadLogo.isPending || deleteLogo.isPending}
-							onUpload={file => uploadLogo.mutate(file, { onSuccess: refreshAssetPreview })}
-							onDelete={() => deleteLogo.mutate(undefined, { onSuccess: refreshAssetPreview })}
 							canEdit={isOwner}
+							onUpload={file =>
+								uploadLogo.mutate(file, { onSuccess: refreshAssetPreview, onError: onAssetError })
+							}
+							onDelete={() =>
+								deleteLogo.mutate(undefined, { onSuccess: refreshAssetPreview, onError: onAssetError })
+							}
 						/>
-						<BusinessAssetControl
-							label='Briefpapier'
+						<BusinessAssetRow
+							icon='file-text'
+							a4
 							previewAlt='Briefpapier'
 							previewSrc={`/api/me/business-details/letterhead?v=${assetPreviewVersion}`}
-							previewVariant='letterhead'
 							hasAsset={data.hasLetterhead}
+							stateText={data.hasLetterhead ? 'Briefpapier ingesteld.' : 'Geen briefpapier geüpload.'}
+							hint='PNG, JPG of WEBP op A4-formaat (min. 1240×1754px). Je logo en gegevens worden hierop geplaatst. Laat je dit leeg, dan verschijnt er geen briefpapier op de offerte.'
+							uploadLabel='Upload briefpapier'
 							isPending={uploadLetterhead.isPending || deleteLetterhead.isPending}
-							onUpload={file => uploadLetterhead.mutate(file, { onSuccess: refreshAssetPreview })}
-							onDelete={() => deleteLetterhead.mutate(undefined, { onSuccess: refreshAssetPreview })}
 							canEdit={isOwner}
+							onUpload={file =>
+								uploadLetterhead.mutate(file, { onSuccess: refreshAssetPreview, onError: onAssetError })
+							}
+							onDelete={() =>
+								deleteLetterhead.mutate(undefined, {
+									onSuccess: refreshAssetPreview,
+									onError: onAssetError
+								})
+							}
+							isLast
 						/>
-					</Stack>
+					</Box>
 
-					{isOwner &&
-						(uploadLogo.error || uploadLetterhead.error || deleteLogo.error || deleteLetterhead.error) && (
-							<Banner tone='error'>Bestand bijwerken mislukt.</Banner>
-						)}
-
-					<Divider />
-
-					<Box>
-						<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
+					<Box
+						sx={theme => ({
+							py: 1.5,
+							px: 3,
+							borderTop: `1px solid ${theme.tokens.color.line}`,
+							bgcolor: theme.tokens.color.paper2,
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'space-between',
+							gap: 2
+						})}
+					>
+						<BodySmall color='textSecondary' sx={{ fontSize: 12 }}>
 							Bekijk hoe je gegevens op een offerte-PDF verschijnen (met voorbeeldregels).
 						</BodySmall>
-						<Button variant='outlined' onClick={handlePdfPreview} disabled={pdfPreviewPending}>
-							{pdfPreviewPending ? 'Bezig…' : 'Bekijk voorbeeld-offerte'}
-						</Button>
-						{pdfPreviewError && (
-							<Banner tone='error' sx={{ mt: 2 }}>
-								{pdfPreviewError}
-							</Banner>
-						)}
-					</Box>
-				</Stack>
-			</Paper>
-
-			<Box sx={{ mt: 4 }}>
-				<VatSettingsSection isOwner={isOwner} />
-			</Box>
-
-			{isOwner && (
-				<Paper variant='outlined' sx={{ p: 6, borderRadius: 2, mt: 4, borderColor: 'error.light' }}>
-					<Stack useFlexGap spacing={3}>
-						<Box>
-							<H3 component='h2' sx={{ color: 'error.main', mb: 1 }}>
-								Gevarenzone
-							</H3>
-							<BodySmall color='textSecondary'>Acties die niet ongedaan gemaakt kunnen worden.</BodySmall>
-						</Box>
-						<Divider />
-
-						<Stack
-							direction={{ xs: 'column', sm: 'row' }}
-							useFlexGap
-							spacing={2}
-							sx={{ alignItems: { sm: 'center' } }}
+						<Button
+							variant='contained'
+							onClick={handlePdfPreview}
+							disabled={pdfPreviewPending}
+							startIcon={<AppIcon name='external-link' size='small' />}
+							sx={{ flexShrink: 0 }}
 						>
-							<Box sx={{ flex: 1 }}>
-								<Label component='p' sx={{ mb: 0.5 }}>
-									Verwijder alle ingelezen e-mails uit Offertum
-								</Label>
-								<BodySmall color='textSecondary'>
-									Klantgegevens, concepten en geschiedenis worden gewist. Je mailbox-koppelingen
-									blijven actief — nieuwe e-mails worden opnieuw ingelezen.
-								</BodySmall>
-							</Box>
-							{/* MOCK — no data-purge endpoint exists yet (only full-org delete). Disabled
-							    until the backend lands; see organization-locale.mock.ts. */}
-							<Button variant='outlined' color='error' disabled sx={{ flexShrink: 0 }}>
-								Verwijder data
-							</Button>
-						</Stack>
+							{pdfPreviewPending ? 'Bezig…' : 'Voorbeeld bekijken'}
+						</Button>
+					</Box>
+				</CardSection>
 
-						<Divider />
-
-						<Box>
-							<Label component='p' sx={{ mb: 0.5 }}>
-								Verwijder organisatie permanent
-							</Label>
-							<BodySmall color='textSecondary'>
-								Alle leden worden losgekoppeld en alle organisatiegegevens worden gewist. Een
-								geannuleerd abonnement loopt door tot het einde van de periode.
-							</BodySmall>
-						</Box>
-						<TextField
-							label='Typ de bedrijfsnaam om te bevestigen'
-							value={deleteConfirm}
-							onChange={event => setDeleteConfirm(event.target.value)}
-							fullWidth
-						/>
-						{deleteOrganization.error && (
-							<Banner tone='error'>
-								{deleteOrganization.error instanceof Error
-									? deleteOrganization.error.message
-									: 'Verwijderen mislukt.'}
-							</Banner>
-						)}
-						<Stack direction='row' sx={{ justifyContent: 'flex-end' }}>
-							<Button
-								variant='outlined'
-								color='error'
-								disabled={deleteConfirm !== data.name || deleteOrganization.isPending}
-								onClick={() => deleteOrganization.mutate(deleteConfirm)}
+				{isOwner && (
+					<CardSection
+						title='Gevarenzone'
+						caption='Acties die niet ongedaan gemaakt kunnen worden.'
+						titleColor='error'
+						headerBgcolor={theme => theme.tokens.color.lost[50]}
+					>
+						<Stack useFlexGap spacing={3} sx={{ p: 3 }}>
+							<Stack
+								direction={{ xs: 'column', sm: 'row' }}
+								useFlexGap
+								spacing={2}
+								sx={{ alignItems: { sm: 'center' } }}
 							>
-								{deleteOrganization.isPending ? 'Verwijderen…' : 'Organisatie verwijderen'}
-							</Button>
+								<Box sx={{ flex: 1 }}>
+									<Label component='p' sx={{ mb: 0.5 }}>
+										Verwijder alle ingelezen e-mails uit Offertum
+									</Label>
+									<BodySmall color='textSecondary'>
+										Klantgegevens, concepten en geschiedenis worden gewist. Je mailbox-koppelingen
+										blijven actief — nieuwe e-mails worden opnieuw ingelezen.
+									</BodySmall>
+								</Box>
+								<Button
+									variant='contained'
+									color='error'
+									startIcon={<AppIcon name='trash' size='small' />}
+									sx={{ flexShrink: 0 }}
+									onClick={() => setPurgeOpen(true)}
+								>
+									Verwijder data
+								</Button>
+							</Stack>
+
+							<Divider />
+
+							<Stack
+								direction={{ xs: 'column', sm: 'row' }}
+								useFlexGap
+								spacing={2}
+								sx={{ alignItems: { sm: 'center' } }}
+							>
+								<Box sx={{ flex: 1 }}>
+									<Label component='p' sx={{ mb: 0.5 }}>
+										Verwijder organisatie permanent
+									</Label>
+									<BodySmall color='textSecondary'>
+										Alle leden worden losgekoppeld en alle organisatiegegevens worden gewist. Een
+										geannuleerd abonnement loopt door tot het einde van de periode.
+									</BodySmall>
+								</Box>
+								<Button
+									variant='contained'
+									color='error'
+									startIcon={<AppIcon name='trash' size='small' />}
+									sx={{ flexShrink: 0 }}
+									onClick={() => setDeleteOpen(true)}
+								>
+									Organisatie verwijderen
+								</Button>
+							</Stack>
 						</Stack>
-					</Stack>
-				</Paper>
-			)}
+					</CardSection>
+				)}
+			</Stack>
+
+			<Dialog
+				open={deleteOpen}
+				title='Organisatie verwijderen'
+				onClose={closeDeleteDialog}
+				disableClose={deleteOrganization.isPending}
+				action={
+					<>
+						<Button variant='outlined' onClick={closeDeleteDialog} disabled={deleteOrganization.isPending}>
+							Annuleren
+						</Button>
+						<Button
+							variant='contained'
+							color='error'
+							disabled={deleteConfirm !== data.name || deleteOrganization.isPending}
+							onClick={confirmDeleteOrganization}
+						>
+							{deleteOrganization.isPending ? 'Verwijderen…' : 'Definitief verwijderen'}
+						</Button>
+					</>
+				}
+			>
+				<Stack useFlexGap spacing={2}>
+					<BodySmall color='textSecondary'>
+						Alle leden worden losgekoppeld en alle organisatiegegevens — aanvragen, concepten, offertes en
+						instellingen — worden permanent gewist. Een geannuleerd abonnement loopt door tot het einde van
+						de periode. Deze actie kan niet ongedaan worden gemaakt.
+					</BodySmall>
+					<TextField
+						label={`Typ "${data.name}" om te bevestigen`}
+						value={deleteConfirm}
+						onChange={event => setDeleteConfirm(event.target.value)}
+						fullWidth
+						autoFocus
+						autoComplete='off'
+					/>
+				</Stack>
+			</Dialog>
+
+			<Dialog
+				open={purgeOpen}
+				title='Ingelezen e-mails verwijderen'
+				onClose={closePurgeDialog}
+				disableClose={purgeData.isPending}
+				action={
+					<>
+						<Button variant='outlined' onClick={closePurgeDialog} disabled={purgeData.isPending}>
+							Annuleren
+						</Button>
+						<Button
+							variant='contained'
+							color='error'
+							onClick={confirmPurgeData}
+							disabled={purgeData.isPending}
+						>
+							{purgeData.isPending ? 'Verwijderen…' : 'Ja, verwijder alles'}
+						</Button>
+					</>
+				}
+			>
+				<BodySmall color='textSecondary'>
+					Alle ingelezen e-mails, aanvragen, concepten en offertes worden permanent gewist. Je
+					mailbox-koppelingen blijven actief — alleen nieuwe e-mails worden opnieuw ingelezen. Deze actie kan
+					niet ongedaan worden gemaakt.
+				</BodySmall>
+			</Dialog>
 		</Stack>
 	);
 }
 
-interface BusinessAssetControlProps {
-	label: string;
+interface CardSectionProps {
+	title: string;
+	caption?: ReactNode;
+	headerAction?: ReactNode;
+	titleColor?: string;
+	headerBgcolor?: (theme: Theme) => string;
+	children: ReactNode;
+}
+
+function CardSection({ title, caption, headerAction, titleColor, headerBgcolor, children }: CardSectionProps) {
+	return (
+		<Paper variant='outlined' sx={{ p: 0, overflow: 'hidden' }}>
+			<Box
+				sx={[
+					theme => ({
+						py: 2.5,
+						px: 3,
+						borderBottom: `1px solid ${theme.tokens.color.line}`,
+						display: 'flex',
+						alignItems: 'flex-start',
+						justifyContent: 'space-between',
+						gap: 2
+					}),
+					headerBgcolor ? theme => ({ bgcolor: headerBgcolor(theme) }) : false
+				]}
+			>
+				<Box>
+					<H3 component='h2' fontWeight='medium' color={titleColor} sx={{ fontSize: 16 }}>
+						{title}
+					</H3>
+					{caption && (
+						<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.5, fontSize: 12 }}>
+							{caption}
+						</BodySmall>
+					)}
+				</Box>
+				{headerAction}
+			</Box>
+			{children}
+		</Paper>
+	);
+}
+
+/**
+ * Save bar pinned to the bottom of each section's form: Annuleren resets the section
+ * back to its saved values, Opslaan submits that section's partial PATCH. Rendered
+ * inside `<Form>` so it can reach the section's react-hook-form context. The `mt: -2`
+ * cancels the `FormGroup`'s gap so the bar sits flush under the fields.
+ */
+function SectionSaveFooter({ isPending }: { isPending: boolean }) {
+	const { reset } = useFormContext();
+
+	return (
+		<Box
+			sx={theme => ({
+				mt: -2,
+				display: 'flex',
+				alignItems: 'center',
+				justifyContent: 'flex-end',
+				gap: 1.25,
+				py: 1.5,
+				px: 3,
+				borderTop: `1px solid ${theme.tokens.color.line}`,
+				bgcolor: theme.tokens.color.paper2
+			})}
+		>
+			<Button variant='outlined' onClick={() => reset()} disabled={isPending}>
+				Annuleren
+			</Button>
+			<Button type='submit' variant='contained' startIcon={<AppIcon name='check' />} disabled={isPending}>
+				Opslaan
+			</Button>
+		</Box>
+	);
+}
+
+interface BusinessAssetRowProps {
+	icon: AppIconName;
 	previewAlt: string;
 	previewSrc: string;
-	previewVariant: 'logo' | 'letterhead';
+	stateText: string;
+	hint: string;
+	uploadLabel: string;
 	hasAsset: boolean;
 	isPending: boolean;
 	canEdit: boolean;
+	isLast?: boolean;
+	a4?: boolean;
 	onUpload: (file: File) => void;
 	onDelete: () => void;
 }
 
-function BusinessAssetControl({
-	label,
+/**
+ * A single asset row (logo / letterhead): a preview tile — the uploaded asset or a dashed
+ * placeholder — beside its state, hint, and actions (upload, delete). The tile is an 88×88 square
+ * by default, or an A4 portrait rectangle when `a4` is set (letterhead). Members see it read-only.
+ */
+function BusinessAssetRow({
+	icon,
 	previewAlt,
 	previewSrc,
-	previewVariant,
+	stateText,
+	hint,
+	uploadLabel,
 	hasAsset,
 	isPending,
 	canEdit,
+	isLast,
+	a4,
 	onUpload,
 	onDelete
-}: BusinessAssetControlProps) {
+}: BusinessAssetRowProps) {
 	return (
-		<Box sx={{ p: 3, flex: 1, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-			<Stack useFlexGap spacing={2}>
-				<Label>{label}</Label>
+		<Box
+			sx={theme => ({
+				p: 3,
+				display: 'flex',
+				alignItems: 'center',
+				gap: 2.5,
+				borderBottom: isLast ? 'none' : `1px solid ${theme.tokens.color.line}`
+			})}
+		>
+			<Box
+				sx={theme => ({
+					width: 88,
+					height: a4 ? 124 : 88,
+					flexShrink: 0,
+					borderRadius: `${theme.tokens.radius.md}px`,
+					overflow: 'hidden',
+					display: 'inline-flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					bgcolor: theme.tokens.color.paper2,
+					border: hasAsset
+						? `1px solid ${theme.tokens.color.line}`
+						: `1px dashed ${theme.tokens.color.lineStrong}`,
+					color: theme.tokens.color.ink4
+				})}
+			>
 				{hasAsset ? (
 					<Box
-						sx={{
-							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							overflow: 'hidden',
-							minHeight: previewVariant === 'logo' ? 96 : 180,
-							aspectRatio: previewVariant === 'logo' ? '3 / 1' : '210 / 297',
-							bgcolor: 'background.default',
-							border: 1,
-							borderColor: 'divider',
-							borderRadius: 1
-						}}
-					>
-						<Box
-							component='img'
-							src={previewSrc}
-							alt={previewAlt}
-							sx={{
-								display: 'block',
-								width: '100%',
-								height: '100%',
-								objectFit: 'contain'
-							}}
-						/>
-					</Box>
+						component='img'
+						src={previewSrc}
+						alt={previewAlt}
+						sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+					/>
 				) : (
-					<BodySmall color='textSecondary'>Geen bestand ingesteld.</BodySmall>
+					<AppIcon name={icon} size='large' />
 				)}
-				{canEdit && (
-					<Stack direction='row' useFlexGap spacing={1}>
-						<Button variant='outlined' component='label' disabled={isPending}>
-							Upload
+			</Box>
+
+			<Box sx={{ flex: 1, minWidth: 0 }}>
+				<BodySmall fontWeight='medium' sx={{ display: 'block' }}>
+					{stateText}
+				</BodySmall>
+				<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.5, fontSize: 12 }}>
+					{hint}
+				</BodySmall>
+				<Stack direction='row' useFlexGap spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+					{canEdit && (
+						<Button
+							variant='outlined'
+							component='label'
+							disabled={isPending}
+							startIcon={<AppIcon name='upload' size='small' />}
+						>
+							{uploadLabel}
 							<input
 								type='file'
 								accept='image/png,image/jpeg,image/webp'
@@ -456,12 +814,14 @@ function BusinessAssetControl({
 								}}
 							/>
 						</Button>
-						<Button variant='text' color='error' disabled={!hasAsset || isPending} onClick={onDelete}>
+					)}
+					{canEdit && hasAsset && (
+						<Button variant='text' color='error' onClick={onDelete} disabled={isPending}>
 							Verwijder
 						</Button>
-					</Stack>
-				)}
-			</Stack>
+					)}
+				</Stack>
+			</Box>
 		</Box>
 	);
 }

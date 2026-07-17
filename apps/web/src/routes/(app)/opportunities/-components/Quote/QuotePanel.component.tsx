@@ -47,8 +47,9 @@ import TableRow from '@mui/material/TableRow';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import {
-	buildQuoteVatOptions,
+	buildQuoteVatOptionsWithUsed,
 	computeQuoteTotals,
+	getDefaultVatRate,
 	lineNetCents,
 	pluralize,
 	quoteVatLineToOptionId,
@@ -62,7 +63,7 @@ import {
 } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // Leading `-` allowed for discount ("Korting") lines; quantity stays non-negative.
 const MONEY_PATTERN = /^-?\d{1,8}(\.\d{1,2})?$/;
@@ -82,14 +83,14 @@ const VAT_ADD_OPTION_ID = '__add_vat__';
 // Title for the expiry notice, phrased by how many days remain on the quote's validity.
 function expiryBannerTitle(days: number, validUntil: string): string {
 	if (days < 0) {
-		return 'Aanvraag is verlopen';
+		return 'Offerte is verlopen';
 	}
 
 	if (days === 0) {
-		return 'Aanvraag verloopt vandaag';
+		return 'Offerte verloopt vandaag';
 	}
 
-	return `Aanvraag verloopt over ${days} ${pluralize(days, 'dag', 'dagen')} (${toReadableDate(validUntil)})`;
+	return `Offerte verloopt over ${days} ${pluralize(days, 'dag', 'dagen')} (${toReadableDate(validUntil)})`;
 }
 
 type QuoteSource = QuoteLineItem['source'];
@@ -278,6 +279,9 @@ export function QuotePanel({
 	// genereren"; blocked while any line is unpriced or the quote has no lines.
 	const unpricedCount = latest ? computeQuoteTotals(latest.lineItems).unpricedLineCount : 0;
 	const lineCount = latest ? latest.lineItems.length : 0;
+	// An expired quote (validity window past) would produce a PDF whose "Geldig tot" date is already
+	// in the past — block PDF generation and nudge a regenerate (which resets the validity window).
+	const quoteExpired = latest !== null && latest.validUntil !== null && toDaysUntil(latest.validUntil) < 0;
 
 	const openRegenerate = () =>
 		preview.mutate(undefined, {
@@ -369,13 +373,15 @@ export function QuotePanel({
 							variant='contained'
 							size='large'
 							onClick={onGeneratePdf}
-							disabled={generatePdf.isPending || unpricedCount > 0 || lineCount === 0}
+							disabled={generatePdf.isPending || unpricedCount > 0 || lineCount === 0 || quoteExpired}
 							title={
 								lineCount === 0
 									? 'Voeg eerst een regel toe'
 									: unpricedCount > 0
 										? 'Vul eerst alle prijzen in'
-										: undefined
+										: quoteExpired
+											? 'Deze offerte is verlopen — genereer hem opnieuw'
+											: undefined
 							}
 							startIcon={
 								generatePdf.isPending ? (
@@ -1062,6 +1068,14 @@ function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineIn
 // Persisted collapse preference for the quote-notice bar (mirrors the opportunities-list insights bar).
 const QUOTE_NOTICES_OPEN_KEY = 'offertum.quoteNotices.open';
 
+function readQuoteNoticesOpen(): boolean {
+	try {
+		return localStorage.getItem(QUOTE_NOTICES_OPEN_KEY) === '1';
+	} catch {
+		return false;
+	}
+}
+
 function writeQuoteNoticesOpen(open: boolean): void {
 	try {
 		localStorage.setItem(QUOTE_NOTICES_OPEN_KEY, open ? '1' : '0');
@@ -1087,7 +1101,13 @@ function CollapsibleQuoteNotices({ notices }: { notices: BannerStackItem[] }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 
+	// Collapsed by default; the persisted preference is restored after mount so SSR + the first
+	// client render agree (no hydration mismatch).
 	const [open, setOpen] = useState(false);
+	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setOpen(readQuoteNoticesOpen());
+	}, []);
 
 	if (notices.length === 0) {
 		return null;
@@ -1107,9 +1127,14 @@ function CollapsibleQuoteNotices({ notices }: { notices: BannerStackItem[] }) {
 			? 'warning'
 			: 'info';
 
+	// Red flow + border when something's wrong (an expired quote / stale pricing surfaces an error
+	// notice); the calm accent flow otherwise.
+	const hasError = severity === 'error';
+	const frameBorder = hasError ? c.lost[500] : c.accent[300];
+
 	return (
-		<Box sx={{ border: `1px solid ${c.accent[300]}`, borderRadius: `${tokens.radius.md}px`, overflow: 'hidden' }}>
-			<FlowingGradient>
+		<Box sx={{ border: `1px solid ${frameBorder}`, borderRadius: `${tokens.radius.md}px`, overflow: 'hidden' }}>
+			<FlowingGradient colors={hasError ? [c.lost[700], c.lost[500], c.lost[700]] : undefined}>
 				{/* Summary row — always visible, click to toggle. */}
 				<ButtonBase
 					onClick={toggle}
@@ -1168,7 +1193,7 @@ function CollapsibleQuoteNotices({ notices }: { notices: BannerStackItem[] }) {
 
 			{/* Expanded detail — the full framed BannerStack, MUI-animated open/closed. */}
 			<Collapse in={open} timeout='auto' unmountOnExit>
-				<Box sx={{ p: 1.5, borderTop: `1px solid ${c.accent[300]}`, backgroundColor: c.surface }}>
+				<Box sx={{ p: 1.5, borderTop: `1px solid ${frameBorder}`, backgroundColor: c.surface }}>
 					<BannerStack banners={notices} />
 				</Box>
 			</Collapse>
@@ -1195,22 +1220,18 @@ function QuoteDraftEditor({
 	const { data: catalog } = useSuspenseQuery(catalogItemsQueryOptions);
 	const { data: vatConfig } = useSuspenseQuery(vatSettingsQueryOptions);
 	const navigate = useNavigate();
-	// A rate can be removed from the org's VAT settings after a line was saved at it (nothing
-	// prevents this). Union the line's own rate back in so the row's BTW select always has a
-	// matching option instead of falling through to the untranslated MUI placeholder.
-	const configuredRates = new Set(vatConfig.rates);
-	const usedRates = [...new Set(draft.lineItems.filter(line => !line.vatReverseCharged).map(line => line.vatRate))];
-	const missingRates = usedRates.filter(rate => !configuredRates.has(rate));
-	const vatOptions = buildQuoteVatOptions(
-		missingRates.length > 0 ? { ...vatConfig, rates: [...vatConfig.rates, ...missingRates] } : vatConfig
-	) as Option[];
+	// A rate can be removed / deactivated in the org's VAT settings after a line was saved at it
+	// (nothing prevents this). Union the line's own rate back in so the row's BTW select always has
+	// a matching option instead of falling through to the untranslated MUI placeholder.
+	const usedRates = draft.lineItems.filter(line => !line.vatReverseCharged).map(line => line.vatRate);
+	const vatOptions = buildQuoteVatOptionsWithUsed(vatConfig, usedRates) as Option[];
 
 	// Rows get an extra "add a rate" action that jumps to the BTW-tarieven settings section.
 	const vatRowOptions: Option[] = [
 		...vatOptions.map((option, index) => ({ ...option, divider: index === vatOptions.length - 1 })),
 		{ id: VAT_ADD_OPTION_ID, icon: 'plus', label: 'Nieuw BTW-tarief' }
 	];
-	const goToVatSettings = () => navigate({ to: '/settings/business-details', hash: 'btw-tarieven' });
+	const goToVatSettings = () => navigate({ to: '/settings/organization', hash: 'btw-tarieven' });
 	const totals = computeQuoteTotals(draft.lineItems);
 	const unpriced = totals.unpricedLineCount;
 
@@ -1257,13 +1278,23 @@ function QuoteDraftEditor({
 		});
 	}
 
-	// Only warn while the quote is close to expiring (or already past) — a fresh 30-day quote stays quiet.
+	// Surface the validity notice only while the quote is close to expiring (or already past) — a
+	// fresh 30-day quote stays quiet. An expired quote is a different message: too late to "send on
+	// time", so prompt a regenerate (fresh prices + a new validity window) instead.
 	if (expiryDays !== null && expiryDays <= QUOTE_EXPIRY_WARN_DAYS) {
+		const expired = expiryDays < 0;
 		notices.push({
 			key: 'expiry',
-			tone: 'warning',
+			tone: expired ? 'error' : 'warning',
 			title: expiryBannerTitle(expiryDays, draft.validUntil!),
-			body: 'Stuur de offerte op tijd om de aanvraag warm te houden.'
+			body: expired
+				? 'De geldigheid van deze offerte is verstreken. Genereer een nieuwe offerte met actuele prijzen en een nieuwe geldigheidsdatum.'
+				: 'Stuur de offerte op tijd voordat de geldigheid verloopt.',
+			action: expired ? (
+				<Button color='inherit' size='small' onClick={onRegenerate} disabled={regenerating}>
+					Opnieuw genereren
+				</Button>
+			) : undefined
 		});
 	}
 
@@ -1406,7 +1437,7 @@ function QuoteDraftEditor({
 										description: 'Nieuwe regel',
 										quantity: '1',
 										unitPriceEur: null,
-										vatRate: vatConfig.defaultRate,
+										vatRate: getDefaultVatRate(vatConfig),
 										vatReverseCharged: false
 									}
 								},
