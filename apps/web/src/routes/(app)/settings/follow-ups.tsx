@@ -139,13 +139,24 @@ function FollowUpsSettingsPage() {
 
 	const commitCadence = (value: number) => {
 		setCadence(value);
+		if (value === data.cadenceDays) {
+			return;
+		}
 		persist({ cadenceDays: value, maxCount, coldAfterDays: coldAfter });
 	};
 	const commitMaxCount = (value: number) => {
 		setMaxCount(value);
+		if (value === data.maxCount) {
+			return;
+		}
 		persist({ cadenceDays: cadence, maxCount: value, coldAfterDays: coldAfter });
 	};
-	const commitColdAfter = () => persist({ cadenceDays: cadence, maxCount, coldAfterDays: coldAfter });
+	const commitColdAfter = () => {
+		if (coldAfter === data.coldAfterDays) {
+			return;
+		}
+		persist({ cadenceDays: cadence, maxCount, coldAfterDays: coldAfter });
+	};
 	const toggleDisabled = () => commitMaxCount(disabled ? DEFAULT_MAX_COUNT : 0);
 
 	return (
