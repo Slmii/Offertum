@@ -212,9 +212,9 @@ export function QuotePdfAttachSelect({
 					)}
 					{data.pdfs.map(pdf => {
 						const isSelected = pdf.id === selectedPdfId;
-							// Block a version whose OWN validity has lapsed (server enforces the same on attach).
-							// PDFs predating the validUntil snapshot fall back to the latest-draft heuristic.
-							const pdfExpired = pdf.validUntil != null ? toDaysUntil(pdf.validUntil) < 0 : quoteExpired;
+						// Block a version whose OWN validity has lapsed (server enforces the same on attach).
+						// PDFs predating the validUntil snapshot fall back to the latest-draft heuristic.
+						const pdfExpired = pdf.validUntil != null ? toDaysUntil(pdf.validUntil) < 0 : quoteExpired;
 						return (
 							<MenuItem
 								key={pdf.id}
