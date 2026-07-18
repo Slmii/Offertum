@@ -8,7 +8,6 @@ import { followUpSettingsQueryOptions, useUpdateFollowUpSettings } from '@/lib/q
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Slider from '@mui/material/Slider';
@@ -46,7 +45,6 @@ export const Route = createFileRoute('/(app)/settings/follow-ups')({
 	errorComponent: SectionError
 });
 
-const CADENCE_PRESETS = [3, 4, 5, 7] as const;
 const CADENCE_MIN = 1;
 const CADENCE_MAX = 14;
 const DEFAULT_MAX_COUNT = 2;
@@ -502,31 +500,6 @@ function CadenceSlider({ value, disabled, onLiveChange, onCommit }: CadenceSlide
 						{label}
 					</BodySmall>
 				))}
-			</Stack>
-
-			<Stack direction='row' useFlexGap spacing={0.75} sx={{ flexWrap: 'wrap', mt: 1.75 }}>
-				{CADENCE_PRESETS.map(preset => {
-					const active = value === preset;
-					return (
-						<ButtonBase
-							key={preset}
-							onClick={() => onCommit(preset)}
-							sx={theme => ({
-								py: 0.75,
-								px: 1.5,
-								fontSize: 13,
-								fontWeight: 500,
-								borderRadius: `${theme.tokens.radius.full}px`,
-								border: `1px solid ${active ? theme.tokens.color.accent[500] : theme.tokens.color.lineStrong}`,
-								backgroundColor: active ? theme.tokens.color.accent[50] : theme.tokens.color.surface,
-								color: active ? theme.tokens.color.accent[700] : theme.tokens.color.ink2,
-								transition: `all ${theme.tokens.motion.durBase}ms ${theme.tokens.motion.easeOut}`
-							})}
-						>
-							{preset} dagen
-						</ButtonBase>
-					);
-				})}
 			</Stack>
 		</Box>
 	);
