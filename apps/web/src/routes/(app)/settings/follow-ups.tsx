@@ -722,8 +722,9 @@ function DisableZone({ disabled, onToggle }: { disabled: boolean; onToggle: () =
 					</BodySmall>
 				</Box>
 				<Button
-					variant={disabled ? 'contained' : 'outlined'}
+					variant='contained'
 					onClick={onToggle}
+					color={disabled ? 'primary' : 'warning'}
 					startIcon={<AppIcon name={disabled ? 'play' : 'power'} size='small' />}
 					sx={{ flexShrink: 0 }}
 				>
