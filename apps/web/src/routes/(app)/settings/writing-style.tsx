@@ -144,7 +144,7 @@ function WritingStylePage() {
 			/>
 
 			<Stack useFlexGap spacing={3}>
-				<Banner tone='info' title='Tip: schrijf in de eerste persoon.'>
+				<Banner tone='info' title='Tip: schrijf in de eerste persoon'>
 					Offertum gebruikt dit als instructie. Hoe specifieker je voorbeelden, hoe dichter het concept bij
 					jouw eigen stijl uitkomt.
 				</Banner>

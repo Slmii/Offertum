@@ -44,6 +44,8 @@ import {
 	IconFileText,
 	IconFileTextFilled,
 	IconFileX,
+	IconFlag,
+	IconFlagFilled,
 	IconFlask2,
 	IconFlask2Filled,
 	IconInbox,
@@ -73,8 +75,13 @@ import {
 	IconPhoneFilled,
 	IconPhoto,
 	IconPhotoFilled,
+	IconPlayerPause,
+	IconPlayerPauseFilled,
+	IconPlayerPlay,
+	IconPlayerPlayFilled,
 	IconPlug,
 	IconPlus,
+	IconPower,
 	IconPuzzle,
 	IconPuzzleFilled,
 	IconRefresh,
@@ -180,6 +187,7 @@ export type AppIconName =
 	| 'file-text'
 	| 'file-plus'
 	| 'file-x'
+	| 'flag'
 	| 'message'
 	| 'code'
 	| 'flask'
@@ -201,6 +209,9 @@ export type AppIconName =
 	| 'star'
 	| 'percent'
 	| 'image'
+	| 'pause'
+	| 'play'
+	| 'power'
 	| 'sun'
 	| 'moon'
 	| 'x';
@@ -279,6 +290,7 @@ const ICONS: Record<AppIconName, IconPair> = {
 	// Tabler ships no filled file-plus / file-x — outline doubles as the filled slot.
 	'file-plus': { outline: IconFilePlus, filled: IconFilePlus },
 	'file-x': { outline: IconFileX, filled: IconFileX },
+	flag: { outline: IconFlag, filled: IconFlagFilled },
 	message: { outline: IconMessageCircle, filled: IconMessageCircleFilled },
 	code: { outline: IconCode, filled: IconCode },
 	flask: { outline: IconFlask2, filled: IconFlask2Filled },
@@ -306,6 +318,10 @@ const ICONS: Record<AppIconName, IconPair> = {
 	// Tabler ships no filled percentage — outline doubles as the filled slot.
 	percent: { outline: IconPercentage, filled: IconPercentage },
 	image: { outline: IconPhoto, filled: IconPhotoFilled },
+	pause: { outline: IconPlayerPause, filled: IconPlayerPauseFilled },
+	play: { outline: IconPlayerPlay, filled: IconPlayerPlayFilled },
+	// Tabler ships no filled power — outline doubles as the filled slot.
+	power: { outline: IconPower, filled: IconPower },
 	sun: { outline: IconSun, filled: IconSunFilled },
 	moon: { outline: IconMoon, filled: IconMoonFilled },
 	// Tabler ships no filled x — outline doubles as the filled slot.
