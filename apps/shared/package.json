@@ -16,5 +16,8 @@
 		"build": "tsc",
 		"dev": "tsc --watch --preserveWatchOutput",
 		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"dayjs": "1.11.21"
 	}
 }

@@ -83,6 +83,9 @@ importers:
       class-validator:
         specifier: ^0.15.1
         version: 0.15.1
+      dayjs:
+        specifier: ^1.11.21
+        version: 1.11.21
       dedent:
         specifier: ^1.7.2
         version: 1.7.2(babel-plugin-macros@3.1.0)
@@ -166,7 +169,11 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)(terser@5.48.0)
 
-  apps/shared: {}
+  apps/shared:
+    dependencies:
+      dayjs:
+        specifier: 1.11.21
+        version: 1.11.21
 
   apps/web:
     dependencies:

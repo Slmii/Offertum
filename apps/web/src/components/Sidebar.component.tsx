@@ -36,7 +36,6 @@ type AppRoute =
 	| '/settings/pricing-playbook'
 	| '/settings/follow-ups'
 	| '/settings/notifications'
-	| '/settings/calendar'
 	| '/settings/integrations'
 	| '/team'
 	| '/billing'
@@ -109,13 +108,6 @@ const SETTINGS_SUB_NAV: SettingsSubEntry[] = [
 		to: '/settings/notifications',
 		label: 'Notificaties',
 		icon: 'bell',
-		ownerOnly: false,
-		lockedWhenNotEntitled: false
-	},
-	{
-		to: '/settings/calendar',
-		label: 'Agenda-synchronisatie',
-		icon: 'calendar',
 		ownerOnly: false,
 		lockedWhenNotEntitled: false
 	},

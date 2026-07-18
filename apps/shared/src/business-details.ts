@@ -15,30 +15,30 @@ export type VerticalValue = (typeof VERTICAL_VALUES)[number];
 
 export const SUPPORTED_LANGUAGE_VALUES = ['nl', 'en'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGE_VALUES)[number];
-export const SUPPORTED_LANGUAGES: { value: SupportedLanguage; label: string }[] = [
-	{ value: 'nl', label: 'Nederlands' },
-	{ value: 'en', label: 'Engels' }
+export const SUPPORTED_LANGUAGES: { value: SupportedLanguage; label: string; disabled?: boolean }[] = [
+	{ value: 'nl', label: 'Nederlands' }
+	// { value: 'en', label: 'English', disabled: true } // TODO: enable when translation is ready
 ];
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'nl';
 
 export const SUPPORTED_TIMEZONE_VALUES = [
-	'Europe/Amsterdam',
-	'Europe/Brussels',
-	'Europe/Paris',
-	'Europe/Berlin',
-	'Europe/London',
-	'Europe/Madrid',
-	'UTC'
+	'Europe/Amsterdam'
+	// 'Europe/Brussels',
+	// 'Europe/Paris',
+	// 'Europe/Berlin',
+	// 'Europe/London',
+	// 'Europe/Madrid',
+	// 'UTC'
 ] as const;
 export type SupportedTimezone = (typeof SUPPORTED_TIMEZONE_VALUES)[number];
 export const SUPPORTED_TIMEZONES: { value: SupportedTimezone; label: string }[] = [
-	{ value: 'Europe/Amsterdam', label: 'Amsterdam (CET/CEST)' },
-	{ value: 'Europe/Brussels', label: 'Brussel (CET/CEST)' },
-	{ value: 'Europe/Paris', label: 'Parijs (CET/CEST)' },
-	{ value: 'Europe/Berlin', label: 'Berlijn (CET/CEST)' },
-	{ value: 'Europe/London', label: 'Londen (GMT/BST)' },
-	{ value: 'Europe/Madrid', label: 'Madrid (CET/CEST)' },
-	{ value: 'UTC', label: 'UTC' }
+	{ value: 'Europe/Amsterdam', label: 'Amsterdam (CET/CEST)' }
+	// { value: 'Europe/Brussels', label: 'Brussel (CET/CEST)' },
+	// { value: 'Europe/Paris', label: 'Parijs (CET/CEST)' },
+	// { value: 'Europe/Berlin', label: 'Berlijn (CET/CEST)' },
+	// { value: 'Europe/London', label: 'Londen (GMT/BST)' },
+	// { value: 'Europe/Madrid', label: 'Madrid (CET/CEST)' },
+	// { value: 'UTC', label: 'UTC' }
 ];
 export const DEFAULT_TIMEZONE: SupportedTimezone = 'Europe/Amsterdam';
 

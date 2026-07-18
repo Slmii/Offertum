@@ -73,7 +73,7 @@ const VERTICAL_OPTIONS = (Object.entries(VERTICAL_LABELS) as [VerticalValue, str
 	label
 }));
 
-const LANGUAGE_OPTIONS = SUPPORTED_LANGUAGES.map(({ value, label }) => ({ id: value, label }));
+const LANGUAGE_OPTIONS = SUPPORTED_LANGUAGES.map(({ value, label, disabled }) => ({ id: value, label, disabled }));
 const TIMEZONE_OPTIONS = SUPPORTED_TIMEZONES.map(({ value, label }) => ({ id: value, label }));
 
 // Each card is its own form + partial save (owner picked "per section"), so slice the
@@ -342,10 +342,7 @@ function BusinessDetailsSettingsPage() {
 					</Form>
 				</CardSection>
 
-				<CardSection
-					title='Taal & tijdzone'
-					caption='Je standaardtaal en tijdzone voor deze organisatie.'
-				>
+				<CardSection title='Taal & tijdzone' caption='Je standaardtaal en tijdzone voor deze organisatie.'>
 					<Form<LocaleForm>
 						action={saveLocale}
 						schema={LOCALE_SCHEMA}

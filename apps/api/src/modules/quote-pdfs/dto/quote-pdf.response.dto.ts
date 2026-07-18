@@ -5,7 +5,9 @@ export class QuotePdfResponseDto implements QuotePdf {
 	opportunityId!: string;
 	quoteDraftId!: string | null;
 	filename!: string;
+	quoteNumber!: string | null;
 	sizeBytes!: number;
 	totalCents!: number | null;
+	validUntil!: string | null;
 	createdAt!: string;
 }

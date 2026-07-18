@@ -9,6 +9,7 @@ import {
 	ATTACHMENT_FILE_MISSING,
 	ATTACHMENT_NOT_FOUND,
 	OPPORTUNITY_NOT_FOUND,
+	QUOTE_PDF_EXPIRED,
 	QUOTE_PDF_NOT_FOUND,
 	REPLY_DRAFT_LOCKED,
 	attachmentCountExceeded,
@@ -94,6 +95,12 @@ export class ReplyDraftAttachmentsService {
 		// opportunity's quote PDF (a different customer's quote) onto this draft.
 		if (!pdf || pdf.opportunityId !== opportunityId) {
 			throw new NotFoundException(QUOTE_PDF_NOT_FOUND);
+		}
+		// Don't send an expired quote. Enforced against the PDF's OWN snapshotted validity (an older
+		// version can be expired while a newer draft is still valid), so the client's approximate
+		// latest-draft guard can't be bypassed via a direct call.
+		if (pdf.validUntil && pdf.validUntil.getTime() < Date.now()) {
+			throw new BadRequestException(QUOTE_PDF_EXPIRED);
 		}
 
 		await this.removeQuotePdfAttachment(draft.draftId);

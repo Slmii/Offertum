@@ -33,7 +33,6 @@ type NavRoute =
 	| '/settings/pricing-playbook'
 	| '/settings/follow-ups'
 	| '/settings/notifications'
-	| '/settings/calendar'
 	| '/settings/integrations';
 
 interface NavShortcut {
@@ -108,14 +107,6 @@ const NAV_SHORTCUTS: NavShortcut[] = [
 		hint: 'E-mail- en in-app-meldingen',
 		icon: 'settings',
 		keywords: 'notificaties meldingen',
-		ownerOnly: false
-	},
-	{
-		to: '/settings/calendar',
-		label: 'Agenda-synchronisatie',
-		hint: 'iCal-feed voor je telefoon',
-		icon: 'calendar',
-		keywords: 'agenda sync ical abonnement',
 		ownerOnly: false
 	},
 	{

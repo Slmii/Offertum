@@ -35,6 +35,7 @@ import type {
 	UpdateQuoteLineItemInput
 } from '@offertum/shared';
 import { computeQuoteTotals, formatQuoteNumber } from '@offertum/shared';
+import { endOfDayInTimeZone, yearInTimeZone } from '@/lib/time/timezone';
 
 const DEFAULT_LINE_UNIT = 'piece';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -71,9 +72,11 @@ export class QuoteDraftsService {
 		// (and a later change to the org default won't retroactively move existing quotes).
 		const org = await this.prisma.organization.findUniqueOrThrow({
 			where: { id: organizationId },
-			select: { quoteValidityDays: true }
+			select: { quoteValidityDays: true, timezone: true }
 		});
-		const validUntil = new Date(Date.now() + org.quoteValidityDays * DAY_MS);
+		// Snap "Geldig tot" to end-of-day in the org's timezone so the quote stays valid through the
+		// whole final day (and the server instant-check agrees with the client's calendar-day check).
+		const validUntil = endOfDayInTimeZone(new Date(Date.now() + org.quoteValidityDays * DAY_MS), org.timezone);
 
 		const row = await this.repository.create({
 			organizationId,
@@ -218,9 +221,12 @@ export class QuoteDraftsService {
 		if (validUntil === null) {
 			const org = await this.prisma.organization.findUniqueOrThrow({
 				where: { id: organizationId },
-				select: { quoteValidityDays: true }
+				select: { quoteValidityDays: true, timezone: true }
 			});
-			validUntil = new Date(draft.createdAt.getTime() + org.quoteValidityDays * DAY_MS);
+			validUntil = endOfDayInTimeZone(
+				new Date(draft.createdAt.getTime() + org.quoteValidityDays * DAY_MS),
+				org.timezone
+			);
 			// Conditional write so concurrent PDF generations don't double-stamp — only the first
 			// writer (validUntil still null) wins. The computed value is deterministic (createdAt-
 			// anchored), so the local `validUntil` is correct regardless of who won.
@@ -273,7 +279,8 @@ export class QuoteDraftsService {
 			quoteDraftId,
 			rendered,
 			totals.grossCents,
-			quoteNumber
+			quoteNumber,
+			validUntil
 		);
 
 		this.logService.logAction({
@@ -309,12 +316,14 @@ export class QuoteDraftsService {
 			return existingNumber;
 		}
 
-		const { quoteSequence } = await this.prisma.organization.update({
+		const { quoteSequence, timezone } = await this.prisma.organization.update({
 			where: { id: organizationId },
 			data: { quoteSequence: { increment: 1 } },
-			select: { quoteSequence: true }
+			select: { quoteSequence: true, timezone: true }
 		});
-		const quoteNumber = formatQuoteNumber(issueDate.getUTCFullYear(), quoteSequence);
+		// Year in the org's timezone, not UTC — a quote created just after local midnight on Jan 1
+		// must carry the new year, not the previous one.
+		const quoteNumber = formatQuoteNumber(yearInTimeZone(issueDate, timezone), quoteSequence);
 
 		// Claim the number only if the draft is still unnumbered — guards against a concurrent
 		// regeneration double-assigning.

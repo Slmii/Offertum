@@ -1224,6 +1224,9 @@ model QuotePdf {
   // The quote number printed on this PDF — snapshotted so history survives the draft's deletion.
   // Null for PDFs generated before quote numbering existed.
   quoteNumber    String?
+  // "Geldig tot" snapshot at generation, so attach-time expiry can be enforced server-side even
+  // after the source draft is deleted (quoteDraftId → SetNull). Null for pre-existing PDFs.
+  validUntil     DateTime?
   contentType    String   @default("application/pdf")
   sizeBytes      Int
   // Quote total incl. btw (in cents) at generation time — a snapshot, since the draft's lines

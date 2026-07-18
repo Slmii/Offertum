@@ -177,6 +177,7 @@ export const QUOTE_DRAFT_HAS_UNPRICED_LINES = 'Er zijn nog regels zonder prijs. 
 // already lapsed. The PDF's "Geldig tot" date would be in the past, so we refuse and nudge a
 // regenerate (which resets the validity window). Mirrors the client-side disable.
 export const QUOTE_EXPIRED_NO_PDF = 'Deze offerte is verlopen. Genereer hem opnieuw voordat je een PDF maakt.';
+export const QUOTE_PDF_EXPIRED = 'Deze offerte-PDF is verlopen. Genereer een nieuwe versie voordat je hem meestuurt.';
 // User-facing — surfaced when a mutation targets a quote draft that's already been
 // sent to the customer (status = SENT). Editing lines after send would desync the
 // app's view of the quote from what the customer actually received.

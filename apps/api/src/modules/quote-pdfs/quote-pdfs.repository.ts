@@ -8,6 +8,7 @@ export interface QuotePdfRow {
 	quoteDraftId: string | null;
 	filename: string;
 	quoteNumber: string | null;
+	validUntil: Date | null;
 	contentType: string;
 	sizeBytes: number;
 	totalCents: number | null;
@@ -22,6 +23,7 @@ export interface CreateQuotePdfInput {
 	quoteDraftId: string | null;
 	filename: string;
 	quoteNumber: string | null;
+	validUntil: Date | null;
 	contentType: string;
 	sizeBytes: number;
 	totalCents: number | null;

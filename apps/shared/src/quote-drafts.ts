@@ -58,9 +58,13 @@ export interface QuotePdf {
 	opportunityId: string;
 	quoteDraftId: string | null;
 	filename: string;
+	/** Customer-facing quote number printed on the PDF (`OFF-YYYY-NNNN`). Null for older PDFs. */
+	quoteNumber: string | null;
 	sizeBytes: number;
 	/** Quote total incl. btw (cents) snapshotted when the PDF was generated. Null for older PDFs. */
 	totalCents: number | null;
+	/** "Geldig tot" (ISO) snapshotted at generation; drives attach-time expiry. Null for older PDFs. */
+	validUntil: string | null;
 	createdAt: string;
 }
 
