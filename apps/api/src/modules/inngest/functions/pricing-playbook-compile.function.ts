@@ -64,7 +64,36 @@ export class PricingPlaybookCompileFunction {
 				name: 'Pricing playbook compile',
 				triggers: [{ event: InngestEvents.PricingPlaybookSaved }],
 				retries: 2,
-				debounce: { period: '5s', key: 'event.data.organizationId' }
+				debounce: { period: '5s', key: 'event.data.organizationId' },
+				// All retries exhausted → record FAILED so the settings page shows "Verwerken
+				// mislukt" (and offers a retry). `event` here is the internal function.failed
+				// payload; the original save event is nested at `event.data.event`.
+				onFailure: async ({ event, error }) => {
+					// `event.data.event` is the nested original save event — optional-chain the whole path
+					// so a malformed failure payload can't make onFailure itself throw (which would leave
+					// the playbook stuck in PROCESSING with no terminal transition).
+					const originalData = event?.data?.event?.data as { organizationId?: unknown } | undefined;
+					const organizationId =
+						typeof originalData?.organizationId === 'string' ? originalData.organizationId : null;
+					if (!organizationId) {
+						return;
+					}
+					await requestContext.run({ requestId: event?.data?.run_id, organizationId }, async () => {
+						try {
+							await repository.markCompileFailed(organizationId, error.message);
+						} catch {
+							// Best-effort: the compile already failed; a missing playbook row (P2025)
+							// or DB hiccup here shouldn't mask the original failure.
+						}
+						logService.logAction({
+							action: 'pricing_playbook.compile.failed',
+							message: `Pricing playbook compile failed for org ${organizationId}: ${error.message}`,
+							metadata: { organizationId, error: error.message },
+							level: 'error',
+							context: 'InngestFn:pricing-playbook-compile'
+						});
+					});
+				}
 			},
 			async ({ event, runId, step }) => {
 				const data = event.data as { organizationId?: unknown; playbookHash?: unknown } | undefined;
@@ -106,6 +135,10 @@ export class PricingPlaybookCompileFunction {
 							// last successful compile. Bail out — same input → same output.
 							const currentHash = compileService.hashPlaybookText(playbook.playbookText);
 							if (playbook.compiledHash === currentHash) {
+								// Prose unchanged since the last successful compile — skip the LLM. But the
+								// save that fired this event flipped status to PROCESSING, so settle it back
+								// to SUCCEEDED (without bumping compiledAt) or the UI hangs on "Bezig…".
+								await repository.markCompileSucceeded(playbook.id, playbook.playbookText);
 								logService.logAction({
 									action: 'pricing_playbook.compile.no_op',
 									message: `Playbook for org ${organizationId} unchanged since last compile`,
@@ -151,7 +184,12 @@ export class PricingPlaybookCompileFunction {
 							}));
 
 							await repository.applyCompileOutput(gate.pricingPlaybookId, rules);
-							await repository.markCompiled(gate.pricingPlaybookId, gate.currentHash, new Date());
+							await repository.markCompiled(
+								gate.pricingPlaybookId,
+								gate.playbookText,
+								gate.currentHash,
+								new Date()
+							);
 
 							logService.logAction({
 								action: 'pricing_playbook.compile.completed',

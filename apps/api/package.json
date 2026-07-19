@@ -28,7 +28,10 @@
 		"test:e2e": "jest --config ./test/jest-e2e.json",
 		"test:ai": "node scripts/run-jest-with-env.cjs --testPathPatterns='accuracy'",
 		"test:ai:classifier": "node scripts/run-jest-with-env.cjs --testPathPatterns='classifier.accuracy'",
-		"test:ai:extractor": "node scripts/run-jest-with-env.cjs --testPathPatterns='extractor.accuracy'"
+		"test:ai:extractor": "node scripts/run-jest-with-env.cjs --testPathPatterns='extractor.accuracy'",
+		"test:ai:pricing": "node scripts/run-jest-with-env.cjs --testPathPatterns='pricing.*accuracy'",
+		"test:ai:compile": "node scripts/run-jest-with-env.cjs --testPathPatterns='compile.accuracy'",
+		"test:ai:narrative": "node scripts/run-jest-with-env.cjs --testPathPatterns='pricing-narrative-verifier.accuracy'"
 	},
 	"dependencies": {
 		"@auth/core": "^0.41.2",

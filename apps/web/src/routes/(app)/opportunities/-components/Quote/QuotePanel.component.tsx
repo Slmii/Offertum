@@ -5,7 +5,8 @@ import { FlowingGradient } from '@/components/FlowingGradient.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { type Option } from '@/components/Form/Select/Select.types';
-import { BodySmall, H1, H3, Label } from '@/components/Text.component';
+import { Tabs } from '@/components/Tabs.component';
+import { BodySmall, H1, H3 } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
 import { catalogItemsQueryOptions } from '@/lib/queries/catalog-items.queries';
 import {
@@ -27,17 +28,14 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
 import Checkbox from '@mui/material/Checkbox';
-import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Collapse from '@mui/material/Collapse';
-import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, type Theme } from '@mui/material/styles';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -675,12 +673,89 @@ interface QuoteLineDiffEntry {
 	proposed: ProposedQuoteLine | null;
 }
 
+/** Rule-derived lines (spoedtoeslag/voorrijkosten/uurtarief) are always recalculated and shown
+ * read-only ("Automatisch") — only lines that are also `removed` fall through to a normal toggle,
+ * since a vanished rule has nothing left to auto-apply. */
+function entryIsAuto(entry: QuoteLineDiffEntry): boolean {
+	return entry.isRule && entry.status !== 'removed';
+}
+
+const DIFF_STATUS_ORDER: QuoteLineDiffStatus[] = ['changed', 'new', 'removed', 'unchanged'];
+
+type DiffColorTokens = Theme['tokens']['color'];
+
+function diffMeta(c: DiffColorTokens): Record<QuoteLineDiffStatus, { label: string; bg: string; fg: string; border: string }> {
+	return {
+		changed: { label: 'Gewijzigd', bg: c.pending[50], fg: c.pending[700], border: c.pending[500] },
+		new: { label: 'Nieuw', bg: c.won[50], fg: c.won[700], border: c.won[500] },
+		removed: { label: 'Vervalt', bg: c.lost[50], fg: c.lost[700], border: c.lost[500] },
+		unchanged: { label: 'Ongewijzigd', bg: c.paper2, fg: c.ink3, border: c.lineStrong }
+	};
+}
+
+/** Title row (design's accent icon-tile + heading) — kept as its own component so it can read the theme. */
+function RegenerateModalTitle() {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	return (
+		<Box component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.5 }}>
+			<Box
+				component='span'
+				sx={{
+					width: 24,
+					height: 24,
+					flexShrink: 0,
+					display: 'inline-flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					borderRadius: `${tokens.radius.sm}px`,
+					backgroundColor: c.accent[50],
+					color: c.accent[700]
+				}}
+			>
+				<AppIcon name='refresh' size='small' />
+			</Box>
+			Opnieuw genereren — kies wat je overneemt
+		</Box>
+	);
+}
+
+/** Summary chip — count + lowercased status label, tinted by `diffMeta`. */
+function DiffCountChip({ status, count }: { status: QuoteLineDiffStatus; count: number }) {
+	const { tokens } = useTheme();
+	const meta = diffMeta(tokens.color)[status];
+	return (
+		<Box
+			component='span'
+			sx={{
+				display: 'inline-flex',
+				alignItems: 'center',
+				gap: 0.5,
+				px: 1,
+				py: 0.25,
+				borderRadius: `${tokens.radius.sm}px`,
+				backgroundColor: meta.bg,
+				border: `1px solid ${meta.border}`,
+				color: meta.fg,
+				fontSize: 12,
+				fontWeight: 'bold',
+				whiteSpace: 'nowrap'
+			}}
+		>
+			<Box component='span' className='tabular'>
+				{count}
+			</Box>
+			{meta.label.toLowerCase()}
+		</Box>
+	);
+}
+
 /**
  * Regenerate diff modal. Matches the current draft against a fresh proposal and shows
  * one row per logical line — ongewijzigd / gewijzigd / nieuw / vervalt — so a line
  * never appears twice. The owner decides per line; rule-derived lines (toeslagen,
- * voorrijkosten, minimum) are always recalculated and shown read-only. Manually edited
- * lines default to "keep" so owner work isn't silently overwritten.
+ * voorrijkosten, uurtarief) are always recalculated and shown read-only ("Automatisch").
+ * Manually edited lines default to "keep" so owner work isn't silently overwritten.
  */
 function QuoteRegenerateModal({
 	opportunityId,
@@ -695,6 +770,8 @@ function QuoteRegenerateModal({
 	isOpen: boolean;
 	onClose: () => void;
 }) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
 	const toast = useToast();
 	const replace = useReplaceQuoteLines(opportunityId);
 	const entries = useMemo(() => diffQuoteLines(draft.lineItems, proposed), [draft.lineItems, proposed]);
@@ -715,18 +792,32 @@ function QuoteRegenerateModal({
 		setSelection(Object.fromEntries(entries.map(entry => [entry.key, defaultSelection(entry)])));
 	}
 
+	const [unchangedOpen, setUnchangedOpen] = useState(false);
+
 	const setKey = (key: string, value: boolean) => setSelection(prev => ({ ...prev, [key]: value }));
 
-	const lineEntries = entries.filter(entry => !entry.isRule);
-	const ruleEntries = entries.filter(entry => entry.isRule);
-	const resultLines = buildResultLines(lineEntries, ruleEntries, selection);
+	const changedEntries = entries.filter(entry => entry.status !== 'unchanged');
+	const unchangedEntries = entries.filter(entry => entry.status === 'unchanged');
+	const autoCount = entries.filter(entryIsAuto).length;
+
+	const statusCounts: Record<QuoteLineDiffStatus, number> = {
+		changed: 0,
+		new: 0,
+		removed: 0,
+		unchanged: unchangedEntries.length
+	};
+	for (const entry of changedEntries) {
+		statusCounts[entry.status]++;
+	}
+
+	const resultLines = buildResultLines(entries, selection);
 
 	return (
 		<Dialog
 			open={isOpen}
-			title='Offerte opnieuw genereren'
+			title={<RegenerateModalTitle />}
 			onClose={onClose}
-			width={880}
+			width={720}
 			action={
 				<>
 					<Button onClick={onClose} disabled={replace.isPending}>
@@ -748,166 +839,310 @@ function QuoteRegenerateModal({
 							)
 						}
 						disabled={replace.isPending || resultLines.length === 0}
-						startIcon={replace.isPending ? <CircularProgress size={14} /> : null}
+						startIcon={
+							replace.isPending ? <CircularProgress size={14} /> : <AppIcon name='check' size='small' />
+						}
 					>
-						Toepassen ({resultLines.length})
+						Toepassen
 					</Button>
 				</>
 			}
 		>
-			<BodySmall color='textSecondary' sx={{ display: 'block', mb: 2 }}>
-				Vergelijk je huidige offerte met het nieuwe voorstel en kies per regel wat er gebeurt. Toeslagen en
-				voorrijkosten worden automatisch opnieuw berekend.
-			</BodySmall>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ flexWrap: 'wrap', mb: 1.75 }}>
+				{DIFF_STATUS_ORDER.filter(status => statusCounts[status] > 0).map(status => (
+					<DiffCountChip key={status} status={status} count={statusCounts[status]} />
+				))}
+			</Stack>
 
-			<Label sx={{ display: 'block', mb: 1 }}>Werk &amp; materialen</Label>
+			{autoCount > 0 && (
+				<Box
+					sx={{
+						display: 'flex',
+						gap: 1,
+						mb: 1.75,
+						p: 1.5,
+						borderRadius: `${tokens.radius.sm}px`,
+						backgroundColor: c.accent[50],
+						border: `1px solid ${c.accent[300]}`,
+						color: c.accent[700]
+					}}
+				>
+					<Box component='span' sx={{ flexShrink: 0, mt: 0.25 }}>
+						<AppIcon name='calculator' size='small' />
+					</Box>
+					<BodySmall component='span' sx={{ color: 'inherit' }}>
+						<strong>
+							{autoCount} {pluralize(autoCount, 'regel', 'regels')} uit prijsregels
+						</strong>{' '}
+						{autoCount === 1 ? 'wordt' : 'worden'} automatisch herberekend (toeslagen, voorrijkosten,
+						uurtarief). Je handmatige aanpassingen blijven standaard staan.
+					</BodySmall>
+				</Box>
+			)}
+
 			<Stack useFlexGap spacing={1}>
-				{lineEntries.length === 0 && (
-					<BodySmall color='textSecondary'>Geen werk- of materiaalregels.</BodySmall>
-				)}
-				{lineEntries.map(entry => (
-					<QuoteDiffRow
+				{changedEntries.map(entry => (
+					<DiffRow
 						key={entry.key}
 						entry={entry}
-						checked={selection[entry.key] ?? false}
+						selected={selection[entry.key] ?? false}
 						onChange={value => setKey(entry.key, value)}
 					/>
 				))}
 			</Stack>
 
-			{ruleEntries.length > 0 && (
+			{unchangedEntries.length > 0 && (
 				<>
-					<Divider sx={{ my: 2 }} />
-					<Label sx={{ display: 'block', mb: 1 }}>Automatisch herberekend (prijsregels)</Label>
-					<Stack useFlexGap spacing={0.5}>
-						{ruleEntries.map(entry => (
-							<RuleDiffRow key={entry.key} entry={entry} />
-						))}
-					</Stack>
+					<ButtonBase
+						onClick={() => setUnchangedOpen(prev => !prev)}
+						aria-expanded={unchangedOpen}
+						sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 1.5, color: c.ink3, fontSize: 12 }}
+					>
+						<AppIcon name={unchangedOpen ? 'chevron-down' : 'chevron-right'} size='small' />
+						{unchangedEntries.length}{' '}
+						{pluralize(unchangedEntries.length, 'ongewijzigde regel', 'ongewijzigde regels')}
+					</ButtonBase>
+					<Collapse in={unchangedOpen} timeout='auto' unmountOnExit>
+						<Stack useFlexGap spacing={1} sx={{ mt: 1 }}>
+							{unchangedEntries.map(entry => (
+								<DiffRow
+									key={entry.key}
+									entry={entry}
+									selected={selection[entry.key] ?? false}
+									onChange={value => setKey(entry.key, value)}
+								/>
+							))}
+						</Stack>
+					</Collapse>
 				</>
 			)}
 		</Dialog>
 	);
 }
 
-const DIFF_CHIP: Record<QuoteLineDiffStatus, { label: string; color: 'default' | 'success' | 'warning' | 'info' }> = {
-	unchanged: { label: 'Ongewijzigd', color: 'default' },
-	changed: { label: 'Gewijzigd', color: 'warning' },
-	new: { label: 'Nieuw', color: 'success' },
-	removed: { label: 'Vervalt', color: 'info' }
-};
-
-function QuoteDiffRow({
+/** One diff card — badge + description + source chip + value detail, and a right-side action
+ * (auto-recalc chip or a keep/take `Tabs` segmented toggle, nothing for `unchanged`). */
+function DiffRow({
 	entry,
-	checked,
+	selected,
 	onChange
 }: {
 	entry: QuoteLineDiffEntry;
-	checked: boolean;
+	selected: boolean;
 	onChange: (value: boolean) => void;
 }) {
-	const chip = (
-		<Chip
-			size='small'
-			variant='outlined'
-			color={DIFF_CHIP[entry.status].color}
-			label={DIFF_CHIP[entry.status].label}
-		/>
-	);
-
-	if (entry.status === 'unchanged' && entry.proposed) {
-		return (
-			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', pl: 1.5 }}>
-				{chip}
-				<LineSummary line={entry.proposed} />
-			</Stack>
-		);
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	const meta = diffMeta(c)[entry.status];
+	const unchanged = entry.status === 'unchanged';
+	const line = entry.current ?? entry.proposed;
+	if (!line) {
+		return null;
 	}
 
-	if (entry.status === 'changed' && entry.current && entry.proposed) {
-		return (
-			<Box>
-				<FormControlLabel
-					control={<Checkbox size='small' checked={checked} onChange={e => onChange(e.target.checked)} />}
-					label={
-						<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
-							{chip}
-							<BodySmall>{entry.proposed.description}</BodySmall>
-						</Stack>
-					}
-				/>
-				<BodySmall color='textSecondary' sx={{ display: 'block', pl: 3.75 }}>
-					huidig: {summarize(entry.current.quantity, entry.current.unitPriceEur)} → nieuw:{' '}
-					{summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)} ·{' '}
-					{checked ? 'nieuwe regel gebruiken' : 'huidige regel behouden'}
-				</BodySmall>
+	const willDrop = entry.status === 'removed' && !selected;
+	const auto = entryIsAuto(entry);
+	const willTakeChange = entry.status === 'changed' && (auto || selected);
+
+	return (
+		<Box
+			sx={{
+				display: 'flex',
+				alignItems: 'flex-start',
+				gap: 1.5,
+				py: 1.5,
+				px: 1.75,
+				border: `1px solid ${unchanged ? c.line : meta.border}`,
+				borderRadius: `${tokens.radius.md}px`,
+				backgroundColor: unchanged ? c.surface : meta.bg
+			}}
+		>
+			<Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+				<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+					<Box
+						component='span'
+						sx={{
+							textTransform: 'uppercase',
+							fontSize: 10,
+							fontWeight: 'bold',
+							letterSpacing: '0.04em',
+							backgroundColor: c.surface,
+							border: `1px solid ${meta.border}`,
+							color: meta.fg,
+							borderRadius: `${tokens.radius.sm}px`,
+							py: 0.25,
+							px: 0.75
+						}}
+					>
+						{meta.label}
+					</Box>
+					<BodySmall
+						component='span'
+						fontWeight='bold'
+						color={willDrop ? 'textSecondary' : undefined}
+						sx={{ textDecoration: willDrop ? 'line-through' : 'none' }}
+					>
+						{line.description}
+					</BodySmall>
+					<SourceChip source={line.source} />
+				</Stack>
+
+				<Box className='tabular' sx={{ fontSize: 13, color: c.ink2 }}>
+					{entry.status === 'changed' && entry.current && entry.proposed && (
+						<ChangeDetail cur={entry.current} next={entry.proposed} apply={willTakeChange} />
+					)}
+					{entry.status === 'new' && entry.proposed && <LineValue line={entry.proposed} />}
+					{entry.status === 'removed' && entry.current && (
+						<>
+							<Box component='span' sx={{ color: c.ink3 }}>
+								Stond op de offerte:{' '}
+							</Box>
+							<LineValue line={entry.current} inline />
+						</>
+					)}
+					{unchanged && <LineValue line={line} muted />}
+				</Box>
 			</Box>
-		);
-	}
 
-	if (entry.status === 'new' && entry.proposed) {
-		return (
-			<FormControlLabel
-				control={<Checkbox size='small' checked={checked} onChange={e => onChange(e.target.checked)} />}
-				label={
-					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
-						{chip}
-						<LineSummary line={entry.proposed} />
-					</Stack>
-				}
-			/>
-		);
-	}
-
-	if (entry.status === 'removed' && entry.current) {
-		return (
-			<FormControlLabel
-				control={<Checkbox size='small' checked={checked} onChange={e => onChange(e.target.checked)} />}
-				label={
-					<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
-						{chip}
-						<LineSummary line={entry.current} />
-						<BodySmall color='textSecondary'>(behouden?)</BodySmall>
-					</Stack>
-				}
-			/>
-		);
-	}
-
-	return null;
-}
-
-function RuleDiffRow({ entry }: { entry: QuoteLineDiffEntry }) {
-	if (!entry.proposed) {
-		return <BodySmall color='textSecondary'>{entry.current?.description} — vervalt</BodySmall>;
-	}
-	const changed = entry.current !== null && !sameLine(entry.current, entry.proposed);
-	return (
-		<BodySmall>
-			{entry.proposed.description} · {summarize(String(entry.proposed.quantity), entry.proposed.unitPriceEur)}
-			{changed && entry.current && (
-				<BodySmall component='span' color='textSecondary'>
-					{' '}
-					(was {formatLinePrice(entry.current.unitPriceEur)})
-				</BodySmall>
-			)}
-		</BodySmall>
+			<Box sx={{ flexShrink: 0 }}>
+				{!unchanged &&
+					(auto ? (
+						<AutoChip />
+					) : entry.status === 'changed' ? (
+						<Tabs
+							variant='segmented'
+							items={[
+								{ id: 'keep', label: 'Behouden' },
+								{ id: 'take', label: 'Overnemen' }
+							]}
+							value={selected ? 'take' : 'keep'}
+							onChange={next => onChange(next === 'take')}
+						/>
+					) : entry.status === 'new' ? (
+						<Tabs
+							variant='segmented'
+							items={[
+								{ id: 'take', label: 'Toevoegen' },
+								{ id: 'skip', label: 'Overslaan' }
+							]}
+							value={selected ? 'take' : 'skip'}
+							onChange={next => onChange(next === 'take')}
+						/>
+					) : (
+						<Tabs
+							variant='segmented'
+							items={[
+								{ id: 'keep', label: 'Behouden' },
+								{ id: 'take', label: 'Verwijderen' }
+							]}
+							value={selected ? 'keep' : 'take'}
+							onChange={next => onChange(next === 'keep')}
+						/>
+					))}
+			</Box>
+		</Box>
 	);
 }
 
-function LineSummary({ line }: { line: QuoteLineItem | ProposedQuoteLine }) {
+/** "Automatisch" chip — right-column marker for rule-derived lines that always recalculate. */
+function AutoChip() {
+	const { tokens } = useTheme();
+	const c = tokens.color;
 	return (
-		<BodySmall>
-			{line.description}{' '}
-			<BodySmall component='span' color='textSecondary'>
-				· {summarize(String(line.quantity), line.unitPriceEur)}
-			</BodySmall>
-		</BodySmall>
+		<Box
+			component='span'
+			sx={{
+				display: 'inline-flex',
+				alignItems: 'center',
+				gap: 0.5,
+				px: 1,
+				py: 0.5,
+				borderRadius: `${tokens.radius.sm}px`,
+				backgroundColor: c.accent[50],
+				border: `1px solid ${c.accent[300]}`,
+				color: c.accent[700],
+				fontSize: 11,
+				fontWeight: 'bold',
+				whiteSpace: 'nowrap'
+			}}
+		>
+			<AppIcon name='lock' size='small' /> Automatisch
+		</Box>
 	);
 }
 
-function summarize(quantity: string, unitPriceEur: string | null): string {
-	return `${quantity} × ${formatLinePrice(unitPriceEur)}`;
+/** BTW label for `ChangeDetail` — "verlegd" when reverse-charged, else the rate. */
+function vatLabel(rate: number, reverse: boolean): string {
+	return reverse ? 'verlegd' : rate + '%';
+}
+
+/** From → to detail for a `changed` row — only the fields that actually differ, struck through
+ * when the new value is being applied. */
+function ChangeDetail({ cur, next, apply }: { cur: QuoteLineItem; next: ProposedQuoteLine; apply: boolean }) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+
+	const fields: { label: string; from: string; to: string }[] = [];
+	if (cur.unitPriceEur !== next.unitPriceEur) {
+		fields.push({
+			label: 'stuksprijs',
+			from: formatLinePrice(cur.unitPriceEur),
+			to: formatLinePrice(next.unitPriceEur)
+		});
+	}
+	if (Number(cur.quantity) !== next.quantity) {
+		fields.push({ label: 'aantal', from: String(cur.quantity), to: String(next.quantity) });
+	}
+	if (cur.vatRate !== next.vatRate) {
+		fields.push({
+			label: 'btw',
+			from: vatLabel(cur.vatRate, cur.vatReverseCharged),
+			to: vatLabel(next.vatRate, false)
+		});
+	}
+
+	return (
+		<Stack direction='row' useFlexGap spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+			{fields.map(field => (
+				<Box key={field.label} component='span' sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+					<Box component='span' sx={{ color: c.ink4, fontSize: 12 }}>
+						{field.label}
+					</Box>
+					<Box
+						component='span'
+						sx={{ textDecoration: apply ? 'line-through' : 'none', color: c.ink3 }}
+					>
+						{field.from}
+					</Box>
+					<AppIcon name='arrow-right' size='small' />
+					<Box component='span' sx={{ fontWeight: 'bold', color: apply ? c.ink1 : c.ink3 }}>
+						{field.to}
+					</Box>
+				</Box>
+			))}
+		</Stack>
+	);
+}
+
+/** Compact "qty unit × price [· BTW rate]" line — reused for new/removed/unchanged rows. */
+function LineValue({
+	line,
+	inline = false,
+	muted = false
+}: {
+	line: QuoteLineItem | ProposedQuoteLine;
+	inline?: boolean;
+	muted?: boolean;
+}) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	const reverse = 'vatReverseCharged' in line ? line.vatReverseCharged : false;
+	return (
+		<Box component='span' className='tabular' sx={{ color: muted ? c.ink3 : c.ink2 }}>
+			{line.quantity} {line.unit} × {formatLinePrice(line.unitPriceEur)}
+			{!inline && line.unitPriceEur !== null && ` · BTW ${reverse ? 'verlegd' : `${line.vatRate}%`}`}
+		</Box>
+	);
 }
 
 function formatLinePrice(unitPriceEur: string | null): string {
@@ -1003,31 +1238,44 @@ function defaultSelection(entry: QuoteLineDiffEntry): boolean {
 }
 
 function buildResultLines(
-	lineEntries: QuoteLineDiffEntry[],
-	ruleEntries: QuoteLineDiffEntry[],
+	entries: QuoteLineDiffEntry[],
 	selection: Record<string, boolean>
 ): ReplaceQuoteLineInput[] {
 	const result: ReplaceQuoteLineInput[] = [];
-	for (const entry of lineEntries) {
+	for (const entry of entries) {
+		if (entry.status === 'unchanged') {
+			if (entry.proposed) {
+				result.push(proposedLineToReplaceInput(entry.proposed));
+			} else if (entry.current) {
+				result.push(currentLineToReplaceInput(entry.current));
+			}
+			continue;
+		}
+
+		// Rule-derived lines always refresh to the new proposal (removed rule lines fall
+		// through to the normal `removed` branch below since `entryIsAuto` excludes them).
+		if (entryIsAuto(entry)) {
+			if (entry.proposed) {
+				result.push(proposedLineToReplaceInput(entry.proposed));
+			}
+			continue;
+		}
+
 		const selected = selection[entry.key] ?? false;
-		if (entry.status === 'unchanged' && entry.proposed) {
-			result.push(proposedLineToReplaceInput(entry.proposed));
-		} else if (entry.status === 'changed') {
+		if (entry.status === 'changed') {
 			if (selected && entry.proposed) {
 				result.push(proposedLineToReplaceInput(entry.proposed));
 			} else if (!selected && entry.current) {
 				result.push(currentLineToReplaceInput(entry.current));
 			}
-		} else if (entry.status === 'new' && selected && entry.proposed) {
-			result.push(proposedLineToReplaceInput(entry.proposed));
-		} else if (entry.status === 'removed' && selected && entry.current) {
-			result.push(currentLineToReplaceInput(entry.current));
-		}
-	}
-	// Rule-derived lines always refresh to the new proposal; removed ones drop.
-	for (const entry of ruleEntries) {
-		if (entry.proposed) {
-			result.push(proposedLineToReplaceInput(entry.proposed));
+		} else if (entry.status === 'new') {
+			if (selected && entry.proposed) {
+				result.push(proposedLineToReplaceInput(entry.proposed));
+			}
+		} else if (entry.status === 'removed') {
+			if (selected && entry.current) {
+				result.push(currentLineToReplaceInput(entry.current));
+			}
 		}
 	}
 	return result;
@@ -1778,7 +2026,7 @@ function QuoteLineRow({
 						border: 'none',
 						background: 'transparent',
 						borderRadius: `${tokens.radius.sm}px`,
-						color: c.ink4,
+						color: c.lost[700],
 						cursor: remove.isPending ? 'default' : 'pointer',
 						'&:hover': { backgroundColor: c.paper2, color: c.lost[500] }
 					}}

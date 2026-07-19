@@ -157,10 +157,15 @@ export class QuoteDraftsRepository {
 		await this.prisma.quoteLineItem.delete({ where: { id: lineItemId } });
 	}
 
-	/** Replace every line on a draft atomically (regenerate-merge apply). Also bumps
-	 * the draft's `updatedAt` so the "pricing changed since this quote" staleness check
-	 * resets — the lines now reflect the current pricing. */
-	async replaceLines(quoteDraftId: string, lines: ReadonlyArray<ReplaceQuoteLineRepoInput>): Promise<void> {
+	/** Replace every line on a draft atomically (regenerate-merge apply). Bumps the draft's
+	 * `updatedAt` (so the "pricing changed since this quote" staleness check resets) AND resets
+	 * `validUntil` — a regenerate is a fresh quote with current prices, so it earns a fresh
+	 * validity window (otherwise regenerating an EXPIRED quote leaves it expired + PDF blocked). */
+	async replaceLines(
+		quoteDraftId: string,
+		lines: ReadonlyArray<ReplaceQuoteLineRepoInput>,
+		validUntil: Date
+	): Promise<void> {
 		await this.prisma.$transaction([
 			this.prisma.quoteLineItem.deleteMany({ where: { quoteDraftId } }),
 			this.prisma.quoteLineItem.createMany({
@@ -180,7 +185,7 @@ export class QuoteDraftsRepository {
 					wasEditedByUser: line.wasEditedByUser
 				}))
 			}),
-			this.prisma.quoteDraft.update({ where: { id: quoteDraftId }, data: { updatedAt: new Date() } })
+			this.prisma.quoteDraft.update({ where: { id: quoteDraftId }, data: { updatedAt: new Date(), validUntil } })
 		]);
 	}
 }

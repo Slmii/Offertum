@@ -6,7 +6,9 @@ import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Segmented } from '@/components/Segmented.component';
 import { BodySmall } from '@/components/Text.component';
+import { UpsellDialog } from '@/components/UpsellDialog.component';
 import { useToast } from '@/lib/hooks/use-toast';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import {
 	catalogItemsQueryOptions,
 	useDeleteCatalogItem,
@@ -49,6 +51,12 @@ const FILTER_OPTIONS: { id: CatalogFilter; label: string }[] = [
 // column-header row so switching between the two states never changes the table's height.
 const TABLE_HEADER_HEIGHT = 48;
 
+const CATALOG_UPSELL_ITEMS = [
+	'Producten en diensten met vaste prijzen en BTW',
+	'Automatisch voorgesteld bij elke offerte',
+	'Eén keer instellen, altijd bij de hand'
+] as const;
+
 // Catalogus is a top-level page (its own sidebar item — sibling of Instellingen), NOT a settings
 // sub-tab, so it renders without the Settings area's inline sub-nav. Owner-only + prefetches the
 // item list and the org VAT config (the create/edit dialog's BTW dropdown reads it).
@@ -61,6 +69,7 @@ export const Route = createFileRoute('/(app)/catalog')({
 	},
 	loader: ({ context }) =>
 		Promise.all([
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
 			context.queryClient.ensureQueryData(catalogItemsQueryOptions),
 			context.queryClient.ensureQueryData(vatSettingsQueryOptions)
 		]),
@@ -70,14 +79,21 @@ export const Route = createFileRoute('/(app)/catalog')({
 
 function CatalogPage() {
 	const { data } = useSuspenseQuery(catalogItemsQueryOptions);
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 	const [editing, setEditing] = useState<CatalogItem | null>(null);
 	const [creating, setCreating] = useState(false);
+	const [showUpsell, setShowUpsell] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<CatalogItem | null>(null);
 	const [query, setQuery] = useState('');
 	const [filter, setFilter] = useState<CatalogFilter>('all');
 
 	const items = data.items;
 	const activeCount = items.filter(item => item.active).length;
+
+	// Adding a catalog item is a write — gated on entitlement. Non-entitled orgs get the upsell
+	// modal instead of the create form (the API's OwnerWrite/entitlement guard is the real
+	// enforcement; this is the friendly pre-empt). The page is owner-only via `beforeLoad`.
+	const handleAdd = () => (isBillingEntitled(billing.state) ? setCreating(true) : setShowUpsell(true));
 
 	// Search (name / description / SKU) + status filter, then active-first ordering.
 	const visible = useMemo(() => {
@@ -106,18 +122,14 @@ function CatalogPage() {
 				title='Catalogus'
 				caption='Producten en diensten met standaardprijzen die Offertum voorstelt bij het opstellen van offertes.'
 				actions={
-					<Button
-						variant='contained'
-						startIcon={<AppIcon name='plus' size='small' />}
-						onClick={() => setCreating(true)}
-					>
+					<Button variant='contained' startIcon={<AppIcon name='plus' size='small' />} onClick={handleAdd}>
 						Nieuw item
 					</Button>
 				}
 			/>
 
 			{items.length === 0 ? (
-				<EmptyCatalog onAdd={() => setCreating(true)} />
+				<EmptyCatalog onAdd={handleAdd} />
 			) : (
 				<Stack useFlexGap spacing={1.75}>
 					{/* Toolbar — search + status filter + counts */}
@@ -159,6 +171,14 @@ function CatalogPage() {
 				mode='edit'
 				item={editing ?? undefined}
 				onClose={() => setEditing(null)}
+			/>
+			<UpsellDialog
+				isOpen={showUpsell}
+				isOwner
+				title='Abonneer voor je catalogus'
+				description='Een eigen catalogus hoort bij een abonnement. Met een abonnement stel je je producten en diensten met vaste prijzen één keer in en vult Offertum ze automatisch in op elke offerte.'
+				items={CATALOG_UPSELL_ITEMS}
+				onClose={() => setShowUpsell(false)}
 			/>
 			<DeleteConfirmDialog
 				isOpen={!!deleteTarget}

@@ -64,6 +64,17 @@ enum AICallStatus {
   TIMEOUT
 }
 
+// Compile-pass status for a PricingPlaybook. Drives the settings page's compile-state
+// UI (Bezig met verwerken / Verwerkt / Verwerken mislukt). Set to PROCESSING on save,
+// flipped to SUCCEEDED/FAILED by the Inngest compile function. Wire-format conversion to
+// lowercase happens in `pricing-compile-status.mapper.ts`.
+enum PricingCompileStatus {
+  IDLE
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 // Materialized quote opportunity created from a classified-positive RawMessage.
 // Uppercase per existing schema convention (see `MembershipRole`, `AICallStatus`,
 // `EmailProvider`). Wire-format conversion to lowercase happens in
@@ -969,6 +980,13 @@ model PricingPlaybook {
   // hash matches (idempotency on Inngest retries + on rapid-save flurries that
   // collapse into one debounced compile event).
   compiledHash   String?   @db.Text
+  // Compile-pass lifecycle. Set to PROCESSING on save (before the debounced Inngest
+  // compile runs), then SUCCEEDED / FAILED by the compile function. Drives the
+  // settings-page compile-state UI + the FE's poll-while-processing.
+  compileStatus  PricingCompileStatus @default(IDLE)
+  // Last compile error message (ops/debug only — never surfaced to the owner, who sees
+  // a generic "Verwerken mislukt"). NULL once a compile succeeds.
+  compileError   String?   @db.Text
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

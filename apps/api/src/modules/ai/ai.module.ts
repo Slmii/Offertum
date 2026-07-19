@@ -4,6 +4,7 @@ import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
 import { LineItemProposerService } from '@/modules/ai/line-item-proposer/line-item-proposer.service';
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
+import { PricingNarrativeVerifierService } from '@/modules/ai/pricing-narrative-verifier/pricing-narrative-verifier.service';
 import { ReplyDraftGenerator } from '@/modules/ai/reply-draft/reply-draft-generator.service';
 import { ShouldReplyClassifier } from '@/modules/ai/should-reply/should-reply.service';
 import { Module } from '@nestjs/common';
@@ -38,7 +39,8 @@ import { Module } from '@nestjs/common';
 		ExtractorService,
 		ReplyDraftGenerator,
 		ShouldReplyClassifier,
-		LineItemProposerService
+		LineItemProposerService,
+		PricingNarrativeVerifierService
 	],
 	exports: [
 		AI_CLIENT,
@@ -47,7 +49,8 @@ import { Module } from '@nestjs/common';
 		ExtractorService,
 		ReplyDraftGenerator,
 		ShouldReplyClassifier,
-		LineItemProposerService
+		LineItemProposerService,
+		PricingNarrativeVerifierService
 	]
 })
 export class AiModule {}

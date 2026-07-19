@@ -4,7 +4,10 @@ import { getByteLength, StandaloneField, trimToMaxBytes } from '@/components/For
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, H3, Label } from '@/components/Text.component';
+import { UpsellTeaser } from '@/components/UpsellTeaser.component';
 import { useToast } from '@/lib/hooks/use-toast';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
+import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import { tonePlaybookQueryOptions, useUpdateTonePlaybook } from '@/lib/queries/tone-playbook.queries';
 import { toReadableDateTime } from '@/lib/utils/date.utils';
 import Accordion from '@mui/material/Accordion';
@@ -33,7 +36,12 @@ import { useEffect, useRef, useState } from 'react';
  * byte-accurate `maxLength` on the field plus the backend's own length guard.
  */
 export const Route = createFileRoute('/(app)/settings/writing-style')({
-	loader: ({ context }) => context.queryClient.ensureQueryData(tonePlaybookQueryOptions),
+	loader: async ({ context }) => {
+		await Promise.all([
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
+			context.queryClient.ensureQueryData(tonePlaybookQueryOptions)
+		]);
+	},
 	component: WritingStylePage,
 	errorComponent: SectionError
 });
@@ -83,6 +91,41 @@ const EXAMPLES: WritingStyleExample[] = [
 ];
 
 function WritingStylePage() {
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+
+	if (!isBillingEntitled(billing.state)) {
+		return <WritingStyleUpsell isOwner={me.role === 'OWNER'} />;
+	}
+
+	return <WritingStyleEditor />;
+}
+
+const UPSELL_BULLETS = [
+	'Concept-antwoorden in jouw eigen toon',
+	'Voorbeelden als startpunt, direct aan te passen',
+	'Elk teamlid een eigen schrijfstijl'
+] as const;
+
+/**
+ * Locked schrijfstijl upsell — shown when the org is NOT entitled (no active subscription/trial).
+ * Reuses the shared `UpsellTeaser` with writing-style copy, so the design stays DRY across every
+ * gated settings page.
+ */
+function WritingStyleUpsell({ isOwner }: { isOwner: boolean }) {
+	return (
+		<Stack useFlexGap spacing={3}>
+			<PageHeader
+				title='Mijn schrijfstijl'
+				caption='Vertel ons in een paar zinnen hoe je schrijft, begroeting, afsluiting, toon, vaste zinnetjes. Offertum gebruikt dit voor concept-antwoorden op je offerteaanvragen, zodat ze klinken zoals jij.'
+				disableMargin
+			/>
+			<UpsellTeaser isOwner={isOwner} title='Schrijf je concepten in jouw eigen stijl' items={UPSELL_BULLETS} />
+		</Stack>
+	);
+}
+
+function WritingStyleEditor() {
 	const { data } = useSuspenseQuery(tonePlaybookQueryOptions);
 	const update = useUpdateTonePlaybook();
 

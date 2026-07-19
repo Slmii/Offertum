@@ -7,6 +7,17 @@
  * (Prisma stores UPPERCASE; mappers convert at the controller boundary).
  */
 
+/**
+ * Compile-pass status surfaced to the settings page. Lowercase wire values (Prisma stores
+ * UPPERCASE; `pricing-compile-status.mapper.ts` converts at the controller boundary).
+ *   - `idle`       — never saved / never compiled (fresh org).
+ *   - `processing` — saved; the debounced Inngest compile is enqueued or running.
+ *   - `succeeded`  — compile finished (may still have produced zero rules).
+ *   - `failed`     — compile errored after all retries.
+ */
+export const PRICING_COMPILE_STATUSES = ['idle', 'processing', 'succeeded', 'failed'] as const;
+export type PricingCompileStatus = (typeof PRICING_COMPILE_STATUSES)[number];
+
 export const PRICING_RULE_TYPES = [
 	'hourly_rate',
 	'material_markup',
@@ -100,6 +111,8 @@ export interface PricingPlaybook {
 	compiledAt: string | null;
 	compiledHash: string | null;
 	rulesCount: number;
+	/** Compile-pass lifecycle — drives the "Bezig met verwerken / Verwerkt / Verwerken mislukt" UI. */
+	compileStatus: PricingCompileStatus;
 	updatedAt: string;
 }
 

@@ -96,7 +96,20 @@ Als de regel-zin een woord bevat dat:
 - "Voor spoedklussen reken ik 25% extra." → \`urgency: "emergency"\` vangt het volledig → \`null\`
 - "Klanten in België krijgen BTW verlegd." → \`jurisdiction: "BE"\` vangt het volledig → \`null\`
 
-Als je TWIJFELT of een conditie volledig in de structured fields past: vul \`conditionNarrative\` in. Een AI verifier checkt het later per offerte; over-emissie kost weinig, onder-emissie betekent dat de regel ten onrechte wordt toegepast.
+**HARDE REGEL — dubbel NOOIT een structured field in de narrative.** Als een structured field
+(\`urgency\`, \`category\`, \`jurisdiction\`, \`lineKind\`) dat je op deze regel zet de voorwaarde AL
+VOLLEDIG vastlegt, dan MOET \`conditionNarrative\` \`null\` zijn — herhaal die voorwaarde niet als
+narrative.
+- "spoed zelfde dag" → \`urgency: "emergency"\` → \`conditionNarrative: null\` (dus NIET \`"klussen die dezelfde dag af moeten"\`)
+- "op arbeid" / "op materialen" → \`lineKind: "labor"\`/\`"material"\` → \`null\`
+- "voor loodgieterswerk" → \`category: "plumbing"\` → \`null\`
+Een narrative die een structured field dubbelt is FOUT: de AI-verifier gaat 'm bij élke offerte
+onnodig checken en kan de regel dan ten onrechte laten vervallen.
+
+Als je TWIJFELT: dekt GÉÉN enkel structured field de voorwaarde, vul dan \`conditionNarrative\` in.
+Een AI verifier checkt het later per offerte; bij niet-structureerbare condities kost over-emissie
+weinig, onder-emissie betekent dat de regel ten onrechte wordt toegepast. Maar dubbel nooit een
+condition die al in een structured field staat — dat is géén "twijfelgeval".
 
 # "Behalve voor X" / uitzondering-zinnen — maak ALTIJD twee regels
 
@@ -121,7 +134,7 @@ De **default-regel** krijgt \`priority: 100\` + \`conditionNarrative: null\`. De
 
 # Regels voor extractie
 
-1. **Geen verzinsels.** Geef alleen regels uit die EXPLICIET in de tekst staan. Twijfel? Niet emitten.
+1. **Geen verzinsels.** Geef alleen regels uit die EXPLICIET in de tekst staan. Twijfel? Niet emitten. Bevat de tekst GEEN concrete prijsinformatie — alleen een groet, contactgegevens, losse notities, of een leeg/onafgemaakt woord zoals \`"bijvoorbeeld"\` of \`"test"\` — geef dan een LEGE \`rules\`-array terug. Vul de tekst NOOIT aan met verzonnen voorbeeldregels; ook niet als een aanhef als "bijvoorbeeld" of "voorbeeld:" lijkt te vragen om een voorbeeld. Genereer alleen op basis van wat de gebruiker daadwerkelijk heeft geschreven.
 2. **Eén regel per uitspraak.** Als de gebruiker zegt "€85/uur voor loodgieterswerk en €95 voor elektra", maak twee aparte hourly_rate regels (één met \`category: "plumbing"\`, één met \`category: "electrical"\`).
 3. **Priority:**
    - Default uitspraken ("mijn uurtarief is X"): \`priority: 100\`

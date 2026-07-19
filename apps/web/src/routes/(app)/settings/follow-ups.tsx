@@ -3,7 +3,9 @@ import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { BodySmall, Overline } from '@/components/Text.component';
+import { UpsellTeaser } from '@/components/UpsellTeaser.component';
 import { useToast } from '@/lib/hooks/use-toast';
+import { billingStatusQueryOptions, isBillingEntitled } from '@/lib/queries/billing.queries';
 import { followUpSettingsQueryOptions, useUpdateFollowUpSettings } from '@/lib/queries/follow-up-settings.queries';
 import { myMembershipQueryOptions } from '@/lib/queries/team.queries';
 import Box from '@mui/material/Box';
@@ -40,7 +42,12 @@ export const Route = createFileRoute('/(app)/settings/follow-ups')({
 			throw redirect({ to: '/' });
 		}
 	},
-	loader: ({ context }) => context.queryClient.ensureQueryData(followUpSettingsQueryOptions),
+	loader: async ({ context }) => {
+		await Promise.all([
+			context.queryClient.ensureQueryData(billingStatusQueryOptions),
+			context.queryClient.ensureQueryData(followUpSettingsQueryOptions)
+		]);
+	},
 	component: FollowUpsSettingsPage,
 	errorComponent: SectionError
 });
@@ -88,6 +95,41 @@ const sliderSx = (theme: Theme) => ({
 });
 
 function FollowUpsSettingsPage() {
+	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
+	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+
+	if (!isBillingEntitled(billing.state)) {
+		return <FollowUpsUpsell isOwner={me.role === 'OWNER'} />;
+	}
+
+	return <FollowUpsEditor />;
+}
+
+const UPSELL_BULLETS = [
+	'Automatische check-ins als een klant stil blijft',
+	'In jouw toon geschreven — jij leest na en verstuurt',
+	'Zelf het ritme en het aantal pogingen bepalen'
+] as const;
+
+/**
+ * Locked follow-ups upsell — shown to owners whose org is NOT entitled (no active
+ * subscription/trial). Reuses the shared `UpsellTeaser` with follow-up-specific copy, so the
+ * design stays DRY across every gated settings page.
+ */
+function FollowUpsUpsell({ isOwner }: { isOwner: boolean }) {
+	return (
+		<Stack useFlexGap spacing={2.5}>
+			<PageHeader
+				title='Automatische follow-ups'
+				caption="Offertum houdt aanvragen waarop je antwoordde in de gaten. Blijft de klant stil, dan schrijft Offertum een vriendelijke check-in en zet 'm klaar — jij leest 'm na en verstuurt."
+				disableMargin
+			/>
+			<UpsellTeaser isOwner={isOwner} title='Laat Offertum je offertes opvolgen' items={UPSELL_BULLETS} />
+		</Stack>
+	);
+}
+
+function FollowUpsEditor() {
 	const { data } = useSuspenseQuery(followUpSettingsQueryOptions);
 	const update = useUpdateFollowUpSettings();
 	const toast = useToast();
@@ -194,8 +236,7 @@ function FollowUpsSettingsPage() {
 								fontWeight: 500,
 								fontSize: 20,
 								lineHeight: 1.4,
-								color: theme.tokens.color.ink1,
-								maxWidth: 720
+								color: theme.tokens.color.ink1
 							})}
 						>
 							Offertum stelt maximaal{' '}
@@ -214,7 +255,7 @@ function FollowUpsSettingsPage() {
 				{/* Controls */}
 				<Stack
 					useFlexGap
-					sx={theme => ({ p: 3, gap: 3.5, borderBottom: `1px solid ${theme.tokens.color.line}` })}
+					sx={theme => ({ p: 3, gap: 3, borderBottom: `1px solid ${theme.tokens.color.line}` })}
 				>
 					<CadenceSlider
 						value={cadence}
@@ -488,7 +529,7 @@ interface CadenceSliderProps {
 function CadenceSlider({ value, disabled, onLiveChange, onCommit }: CadenceSliderProps) {
 	return (
 		<Box sx={{ opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
-			<Stack direction='row' sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 1.75 }}>
+			<Stack direction='row' sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.5 }}>
 				<BodySmall color='textSecondary'>Wachttijd tussen check-ins</BodySmall>
 				<SliderValue value={value} unit={pluralize(value, 'dag', 'dagen')} />
 			</Stack>
@@ -505,7 +546,7 @@ function CadenceSlider({ value, disabled, onLiveChange, onCommit }: CadenceSlide
 				sx={sliderSx}
 			/>
 
-			<Stack direction='row' sx={{ justifyContent: 'space-between', mt: 1 }}>
+			<Stack direction='row' sx={{ justifyContent: 'space-between' }}>
 				{['1 dag', '1 week', '2 weken'].map(label => (
 					<BodySmall key={label} color='textSecondary' sx={{ fontSize: 11 }}>
 						{label}
@@ -529,7 +570,7 @@ function MaxCountSlider({
 }) {
 	return (
 		<Box>
-			<Stack direction='row' sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 1.75 }}>
+			<Stack direction='row' sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.5 }}>
 				<BodySmall color='textSecondary'>Aantal pogingen</BodySmall>
 				<SliderValue value={value} unit='×' />
 			</Stack>
@@ -556,7 +597,7 @@ function MaxCountSlider({
 				})}
 			/>
 
-			<BodySmall color='textSecondary' sx={{ display: 'block', mt: 1 }}>
+			<BodySmall color='textSecondary' sx={{ display: 'block' }}>
 				{value === 0 ? (
 					<>
 						<Box component='strong' sx={{ color: 'text.primary' }}>

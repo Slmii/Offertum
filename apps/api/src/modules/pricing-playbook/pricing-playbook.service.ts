@@ -5,6 +5,7 @@ import { inngest } from '@/modules/inngest/inngest.client';
 import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { LogService } from '@/modules/logger/log.service';
 import { PricingPlaybookResponseDto } from '@/modules/pricing-playbook/dto/pricing-playbook.response.dto';
+import { PRICING_COMPILE_STATUS_TO_WIRE } from '@/modules/pricing-playbook/pricing-compile-status.mapper';
 import {
 	PricingRuleResponseDto,
 	PricingRulesListResponseDto
@@ -51,15 +52,22 @@ export class PricingPlaybookService {
 				data: { organizationId, playbookHash }
 			});
 		} catch (error) {
+			const message = error instanceof Error ? error.message : 'unknown';
 			this.logService.logAction({
 				action: 'pricing_playbook.compile.enqueue_failed',
-				message: `Failed to enqueue pricing-playbook compile for org ${organizationId}: ${
-					error instanceof Error ? error.message : 'unknown'
-				}`,
+				message: `Failed to enqueue pricing-playbook compile for org ${organizationId}: ${message}`,
 				metadata: { organizationId, playbookHash },
 				level: 'warn',
 				context: 'PricingPlaybookService'
 			});
+			// `updatePlaybookText` set status = PROCESSING, but with no compile enqueued it would hang
+			// there forever (the FE polls "Bezig met verwerken" indefinitely). Flip to FAILED so the
+			// owner sees "Verwerken mislukt" + a retry, which re-enqueues. Best-effort; the saved text
+			// is safe regardless.
+			await this.repository
+				.markCompileFailed(organizationId, `Compile enqueue failed: ${message}`)
+				.catch(() => undefined);
+			return toResponseDto(await this.repository.getOrCreate(organizationId));
 		}
 
 		return toResponseDto(row);
@@ -128,6 +136,7 @@ function toResponseDto(row: PricingPlaybookRow): PricingPlaybookResponseDto {
 		compiledAt: row.compiledAt?.toISOString() ?? null,
 		compiledHash: row.compiledHash,
 		rulesCount: row.rulesCount,
+		compileStatus: PRICING_COMPILE_STATUS_TO_WIRE[row.compileStatus],
 		updatedAt: row.updatedAt.toISOString()
 	};
 }

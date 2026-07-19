@@ -1,4 +1,4 @@
-import type { PricingPlaybook } from '@offertum/shared';
+import type { PricingCompileStatus, PricingPlaybook } from '@offertum/shared';
 
 /**
  * `GET /api/pricing-playbook` + `PUT /api/pricing-playbook` response. Carries the
@@ -10,5 +10,6 @@ export class PricingPlaybookResponseDto implements PricingPlaybook {
 	compiledAt!: string | null;
 	compiledHash!: string | null;
 	rulesCount!: number;
+	compileStatus!: PricingCompileStatus;
 	updatedAt!: string;
 }

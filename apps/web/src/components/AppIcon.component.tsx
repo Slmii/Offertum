@@ -94,11 +94,16 @@ import {
 	IconSettingsFilled,
 	IconShieldCheck,
 	IconShieldCheckFilled,
+	IconShoppingCart,
 	IconSnowflake,
 	IconSparkles,
 	IconSparklesFilled,
 	IconStar,
 	IconStarFilled,
+	IconTag,
+	IconTagFilled,
+	IconBolt,
+	IconBoltFilled,
 	IconSun,
 	IconSunFilled,
 	IconSunrise,
@@ -209,6 +214,9 @@ export type AppIconName =
 	| 'star'
 	| 'percent'
 	| 'image'
+	| 'tag'
+	| 'zap'
+	| 'shopping-cart'
 	| 'pause'
 	| 'play'
 	| 'power'
@@ -317,6 +325,10 @@ const ICONS: Record<AppIconName, IconPair> = {
 	star: { outline: IconStar, filled: IconStarFilled },
 	// Tabler ships no filled percentage — outline doubles as the filled slot.
 	percent: { outline: IconPercentage, filled: IconPercentage },
+	tag: { outline: IconTag, filled: IconTagFilled },
+	zap: { outline: IconBolt, filled: IconBoltFilled },
+	// Tabler ships no filled shopping-cart — outline doubles as the filled slot.
+	'shopping-cart': { outline: IconShoppingCart, filled: IconShoppingCart },
 	image: { outline: IconPhoto, filled: IconPhotoFilled },
 	pause: { outline: IconPlayerPause, filled: IconPlayerPauseFilled },
 	play: { outline: IconPlayerPlay, filled: IconPlayerPlayFilled },

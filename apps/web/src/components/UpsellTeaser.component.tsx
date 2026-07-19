@@ -12,15 +12,28 @@ const VALUE_PROPS = [
 	'Inzicht in je reactiesnelheid en winkans'
 ] as const;
 
+interface UpsellTeaserProps {
+	isOwner: boolean;
+	/** Feature headline. Defaults to the W13 "Slimme prioritering" teaser. */
+	title?: string;
+	/** Value-prop bullets rendered as check items. Defaults to the W13 props. */
+	items?: readonly string[];
+}
+
 /**
- * Upsell teaser for W13 features (daily digest, smart expiry, pattern banners) — the design's
- * `UpsellTeaser`. Presentational: the caller decides when to render it (only when NOT entitled);
- * entitled orgs see the real feature (`OppInsights`) instead.
+ * Shared upsell teaser — the design's `UpsellTeaser`: a lock tile + headline + "Met een
+ * abonnement krijg je:" + check-listed value props + a subscribe CTA. Presentational: the
+ * caller decides when to render it (only when NOT entitled); entitled orgs see the real
+ * feature instead.
+ *
+ * `title` + `items` are parameterised so every gated feature reuses the same chrome with its
+ * own copy (W13 insights, Prijsregels, …); they default to the W13 content so existing callers
+ * stay unchanged.
  *
  * Owner sees an "Abonneren" CTA that links to /billing. Non-owners see an "ask the owner" line
  * instead (they cannot reach /billing — OwnerGuard blocks it on the API too).
  */
-export function UpsellTeaser({ isOwner }: { isOwner: boolean }) {
+export function UpsellTeaser({ isOwner, title = 'Slimme prioritering', items = VALUE_PROPS }: UpsellTeaserProps) {
 	return (
 		<Paper variant='outlined' sx={{ p: 3 }}>
 			<Stack direction='row' useFlexGap spacing={2.25} sx={{ alignItems: 'flex-start' }}>
@@ -28,15 +41,15 @@ export function UpsellTeaser({ isOwner }: { isOwner: boolean }) {
 
 				<Box sx={{ flex: 1, minWidth: 0 }}>
 					<H2 component='h2' sx={{ m: 0 }}>
-						Slimme prioritering
+						{title}
 					</H2>
 					<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.5, mb: 2 }}>
 						Met een abonnement krijg je:
 					</BodySmall>
 
 					<Stack useFlexGap spacing={1.25}>
-						{VALUE_PROPS.map(prop => (
-							<UpsellCheckItem key={prop}>{prop}</UpsellCheckItem>
+						{items.map(item => (
+							<UpsellCheckItem key={item}>{item}</UpsellCheckItem>
 						))}
 					</Stack>
 

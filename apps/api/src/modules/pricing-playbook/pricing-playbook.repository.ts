@@ -1,5 +1,8 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { PricingRuleType as PrismaPricingRuleType } from '@/generated/prisma/enums';
+import {
+	PricingCompileStatus as PrismaPricingCompileStatus,
+	PricingRuleType as PrismaPricingRuleType
+} from '@/generated/prisma/enums';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
@@ -13,6 +16,7 @@ export interface PricingPlaybookRow {
 	compiledAt: Date | null;
 	compiledHash: string | null;
 	rulesCount: number;
+	compileStatus: PrismaPricingCompileStatus;
 	updatedAt: Date;
 }
 
@@ -69,6 +73,7 @@ export class PricingPlaybookRepository {
 				playbookText: true,
 				compiledAt: true,
 				compiledHash: true,
+				compileStatus: true,
 				updatedAt: true,
 				_count: { select: { rules: { where: { active: true } } } }
 			}
@@ -78,6 +83,7 @@ export class PricingPlaybookRepository {
 			playbookText: row.playbookText,
 			compiledAt: row.compiledAt,
 			compiledHash: row.compiledHash,
+			compileStatus: row.compileStatus,
 			updatedAt: row.updatedAt,
 			rulesCount: row._count.rules
 		};
@@ -93,13 +99,16 @@ export class PricingPlaybookRepository {
 	async updatePlaybookText(organizationId: string, playbookText: string): Promise<PricingPlaybookRow> {
 		const row = await this.prisma.pricingPlaybook.upsert({
 			where: { organizationId },
-			update: { playbookText },
-			create: { organizationId, playbookText },
+			// A save always (re)triggers the debounced compile — mark PROCESSING now so the
+			// settings page shows "Bezig met verwerken" immediately, before the Inngest run.
+			update: { playbookText, compileStatus: PrismaPricingCompileStatus.PROCESSING, compileError: null },
+			create: { organizationId, playbookText, compileStatus: PrismaPricingCompileStatus.PROCESSING },
 			select: {
 				id: true,
 				playbookText: true,
 				compiledAt: true,
 				compiledHash: true,
+				compileStatus: true,
 				updatedAt: true,
 				_count: { select: { rules: { where: { active: true } } } }
 			}
@@ -109,6 +118,7 @@ export class PricingPlaybookRepository {
 			playbookText: row.playbookText,
 			compiledAt: row.compiledAt,
 			compiledHash: row.compiledHash,
+			compileStatus: row.compileStatus,
 			updatedAt: row.updatedAt,
 			rulesCount: row._count.rules
 		};
@@ -128,6 +138,7 @@ export class PricingPlaybookRepository {
 				playbookText: true,
 				compiledAt: true,
 				compiledHash: true,
+				compileStatus: true,
 				updatedAt: true,
 				_count: { select: { rules: { where: { active: true } } } }
 			}
@@ -140,6 +151,7 @@ export class PricingPlaybookRepository {
 			playbookText: row.playbookText,
 			compiledAt: row.compiledAt,
 			compiledHash: row.compiledHash,
+			compileStatus: row.compileStatus,
 			updatedAt: row.updatedAt,
 			rulesCount: row._count.rules
 		};
@@ -151,10 +163,53 @@ export class PricingPlaybookRepository {
 	 * the next compile fires on identical prose, the function checks
 	 * `playbookHash === compiledHash` and skips re-running the LLM entirely.
 	 */
-	async markCompiled(pricingPlaybookId: string, compiledHash: string, compiledAt: Date): Promise<void> {
-		await this.prisma.pricingPlaybook.update({
-			where: { id: pricingPlaybookId },
-			data: { compiledAt, compiledHash }
+	async markCompiled(
+		pricingPlaybookId: string,
+		compiledText: string,
+		compiledHash: string,
+		compiledAt: Date
+	): Promise<void> {
+		// Guard against a stale run: if the owner re-saved (playbookText changed) while this compile
+		// was in flight, do NOT stamp SUCCEEDED + the now-outdated hash — that would mark the newer
+		// text "verwerkt" with rules from the old text. The 0-row no-op leaves it PROCESSING for the
+		// newer save's own compile to settle.
+		await this.prisma.pricingPlaybook.updateMany({
+			where: { id: pricingPlaybookId, playbookText: compiledText },
+			data: {
+				compiledAt,
+				compiledHash,
+				compileStatus: PrismaPricingCompileStatus.SUCCEEDED,
+				compileError: null
+			}
+		});
+	}
+
+	/**
+	 * Settle the compile status to SUCCEEDED WITHOUT bumping `compiledAt` / `compiledHash`.
+	 * Used by the idempotency-skip path: a save re-triggers the compile and sets PROCESSING,
+	 * but the hash already matches the last successful compile, so the LLM is skipped — we
+	 * still have to flip PROCESSING back to SUCCEEDED or the UI would hang on "Bezig met
+	 * verwerken" forever.
+	 */
+	async markCompileSucceeded(pricingPlaybookId: string, compiledText: string): Promise<void> {
+		// Same stale-run guard as `markCompiled`: only settle to SUCCEEDED if the text this run saw is
+		// still the current text. If the owner re-saved meanwhile, leave PROCESSING for that run.
+		await this.prisma.pricingPlaybook.updateMany({
+			where: { id: pricingPlaybookId, playbookText: compiledText },
+			data: { compileStatus: PrismaPricingCompileStatus.SUCCEEDED, compileError: null }
+		});
+	}
+
+	/** Record a failed compile (all retries exhausted). The owner sees a generic "Verwerken
+	 * mislukt"; `compileError` is kept for ops/debug only. Keyed by orgId since the Inngest
+	 * onFailure handler only has the original event payload. */
+	async markCompileFailed(organizationId: string, compileError: string): Promise<void> {
+		// Only fail a playbook that is still PROCESSING. Guards the onFailure race: an old run that
+		// exhausts its retries must NOT clobber a newer save that already compiled SUCCEEDED (which
+		// would flip the UI to "Verwerken mislukt" even though the current rules are valid).
+		await this.prisma.pricingPlaybook.updateMany({
+			where: { organizationId, compileStatus: PrismaPricingCompileStatus.PROCESSING },
+			data: { compileStatus: PrismaPricingCompileStatus.FAILED, compileError }
 		});
 	}
 

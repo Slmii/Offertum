@@ -48,11 +48,20 @@ const entries = readFileSync(JSONL_PATH, 'utf8')
 const runsById = new Map();
 for (const e of entries) {
 	if (!runsById.has(e.runId)) {
-		runsById.set(e.runId, { runId: e.runId, timestamp: e.timestamp, classifier: null, extractor: null });
+		runsById.set(e.runId, {
+			runId: e.runId,
+			timestamp: e.timestamp,
+			classifier: null,
+			extractor: null,
+			compile: null,
+			narrative: null
+		});
 	}
 	const run = runsById.get(e.runId);
 	if (e.kind === 'classifier') run.classifier = e;
 	if (e.kind === 'extractor') run.extractor = e;
+	if (e.kind === 'compile') run.compile = e;
+	if (e.kind === 'narrative-verify') run.narrative = e;
 	if (e.timestamp > run.timestamp) run.timestamp = e.timestamp;
 }
 
@@ -100,6 +109,18 @@ function extractorSummaryLine(e) {
 	if (!e) return '<span class="muted">Extractor: not run</span>';
 	const s = e.summary;
 	return `<span><strong>Extractor:</strong> ${fmtPct(s.overall)} <span class="muted">(${s.passed}/${s.total} fixtures passed)</span></span>`;
+}
+
+function compileSummaryLine(c) {
+	if (!c) return '';
+	const s = c.summary;
+	return `<span><strong>Compile:</strong> ${fmtPct(s.overall)} <span class="muted">(${s.passed}/${s.total} fixtures)</span></span>`;
+}
+
+function narrativeSummaryLine(n) {
+	if (!n) return '';
+	const s = n.summary;
+	return `<span><strong>AI-conditie:</strong> ${fmtPct(s.overall)} <span class="muted">(${s.correct}/${s.total} verdicts · ${s.fixturesPassed}/${s.fixturesTotal} fixtures)</span></span>`;
 }
 
 /**
@@ -272,20 +293,180 @@ function fixtureBlock(f) {
 	`;
 }
 
+// ─── Compile ("pricing-playbook compile") rendering ────────────────────────────────
+
+function compileFixtureSummaryRow(f) {
+	const mark = f.error
+		? `<span class="fail">${escapeHtml(f.error)}</span>`
+		: f.acceptable
+			? `<span class="pass">✓ ${f.matchedCount}/${f.expectedCount}</span>`
+			: '<span class="fail">✗</span>';
+
+	return `
+		<div class="fixture-summary">
+			<span class="marks">
+				<span class="mark-group">compile ${mark}</span>
+			</span>
+			<span class="subject">${escapeHtml(f.name || '(unnamed)')}</span>
+		</div>
+	`;
+}
+
+function compileFixtureBlock(f) {
+	const failed = f.acceptable === false;
+	const openAttr = failed ? 'open' : '';
+	const rowClass = failed ? 'fixture row-fail' : 'fixture';
+
+	const expectedRows = (f.expected || [])
+		.map(exp => {
+			const mark = exp.matched ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>';
+			return `<tr><td>${mark}</td><td>${escapeHtml(exp.ruleType)}</td><td>${escapeHtml(exp.effectType)}</td><td>${exp.value}</td><td>${exp.hasNarrative ? 'ja' : 'nee'}</td></tr>`;
+		})
+		.join('');
+
+	const producedRows = (f.produced || [])
+		.map(p => {
+			const condition = [
+				p.urgency ? `urgency=${p.urgency}` : null,
+				p.jurisdiction ? `jurisdiction=${p.jurisdiction}` : null,
+				p.category ? `category=${p.category}` : null,
+				p.lineKind ? `lineKind=${p.lineKind}` : null
+			]
+				.filter(Boolean)
+				.join(', ');
+			return `<tr><td>${escapeHtml(p.ruleType)}</td><td>${escapeHtml(p.effectType)}</td><td>${p.value}</td><td>${escapeHtml(condition)}</td><td>${escapeHtml(p.conditionNarrative || '—')}</td><td>${escapeHtml(p.description || '')}</td></tr>`;
+		})
+		.join('');
+
+	return `
+		<details class="${rowClass}" ${openAttr}>
+			<summary>${compileFixtureSummaryRow(f)}</summary>
+			<div class="fixture-detail">
+				<pre class="body">${escapeHtml(f.prose || '')}</pre>
+				<div class="compile-tables">
+					<div class="result-block">
+						<div class="result-header"><strong>Expected</strong></div>
+						<table class="result-table">
+							<thead><tr><th></th><th>ruleType</th><th>effectType</th><th>value</th><th>narrative?</th></tr></thead>
+							<tbody>${expectedRows}</tbody>
+						</table>
+					</div>
+					<div class="result-block">
+						<div class="result-header"><strong>Produced</strong></div>
+						<table class="result-table">
+							<thead><tr><th>ruleType</th><th>effectType</th><th>value</th><th>condition</th><th>narrative</th><th>description</th></tr></thead>
+							<tbody>${producedRows}</tbody>
+						</table>
+					</div>
+				</div>
+				${f.error ? `<p class="error">${escapeHtml(f.error)}</p>` : ''}
+			</div>
+		</details>
+	`;
+}
+
+function compileSection(compile) {
+	const fixtures = compile.fixtures || [];
+	return `
+		<div class="sub-section">
+			<h4>Pricing-playbook compile</h4>
+			<p class="run-summary">${compileSummaryLine(compile)}</p>
+			<div class="fixtures">
+				${fixtures.map(compileFixtureBlock).join('')}
+			</div>
+		</div>
+	`;
+}
+
+// ─── Narrative-verify ("AI controleert AI-condities") rendering ────────────────────
+
+function narrativeFixtureSummaryRow(f) {
+	const rules = f.rules || [];
+	const passCount = rules.filter(r => r.ok).length;
+	const total = rules.length;
+	const mark = f.error
+		? `<span class="fail">${escapeHtml(f.error)}</span>`
+		: f.acceptable
+			? `<span class="pass">✓ ${passCount}/${total}</span>`
+			: `<span class="fail">✗ ${passCount}/${total}</span>`;
+
+	return `
+		<div class="fixture-summary">
+			<span class="marks">
+				<span class="mark-group">narrative ${mark}</span>
+			</span>
+			<span class="subject">${escapeHtml(f.name || '(unnamed)')}</span>
+		</div>
+	`;
+}
+
+function narrativeFixtureBlock(f) {
+	const failed = f.acceptable === false;
+	const openAttr = failed ? 'open' : '';
+	const rowClass = failed ? 'fixture row-fail' : 'fixture';
+
+	const ctx = f.context || {};
+	const ruleRows = (f.rules || [])
+		.map(r => {
+			const expected = r.expected ? 'ja' : 'nee';
+			const actual = r.actual === null || r.actual === undefined ? '—' : r.actual ? 'ja' : 'nee';
+			const mark = r.ok ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>';
+			return `<tr><td>${escapeHtml(r.narrative)}</td><td>${expected}</td><td>${actual}</td><td>${escapeHtml(r.reason || '')}</td><td>${mark}</td></tr>`;
+		})
+		.join('');
+
+	return `
+		<details class="${rowClass}" ${openAttr}>
+			<summary>${narrativeFixtureSummaryRow(f)}</summary>
+			<div class="fixture-detail">
+				<div class="email-input">
+					<div class="meta-row"><span class="meta-label">Type:</span> ${escapeHtml(ctx.requestType || '')}</div>
+					<div class="meta-row"><span class="meta-label">Naam:</span> ${escapeHtml(ctx.customerName || '')}</div>
+					<div class="meta-row"><span class="meta-label">Email:</span> ${escapeHtml(ctx.customerEmail || '')}</div>
+					<pre class="body">${escapeHtml(ctx.bodyText || '')}</pre>
+				</div>
+				<div class="result-block">
+					<table class="result-table">
+						<thead><tr><th>narrative</th><th>expected</th><th>actual</th><th>reason</th><th></th></tr></thead>
+						<tbody>${ruleRows}</tbody>
+					</table>
+				</div>
+				${f.error ? `<p class="error">${escapeHtml(f.error)}</p>` : ''}
+			</div>
+		</details>
+	`;
+}
+
+function narrativeSection(narrative) {
+	const fixtures = narrative.fixtures || [];
+	return `
+		<div class="sub-section">
+			<h4>AI-conditie verificatie (AI controleert)</h4>
+			<p class="run-summary">${narrativeSummaryLine(narrative)}</p>
+			<div class="fixtures">
+				${fixtures.map(narrativeFixtureBlock).join('')}
+			</div>
+		</div>
+	`;
+}
+
 function runBlock(run) {
 	const fixtures = buildUnifiedFixtures(run);
+	const compilePart = run.compile ? ` &nbsp;·&nbsp;\n\t\t\t\t\t${compileSummaryLine(run.compile)}` : '';
+	const narrativePart = run.narrative ? ` &nbsp;·&nbsp;\n\t\t\t\t\t${narrativeSummaryLine(run.narrative)}` : '';
+	const extraSections = `${run.compile ? compileSection(run.compile) : ''}${run.narrative ? narrativeSection(run.narrative) : ''}`;
 	return `
 		<section class="run">
 			<header>
 				<h3>Run @ ${fmtTime(run.timestamp)} <span class="muted">(${escapeHtml(run.runId)})</span></h3>
 				<p class="run-summary">
 					${classifierSummaryLine(run.classifier)} &nbsp;·&nbsp;
-					${extractorSummaryLine(run.extractor)}
+					${extractorSummaryLine(run.extractor)}${compilePart}${narrativePart}
 				</p>
 			</header>
 			<div class="fixtures">
 				${fixtures.map(fixtureBlock).join('')}
-			</div>
+			</div>${extraSections}
 		</section>
 	`;
 }
@@ -367,6 +548,9 @@ function renderHtml(byDate, totalRuns) {
 		code { background: #f5f5f5; padding: 0.05rem 0.3rem; border-radius: 3px; font-size: 0.85rem; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 		.reason { color: #555; max-width: 30rem; }
 		.notes { font-size: 0.85rem; color: #666; background: #fffce8; border-left: 3px solid #e4c14a; padding: 0.4rem 0.75rem; margin-top: 0.75rem; border-radius: 0 4px 4px 0; }
+		.sub-section { margin-top: 1.25rem; padding-top: 0.75rem; border-top: 1px dashed #ddd; }
+		.sub-section h4 { font-size: 0.95rem; margin: 0 0 0.4rem 0; }
+		.compile-tables .result-block + .result-block { margin-top: 0.75rem; }
 		footer { color: #888; font-size: 0.8rem; margin-top: 3rem; text-align: center; border-top: 1px solid #eee; padding-top: 1rem; }
 	</style>
 </head>

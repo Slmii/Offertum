@@ -25,3 +25,13 @@ export function yearInTimeZone(date: Date, timeZone: string): number {
 export function endOfDayInTimeZone(date: Date, timeZone: string): Date {
 	return dayjs(date).tz(timeZone).endOf('day').toDate();
 }
+
+/**
+ * End-of-local-day, `days` calendar days after `base`, in `timeZone`. Adds the days as CALENDAR days
+ * in the target timezone (DST-aware) rather than as a fixed `days * 24h` offset — the latter lands on
+ * the wrong calendar day across a DST transition (e.g. +1 fixed day over spring-forward yields +2
+ * local days). Used to stamp a quote's `validUntil` (e.g. "geldig 30 dagen").
+ */
+export function endOfDayPlusDaysInTimeZone(base: Date, days: number, timeZone: string): Date {
+	return dayjs(base).tz(timeZone).add(days, 'day').endOf('day').toDate();
+}

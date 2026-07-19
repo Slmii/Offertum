@@ -15,6 +15,14 @@ import OpenAI, { APIError, AzureOpenAI } from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 
 /**
+ * SDK auto-retry budget for 429/5xx (default is 2). The SDK honours the `Retry-After` header, so a
+ * higher budget lets calls wait out per-minute rate limits (TPM) and self-throttle instead of
+ * surfacing a 429 — important on low-TPM orgs and for the batch accuracy harnesses that fire many
+ * calls back-to-back. Backoff is bounded, so a truly-down provider still fails in reasonable time.
+ */
+const OPENAI_MAX_RETRIES = 5;
+
+/**
  * Default purpose → model mapping. Caller can override per-call via `request.model`.
  *  - `classifier`: cheap + fast model, runs on every incoming email
  *  - `extractor`: higher-quality model, runs only on classifier positives
@@ -244,7 +252,8 @@ export class OpenAIClient implements AIClient {
 			this.client = new AzureOpenAI({
 				endpoint: azureEndpoint,
 				apiKey,
-				apiVersion: this.config.get('AZURE_OPENAI_API_VERSION', { infer: true })
+				apiVersion: this.config.get('AZURE_OPENAI_API_VERSION', { infer: true }),
+				maxRetries: OPENAI_MAX_RETRIES
 			});
 			return this.client;
 		}
@@ -252,7 +261,7 @@ export class OpenAIClient implements AIClient {
 		if (!openaiKey) {
 			return null;
 		}
-		this.client = new OpenAI({ apiKey: openaiKey });
+		this.client = new OpenAI({ apiKey: openaiKey, maxRetries: OPENAI_MAX_RETRIES });
 		return this.client;
 	}
 

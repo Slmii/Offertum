@@ -10,14 +10,16 @@ const PricingPlaybookKeys = {
 };
 
 /**
- * Settings page primary query. `staleTime` is short because the compile pass
- * mutates `compiledAt` + `rulesCount` asynchronously after a save — refetch on
- * focus picks up the new state without polling.
+ * Settings page primary query. The compile pass runs asynchronously (debounced Inngest job)
+ * and mutates `compileStatus` + `compiledAt` + `rulesCount` after a save. While the server
+ * reports `processing`, poll every 2s so the page live-tracks the Inngest job to
+ * `succeeded` / `failed`; once settled the interval turns off.
  */
 export const pricingPlaybookQueryOptions = queryOptions({
 	queryKey: PricingPlaybookKeys.root,
 	queryFn: getPricingPlaybookServer,
-	staleTime: 5_000
+	staleTime: 5_000,
+	refetchInterval: query => (query.state.data?.compileStatus === 'processing' ? 2_000 : false)
 });
 
 /**

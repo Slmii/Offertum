@@ -35,10 +35,9 @@ import type {
 	UpdateQuoteLineItemInput
 } from '@offertum/shared';
 import { computeQuoteTotals, formatQuoteNumber } from '@offertum/shared';
-import { endOfDayInTimeZone, yearInTimeZone } from '@/lib/time/timezone';
+import { endOfDayPlusDaysInTimeZone, yearInTimeZone } from '@/lib/time/timezone';
 
 const DEFAULT_LINE_UNIT = 'piece';
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * W10.2 — persists the W10.1 line-item proposal as a `QuoteDraft` + lines, and
@@ -76,7 +75,7 @@ export class QuoteDraftsService {
 		});
 		// Snap "Geldig tot" to end-of-day in the org's timezone so the quote stays valid through the
 		// whole final day (and the server instant-check agrees with the client's calendar-day check).
-		const validUntil = endOfDayInTimeZone(new Date(Date.now() + org.quoteValidityDays * DAY_MS), org.timezone);
+		const validUntil = endOfDayPlusDaysInTimeZone(new Date(), org.quoteValidityDays, org.timezone);
 
 		const row = await this.repository.create({
 			organizationId,
@@ -123,16 +122,23 @@ export class QuoteDraftsService {
 		this.assertEditable(await this.loadDraft(organizationId, quoteDraftId));
 		// Drop provenance ids the client can't prove belong to this org, so a crafted
 		// request can't poison the year-2 AI-accuracy analytics with dangling/foreign refs.
-		const [catalogIds, ruleIds] = await Promise.all([
+		const [catalogIds, ruleIds, org] = await Promise.all([
 			this.loadCatalogItemIds(organizationId),
-			this.loadRuleIds(organizationId)
+			this.loadRuleIds(organizationId),
+			this.prisma.organization.findUniqueOrThrow({
+				where: { id: organizationId },
+				select: { quoteValidityDays: true, timezone: true }
+			})
 		]);
 		const sanitized = lines.map(line => ({
 			...line,
 			catalogItemId: line.catalogItemId && catalogIds.has(line.catalogItemId) ? line.catalogItemId : null,
 			appliedRuleId: line.appliedRuleId && ruleIds.has(line.appliedRuleId) ? line.appliedRuleId : null
 		}));
-		await this.repository.replaceLines(quoteDraftId, sanitized.map(toReplaceRepoLine));
+		// Regenerate = fresh prices → fresh validity window (same rule as creation). Without this a
+		// regenerated expired quote stays "verlopen" and PDF generation stays blocked.
+		const validUntil = endOfDayPlusDaysInTimeZone(new Date(), org.quoteValidityDays, org.timezone);
+		await this.repository.replaceLines(quoteDraftId, sanitized.map(toReplaceRepoLine), validUntil);
 		return this.reload(organizationId, quoteDraftId);
 	}
 
@@ -223,10 +229,7 @@ export class QuoteDraftsService {
 				where: { id: organizationId },
 				select: { quoteValidityDays: true, timezone: true }
 			});
-			validUntil = endOfDayInTimeZone(
-				new Date(draft.createdAt.getTime() + org.quoteValidityDays * DAY_MS),
-				org.timezone
-			);
+			validUntil = endOfDayPlusDaysInTimeZone(draft.createdAt, org.quoteValidityDays, org.timezone);
 			// Conditional write so concurrent PDF generations don't double-stamp — only the first
 			// writer (validUntil still null) wins. The computed value is deterministic (createdAt-
 			// anchored), so the local `validUntil` is correct regardless of who won.
