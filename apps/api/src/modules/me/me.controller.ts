@@ -1,3 +1,5 @@
+import { OwnerWrite } from '@/common/decorators/owner-write.decorator';
+import { TenantWrite } from '@/common/decorators/tenant-write.decorator';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { OwnerGuard } from '@/common/guards/owner.guard';
@@ -100,7 +102,7 @@ export class MeController {
 
 	@ApiOperation({ summary: 'Update the current user’s writing-style playbook' })
 	@ApiOkResponse({ type: TonePlaybookResponseDto })
-	@UseGuards(AuthGuard)
+	@TenantWrite()
 	@Put('tone-playbook')
 	updateTonePlaybook(@Req() request: Request, @Body() body: UpdateTonePlaybookDto): Promise<TonePlaybookResponseDto> {
 		return this.me.updateTonePlaybook(this.userId(request), body.text);
@@ -116,7 +118,7 @@ export class MeController {
 
 	@ApiOperation({ summary: 'Update the active organization’s follow-up cadence + cap (owner-only)' })
 	@ApiOkResponse({ type: FollowUpSettingsResponseDto })
-	@UseGuards(OwnerGuard)
+	@OwnerWrite()
 	@Patch('follow-up-settings')
 	updateFollowUpSettings(
 		@Req() request: Request,
