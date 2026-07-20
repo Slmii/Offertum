@@ -162,11 +162,19 @@ function PricingPlaybookEditor() {
 	const [savedProse, setSavedProse] = useState(data.playbookText);
 	const [proseOpen, setProseOpen] = useState(true);
 
-	// Re-seed local editor state when the server config changes (e.g. after a save refetch).
-	if (data !== seed) {
-		setSeed(data);
+	// Re-seed local editor state when the server config changes (e.g. after a save refetch). Only
+	// re-seed prose/savedProse when the saved text itself changed — the playbook query polls every
+	// 2s while compileStatus is 'processing', producing a new `data` reference on every tick even
+	// when playbookText is unchanged. Re-seeding on every reference change would silently overwrite
+	// prose the owner is still typing (the Save button is disabled while processing, but the
+	// textarea stays editable) the moment a poll observes the processing → succeeded/failed
+	// transition.
+	if (data.playbookText !== seed.playbookText) {
 		setProse(data.playbookText);
 		setSavedProse(data.playbookText);
+	}
+	if (data !== seed) {
+		setSeed(data);
 	}
 
 	// When the async compile settles (processing → succeeded/failed), refetch the rule list so the
