@@ -127,7 +127,13 @@ export function VatSettingsSection({ isOwner }: { isOwner: boolean }) {
 	};
 
 	const deleteRate = (id: string) => {
-		applyRates(rates.filter(rate => rate.id !== id));
+		const next = rates.filter(rate => rate.id !== id);
+		if (!next.some(rate => rate.active)) {
+			toast.error('Minimaal één actief tarief', 'Er moet minstens één BTW-tarief actief blijven.');
+			setConfirmDelete(null);
+			return;
+		}
+		applyRates(next);
 		setConfirmDelete(null);
 	};
 
