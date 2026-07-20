@@ -46,11 +46,12 @@ export interface ResolveQuoteLinesInput {
 	 * per-km travel rules — the raw distance, no road-detour factor. `undefined` when either address is
 	 * missing or couldn't be geocoded — per-km travel is then skipped. */
 	travelOneWayKm?: number;
+	/** The org's configured default VAT rate (`getDefaultVatRate(OrgVatConfig)`), used as the fallback
+	 * for inferred + computed lines when no VAT rule overrides. Callers should pass the org's actual
+	 * configured default rather than assuming NL's 21%. */
+	defaultVatRate: number;
 }
 
-/** NL standard VAT, used as the fallback for inferred + computed lines when no
- * VAT rule overrides. */
-const DEFAULT_VAT_RATE = 21;
 /** The app is Dutch-only for MVP, so every quote is in the NL jurisdiction. The compiler routinely
  * stamps `jurisdiction: "NL"` on rules; passing this (rather than `null`) lets those rules match.
  * When per-customer country resolution lands, derive this from the customer instead. */
@@ -103,14 +104,7 @@ export function resolveQuoteLines(input: ResolveQuoteLinesInput): ProposedQuoteL
 		const lineKind = inferred.lineKind ?? (LABOR_UNITS.has(inferred.unit) ? 'labor' : 'material');
 		const hourlyRule =
 			lineKind === 'labor' && inferred.unit === 'hour'
-				? findRule(
-						input.rules,
-						input.urgency,
-						'labor',
-						'HOURLY_RATE',
-						'rate_eur_per_hour',
-						inferred.category
-					)
+				? findRule(input.rules, input.urgency, 'labor', 'HOURLY_RATE', 'rate_eur_per_hour', inferred.category)
 				: null;
 
 		lines.push({
@@ -118,7 +112,7 @@ export function resolveQuoteLines(input: ResolveQuoteLinesInput): ProposedQuoteL
 			unit: inferred.unit,
 			quantity: normalizeQuantity(inferred.quantity),
 			unitPriceEur: hourlyRule ? formatCents(toCents(String(hourlyRule.value))) : null,
-			vatRate: resolveVatRate(input.rules, input.urgency, lineKind, DEFAULT_VAT_RATE),
+			vatRate: resolveVatRate(input.rules, input.urgency, lineKind, input.defaultVatRate),
 			source: hourlyRule ? 'rule_applied' : 'inferred',
 			catalogItemId: null,
 			appliedRuleId: hourlyRule?.ruleId ?? null,
@@ -130,7 +124,15 @@ export function resolveQuoteLines(input: ResolveQuoteLinesInput): ProposedQuoteL
 	// 3. Opp-wide rule lines, computed off the net subtotal of priced lines.
 	const netSubtotalCents = lines.reduce((sum, line) => sum + lineNetCents(line), 0);
 	const oppWideRules = stripLineKindFromOppWideRules(input.rules);
-	lines.push(...buildOppWideRuleLines(oppWideRules, input.urgency, netSubtotalCents, input.travelOneWayKm));
+	lines.push(
+		...buildOppWideRuleLines(
+			oppWideRules,
+			input.urgency,
+			netSubtotalCents,
+			input.travelOneWayKm,
+			input.defaultVatRate
+		)
+	);
 
 	return lines;
 }
@@ -174,7 +176,8 @@ function buildOppWideRuleLines(
 	rules: ReadonlyArray<EvaluableRule>,
 	urgency: ResolveQuoteLinesInput['urgency'],
 	netSubtotalCents: number,
-	travelOneWayKm: number | undefined
+	travelOneWayKm: number | undefined,
+	defaultVatRate: number
 ): ProposedQuoteLine[] {
 	const out: ProposedQuoteLine[] = [];
 	// Running total of the FULL order. Surcharge + travel − discount all count toward
@@ -186,7 +189,14 @@ function buildOppWideRuleLines(
 	if (urgencyRule) {
 		const surchargeCents = Math.round((netSubtotalCents * urgencyRule.value) / 100);
 		if (surchargeCents !== 0) {
-			out.push(ruleLine(`Spoedtoeslag (${formatPercent(urgencyRule.value)}%)`, surchargeCents, urgencyRule));
+			out.push(
+				ruleLine(
+					`Spoedtoeslag (${formatPercent(urgencyRule.value)}%)`,
+					surchargeCents,
+					urgencyRule,
+					defaultVatRate
+				)
+			);
 			orderCents += surchargeCents;
 		}
 	}
@@ -194,7 +204,7 @@ function buildOppWideRuleLines(
 	const travelRule = findRule(rules, urgency, null, 'TRAVEL', 'flat_fee_eur');
 	if (travelRule) {
 		const travelCents = toCents(String(travelRule.value));
-		out.push(ruleLine('Voorrijkosten', travelCents, travelRule));
+		out.push(ruleLine('Voorrijkosten', travelCents, travelRule, defaultVatRate));
 		orderCents += travelCents;
 	}
 
@@ -206,7 +216,9 @@ function buildOppWideRuleLines(
 		const billableKm = Math.round(travelOneWayKm * 2 * 10) / 10; // round-trip, 1 decimal
 		const travelCents = Math.round(billableKm * perKmRule.value * 100);
 		if (travelCents > 0) {
-			out.push(ruleLine(`Voorrijkosten (${formatKm(billableKm)} km retour)`, travelCents, perKmRule));
+			out.push(
+				ruleLine(`Voorrijkosten (${formatKm(billableKm)} km retour)`, travelCents, perKmRule, defaultVatRate)
+			);
 			orderCents += travelCents;
 		}
 	}
@@ -222,8 +234,10 @@ function buildOppWideRuleLines(
 		if (discountCents !== 0) {
 			const applied = Math.abs(discountCents);
 			const label =
-				discountRule.effectType === 'discount_percent' ? `Korting (${formatPercent(discountRule.value)}%)` : 'Korting';
-			out.push(ruleLine(label, -applied, discountRule));
+				discountRule.effectType === 'discount_percent'
+					? `Korting (${formatPercent(discountRule.value)}%)`
+					: 'Korting';
+			out.push(ruleLine(label, -applied, discountRule, defaultVatRate));
 			orderCents -= applied;
 		}
 	}
@@ -232,20 +246,20 @@ function buildOppWideRuleLines(
 	if (minimumRule) {
 		const minimumCents = toCents(String(minimumRule.value));
 		if (orderCents > 0 && orderCents < minimumCents) {
-			out.push(ruleLine('Minimumordertoeslag', minimumCents - orderCents, minimumRule));
+			out.push(ruleLine('Minimumordertoeslag', minimumCents - orderCents, minimumRule, defaultVatRate));
 		}
 	}
 
 	return out;
 }
 
-function ruleLine(description: string, netCents: number, rule: MatchedRule): ProposedQuoteLine {
+function ruleLine(description: string, netCents: number, rule: MatchedRule, defaultVatRate: number): ProposedQuoteLine {
 	return {
 		description,
 		unit: 'flat_fee',
 		quantity: 1,
 		unitPriceEur: formatCents(netCents),
-		vatRate: DEFAULT_VAT_RATE,
+		vatRate: defaultVatRate,
 		source: 'rule_applied',
 		catalogItemId: null,
 		appliedRuleId: rule.ruleId,
