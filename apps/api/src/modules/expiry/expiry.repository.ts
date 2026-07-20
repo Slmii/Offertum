@@ -8,9 +8,15 @@ import {
 import { isOrganizationEntitled as isOrgEntitled } from '@/lib/billing/entitlement-check';
 import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
-import { MS_PER_DAY } from '@/lib/time/duration';
+import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * A SENT quote drifting toward expiry without a customer reply. The expiry-watcher
@@ -63,11 +69,18 @@ interface ExpiryCandidateRow {
 }
 
 /**
- * Compute whole-day count from now until a future deadline, rounding UP so an expiry
- * 25 hours out reads as "2 days" not "1" — never understate the runway to the owner.
+ * Compute the calendar-day count from `now` until a future deadline, in
+ * `BUSINESS_TIME_ZONE`. Mirrors the web's `toDaysUntil` (`apps/web/src/lib/utils/date.utils.ts`)
+ * exactly — both diff local calendar days, not elapsed milliseconds — so the same `validUntil`
+ * always reads as the same number of days on the server (AI copy, digest emails) and the client
+ * (expiry-card chips). `validUntil` is always snapped to end-of-local-day
+ * (`endOfDayPlusDaysInTimeZone`), which is what makes this agree with the web's `startOf('day')`
+ * diff: see the doc comment on `endOfDayInTimeZone` in `@/lib/time/timezone`.
  */
 export function daysUntilExpiry(validUntil: Date, now: Date): number {
-	return Math.ceil((validUntil.getTime() - now.getTime()) / MS_PER_DAY);
+	const target = dayjs(validUntil).tz(BUSINESS_TIME_ZONE).startOf('day');
+	const today = dayjs(now).tz(BUSINESS_TIME_ZONE).startOf('day');
+	return target.diff(today, 'day');
 }
 
 @Injectable()
