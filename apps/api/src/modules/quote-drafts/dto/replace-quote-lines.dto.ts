@@ -6,8 +6,10 @@ import {
 } from '@/lib/validators/decimal-string';
 import { NON_WHITESPACE_MESSAGE, NON_WHITESPACE_PATTERN } from '@/lib/validators/non-whitespace-pattern';
 import {
+	PRICING_EFFECT_TYPES,
 	QUOTE_LINE_DESCRIPTION_MAX_LENGTH,
 	QUOTE_LINE_SOURCES,
+	type PricingEffectType,
 	type QuoteLineSource,
 	type ReplaceQuoteLineInput,
 	type ReplaceQuoteLinesInput
@@ -77,6 +79,10 @@ class ReplaceQuoteLineItemDto implements ReplaceQuoteLineInput {
 	@ValidateIf((_, value) => value !== null)
 	@IsString()
 	appliedRuleId!: string | null;
+
+	@ValidateIf((_, value) => value !== null)
+	@IsIn([...PRICING_EFFECT_TYPES])
+	ruleEffectType!: PricingEffectType | null;
 
 	@ValidateIf((_, value) => value !== null)
 	@IsString()

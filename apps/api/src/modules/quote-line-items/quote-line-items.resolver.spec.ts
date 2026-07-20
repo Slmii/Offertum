@@ -44,7 +44,8 @@ function input(overrides: Partial<ResolveQuoteLinesInput>): ResolveQuoteLinesInp
 		proposal: overrides.proposal ?? proposal({}),
 		catalogByRef: overrides.catalogByRef ?? new Map(),
 		rules: overrides.rules ?? [],
-		urgency: overrides.urgency ?? 'normal'
+		urgency: overrides.urgency ?? 'normal',
+		travelOneWayKm: overrides.travelOneWayKm
 	};
 }
 
@@ -90,7 +91,14 @@ describe('resolveQuoteLines', () => {
 			input({
 				proposal: proposal({
 					inferredLines: [
-						{ description: 'Demontagewerk', unit: 'hour', quantity: 3, lineKind: 'labor', reason: 'x' }
+						{
+							description: 'Demontagewerk',
+							unit: 'hour',
+							quantity: 3,
+							lineKind: 'labor',
+							category: null,
+							reason: 'x'
+						}
 					]
 				}),
 				rules: [
@@ -116,6 +124,78 @@ describe('resolveQuoteLines', () => {
 		});
 	});
 
+	it('matches a category-scoped HOURLY_RATE rule to a line tagged with that category', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({
+					inferredLines: [
+						{
+							description: 'Installatie buitenkraan',
+							unit: 'hour',
+							quantity: 2,
+							lineKind: 'labor',
+							category: 'plumbing',
+							reason: 'x'
+						}
+					]
+				}),
+				rules: [
+					makeRule({
+						id: 'hr-plumb',
+						ruleType: 'HOURLY_RATE',
+						condition: { category: 'plumbing', lineKind: 'labor' },
+						effect: { type: 'rate_eur_per_hour', value: 85 },
+						description: 'Uurtarief loodgieterswerk'
+					}),
+					makeRule({
+						id: 'hr-elec',
+						ruleType: 'HOURLY_RATE',
+						condition: { category: 'electrical', lineKind: 'labor' },
+						effect: { type: 'rate_eur_per_hour', value: 95 },
+						description: 'Uurtarief elektra'
+					})
+				]
+			})
+		);
+
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toMatchObject({
+			unitPriceEur: '85.00',
+			source: 'rule_applied',
+			appliedRuleId: 'hr-plumb'
+		});
+	});
+
+	it('does not apply a category-scoped HOURLY_RATE rule to an untagged (null-category) line', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({
+					inferredLines: [
+						{
+							description: 'Divers uurwerk',
+							unit: 'hour',
+							quantity: 2,
+							lineKind: 'labor',
+							category: null,
+							reason: 'x'
+						}
+					]
+				}),
+				rules: [
+					makeRule({
+						id: 'hr-plumb',
+						ruleType: 'HOURLY_RATE',
+						condition: { category: 'plumbing', lineKind: 'labor' },
+						effect: { type: 'rate_eur_per_hour', value: 85 },
+						description: 'Uurtarief loodgieterswerk'
+					})
+				]
+			})
+		);
+
+		expect(lines[0]).toMatchObject({ unitPriceEur: null, source: 'inferred' });
+	});
+
 	it('leaves an inferred line unpriced with an owner prompt when no rule applies', () => {
 		const lines = resolveQuoteLines(
 			input({
@@ -126,6 +206,7 @@ describe('resolveQuoteLines', () => {
 							unit: 'piece',
 							quantity: 5,
 							lineKind: 'material',
+							category: null,
 							reason: 'x'
 						}
 					]
@@ -147,7 +228,14 @@ describe('resolveQuoteLines', () => {
 			input({
 				proposal: proposal({
 					inferredLines: [
-						{ description: 'Klusdag', unit: 'day', quantity: 2, lineKind: 'labor', reason: 'x' }
+						{
+							description: 'Klusdag',
+							unit: 'day',
+							quantity: 2,
+							lineKind: 'labor',
+							category: null,
+							reason: 'x'
+						}
 					]
 				}),
 				rules: [makeRule({ ruleType: 'HOURLY_RATE', effect: { type: 'rate_eur_per_hour', value: 90 } })]
@@ -178,12 +266,69 @@ describe('resolveQuoteLines', () => {
 		);
 
 		// Net subtotal = 2 × €100 = €200; 25% = €50.
-		const surcharge = lines.find(line => line.description === 'Spoedtoeslag');
+		const surcharge = lines.find(line => line.description.startsWith('Spoedtoeslag'));
 		expect(surcharge).toMatchObject({
 			unitPriceEur: '50.00',
 			source: 'rule_applied',
 			appliedRuleId: 'urg-1'
 		});
+	});
+
+	it('fires an urgency surcharge stamped with a per-line lineKind condition (opp-wide rules ignore lineKind)', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 2, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '100.00', vatRate: 21 }
+				]),
+				urgency: 'emergency',
+				rules: [
+					makeRule({
+						id: 'urg-labor',
+						ruleType: 'URGENCY',
+						// The compiler stamps `lineKind: "labor"` on the spoedtoeslag; the opp-wide
+						// lookup has no line (passes lineKind: null), so without stripping it this rule
+						// would never match and the surcharge would silently vanish from the quote.
+						condition: { urgency: 'emergency', lineKind: 'labor' },
+						effect: { type: 'surcharge_percent', value: 75 },
+						description: 'Spoedwerk binnen 4 uur: +75%'
+					})
+				]
+			})
+		);
+
+		// €200 net × 75% = €150 — applied order-wide despite the labor stamp.
+		expect(lines.find(line => line.description.startsWith('Spoedtoeslag'))).toMatchObject({
+			unitPriceEur: '150.00',
+			source: 'rule_applied',
+			appliedRuleId: 'urg-labor'
+		});
+	});
+
+	it('does NOT apply a category-scoped opp-wide surcharge order-wide (drops rather than over-charging)', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 2, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '100.00', vatRate: 21 }
+				]),
+				urgency: 'emergency',
+				rules: [
+					makeRule({
+						id: 'urg-plumb',
+						ruleType: 'URGENCY',
+						// "Spoedtoeslag op loodgieterswerk" — scoped to a trade. The order-wide engine can't
+						// apply it to just the plumbing subtotal, so it must DROP, not surcharge the whole
+						// order. `category` is intentionally NOT stripped (unlike `lineKind`).
+						condition: { urgency: 'emergency', category: 'plumbing' },
+						effect: { type: 'surcharge_percent', value: 75 },
+						description: 'Spoed loodgieterswerk +75%'
+					})
+				]
+			})
+		);
+
+		expect(lines.some(line => line.description.startsWith('Spoedtoeslag'))).toBe(false);
 	});
 
 	it('appends a travel flat fee', () => {
@@ -211,6 +356,62 @@ describe('resolveQuoteLines', () => {
 		});
 	});
 
+	it('prices a per-km travel rule round-trip using the geocoded distance', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 1, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '100.00', vatRate: 21 }
+				]),
+				rules: [
+					makeRule({
+						id: 'trv-km',
+						ruleType: 'TRAVEL',
+						// The compiler stamps `jurisdiction: "NL"` — the resolver must still match it (it
+						// pins the context jurisdiction to NL rather than leaving it null).
+						condition: { jurisdiction: 'NL' },
+						effect: { type: 'per_km_eur', value: 0.5, freeUnderKm: null },
+						description: 'Reiskosten per km'
+					})
+				],
+				travelOneWayKm: 20 // → 40 km round-trip × €0,50 = €20,00
+			})
+		);
+
+		expect(lines.find(line => line.description === 'Voorrijkosten (40 km retour)')).toMatchObject({
+			unitPriceEur: '20.00',
+			source: 'rule_applied',
+			appliedRuleId: 'trv-km'
+		});
+	});
+
+	it('skips per-km travel inside the free radius (freeUnderKm)', () => {
+		const lines = resolveQuoteLines(
+			input({
+				rules: [
+					makeRule({
+						ruleType: 'TRAVEL',
+						effect: { type: 'per_km_eur', value: 0.5, freeUnderKm: 15 }
+					})
+				],
+				travelOneWayKm: 10 // within the 15 km free radius
+			})
+		);
+
+		expect(lines.some(line => line.description.startsWith('Voorrijkosten'))).toBe(false);
+	});
+
+	it('skips per-km travel when no distance was geocoded', () => {
+		const lines = resolveQuoteLines(
+			input({
+				rules: [makeRule({ ruleType: 'TRAVEL', effect: { type: 'per_km_eur', value: 0.5, freeUnderKm: null } })]
+				// travelOneWayKm omitted
+			})
+		);
+
+		expect(lines.some(line => line.description.startsWith('Voorrijkosten'))).toBe(false);
+	});
+
 	it('appends a percentage discount as a negative line', () => {
 		const lines = resolveQuoteLines(
 			input({
@@ -228,7 +429,7 @@ describe('resolveQuoteLines', () => {
 			})
 		);
 
-		expect(lines.find(line => line.description === 'Korting')).toMatchObject({ unitPriceEur: '-20.00' });
+		expect(lines.find(line => line.description.startsWith('Korting'))).toMatchObject({ unitPriceEur: '-20.00' });
 	});
 
 	it('appends a fixed-euro discount as a negative line', () => {
@@ -248,7 +449,7 @@ describe('resolveQuoteLines', () => {
 			})
 		);
 
-		expect(lines.find(line => line.description === 'Korting')).toMatchObject({ unitPriceEur: '-15.00' });
+		expect(lines.find(line => line.description.startsWith('Korting'))).toMatchObject({ unitPriceEur: '-15.00' });
 	});
 
 	it('tops up to the minimum order when the subtotal is below it', () => {
@@ -366,6 +567,7 @@ describe('resolveQuoteLines', () => {
 							unit: 'piece',
 							quantity: 99,
 							lineKind: 'material',
+							category: null,
 							reason: 'x'
 						}
 					]
@@ -378,7 +580,7 @@ describe('resolveQuoteLines', () => {
 		);
 
 		// Surcharge is 10% of €100 (catalog line only), not affected by the unpriced line.
-		expect(lines.find(line => line.description === 'Spoedtoeslag')).toMatchObject({ unitPriceEur: '10.00' });
+		expect(lines.find(line => line.description.startsWith('Spoedtoeslag'))).toMatchObject({ unitPriceEur: '10.00' });
 	});
 
 	it('dedupes a catalog ref the model repeated (first wins, no doubled subtotal)', () => {
@@ -406,7 +608,14 @@ describe('resolveQuoteLines', () => {
 			input({
 				proposal: proposal({
 					inferredLines: [
-						{ description: 'Demontage', unit: 'hour', quantity: 3.333, lineKind: 'labor', reason: 'x' }
+						{
+							description: 'Demontage',
+							unit: 'hour',
+							quantity: 3.333,
+							lineKind: 'labor',
+							category: null,
+							reason: 'x'
+						}
 					]
 				}),
 				rules: [makeRule({ ruleType: 'HOURLY_RATE', effect: { type: 'rate_eur_per_hour', value: 90 } })]

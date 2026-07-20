@@ -59,7 +59,17 @@ export function buildLineItemProposerPromptNL(input: LineItemProposerInput): str
 		   MATERIALEN die niet in de catalogus staan maar wel nodig lijken. Voor elk:
 		   \`description\` (korte Nederlandse omschrijving), \`unit\`, \`quantity\`,
 		   \`lineKind\` ("labor" voor arbeid/uren, "material" voor materiaal, null als
-		   onduidelijk), en \`reason\`.
+		   onduidelijk), \`category\`, en \`reason\`.
+		   - \`category\`: het vakgebied van deze regel in lowercase Engels, EXACT uit
+		     deze woordenschat: "plumbing" (loodgieters-/sanitair-/leidingwerk),
+		     "electrical" (elektra/bekabeling), "painting" (schilderwerk),
+		     "carpentry" (timmer-/houtwerk), "tiling" (tegelwerk), "roofing" (dakwerk),
+		     "consultancy" (advies). Past niets? → \`null\`. Dit koppelt de regel aan een
+		     vakgebied-specifiek uurtarief.
+		   - Reken ARBEID (\`lineKind: "labor"\`) af PER UUR: gebruik \`unit: "hour"\` met
+		     een conservatieve schatting van het aantal uren in \`quantity\`. Zo kan het
+		     juiste uurtarief er automatisch op toegepast worden. (Materiaal houdt zijn
+		     natuurlijke eenheid — stuks, m², enz.)
 
 		## Regels
 		- Gebruik uitsluitend referenties die hierboven in de catalogus staan. Bestaat er

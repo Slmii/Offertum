@@ -1,3 +1,4 @@
+import { GeoModule } from '@/lib/geo/geo.module';
 import { AiModule } from '@/modules/ai/ai.module';
 import { CatalogItemsModule } from '@/modules/catalog-items/catalog-items.module';
 import { OpportunitiesModule } from '@/modules/opportunities/opportunities.module';
@@ -7,7 +8,7 @@ import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-ite
 import { Module } from '@nestjs/common';
 
 @Module({
-	imports: [AiModule, CatalogItemsModule, OpportunitiesModule, PricingPlaybookModule],
+	imports: [GeoModule, AiModule, CatalogItemsModule, OpportunitiesModule, PricingPlaybookModule],
 	controllers: [QuoteLineItemsController],
 	providers: [QuoteLineItemsService],
 	exports: [QuoteLineItemsService]

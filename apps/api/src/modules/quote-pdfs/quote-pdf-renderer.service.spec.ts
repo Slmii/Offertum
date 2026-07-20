@@ -46,7 +46,8 @@ describe('QuotePdfRendererService', () => {
 					unit: 'hour',
 					unitPriceEur: '85.00',
 					vatRate: 21,
-					vatReverseCharged: false
+					vatReverseCharged: false,
+					isAdjustment: false
 				},
 				{
 					description: 'Voorrijkosten Amsterdam',
@@ -54,7 +55,8 @@ describe('QuotePdfRendererService', () => {
 					unit: 'flat_fee',
 					unitPriceEur: '35.00',
 					vatRate: 21,
-					vatReverseCharged: false
+					vatReverseCharged: false,
+					isAdjustment: true
 				}
 			]
 		};
@@ -74,6 +76,7 @@ const line = (overrides: Partial<QuotePdfLineItem> = {}): QuotePdfLineItem => ({
 	quantity: 1,
 	vatRate: 21,
 	vatReverseCharged: false,
+	isAdjustment: false,
 	...overrides
 });
 

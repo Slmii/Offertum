@@ -6,7 +6,7 @@ import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
 import { type QuotePdfRow, QuotePdfsRepository } from '@/modules/quote-pdfs/quote-pdfs.repository';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { formatQuoteNumber, type QuotePdf } from '@offertum/shared';
+import { formatQuoteNumber, type QuoteDiscountInput, type QuotePdf } from '@offertum/shared';
 import { randomUUID } from 'node:crypto';
 
 /** Inputs that vary per quote; business details + branding are loaded from the org. */
@@ -15,6 +15,7 @@ export interface RenderQuoteInput {
 	customerEmail: string | null;
 	customerAddress: string | null;
 	lineItems: QuotePdfLineItem[];
+	discount?: QuoteDiscountInput | null;
 	quoteNumber: string | null;
 	// Issue date printed on the PDF. The real generate path passes the QuoteDraft's createdAt;
 	// omitted for ad-hoc previews, which fall back to the current time.
@@ -103,7 +104,9 @@ export class QuotePdfsService {
 				unit: item.unit,
 				unitPriceEur: item.unitPriceEur,
 				vatRate: item.vatRate,
-				vatReverseCharged: false
+				vatReverseCharged: false,
+				// Preview lines are owner-entered samples, never engine-computed adjustments.
+				isAdjustment: false
 			}))
 		});
 		return buffer;
@@ -155,6 +158,7 @@ export class QuotePdfsService {
 				hasLetterhead: org.letterheadStorageKey !== null
 			},
 			lineItems: input.lineItems,
+			discount: input.discount ?? null,
 			logoDataUri,
 			letterheadDataUri
 		});

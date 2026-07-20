@@ -1,5 +1,7 @@
 import type { QuotePdfResponseDto } from '@/modules/quote-pdfs/dto/quote-pdf.response.dto';
 import type {
+	PricingEffectType,
+	QuoteDiscountType,
 	QuoteDraft,
 	QuoteDraftListResponse,
 	QuoteDraftStatus,
@@ -20,6 +22,7 @@ export class QuoteLineItemResponseDto implements QuoteLineItem {
 	wasEditedByUser!: boolean;
 	catalogItemId!: string | null;
 	appliedRuleId!: string | null;
+	ruleEffectType!: PricingEffectType | null;
 	note!: string | null;
 }
 
@@ -32,6 +35,8 @@ export class QuoteDraftResponseDto implements QuoteDraft {
 	updatedAt!: string;
 	sentAt!: string | null;
 	validUntil!: string | null;
+	discountType!: QuoteDiscountType | null;
+	discountValue!: string | null;
 }
 
 export class QuoteDraftListResponseDto implements QuoteDraftListResponse {

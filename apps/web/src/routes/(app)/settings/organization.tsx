@@ -307,7 +307,7 @@ function BusinessDetailsSettingsPage() {
 									name='companyAddress'
 									fullWidth
 									multiline
-									label='Bezoekadres'
+									label='Adres'
 									disabled={!isOwner}
 									minRows={3}
 								/>

@@ -23,6 +23,14 @@ export interface LineItemProposerFixture {
 	/** Catalog refs that count as a correct match (≥1 must appear in the output). */
 	expectedCatalogRefs: string[];
 	category: 'plumbing' | 'painting' | 'tiling' | 'garden' | 'electrical' | 'photography' | 'misc';
+	/**
+	 * Trade the proposer SHOULD tag any inferred labour line with (lowercase English, the same
+	 * vocabulary the pricing rules use) — this is what lets a category-scoped hourly rate attach.
+	 * `null` when no single trade applies (e.g. generic moving help). Grading is lenient: a `null`
+	 * or omitted tag never fails (a miss isn't a mispricing) — only tagging a genuinely DIFFERENT
+	 * trade fails, since that would apply the wrong hourly rate.
+	 */
+	expectedInferredCategory: string | null;
 	/** One-liner explaining the labeling decision. */
 	notes: string;
 }
@@ -31,6 +39,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'plumbing',
 		expectedCatalogRefs: ['C1', 'C2'],
+		expectedInferredCategory: 'plumbing',
 		notes: 'Boiler replacement — labor + the boiler unit are both in the catalog',
 		input: {
 			requestType: 'CV-ketel vervangen',
@@ -59,6 +68,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'painting',
 		expectedCatalogRefs: ['C1'],
+		expectedInferredCategory: 'painting',
 		notes: 'Interior painting — schilderwerk per m² catalog item',
 		input: {
 			requestType: 'Binnenschilderwerk woonkamer',
@@ -77,6 +87,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'tiling',
 		expectedCatalogRefs: ['C1', 'C2'],
+		expectedInferredCategory: 'tiling',
 		notes: 'Bathroom tiling — both tiling labor and tile material match',
 		input: {
 			requestType: 'Badkamer betegelen',
@@ -95,6 +106,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'garden',
 		expectedCatalogRefs: ['C2'],
+		expectedInferredCategory: 'gardening',
 		notes: 'Garden — hedge trimming maps to the hovenier labor line',
 		input: {
 			requestType: 'Tuinonderhoud — haag snoeien',
@@ -113,6 +125,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'electrical',
 		expectedCatalogRefs: ['C1', 'C3'],
+		expectedInferredCategory: 'electrical',
 		notes: 'Electrical — extra sockets need both electrician labor and the socket material',
 		input: {
 			requestType: 'Extra stopcontacten plaatsen',
@@ -131,6 +144,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'photography',
 		expectedCatalogRefs: ['C1'],
+		expectedInferredCategory: 'photography',
 		notes: 'Wedding photography — full-day package',
 		input: {
 			requestType: 'Bruiloftsfotografie',
@@ -149,6 +163,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'plumbing',
 		expectedCatalogRefs: ['C2'],
+		expectedInferredCategory: 'plumbing',
 		notes: 'Leaking tap — small labor job, only the plumber-labor line matches',
 		input: {
 			requestType: 'Lekkende kraan repareren',
@@ -177,6 +192,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'tiling',
 		expectedCatalogRefs: ['C1'],
+		expectedInferredCategory: 'tiling',
 		notes: 'Floor leveling before tiling — egaliseren labor line matches',
 		input: {
 			requestType: 'Vloer egaliseren',
@@ -195,6 +211,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'garden',
 		expectedCatalogRefs: ['C1', 'C2'],
+		expectedInferredCategory: 'gardening',
 		notes: 'New terrace — paving labor plus the paving stones material',
 		input: {
 			requestType: 'Terras aanleggen',
@@ -213,6 +230,7 @@ export const NL_LINE_ITEM_PROPOSER_FIXTURES: LineItemProposerFixture[] = [
 	{
 		category: 'misc',
 		expectedCatalogRefs: ['C1'],
+		expectedInferredCategory: null,
 		notes: 'Moving help — generic labor day-rate is the only sensible match',
 		input: {
 			requestType: 'Verhuishulp',

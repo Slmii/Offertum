@@ -1,4 +1,5 @@
 import type { CatalogItemUnit } from './catalog-items.js';
+import type { PricingEffectType } from './pricing-playbook.js';
 
 /**
  * Where a proposed quote line came from. Drives provenance display in the edit
@@ -34,6 +35,10 @@ export interface ProposedQuoteLine {
 	/** Set when `source === 'rule_applied'` — the firing PricingRule id, so the
 	 * UI (W11.7) can surface which rule produced the line. */
 	appliedRuleId: string | null;
+	/** The pricing effect that produced a rule line (`surcharge_percent`, `per_km_eur`, …). `null`
+	 * for catalog / inferred / owner lines. Drives totals-block vs line-table placement — see
+	 * `isOrderLevelAdjustmentLine`. */
+	ruleEffectType: PricingEffectType | null;
 	/** Human-readable provenance note (the rule description, or "stel prijs in"
 	 * for inferred lines). `null` when no note applies. */
 	note: string | null;

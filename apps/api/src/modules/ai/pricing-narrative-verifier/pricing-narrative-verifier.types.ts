@@ -30,6 +30,10 @@ export interface PricingNarrativeQuoteContext {
 	 * België") from an email domain or signature. `null` when unknown. */
 	customerName: string | null;
 	customerEmail: string | null;
+	/** Extracted job location — surfaced as a first-class field (not just buried in `bodyText`) so
+	 * the model reliably judges location narratives ("binnen/buiten Utrecht", "in Amsterdam"). `null`
+	 * when the request gave no address. */
+	address: string | null;
 }
 
 /** One narrative-gated rule to check. */

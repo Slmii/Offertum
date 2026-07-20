@@ -64,6 +64,14 @@ export const toReadableBytes = (bytes: number): string => {
 /** `1234.56` → `"€ 1.234,56"`. For everything user-facing where the currency is EUR. */
 export const toReadableEuro = (value: number): string => NL_EUR_FORMATTER.format(value);
 
+/**
+ * Like `toReadableEuro` but puts the minus sign BEFORE the symbol for negatives (`"−€ 33,00"`), for
+ * discount / credit rows — nl-NL's default trails it after the symbol (`"€ -33,00"`), which reads
+ * poorly as a deduction.
+ */
+export const toReadableEuroSigned = (value: number): string =>
+	value < 0 ? `−${toReadableEuro(Math.abs(value))}` : toReadableEuro(value);
+
 /** `1234.56` → `"US$ 1.234,56"`. Standard 2-decimal USD. */
 export const toReadableUsd = (value: number): string => NL_USD_FORMATTER.format(value);
 

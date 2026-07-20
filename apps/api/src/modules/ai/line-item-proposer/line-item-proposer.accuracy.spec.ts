@@ -33,6 +33,21 @@ const describeIfKey = hasApiKey ? describe : describe.skip;
 // At least 7 of 10 fixtures must produce ≥1 correct catalog match.
 const MIN_HITS = 7;
 
+/**
+ * Category-tagging grade for an inferred line. Lenient by design: a `null`/omitted tag is
+ * always fine (a miss isn't a mispricing), and inflections/synonyms are tolerated via a
+ * substring test (`garden` ↔ `gardening`). Only a genuinely DIFFERENT trade is a mismatch —
+ * that's the case that would attach the WRONG category-scoped hourly rate.
+ */
+function isCategoryTagAcceptable(expected: string | null, emitted: string | null): boolean {
+	if (emitted === null || expected === null) {
+		return true;
+	}
+	const a = expected.trim().toLowerCase();
+	const b = emitted.trim().toLowerCase();
+	return a === b || a.includes(b) || b.includes(a);
+}
+
 describeIfKey('LineItemProposerService — live OpenAI accuracy', () => {
 	jest.setTimeout(120_000);
 
@@ -62,11 +77,17 @@ describeIfKey('LineItemProposerService — live OpenAI accuracy', () => {
 					const { value } = await proposer.propose(fixture.input);
 					const returnedRefs = value.catalogLines.map(line => line.ref);
 					const matchedRefs = returnedRefs.filter(ref => fixture.expectedCatalogRefs.includes(ref));
+					const inferredCategories = value.inferredLines.map(line => line.category);
+					const miscategorized = value.inferredLines
+						.filter(line => !isCategoryTagAcceptable(fixture.expectedInferredCategory, line.category))
+						.map(line => `${line.description} → ${line.category ?? 'null'}`);
 					return {
 						fixture,
 						returnedRefs,
 						matchedRefs,
 						hit: matchedRefs.length > 0,
+						inferredCategories,
+						miscategorized,
 						error: null as string | null
 					};
 				} catch (error) {
@@ -75,6 +96,8 @@ describeIfKey('LineItemProposerService — live OpenAI accuracy', () => {
 						returnedRefs: [] as string[],
 						matchedRefs: [] as string[],
 						hit: false,
+						inferredCategories: [] as (string | null)[],
+						miscategorized: [] as string[],
 						error: error instanceof Error ? error.message : String(error)
 					};
 				}
@@ -92,13 +115,26 @@ describeIfKey('LineItemProposerService — live OpenAI accuracy', () => {
 			console.log(
 				`     expected one of=[${result.fixture.expectedCatalogRefs.join(', ')}]  returned=[${result.returnedRefs.join(', ')}]`
 			);
+			const catMark = result.miscategorized.length === 0 ? '✅' : '⚠️';
+			console.log(
+				`     ${catMark} category expected=${result.fixture.expectedInferredCategory ?? 'null'}  inferred tags=[${result.inferredCategories.map(c => c ?? 'null').join(', ')}]`
+			);
+			for (const bad of result.miscategorized) {
+				console.log(`        ✗ wrong-trade tag: ${bad}`);
+			}
 			if (result.error) {
 				console.log(`     error: ${result.error}`);
 			}
 		}
-		console.log(`\n  Hits: ${hits}/${results.length} (threshold ${MIN_HITS})\n`);
+		console.log(`\n  Hits: ${hits}/${results.length} (threshold ${MIN_HITS})`);
+
+		const miscategorizedTotal = results.reduce((sum, result) => sum + result.miscategorized.length, 0);
+		console.log(`  Wrong-trade category tags: ${miscategorizedTotal} (must be 0)\n`);
 
 		expect(hits).toBeGreaterThanOrEqual(MIN_HITS);
+		// A wrong-trade tag would apply a different category's hourly rate — a mispricing, not a miss.
+		// Null/omitted tags are tolerated (see isCategoryTagAcceptable), so this only catches real mis-tags.
+		expect(miscategorizedTotal).toBe(0);
 	});
 });
 

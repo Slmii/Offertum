@@ -1,3 +1,4 @@
+import type { PricingEffectType } from './pricing-playbook.js';
 import type { QuoteLineSource } from './quote-line-items.js';
 
 /** Workflow state of a persisted quote draft (W10.2). */
@@ -34,10 +35,16 @@ export interface QuoteLineItem {
 	catalogItemId: string | null;
 	/** Set when `source === 'rule_applied'`. */
 	appliedRuleId: string | null;
+	/** Pricing effect that produced a rule line (`surcharge_percent`, `per_km_eur`, …); `null` for
+	 * catalog / inferred / owner lines. Drives totals-block vs line-table placement. */
+	ruleEffectType: PricingEffectType | null;
 	note: string | null;
 }
 
 /** A persisted quote draft with its line items (newest-first on the opportunity). */
+/** Owner-applied quote-level discount kind: percentage of the net, or a fixed euro amount. */
+export type QuoteDiscountType = 'percent' | 'eur';
+
 export interface QuoteDraft {
 	id: string;
 	opportunityId: string;
@@ -49,6 +56,11 @@ export interface QuoteDraft {
 	// Quote validity deadline ("Geldig tot"), stamped at creation. Null only for drafts
 	// created before this field existed.
 	validUntil: string | null;
+	/** Owner-applied quote-level discount shown in the totals block (not a line). `null` when none.
+	 * `discountValue` is a decimal string — a percentage (0–100) when `discountType === 'percent'`,
+	 * else a euro amount. */
+	discountType: QuoteDiscountType | null;
+	discountValue: string | null;
 }
 
 /** A generated quote PDF version (W10.4). The binary is fetched via the download
@@ -96,6 +108,9 @@ export interface ReplaceQuoteLineInput {
 	wasEditedByUser: boolean;
 	catalogItemId: string | null;
 	appliedRuleId: string | null;
+	/** Pricing effect that produced a rule line (`surcharge_percent`, `per_km_eur`, …); `null` for
+	 * catalog / inferred / owner lines. Drives totals-block vs line-table placement. */
+	ruleEffectType: PricingEffectType | null;
 	note: string | null;
 }
 

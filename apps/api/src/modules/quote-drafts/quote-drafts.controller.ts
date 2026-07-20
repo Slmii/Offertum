@@ -2,8 +2,20 @@ import { MemberWrite } from '@/common/decorators/member-write.decorator';
 import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { QuoteDraftListResponseDto, QuoteDraftResponseDto } from '@/modules/quote-drafts/dto/quote-draft.response.dto';
+import { SetQuoteDiscountDto } from '@/modules/quote-drafts/dto/set-quote-discount.dto';
 import { QuoteDraftsService } from '@/modules/quote-drafts/quote-drafts.service';
-import { Controller, Get, Param, ParseUUIDPipe, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+	Body,
+	Controller,
+	Get,
+	Param,
+	ParseUUIDPipe,
+	Patch,
+	Post,
+	Req,
+	UnauthorizedException,
+	UseGuards
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -38,6 +50,19 @@ export class QuoteDraftsController {
 		@Param('opportunityId', new ParseUUIDPipe()) opportunityId: string
 	): Promise<QuoteDraftListResponseDto> {
 		return this.quoteDrafts.listForOpportunity(request.organizationId!, opportunityId);
+	}
+
+	@ApiOperation({ summary: 'Set or clear the quote-level discount' })
+	@ApiOkResponse({ type: QuoteDraftResponseDto })
+	@MemberWrite()
+	@Patch(':quoteDraftId/discount')
+	setDiscount(
+		@Req() request: Request,
+		@Param('opportunityId', new ParseUUIDPipe()) opportunityId: string,
+		@Param('quoteDraftId', new ParseUUIDPipe()) quoteDraftId: string,
+		@Body() body: SetQuoteDiscountDto
+	): Promise<QuoteDraftResponseDto> {
+		return this.quoteDrafts.setDiscount(request.organizationId!, opportunityId, quoteDraftId, body);
 	}
 }
 

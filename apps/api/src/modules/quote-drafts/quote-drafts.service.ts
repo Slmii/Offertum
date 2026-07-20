@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import {
+	INVALID_QUOTE_DISCOUNT,
 	OPPORTUNITY_NOT_FOUND,
 	QUOTE_DRAFT_ALREADY_SENT,
 	QUOTE_DRAFT_HAS_UNPRICED_LINES,
@@ -12,6 +13,7 @@ import { LogService } from '@/modules/logger/log.service';
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
 import { PricingPlaybookRepository } from '@/modules/pricing-playbook/pricing-playbook.repository';
 import { PrismaService } from '@/modules/prisma/prisma.service';
+import type { QuoteDraftResponseDto } from '@/modules/quote-drafts/dto/quote-draft.response.dto';
 import { toQuoteDraftWire } from '@/modules/quote-drafts/quote-drafts.mapper';
 import {
 	type CreateQuoteLineRepoInput,
@@ -19,7 +21,10 @@ import {
 	QuoteDraftsRepository,
 	type ReplaceQuoteLineRepoInput
 } from '@/modules/quote-drafts/quote-drafts.repository';
-import { QUOTE_LINE_SOURCE_FROM_WIRE } from '@/modules/quote-drafts/quote-line-source.mapper';
+import {
+	QUOTE_LINE_SOURCE_FROM_WIRE,
+	QUOTE_LINE_SOURCE_TO_WIRE
+} from '@/modules/quote-drafts/quote-line-source.mapper';
 import { QuoteLineItemsService } from '@/modules/quote-line-items/quote-line-items.service';
 import type { QuotePdfLineItem } from '@/modules/quote-pdfs/quote-pdf.types';
 import { QuotePdfsService } from '@/modules/quote-pdfs/quote-pdfs.service';
@@ -28,13 +33,21 @@ import type {
 	CatalogItemUnit,
 	CreateQuoteLineItemInput,
 	ProposedQuoteLine,
+	QuoteDiscountInput,
 	QuoteDraft,
 	QuoteDraftListResponse,
 	QuotePdf,
 	ReplaceQuoteLineInput,
 	UpdateQuoteLineItemInput
 } from '@offertum/shared';
-import { computeQuoteTotals, formatQuoteNumber } from '@offertum/shared';
+import {
+	computeQuoteTotals,
+	formatQuoteNumber,
+	isOrderLevelAdjustmentLine,
+	isPricingEffectType,
+	lineNetCents,
+	type QuoteTotalLineInput
+} from '@offertum/shared';
 import { endOfDayPlusDaysInTimeZone, yearInTimeZone } from '@/lib/time/timezone';
 
 const DEFAULT_LINE_UNIT = 'piece';
@@ -204,6 +217,41 @@ export class QuoteDraftsService {
 		return this.reload(organizationId, quoteDraftId);
 	}
 
+	/** Set or clear the quote-level discount shown in the totals block. `type: null`
+	 * clears both fields; otherwise `value` is range-checked against `type` (percent:
+	 * 0-100, eur: >= 0) before being persisted. */
+	async setDiscount(
+		organizationId: string,
+		opportunityId: string,
+		quoteDraftId: string,
+		input: { type: 'percent' | 'eur' | null; value: string | null }
+	): Promise<QuoteDraftResponseDto> {
+		const draft = await this.repository.findForOpportunity(organizationId, opportunityId, quoteDraftId);
+		if (!draft) {
+			throw new NotFoundException(QUOTE_DRAFT_NOT_FOUND);
+		}
+		this.assertEditable(draft);
+
+		if (input.type === null) {
+			await this.repository.updateDiscount(quoteDraftId, null, null);
+			return this.reload(organizationId, quoteDraftId);
+		}
+
+		if (input.value === null) {
+			throw new BadRequestException(INVALID_QUOTE_DISCOUNT);
+		}
+		const numericValue = Number(input.value);
+		// A discount must be a positive amount; `0` is inert (renders/counts as nothing). Clearing is
+		// done via `type: null`, so reject a zero/negative value rather than persist a dead field.
+		const isValid = input.type === 'percent' ? numericValue > 0 && numericValue <= 100 : numericValue > 0;
+		if (!Number.isFinite(numericValue) || !isValid) {
+			throw new BadRequestException(INVALID_QUOTE_DISCOUNT);
+		}
+
+		await this.repository.updateDiscount(quoteDraftId, input.type, input.value);
+		return this.reload(organizationId, quoteDraftId);
+	}
+
 	/** W10.4 — render the draft as a PDF and save it as a version in the opportunity's
 	 * PDF history. Does NOT attach it; the owner picks a version to attach separately. */
 	async generatePdfVersion(organizationId: string, quoteDraftId: string): Promise<QuotePdf> {
@@ -259,6 +307,7 @@ export class QuoteDraftsService {
 			customerAddress: opportunity.address,
 			quoteNumber,
 			lineItems: draft.lineItems.map(toPdfLineItem),
+			discount: draftDiscount(draft),
 			// Print the draft's creation date as the issue date and its stored validity deadline as
 			// "Geldig tot" — the same values the calendar expiry event + opp detail read, so all three agree.
 			issueDate: draft.createdAt,
@@ -267,13 +316,15 @@ export class QuoteDraftsService {
 
 		// Snapshot the total incl. btw at generation time — all lines are priced (checked above),
 		// so this is the final amount the customer sees on this PDF version.
+		// Percent discount base = the work subtotal (matches the editor + PDF), so the stored total
+		// agrees with what's rendered.
+		const workNetCents = draft.lineItems
+			.filter(line => !isAdjustmentLine(line))
+			.reduce((sum, line) => sum + lineNetCents(toTotalLineInput(line)), 0);
 		const totals = computeQuoteTotals(
-			draft.lineItems.map(line => ({
-				quantity: line.quantity.toString(),
-				unitPriceEur: line.unitPriceEur === null ? null : line.unitPriceEur.toString(),
-				vatRate: line.vatRate.toNumber(),
-				vatReverseCharged: line.vatReverseCharged
-			}))
+			draft.lineItems.map(toTotalLineInput),
+			draftDiscount(draft),
+			workNetCents
 		);
 
 		const pdf = await this.quotePdfs.storeVersion(
@@ -386,19 +437,52 @@ function toRepoLine(line: ProposedQuoteLine, index: number): CreateQuoteLineRepo
 		source: QUOTE_LINE_SOURCE_FROM_WIRE[line.source],
 		catalogItemId: line.catalogItemId,
 		appliedRuleId: line.appliedRuleId,
+		ruleEffectType: line.ruleEffectType,
 		note: line.note
 	};
 }
 
 /** Persisted line → PDF line. Callers must guarantee `unitPriceEur` is non-null. */
+/** Map a persisted line to the shared totals-engine input (Decimals → strings). */
+function toTotalLineInput(line: QuoteDraftWithLines['lineItems'][number]): QuoteTotalLineInput {
+	return {
+		quantity: line.quantity.toString(),
+		unitPriceEur: line.unitPriceEur === null ? null : line.unitPriceEur.toString(),
+		vatRate: line.vatRate.toNumber(),
+		vatReverseCharged: line.vatReverseCharged
+	};
+}
+
+/** Whether a persisted line is an order-level subtotal modifier (surcharge/discount/minimum). */
+function isAdjustmentLine(line: QuoteDraftWithLines['lineItems'][number]): boolean {
+	return isOrderLevelAdjustmentLine({
+		source: QUOTE_LINE_SOURCE_TO_WIRE[line.source],
+		ruleEffectType: isPricingEffectType(line.ruleEffectType) ? line.ruleEffectType : null
+	});
+}
+
+/** Build the totals-engine discount input from a persisted draft's discount columns (`null` = none). */
+function draftDiscount(draft: QuoteDraftWithLines): QuoteDiscountInput | null {
+	if ((draft.discountType !== 'percent' && draft.discountType !== 'eur') || draft.discountValue === null) {
+		return null;
+	}
+	const value = Number(draft.discountValue.toString());
+	if (!Number.isFinite(value) || value <= 0) {
+		return null;
+	}
+	return { type: draft.discountType, value };
+}
+
 function toPdfLineItem(line: QuoteDraftWithLines['lineItems'][number]): QuotePdfLineItem {
+	const ruleEffectType = isPricingEffectType(line.ruleEffectType) ? line.ruleEffectType : null;
 	return {
 		description: line.description,
 		unit: line.unit as CatalogItemUnit,
 		unitPriceEur: (line.unitPriceEur ?? '0').toString(),
 		quantity: Number(line.quantity.toString()),
 		vatRate: line.vatRate.toNumber(),
-		vatReverseCharged: line.vatReverseCharged
+		vatReverseCharged: line.vatReverseCharged,
+		isAdjustment: isOrderLevelAdjustmentLine({ source: QUOTE_LINE_SOURCE_TO_WIRE[line.source], ruleEffectType })
 	};
 }
 
@@ -413,6 +497,7 @@ function toReplaceRepoLine(line: ReplaceQuoteLineInput): ReplaceQuoteLineRepoInp
 		source: QUOTE_LINE_SOURCE_FROM_WIRE[line.source],
 		catalogItemId: line.catalogItemId,
 		appliedRuleId: line.appliedRuleId,
+		ruleEffectType: line.ruleEffectType,
 		note: line.note,
 		wasEditedByUser: line.wasEditedByUser
 	};

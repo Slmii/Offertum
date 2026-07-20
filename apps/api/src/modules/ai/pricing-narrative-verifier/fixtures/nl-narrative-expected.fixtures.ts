@@ -32,7 +32,8 @@ export const NL_NARRATIVE_FIXTURES: NarrativeFixture[] = [
 			bodyText:
 				'Hallo, wij willen graag onze badkamer laten renoveren. Het gaat om onze woning uit 1968, dus alles is flink gedateerd. Kunnen jullie een offerte maken?',
 			customerName: 'Jan de Vries',
-			customerEmail: 'jan.devries@gmail.com'
+			customerEmail: 'jan.devries@gmail.com',
+			address: null
 		},
 		rules: [
 			{ ref: 'R1', description: '9% BTW op arbeid', narrative: 'Alleen voor renovaties van woningen ouder dan 2 jaar.' }
@@ -47,7 +48,8 @@ export const NL_NARRATIVE_FIXTURES: NarrativeFixture[] = [
 			bodyText:
 				'Wij hebben een nieuwbouwwoning die dit jaar is opgeleverd en willen graag de badkamer laten afwerken.',
 			customerName: 'Sophie Bakker',
-			customerEmail: 'sophie@outlook.com'
+			customerEmail: 'sophie@outlook.com',
+			address: null
 		},
 		rules: [
 			{ ref: 'R1', description: '9% BTW op arbeid', narrative: 'Alleen voor renovaties van woningen ouder dan 2 jaar.' }
@@ -61,7 +63,8 @@ export const NL_NARRATIVE_FIXTURES: NarrativeFixture[] = [
 			deliverableHints: ['verbouwing'],
 			bodyText: 'We willen onze hele benedenverdieping verbouwen. Het budget ligt rond de € 15.000.',
 			customerName: 'Familie Jansen',
-			customerEmail: 'jansen@gmail.com'
+			customerEmail: 'jansen@gmail.com',
+			address: null
 		},
 		rules: [
 			{ ref: 'R1', description: '5% korting bij vooruitbetaling', narrative: 'Alleen voor projecten boven de € 5.000.' }
@@ -75,7 +78,8 @@ export const NL_NARRATIVE_FIXTURES: NarrativeFixture[] = [
 			deliverableHints: ['kraan'],
 			bodyText: 'Klein klusje: een lekkende kraan in de keuken vervangen. Denk aan een uurtje werk.',
 			customerName: 'Peter Smit',
-			customerEmail: 'p.smit@gmail.com'
+			customerEmail: 'p.smit@gmail.com',
+			address: null
 		},
 		rules: [
 			{ ref: 'R1', description: '5% korting bij vooruitbetaling', narrative: 'Alleen voor projecten boven de € 5.000.' }
@@ -90,7 +94,8 @@ export const NL_NARRATIVE_FIXTURES: NarrativeFixture[] = [
 			bodyText:
 				'Goeiedag, wij zijn een aannemer uit Antwerpen en zoeken een onderaannemer voor loodgieterswerk op een project hier in de buurt.',
 			customerName: 'Bouwbedrijf Peeters',
-			customerEmail: 'info@bouwbedrijf-peeters.be'
+			customerEmail: 'info@bouwbedrijf-peeters.be',
+			address: 'Antwerpen, België'
 		},
 		rules: [{ ref: 'R1', description: 'BTW verlegd', narrative: 'Alleen voor zakelijke klanten in België.' }],
 		expected: { R1: true }
@@ -103,13 +108,36 @@ export const NL_NARRATIVE_FIXTURES: NarrativeFixture[] = [
 			bodyText:
 				'Onze woning is uit 1975 en we willen de meterkast laten vernieuwen. Het is een klein project, ongeveer € 900.',
 			customerName: 'Karel Dubois',
-			customerEmail: 'karel@gmail.com'
+			customerEmail: 'karel@gmail.com',
+			address: null
 		},
 		rules: [
 			{ ref: 'R1', description: '9% BTW op arbeid', narrative: 'Alleen voor woningen ouder dan 2 jaar.' },
 			{ ref: 'R2', description: '5% projectkorting', narrative: 'Alleen voor projecten boven de € 5.000.' }
 		],
 		expected: { R1: true, R2: false }
+	},
+	{
+		name: 'Reiskosten — geografische conditie (job in Emmen, buiten Utrecht)',
+		context: {
+			requestType: 'Buitenkraan plaatsen',
+			deliverableHints: ['kraan', 'waterafvoer'],
+			bodyText:
+				'Hallo, ik wil graag een kraan geplaatst hebben in de tuin, in de veranda. Er zit waterafvoer aan de andere kant van de muur (keuken), dus daar zou het water vandaan gehaald kunnen worden. Adres: Tammingecamp 22, Emmen. Zou het woensdag kunnen?',
+			customerName: 'Berkay Yıldız',
+			customerEmail: 'b.yildiz@westerhuis.nl',
+			address: 'Tammingecamp 22, Emmen'
+		},
+		rules: [
+			// Emmen is NOT Utrecht → the "binnen Utrecht" fee must NOT apply, the "buiten Utrecht" one must.
+			{ ref: 'R1', description: 'Voorrijkosten binnen Utrecht-stad: € 35', narrative: 'Alleen binnen de stad Utrecht.' },
+			{
+				ref: 'R2',
+				description: 'Voorrijkosten buiten Utrecht-stad: € 0,50/km',
+				narrative: 'Alleen buiten de stad Utrecht.'
+			}
+		],
+		expected: { R1: false, R2: true }
 	}
 ];
 

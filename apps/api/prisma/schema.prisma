@@ -1114,6 +1114,11 @@ model QuoteDraft {
   // before this column existed (read sites fall back to createdAt + quoteValidityDays).
   // W13 "smart expiry" extend/last-followup actions mutate this value.
   validUntil        DateTime?
+  // Owner-applied quote-level discount, shown in the totals block above BTW (NOT a line item — it
+  // modifies the whole quote). `discountType`: "percent" (of the pre-discount net) or "eur" (fixed
+  // amount off the net). Null / null value = no discount. VAT is recomputed on the post-discount net.
+  discountType      String?
+  discountValue     Decimal?         @db.Decimal(12, 2)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -1211,6 +1216,12 @@ model QuoteLineItem {
   // not a rate.
   vatReverseCharged Boolean       @default(false)
   source          QuoteLineSource
+  // Pricing effect that produced a rule-applied line — matches PricingEffectType wire values
+  // (e.g. "surcharge_percent", "discount_percent", "per_km_eur", "flat_fee_eur", "rate_eur_per_hour").
+  // Null for catalog / inferred / owner lines. Lets the editor + PDF place subtotal MODIFIERS
+  // (surcharge / discount / minimum) in the totals block and fixed COSTS (per-km/flat travel) in the
+  // line table, without re-joining the pricing rule. See `isOrderLevelAdjustmentLine`.
+  ruleEffectType  String?
   // Soft references (no FK — source rows may be deleted; denormalized fields above
   // preserve history). Drive the provenance display in the editor.
   catalogItemId   String?         @db.Uuid

@@ -1,4 +1,4 @@
-import type { CatalogItemUnit } from '@offertum/shared';
+import type { CatalogItemUnit, QuoteDiscountInput } from '@offertum/shared';
 
 export interface QuotePdfBusinessDetails {
 	name: string;
@@ -22,6 +22,11 @@ export interface QuotePdfLineItem {
 	/** BTW verlegd (reverse charge): the line's net counts but it carries €0 VAT and
 	 * prints "verlegd" in the BTW column. */
 	vatReverseCharged: boolean;
+	/** Order-level pricing-rule adjustment (Spoedtoeslag / Voorrijkosten / Korting /
+	 * Minimumordertoeslag). Rendered in the totals block below the work subtotal, not among the
+	 * "Werkzaamheden" rows — it surcharges the subtotal, it isn't part of it. Still counts toward VAT
+	 * + grand total. Derived via `isOrderLevelAdjustmentLine` where the line is assembled. */
+	isAdjustment: boolean;
 }
 
 export interface QuotePdfRenderInput {
@@ -33,6 +38,8 @@ export interface QuotePdfRenderInput {
 	customerAddress: string | null;
 	businessDetails: QuotePdfBusinessDetails;
 	lineItems: QuotePdfLineItem[];
+	/** Owner-applied quote-level discount, printed in the totals block. `null` = none. */
+	discount?: QuoteDiscountInput | null;
 	logoDataUri?: string | null;
 	letterheadDataUri?: string | null;
 }

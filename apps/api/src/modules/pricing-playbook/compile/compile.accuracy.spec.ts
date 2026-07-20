@@ -169,5 +169,8 @@ function matchesExpected(rule: PricingRuleCompileOutput, exp: ExpectedCompileRul
 	if (exp.urgency !== undefined && rule.condition.urgency !== exp.urgency) {
 		return false;
 	}
+	if (exp.jurisdiction !== undefined && !exp.jurisdiction.includes(rule.condition.jurisdiction)) {
+		return false;
+	}
 	return true;
 }

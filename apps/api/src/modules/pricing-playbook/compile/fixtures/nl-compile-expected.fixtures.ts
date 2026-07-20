@@ -26,7 +26,19 @@ export interface ExpectedCompileRule {
 	hasNarrative?: boolean;
 	/** Only asserted when the prose pins an unambiguous urgency tier. */
 	urgency?: 'emergency' | 'high' | 'normal' | 'low';
+	/**
+	 * Acceptable `condition.jurisdiction` values (lenient set, like {@link urgency}). Asserted only
+	 * when set. For a domestic rule whose prose names no country, BOTH `null` (applies everywhere)
+	 * and `'NL'` are fine — the resolver pins the quote to NL, so either matches; a wrong country
+	 * (`'BE'`/`'DE'`) would make the rule silently never fire (the per-km travel regression). Set on
+	 * TRAVEL rules to guard exactly that. Leave unset where jurisdiction is irrelevant/model-dependent.
+	 */
+	jurisdiction?: ReadonlyArray<'NL' | 'BE' | 'DE' | null>;
 }
+
+/** A domestic (country-less prose) rule may compile to NL or stay unscoped — both work with the
+ * NL-pinned resolver. Guards against a stray `'BE'`/`'DE'` that would break matching. */
+const NL_OR_UNSCOPED: ReadonlyArray<'NL' | 'BE' | 'DE' | null> = ['NL', null];
 
 export interface CompileFixture {
 	name: string;
@@ -60,8 +72,8 @@ export const NL_COMPILE_FIXTURES: CompileFixture[] = [
 			r('vat', 'vat_rate', 21),
 			r('material_markup', 'markup_percent', 15),
 			// "binnen de stad" / "buiten de stad" — no structured location field → narrative.
-			r('travel', 'flat_fee_eur', 25, true),
-			r('travel', 'per_km_eur', 0.55, true),
+			{ ...r('travel', 'flat_fee_eur', 25, true), jurisdiction: NL_OR_UNSCOPED },
+			{ ...r('travel', 'per_km_eur', 0.55, true), jurisdiction: NL_OR_UNSCOPED },
 			r('urgency', 'surcharge_percent', 25),
 			r('urgency', 'surcharge_percent', 50),
 			// "voor losse klusjes" gates the minimum → narrative.
@@ -78,8 +90,8 @@ export const NL_COMPILE_FIXTURES: CompileFixture[] = [
 		].join('\n'),
 		expected: [
 			r('hourly_rate', 'rate_eur_per_hour', 85),
-			r('travel', 'flat_fee_eur', 30),
-			r('travel', 'per_km_eur', 0.55),
+			{ ...r('travel', 'flat_fee_eur', 30), jurisdiction: NL_OR_UNSCOPED },
+			{ ...r('travel', 'per_km_eur', 0.55), jurisdiction: NL_OR_UNSCOPED },
 			r('urgency', 'surcharge_percent', 50),
 			r('material_markup', 'markup_percent', 15)
 		]
@@ -148,7 +160,7 @@ export const NL_COMPILE_FIXTURES: CompileFixture[] = [
 		name: 'Reiskosten met gratis-zone',
 		prose: 'Reiskosten zijn € 0,50 per kilometer, maar gratis binnen 15 kilometer.',
 		// The "gratis binnen 15 km" is the structured `freeUnderKm` field — no narrative expected.
-		expected: [r('travel', 'per_km_eur', 0.5, false)]
+		expected: [{ ...r('travel', 'per_km_eur', 0.5, false), jurisdiction: NL_OR_UNSCOPED }]
 	},
 	{
 		name: 'Meerdere kortingen (beide narrative)',

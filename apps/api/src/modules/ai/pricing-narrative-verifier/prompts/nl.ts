@@ -24,6 +24,7 @@ export function buildPricingNarrativeVerifierPromptNL(input: PricingNarrativeVer
 	const encodedRequest = JSON.stringify({
 		requestType: input.context.requestType.trim(),
 		deliverableHints: input.context.deliverableHints,
+		address: input.context.address,
 		customerName: input.context.customerName,
 		customerEmail: input.context.customerEmail,
 		body: input.context.bodyText.trim().slice(0, 4000)
@@ -49,13 +50,31 @@ export function buildPricingNarrativeVerifierPromptNL(input: PricingNarrativeVer
 		## Je taak
 		Geef voor ELKE regel een verdict:
 		- \`ref\`: de exacte referentie (bijv. "R2").
-		- \`applies\`: \`true\` ALLEEN als de aanvraag duidelijk aan de voorwaarde voldoet.
-		  Bij twijfel, ontbrekende informatie, of wanneer je het niet met zekerheid uit de
-		  aanvraag kunt afleiden: \`false\`. Pas nooit een uitzondering toe die je niet kunt
-		  onderbouwen — een gemiste uitzondering kan de ondernemer alsnog handmatig toevoegen,
-		  een onterechte uitzondering rekent de klant een verkeerd bedrag.
+		- \`applies\`: \`true\` als de aanvraag aan de voorwaarde voldoet — óók wanneer je dat met
+		  algemene kennis met zekerheid kunt vaststellen (zie hieronder). Alleen bij ECHTE twijfel of
+		  ontbrekende informatie: \`false\`. Pas nooit een uitzondering toe die je niet kunt onderbouwen
+		  — maar een feit dat je met zekerheid weet, is een onderbouwing.
 		- \`reason\`: één korte Nederlandse zin met de onderbouwing (intern gebruik).
 
-		Beoordeel alleen op basis van de aanvraag hierboven — verzin geen feiten.
+		Je MAG en MOET algemene kennis gebruiken om de aanvraag te interpreteren — maar ALLEEN voor
+		geografie (welke plaats in welke stad, gemeente of provincie ligt), eenheden en vakjargon. Als een
+		plaats aantoonbaar buiten of binnen een genoemde stad ligt, is dat GEEN twijfelgeval maar een zeker
+		feit. Voorbeelden (het \`address\`-veld bevat de locatie van de klus):
+		- locatie "Emmen" + voorwaarde "buiten de stad Utrecht" → Emmen ligt in Drenthe, dus BUITEN Utrecht → \`true\`.
+		- locatie "Emmen" + voorwaarde "binnen de stad Utrecht" → Emmen is niet Utrecht → \`false\`.
+		- locatie "Utrecht Overvecht" + voorwaarde "binnen de stad Utrecht" → een wijk ván Utrecht → \`true\`.
+
+		Is de locatie dubbelzinnig of onvolledig — zodat je niet met zekerheid kunt plaatsen — dan is dat WEL
+		twijfel → \`false\`. Bijvoorbeeld een kale plaatsnaam die zowel een stad als een gelijknamige provincie
+		of gemeente kan zijn ("Utrecht", "Groningen"), of een adres dat je niet eenduidig kunt plaatsen. Bij
+		twijfel over de locatie nooit een toeslag toepassen.
+
+		Algemene kennis geldt UITSLUITEND voor geografie/eenheden/vakjargon. Leid NOOIT het klanttype, de
+		zakelijkheid, het land of de BTW-plicht van de klant af uit een bedrijfsnaam, e-mailadres of domein
+		(bijv. ".be"). Voorwaarden als "alleen zakelijke klanten", "klanten in België" of "BTW verlegd" gelden
+		alleen als de aanvraagtekst dat EXPLICIET vermeldt — anders \`false\`.
+
+		Verzin verder geen aanvraag-specifieke feiten die er niet in staan (een niet-genoemd bedrag,
+		bouwjaar, klanttype of oppervlakte). Dat blijft \`false\`.
 	`;
 }

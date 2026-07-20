@@ -57,6 +57,10 @@ export const ProposedInferredLineSchema = z.object({
 	/** Labor vs material — drives hourly-rate pricing + VAT split downstream.
 	 * NULL when the model can't tell. */
 	lineKind: z.enum(['labor', 'material']).nullable(),
+	/** Trade/vakgebied of this line in the SAME lowercase vocabulary the pricing rules use
+	 * ("plumbing", "electrical", "painting", …). Lets a category-scoped rule (e.g. a plumbing-only
+	 * hourly rate) match this specific line. NULL when the work isn't trade-specific / unknown. */
+	category: z.string().nullable(),
 	reason: z.string()
 });
 

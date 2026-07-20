@@ -51,6 +51,7 @@ import { DraftEditor } from './-components/Details/DraftEditor.component';
 import { ExtractedFieldsPanel } from './-components/Details/ExtractedFieldsPanel.component';
 import { LockedReplyPanel } from './-components/Details/LockedReplyPanel.component';
 import { RailQuoteCard } from './-components/Details/RailQuoteCard.component';
+import { RailQuoteEmptyCard } from './-components/Details/RailQuoteEmptyCard.component';
 import { SendConfirmDialog } from './-components/Details/SendConfirmDialog.component';
 import { SentComposerState } from './-components/Details/SentComposerState.component';
 import { StatusPipeline } from './-components/Details/StatusPipeline.component';
@@ -610,45 +611,6 @@ function OpportunityDetailPage() {
 												rowGap: 1
 											}}
 										>
-											{/* Quote affordance — generate the quote draft when none exists yet; "Offerte
-											    bekijken" (view) is still deferred to the quote builder page, so it's a no-op. */}
-											<Button
-												variant='outlined'
-												color='inherit'
-												size='medium'
-												disabled={generateQuote.isPending}
-												onClick={() => {
-													if (hasQuote) {
-														openQuote();
-														return;
-													}
-													generateQuote.mutate(undefined, {
-														onError: err =>
-															toast.error(
-																'Genereren mislukt',
-																err instanceof Error
-																	? err.message
-																	: 'Probeer het opnieuw.'
-															)
-													});
-												}}
-												startIcon={
-													generateQuote.isPending ? (
-														<CircularProgress size={14} />
-													) : (
-														<AppIcon
-															name={hasQuote ? 'file-text' : 'file-plus'}
-															size='small'
-														/>
-													)
-												}
-											>
-												{generateQuote.isPending
-													? 'Bezig…'
-													: hasQuote
-														? 'Offerte bekijken'
-														: 'Genereer offerte'}
-											</Button>
 											<Button
 												variant='contained'
 												size='medium'
@@ -709,7 +671,22 @@ function OpportunityDetailPage() {
 							customerPhone={opportunity.customerPhone}
 						/>
 						{isEntitled && <ExpiryActionCard opportunityId={id} isOwner={isOwner} />}
-						<RailQuoteCard opportunityId={id} onOpen={openQuote} />
+						{hasQuote ? (
+							<RailQuoteCard opportunityId={id} onOpen={openQuote} />
+						) : (
+							<RailQuoteEmptyCard
+								isGenerating={generateQuote.isPending}
+								onGenerate={() =>
+									generateQuote.mutate(undefined, {
+										onError: err =>
+											toast.error(
+												'Genereren mislukt',
+												err instanceof Error ? err.message : 'Probeer het opnieuw.'
+											)
+									})
+								}
+							/>
+						)}
 						<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} disabled={!isEntitled} />
 						<AssigneePicker
 							opportunityId={id}

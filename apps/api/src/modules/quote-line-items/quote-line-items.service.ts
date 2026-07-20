@@ -1,5 +1,7 @@
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import { OPPORTUNITY_NOT_FOUND } from '@/lib/errors';
+import { GeocodingService } from '@/lib/geo/geocoding.service';
+import { haversineKm } from '@/lib/geo/haversine';
 import { LineItemProposerService } from '@/modules/ai/line-item-proposer/line-item-proposer.service';
 import type { LineItemProposerCatalogEntry } from '@/modules/ai/line-item-proposer/line-item-proposer.types';
 import { PricingNarrativeVerifierService } from '@/modules/ai/pricing-narrative-verifier/pricing-narrative-verifier.service';
@@ -8,6 +10,7 @@ import { CatalogItemsRepository } from '@/modules/catalog-items/catalog-items.re
 import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.repository';
 import { OPPORTUNITY_URGENCY_TO_WIRE } from '@/modules/opportunities/opportunity-urgency.mapper';
 import { PricingPlaybookRepository, type PricingRuleRow } from '@/modules/pricing-playbook/pricing-playbook.repository';
+import { PrismaService } from '@/modules/prisma/prisma.service';
 import type { EvaluableRule } from '@/modules/pricing-playbook/rule-engine';
 import {
 	hasNarrative,
@@ -55,7 +58,9 @@ export class QuoteLineItemsService {
 		private readonly catalogItems: CatalogItemsRepository,
 		private readonly pricingPlaybook: PricingPlaybookRepository,
 		private readonly proposer: LineItemProposerService,
-		private readonly narrativeVerifier: PricingNarrativeVerifierService
+		private readonly narrativeVerifier: PricingNarrativeVerifierService,
+		private readonly geocoding: GeocodingService,
+		private readonly prisma: PrismaService
 	) {}
 
 	/** Preview path (W10.1): just the resolved lines, nothing persisted. */
@@ -117,20 +122,28 @@ export class QuoteLineItemsService {
 			deliverableHints,
 			bodyText,
 			customerName: opportunity.customerName,
-			customerEmail: opportunity.customerEmail
+			customerEmail: opportunity.customerEmail,
+			address: opportunity.address
 		};
 
-		// The proposer (which catalog items apply) and narrative verification (which
-		// narrative-gated rules apply) are independent AI calls — run them in parallel so
-		// "AI controleert" adds no wall-clock latency to quote generation.
-		const [proposal, confirmedNarrativeRuleIds] = await Promise.all([
+		// Only geocode when a per-km TRAVEL rule actually exists — otherwise the distance is computed
+		// and discarded (the resolver has nothing to bill it against), so we'd pay two PDOK round-trips
+		// + an external failure surface on every quote for nothing.
+		const hasPerKmTravelRule = activeRuleRows.some(
+			row => row.ruleType === 'TRAVEL' && (row.effect as { type?: unknown }).type === 'per_km_eur'
+		);
+
+		// The proposer, narrative verification, and travel geocoding are all independent I/O — run
+		// them in parallel so neither "AI controleert" nor the PDOK geocode adds wall-clock latency.
+		const [proposal, confirmedNarrativeRuleIds, travelOneWayKm] = await Promise.all([
 			this.proposer.propose({
 				requestType: opportunity.requestType,
 				deliverableHints,
 				bodyText,
 				catalog: proposerCatalog
 			}),
-			this.verifyNarrativeRules(organizationId, activeRuleRows, narrativeContext)
+			this.verifyNarrativeRules(organizationId, activeRuleRows, narrativeContext),
+			this.computeTravelDistanceKm(organizationId, opportunity.address, hasPerKmTravelRule)
 		]);
 
 		// Only structural rules + AI-confirmed narrative rules reach the deterministic engine.
@@ -140,7 +153,8 @@ export class QuoteLineItemsService {
 			proposal: proposal.value,
 			catalogByRef,
 			rules,
-			urgency
+			urgency,
+			travelOneWayKm
 		});
 
 		return {
@@ -166,6 +180,50 @@ export class QuoteLineItemsService {
 		}
 		const rows = await this.pricingPlaybook.listRules(playbook.id);
 		return rows.filter(row => row.active);
+	}
+
+	/**
+	 * One-way straight-line (geocoded) distance in km from the org's base address to the customer, for
+	 * per-km travel rules — the raw PDOK-derived distance, no road-detour factor applied. Best-effort:
+	 * no per-km rule, no customer address, no org `companyAddress`, or a geocode miss → `undefined`
+	 * (the resolver then skips per-km travel — it never fails the quote). Round-trip (×2) is applied
+	 * downstream by the resolver.
+	 */
+	private async computeTravelDistanceKm(
+		organizationId: string,
+		customerAddress: string | null,
+		hasPerKmTravelRule: boolean
+	): Promise<number | undefined> {
+		if (!hasPerKmTravelRule || !customerAddress || customerAddress.trim().length === 0) {
+			return undefined;
+		}
+		// Fail-soft in full: travel is optional, so NOTHING here — the org lookup included — may reject
+		// the parallel quote-generation call. A DB blip or geocode error just skips per-km travel.
+		try {
+			const org = await this.prisma.organization.findUnique({
+				where: { id: organizationId },
+				select: { companyAddress: true }
+			});
+			const baseAddress = org?.companyAddress?.trim();
+			if (!baseAddress) {
+				return undefined;
+			}
+			const [origin, destination] = await Promise.all([
+				this.geocoding.geocode(baseAddress),
+				this.geocoding.geocode(customerAddress)
+			]);
+			if (!origin || !destination) {
+				return undefined;
+			}
+			return haversineKm(origin, destination);
+		} catch (error) {
+			this.logger.warn(
+				`Travel distance lookup failed for org ${organizationId}; skipping per-km travel. ${
+					error instanceof Error ? error.message : 'unknown error'
+				}`
+			);
+			return undefined;
+		}
 	}
 
 	/**

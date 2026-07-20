@@ -18,11 +18,12 @@ import {
 	useGenerateQuotePdf,
 	useGenerateQuotePreview,
 	useReplaceQuoteLines,
+	useSetQuoteDiscount,
 	useUpdateQuoteLineItem
 } from '@/lib/queries/quote-drafts.queries';
 import { vatSettingsQueryOptions } from '@/lib/queries/vat-settings.queries';
 import { toDaysUntil, toReadableDate } from '@/lib/utils/date.utils';
-import { toReadableBytes, toReadableEuro } from '@/lib/utils/number.utils';
+import { toReadableBytes, toReadableEuro, toReadableEuroSigned } from '@/lib/utils/number.utils';
 import { AddCatalogItemsDialog } from '@/routes/(app)/opportunities/-components/Quote/AddCatalogItemsDialog.component';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -48,11 +49,14 @@ import {
 	buildQuoteVatOptionsWithUsed,
 	computeQuoteTotals,
 	getDefaultVatRate,
+	isOrderLevelAdjustmentLine,
 	lineNetCents,
 	pluralize,
 	quoteVatLineToOptionId,
 	quoteVatOptionToLine,
 	type ProposedQuoteLine,
+	type QuoteDiscountInput,
+	type QuoteDiscountType,
 	type QuoteDraft,
 	type QuoteLineItem,
 	type QuotePdf,
@@ -406,7 +410,6 @@ export function QuotePanel({
 									sx={theme => ({
 										ml: 1,
 										px: 0.75,
-										py: 0.25,
 										borderRadius: `${theme.tokens.radius.sm}px`,
 										fontSize: 11,
 										fontWeight: 'bold',
@@ -684,7 +687,9 @@ const DIFF_STATUS_ORDER: QuoteLineDiffStatus[] = ['changed', 'new', 'removed', '
 
 type DiffColorTokens = Theme['tokens']['color'];
 
-function diffMeta(c: DiffColorTokens): Record<QuoteLineDiffStatus, { label: string; bg: string; fg: string; border: string }> {
+function diffMeta(
+	c: DiffColorTokens
+): Record<QuoteLineDiffStatus, { label: string; bg: string; fg: string; border: string }> {
 	return {
 		changed: { label: 'Gewijzigd', bg: c.pending[50], fg: c.pending[700], border: c.pending[500] },
 		new: { label: 'Nieuw', bg: c.won[50], fg: c.won[700], border: c.won[500] },
@@ -896,7 +901,14 @@ function QuoteRegenerateModal({
 					<ButtonBase
 						onClick={() => setUnchangedOpen(prev => !prev)}
 						aria-expanded={unchangedOpen}
-						sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 1.5, color: c.ink3, fontSize: 12 }}
+						sx={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 0.5,
+							mt: 1.5,
+							color: c.ink3,
+							fontSize: 12
+						}}
 					>
 						<AppIcon name={unchangedOpen ? 'chevron-down' : 'chevron-right'} size='small' />
 						{unchangedEntries.length}{' '}
@@ -1108,10 +1120,7 @@ function ChangeDetail({ cur, next, apply }: { cur: QuoteLineItem; next: Proposed
 					<Box component='span' sx={{ color: c.ink4, fontSize: 12 }}>
 						{field.label}
 					</Box>
-					<Box
-						component='span'
-						sx={{ textDecoration: apply ? 'line-through' : 'none', color: c.ink3 }}
-					>
+					<Box component='span' sx={{ textDecoration: apply ? 'line-through' : 'none', color: c.ink3 }}>
 						{field.from}
 					</Box>
 					<AppIcon name='arrow-right' size='small' />
@@ -1237,10 +1246,7 @@ function defaultSelection(entry: QuoteLineDiffEntry): boolean {
 	}
 }
 
-function buildResultLines(
-	entries: QuoteLineDiffEntry[],
-	selection: Record<string, boolean>
-): ReplaceQuoteLineInput[] {
+function buildResultLines(entries: QuoteLineDiffEntry[], selection: Record<string, boolean>): ReplaceQuoteLineInput[] {
 	const result: ReplaceQuoteLineInput[] = [];
 	for (const entry of entries) {
 		if (entry.status === 'unchanged') {
@@ -1293,6 +1299,7 @@ function currentLineToReplaceInput(line: QuoteLineItem): ReplaceQuoteLineInput {
 		wasEditedByUser: line.wasEditedByUser,
 		catalogItemId: line.catalogItemId,
 		appliedRuleId: line.appliedRuleId,
+		ruleEffectType: line.ruleEffectType,
 		note: line.note
 	};
 }
@@ -1309,6 +1316,7 @@ function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineIn
 		wasEditedByUser: false,
 		catalogItemId: line.catalogItemId,
 		appliedRuleId: line.appliedRuleId,
+		ruleEffectType: line.ruleEffectType,
 		note: line.note
 	};
 }
@@ -1480,7 +1488,19 @@ function QuoteDraftEditor({
 		{ id: VAT_ADD_OPTION_ID, icon: 'plus', label: 'Nieuw BTW-tarief' }
 	];
 	const goToVatSettings = () => navigate({ to: '/settings/organization', hash: 'btw-tarieven' });
-	const totals = computeQuoteTotals(draft.lineItems);
+	// Subtotal MODIFIERS (Spoedtoeslag % / Korting / minimum) render in the totals block; fixed COSTS
+	// (Voorrijkosten, hourly work) stay in the line table — split by the persisted rule effect. The
+	// displayed Subtotaal is the pre-discount work net (summed directly); the manual discount then
+	// shows as its own line, and the brackets/total below it are already post-discount.
+	const workLines = draft.lineItems.filter(line => !isOrderLevelAdjustmentLine(line));
+	const adjustmentLines = draft.lineItems.filter(line => isOrderLevelAdjustmentLine(line));
+	const workNetCents = workLines.reduce((sum, line) => sum + lineNetCents(line), 0);
+
+	// The quote-level discount reduces the net; a PERCENT discount is taken off the work Subtotaal (so
+	// "Korting 10%" = 10% of the shown Subtotaal, not the surcharges). VAT is recomputed on the
+	// discounted net; `discountCents` surfaces the applied amount.
+	const discount = draftDiscountInput(draft);
+	const totals = computeQuoteTotals(draft.lineItems, discount, workNetCents);
 	const unpriced = totals.unpricedLineCount;
 
 	// "Toevoegen" opens the add-catalog modal in place (no redirect).
@@ -1578,11 +1598,12 @@ function QuoteDraftEditor({
 	// Row selection for the bulk-delete toolbar. Kept as a Set of line ids; intersected with the
 	// current lines on every read so a regenerate/delete that drops ids can't leave stale selection.
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-	const selectedCount = draft.lineItems.filter(line => selectedIds.has(line.id)).length;
-	const allSelected = draft.lineItems.length > 0 && selectedCount === draft.lineItems.length;
+	// Selection tracks the work rows only — adjustments render in the totals block, not the table.
+	const selectedCount = workLines.filter(line => selectedIds.has(line.id)).length;
+	const allSelected = workLines.length > 0 && selectedCount === workLines.length;
 	const someSelected = selectedCount > 0 && !allSelected;
 
-	const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(draft.lineItems.map(line => line.id)));
+	const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(workLines.map(line => line.id)));
 
 	const toggleOne = (lineId: string) =>
 		setSelectedIds(prev => {
@@ -1655,7 +1676,7 @@ function QuoteDraftEditor({
 							</TableRow>
 						</TableHead>
 						<TableBody>
-							{draft.lineItems.map(line => (
+							{workLines.map(line => (
 								<QuoteLineRow
 									key={line.id}
 									line={line}
@@ -1704,7 +1725,15 @@ function QuoteDraftEditor({
 					</Button>
 				</Box>
 
-				<QuoteTotals totals={totals} reverseChargeLabel={vatConfig.reverseChargeLabel} />
+				<QuoteTotals
+					totals={totals}
+					workNetCents={workNetCents}
+					adjustments={adjustmentLines}
+					draft={draft}
+					opportunityId={opportunityId}
+					quoteDraftId={draft.id}
+					reverseChargeLabel={vatConfig.reverseChargeLabel}
+				/>
 			</Paper>
 
 			<AddCatalogItemsDialog
@@ -1736,11 +1765,295 @@ function QuoteTotalsLine({ label, value }: { label: string; value: string }) {
 	);
 }
 
+/** One order-level adjustment row in the totals block (Spoedtoeslag / Voorrijkosten / Korting /
+ * Minimumordertoeslag): the rule's amount + a Prijsregel chip. Auto-derived, but still removable —
+ * an owner can drop a surcharge from this one quote (it returns on the next regenerate). */
+function QuoteAdjustmentLine({
+	line,
+	opportunityId,
+	quoteDraftId
+}: {
+	line: QuoteLineItem;
+	opportunityId: string;
+	quoteDraftId: string;
+}) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	const toast = useToast();
+	const remove = useDeleteQuoteLineItem(opportunityId);
+
+	return (
+		<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+			<Stack direction='row' useFlexGap spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+				<Box
+					component='span'
+					sx={{
+						fontSize: 13,
+						color: c.ink3,
+						overflow: 'hidden',
+						textOverflow: 'ellipsis',
+						whiteSpace: 'nowrap'
+					}}
+				>
+					{line.description}
+				</Box>
+				<SourceChip source='rule_applied' />
+			</Stack>
+			<Stack direction='row' useFlexGap spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+				<Box
+					component='span'
+					className='tabular'
+					sx={{ fontSize: 14, fontWeight: 'medium', color: c.ink1, whiteSpace: 'nowrap' }}
+				>
+					{toReadableEuroSigned(lineNetCents(line) / 100)}
+				</Box>
+				<IconButton
+					aria-label='Regel verwijderen'
+					size='small'
+					disabled={remove.isPending}
+					onClick={() =>
+						remove.mutate(
+							{ quoteDraftId, lineItemId: line.id },
+							{
+								onError: error =>
+									toast.error(
+										'Verwijderen mislukt',
+										error instanceof Error ? error.message : 'Probeer het opnieuw.'
+									)
+							}
+						)
+					}
+					sx={{ p: 0.5, color: c.lost[700], '&:hover': { backgroundColor: c.paper2, color: c.lost[500] } }}
+				>
+					<AppIcon name='trash' size='small' />
+				</IconButton>
+			</Stack>
+		</Stack>
+	);
+}
+
+/** Build the discount input the totals math expects from a draft's persisted discount fields. */
+function draftDiscountInput(draft: QuoteDraft): QuoteDiscountInput | null {
+	if (!draft.discountType || draft.discountValue === null) {
+		return null;
+	}
+	const value = Number(draft.discountValue);
+	if (!Number.isFinite(value) || value <= 0) {
+		return null;
+	}
+	return { type: draft.discountType, value };
+}
+
+/**
+ * Quote-level "Korting" control in the totals block: a "Korting toevoegen" link when none is set, the
+ * applied discount as a removable/editable line when set, and an inline %/€ editor while editing.
+ */
+function QuoteDiscountEditor({
+	draft,
+	opportunityId,
+	quoteDraftId,
+	discountCents
+}: {
+	draft: QuoteDraft;
+	opportunityId: string;
+	quoteDraftId: string;
+	discountCents: number;
+}) {
+	const { tokens } = useTheme();
+	const c = tokens.color;
+	const toast = useToast();
+	const setDiscount = useSetQuoteDiscount(opportunityId);
+
+	const [editing, setEditing] = useState(false);
+	const [type, setType] = useState<QuoteDiscountType>(draft.discountType ?? 'percent');
+	const [value, setValue] = useState(draft.discountValue ?? '');
+
+	const hasDiscount = draft.discountType !== null && discountCents > 0;
+
+	const openEditor = () => {
+		setType(draft.discountType ?? 'percent');
+		setValue(draft.discountValue ?? '');
+		setEditing(true);
+	};
+
+	const parsed = Number(value.trim().replace(',', '.'));
+	const isValid = value.trim() !== '' && Number.isFinite(parsed) && parsed > 0 && (type === 'eur' || parsed <= 100);
+
+	const apply = () => {
+		if (!isValid || setDiscount.isPending) {
+			return;
+		}
+		// Round to 2 decimals so the value always satisfies the server's money-decimal pattern.
+		setDiscount.mutate(
+			{ quoteDraftId, type, value: String(Math.round(parsed * 100) / 100) },
+			{
+				onSuccess: () => setEditing(false),
+				onError: error =>
+					toast.error(
+						'Korting toepassen mislukt',
+						error instanceof Error ? error.message : 'Probeer het opnieuw.'
+					)
+			}
+		);
+	};
+
+	const clear = () => {
+		if (setDiscount.isPending) {
+			return;
+		}
+		setDiscount.mutate(
+			{ quoteDraftId, type: null, value: null },
+			{
+				onSuccess: () => setEditing(false),
+				onError: error =>
+					toast.error(
+						'Korting verwijderen mislukt',
+						error instanceof Error ? error.message : 'Probeer het opnieuw.'
+					)
+			}
+		);
+	};
+
+	if (editing) {
+		return (
+			<Stack
+				useFlexGap
+				spacing={1.5}
+				sx={{
+					mt: 0.5,
+					p: 1.5,
+					border: `1px solid ${c.lineStrong}`,
+					borderRadius: `${tokens.radius.md}px`,
+					backgroundColor: c.surface
+				}}
+			>
+				<Stack direction='row' useFlexGap spacing={1.5} sx={{ alignItems: 'center' }}>
+					<Box component='span' sx={{ fontSize: 14, fontWeight: 'medium', color: c.ink1 }}>
+						Korting
+					</Box>
+					<Tabs
+						variant='segmented'
+						value={type}
+						onChange={setType}
+						items={[
+							{ id: 'percent', label: '%' },
+							{ id: 'eur', label: '€' }
+						]}
+					/>
+					<StandaloneField
+						name='discount-value'
+						value={value}
+						onChange={event => setValue(event.target.value)}
+						size='small'
+						autoFocus
+						placeholder={type === 'percent' ? '10' : '50'}
+						onKeyDown={event => {
+							if (event.key === 'Enter') {
+								apply();
+							}
+						}}
+						sx={{ ml: 'auto', maxWidth: 120 }}
+					/>
+				</Stack>
+				<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+					<Button variant='text' size='small' color='inherit' onClick={() => setEditing(false)}>
+						Annuleer
+					</Button>
+					<Button
+						variant='contained'
+						size='small'
+						disabled={!isValid || setDiscount.isPending}
+						onClick={apply}
+					>
+						Toepassen
+					</Button>
+				</Stack>
+			</Stack>
+		);
+	}
+
+	if (hasDiscount) {
+		const detail = draft.discountType === 'percent' ? ` (${Number(draft.discountValue)}%)` : '';
+		return (
+			<Stack
+				direction='row'
+				useFlexGap
+				spacing={2}
+				sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+			>
+				<ButtonBase
+					onClick={openEditor}
+					sx={{
+						gap: 0.5,
+						px: 0.5,
+						borderRadius: `${tokens.radius.sm}px`,
+						fontSize: 13,
+						fontWeight: 'medium',
+						color: c.accent[700]
+					}}
+				>
+					<AppIcon name='tag' size='small' /> Korting{detail}
+				</ButtonBase>
+				<Stack direction='row' useFlexGap spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+					<Box
+						component='span'
+						className='tabular'
+						sx={{ fontSize: 14, fontWeight: 'medium', color: c.ink1, whiteSpace: 'nowrap' }}
+					>
+						−{toReadableEuro(discountCents / 100)}
+					</Box>
+					<IconButton
+						aria-label='Korting verwijderen'
+						size='small'
+						disabled={setDiscount.isPending}
+						onClick={clear}
+						sx={{
+							p: 0.5,
+							color: c.lost[700],
+							'&:hover': { backgroundColor: c.paper2, color: c.lost[500] }
+						}}
+					>
+						<AppIcon name='trash' size='small' />
+					</IconButton>
+				</Stack>
+			</Stack>
+		);
+	}
+
+	return (
+		<ButtonBase
+			onClick={openEditor}
+			sx={{
+				alignSelf: 'flex-start',
+				gap: 0.5,
+				px: 0.5,
+				py: 0.25,
+				borderRadius: `${tokens.radius.sm}px`,
+				fontSize: 13,
+				fontWeight: 'medium',
+				color: c.accent[700]
+			}}
+		>
+			<AppIcon name='tag' size='small' /> Korting toevoegen
+		</ButtonBase>
+	);
+}
+
 function QuoteTotals({
 	totals,
+	workNetCents,
+	adjustments,
+	draft,
+	opportunityId,
+	quoteDraftId,
 	reverseChargeLabel
 }: {
 	totals: ReturnType<typeof computeQuoteTotals>;
+	workNetCents: number;
+	adjustments: QuoteLineItem[];
+	draft: QuoteDraft;
+	opportunityId: string;
+	quoteDraftId: string;
 	reverseChargeLabel: string;
 }) {
 	const { tokens } = useTheme();
@@ -1759,7 +2072,24 @@ function QuoteTotals({
 			}}
 		>
 			<Stack useFlexGap spacing={0.5} sx={{ width: 400, maxWidth: '100%' }}>
-				<QuoteTotalsLine label='Subtotaal (excl. btw)' value={toReadableEuro(totals.netCents / 100)} />
+				<QuoteTotalsLine label='Subtotaal (excl. btw)' value={toReadableEuro(workNetCents / 100)} />
+
+				{/* Korting sits directly under the Subtotaal it's computed on; surcharges follow. */}
+				<QuoteDiscountEditor
+					draft={draft}
+					opportunityId={opportunityId}
+					quoteDraftId={quoteDraftId}
+					discountCents={totals.discountCents}
+				/>
+
+				{adjustments.map(line => (
+					<QuoteAdjustmentLine
+						key={line.id}
+						line={line}
+						opportunityId={opportunityId}
+						quoteDraftId={quoteDraftId}
+					/>
+				))}
 
 				{totals.brackets.map(bracket => (
 					<QuoteTotalsLine

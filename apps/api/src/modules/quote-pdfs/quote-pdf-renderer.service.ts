@@ -1,6 +1,12 @@
 import type { QuotePdfLineItem, QuotePdfLineTotals, QuotePdfRenderInput, QuotePdfTotals } from './quote-pdf.types';
 import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
-import { CATALOG_ITEM_UNIT_LABELS_NL } from '@offertum/shared';
+import {
+	CATALOG_ITEM_UNIT_LABELS_NL,
+	computeQuoteTotals,
+	lineNetCents,
+	type QuoteTotalLineInput,
+	type QuoteTotals
+} from '@offertum/shared';
 import { Injectable } from '@nestjs/common';
 import { createElement, type ElementType, type ReactElement, type ReactNode } from 'react';
 
@@ -156,7 +162,16 @@ export class QuotePdfRendererService {
 	}
 
 	private document(input: QuotePdfRenderInput, renderer: ReactPdfRenderer): ReactElement {
-		const totals = calculateTotals(input.lineItems);
+		// Order-level adjustments (Spoedtoeslag/Voorrijkosten/Korting/Minimumordertoeslag) surcharge the
+		// subtotal — render them in the totals block, not among the "Werkzaamheden" rows. Grand totals
+		// still run over every line; only the "Werkzaamheden" table + the "Subtotaal" figure are work-only.
+		const workItems = input.lineItems.filter(item => !item.isAdjustment);
+		const adjustmentItems = input.lineItems.filter(item => item.isAdjustment);
+		// Totals via the shared engine (same as the web editor): per-rate BTW brackets + a quote-level
+		// discount recomputed on the discounted net. `workNetCents` is the pre-discount work subtotal,
+		// and also the base a PERCENT discount is taken from (Korting 10% = 10% of the Subtotaal).
+		const workNetCents = workItems.reduce((sum, item) => sum + lineNetCents(toTotalInput(item)), 0);
+		const totals = computeQuoteTotals(input.lineItems.map(toTotalInput), input.discount, workNetCents);
 		return h(
 			renderer.Document,
 			{
@@ -174,8 +189,8 @@ export class QuotePdfRendererService {
 					: null,
 				this.renderHeader(input, renderer),
 				this.renderParties(input, renderer),
-				this.renderLineItems(input.lineItems, renderer),
-				this.renderTotals(totals, renderer),
+				this.renderLineItems(workItems, renderer),
+				this.renderTotals(totals, workNetCents, adjustmentItems, renderer),
 				this.renderPaymentTerms(input, renderer),
 				this.renderFooter(input, renderer)
 			)
@@ -275,7 +290,12 @@ export class QuotePdfRendererService {
 		);
 	}
 
-	private renderTotals(totals: QuotePdfTotals, renderer: ReactPdfRenderer): ReactElement {
+	private renderTotals(
+		totals: QuoteTotals,
+		workNetCents: number,
+		adjustments: QuotePdfLineItem[],
+		renderer: ReactPdfRenderer
+	): ReactElement {
 		return h(
 			renderer.View,
 			{ style: styles.totals },
@@ -283,13 +303,38 @@ export class QuotePdfRendererService {
 				renderer.View,
 				{ style: styles.totalRow },
 				h(renderer.Text, null, 'Subtotaal'),
-				h(renderer.Text, null, formatEuro(totals.netCents))
+				h(renderer.Text, null, formatEuro(workNetCents))
 			),
-			h(
-				renderer.View,
-				{ style: styles.totalRow },
-				h(renderer.Text, null, 'BTW'),
-				h(renderer.Text, null, formatEuro(totals.vatCents))
+			// Quote-level discount (Korting) sits directly under the Subtotaal it's computed on.
+			totals.discountCents > 0
+				? h(
+						renderer.View,
+						{ style: styles.totalRow },
+						h(renderer.Text, null, 'Korting'),
+						h(renderer.Text, null, `−${formatEuro(totals.discountCents)}`)
+					)
+				: null,
+			// Order-level adjustments (surcharges) follow the discount, before the BTW lines.
+			...adjustments.map(item =>
+				h(
+					renderer.View,
+					{ style: styles.totalRow },
+					h(renderer.Text, null, item.description),
+					h(renderer.Text, null, formatEuroSigned(calculateLineTotals(item).netCents))
+				)
+			),
+			// Per-rate BTW brackets (matches the editor), computed on the post-discount net.
+			...totals.brackets.map(bracket =>
+				h(
+					renderer.View,
+					{ style: styles.totalRow },
+					h(
+						renderer.Text,
+						null,
+						`${bracket.reverseCharged ? 'BTW verlegd' : `BTW ${bracket.vatRate}%`} (over ${formatEuro(bracket.netCents)})`
+					),
+					h(renderer.Text, null, formatEuro(bracket.vatCents))
+				)
 			),
 			h(
 				renderer.View,
@@ -347,6 +392,16 @@ function renderLines(value: string | null, style: unknown, renderer: ReactPdfRen
 	);
 }
 
+/** Map a PDF line to the shared totals-engine input (quantity → decimal string). */
+function toTotalInput(item: QuotePdfLineItem): QuoteTotalLineInput {
+	return {
+		quantity: String(item.quantity),
+		unitPriceEur: item.unitPriceEur,
+		vatRate: item.vatRate,
+		vatReverseCharged: item.vatReverseCharged
+	};
+}
+
 export function calculateTotals(items: QuotePdfLineItem[]): QuotePdfTotals {
 	return items.reduce(
 		(acc, item) => {
@@ -383,6 +438,12 @@ function formatEuro(cents: number): string {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2
 	}).format(cents / 100);
+}
+
+/** Euro with the minus sign BEFORE the symbol for negatives ("−€ 33,00") — for discount/credit rows,
+ * since nl-NL trails it after ("€ -33,00"). */
+function formatEuroSigned(cents: number): string {
+	return cents < 0 ? `−${formatEuro(Math.abs(cents))}` : formatEuro(cents);
 }
 
 function formatQuantity(value: number): string {

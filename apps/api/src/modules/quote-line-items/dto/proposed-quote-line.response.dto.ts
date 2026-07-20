@@ -1,4 +1,10 @@
-import type { CatalogItemUnit, ProposedQuoteLine, ProposeQuoteLinesResponse, QuoteLineSource } from '@offertum/shared';
+import type {
+	CatalogItemUnit,
+	PricingEffectType,
+	ProposedQuoteLine,
+	ProposeQuoteLinesResponse,
+	QuoteLineSource
+} from '@offertum/shared';
 
 export class ProposedQuoteLineDto implements ProposedQuoteLine {
 	description!: string;
@@ -9,6 +15,7 @@ export class ProposedQuoteLineDto implements ProposedQuoteLine {
 	source!: QuoteLineSource;
 	catalogItemId!: string | null;
 	appliedRuleId!: string | null;
+	ruleEffectType!: PricingEffectType | null;
 	note!: string | null;
 }
 

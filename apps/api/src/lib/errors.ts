@@ -182,6 +182,9 @@ export const QUOTE_PDF_EXPIRED = 'Deze offerte-PDF is verlopen. Genereer een nie
 // sent to the customer (status = SENT). Editing lines after send would desync the
 // app's view of the quote from what the customer actually received.
 export const QUOTE_DRAFT_ALREADY_SENT = 'Deze offerte is al verzonden en kan niet meer worden bewerkt.';
+// User-facing — surfaced when a discount value is out of range for its type: a
+// percentage must be 0-100, a euro amount must be non-negative.
+export const INVALID_QUOTE_DISCOUNT = 'Ongeldige korting. Vul een geldig percentage (0-100) of bedrag in.';
 // User-facing — VAT settings must configure at least one active rate (there must always be a
 // rate to preselect on new quote / catalog lines).
 export const VAT_NO_ACTIVE_RATE = 'Er moet minstens één actief BTW-tarief zijn ingesteld.';

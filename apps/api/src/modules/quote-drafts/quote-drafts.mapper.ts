@@ -1,7 +1,7 @@
 import { QUOTE_DRAFT_STATUS_TO_WIRE } from '@/modules/quote-drafts/quote-draft-status.mapper';
 import type { QuoteDraftWithLines } from '@/modules/quote-drafts/quote-drafts.repository';
 import { QUOTE_LINE_SOURCE_TO_WIRE } from '@/modules/quote-drafts/quote-line-source.mapper';
-import type { QuoteDraft, QuoteLineItem } from '@offertum/shared';
+import { isPricingEffectType, type QuoteDraft, type QuoteLineItem } from '@offertum/shared';
 
 /**
  * Map a persisted `QuoteDraft` (with lines) to its wire shape. Decimal columns
@@ -17,7 +17,9 @@ export function toQuoteDraftWire(row: QuoteDraftWithLines): QuoteDraft {
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString(),
 		sentAt: row.sentAt ? row.sentAt.toISOString() : null,
-		validUntil: row.validUntil ? row.validUntil.toISOString() : null
+		validUntil: row.validUntil ? row.validUntil.toISOString() : null,
+		discountType: row.discountType === 'percent' || row.discountType === 'eur' ? row.discountType : null,
+		discountValue: row.discountValue ? row.discountValue.toString() : null
 	};
 }
 
@@ -35,6 +37,8 @@ function toQuoteLineItemWire(line: QuoteDraftWithLines['lineItems'][number]): Qu
 		wasEditedByUser: line.wasEditedByUser,
 		catalogItemId: line.catalogItemId,
 		appliedRuleId: line.appliedRuleId,
+		// Persisted as a free string column; narrow to the union (a legacy/unknown value → null).
+		ruleEffectType: isPricingEffectType(line.ruleEffectType) ? line.ruleEffectType : null,
 		note: line.note
 	};
 }

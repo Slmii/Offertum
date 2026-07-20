@@ -2,6 +2,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import type { QuoteLineSource as PrismaQuoteLineSource } from '@/generated/prisma/enums';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
+import type { PricingEffectType } from '@offertum/shared';
 
 /** Full draft row with its line items, ordered by `position`. */
 export type QuoteDraftWithLines = Prisma.QuoteDraftGetPayload<{ include: { lineItems: true } }>;
@@ -17,6 +18,7 @@ export interface CreateQuoteLineRepoInput {
 	source: PrismaQuoteLineSource;
 	catalogItemId: string | null;
 	appliedRuleId: string | null;
+	ruleEffectType: PricingEffectType | null;
 	note: string | null;
 }
 
@@ -48,6 +50,7 @@ export interface ReplaceQuoteLineRepoInput {
 	source: PrismaQuoteLineSource;
 	catalogItemId: string | null;
 	appliedRuleId: string | null;
+	ruleEffectType: PricingEffectType | null;
 	note: string | null;
 	wasEditedByUser: boolean;
 }
@@ -87,6 +90,7 @@ export class QuoteDraftsRepository {
 						source: line.source,
 						catalogItemId: line.catalogItemId,
 						appliedRuleId: line.appliedRuleId,
+						ruleEffectType: line.ruleEffectType,
 						note: line.note
 					}))
 				}
@@ -108,6 +112,19 @@ export class QuoteDraftsRepository {
 	async findForOrganization(organizationId: string, quoteDraftId: string): Promise<QuoteDraftWithLines | null> {
 		return this.prisma.quoteDraft.findFirst({
 			where: { id: quoteDraftId, organizationId },
+			include: { lineItems: { orderBy: { position: 'asc' } } }
+		});
+	}
+
+	/** Load one draft (with lines) scoped to both the org AND the opportunity it belongs
+	 * to. Null if missing / other tenant / belongs to a different opportunity. */
+	async findForOpportunity(
+		organizationId: string,
+		opportunityId: string,
+		quoteDraftId: string
+	): Promise<QuoteDraftWithLines | null> {
+		return this.prisma.quoteDraft.findFirst({
+			where: { id: quoteDraftId, organizationId, opportunityId },
 			include: { lineItems: { orderBy: { position: 'asc' } } }
 		});
 	}
@@ -157,6 +174,18 @@ export class QuoteDraftsRepository {
 		await this.prisma.quoteLineItem.delete({ where: { id: lineItemId } });
 	}
 
+	/** Set or clear the quote-level discount. Both fields move together. */
+	async updateDiscount(
+		quoteDraftId: string,
+		discountType: string | null,
+		discountValue: string | null
+	): Promise<void> {
+		await this.prisma.quoteDraft.update({
+			where: { id: quoteDraftId },
+			data: { discountType, discountValue, updatedAt: new Date() }
+		});
+	}
+
 	/** Replace every line on a draft atomically (regenerate-merge apply). Bumps the draft's
 	 * `updatedAt` (so the "pricing changed since this quote" staleness check resets) AND resets
 	 * `validUntil` — a regenerate is a fresh quote with current prices, so it earns a fresh
@@ -181,6 +210,7 @@ export class QuoteDraftsRepository {
 					source: line.source,
 					catalogItemId: line.catalogItemId,
 					appliedRuleId: line.appliedRuleId,
+					ruleEffectType: line.ruleEffectType,
 					note: line.note,
 					wasEditedByUser: line.wasEditedByUser
 				}))

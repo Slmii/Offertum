@@ -4,6 +4,7 @@ import { OpportunityKeys } from '@/lib/queries/opportunities.queries';
 import type {
 	CreateQuoteLineItemInput,
 	ProposeQuoteLinesResponse,
+	QuoteDiscountType,
 	QuoteDraft,
 	QuoteDraftListResponse,
 	QuotePdf,
@@ -140,6 +141,28 @@ export function useDeleteQuoteLineItem(opportunityId: string) {
 	return useMutation({
 		mutationFn: ({ quoteDraftId, lineItemId }: { quoteDraftId: string; lineItemId: string }) =>
 			api<QuoteDraft>(`/api/quote-drafts/${quoteDraftId}/line-items/${lineItemId}`, { method: 'DELETE' }),
+		onSuccess: updated => patchDraftInList(queryClient, opportunityId, updated)
+	});
+}
+
+/** PATCH — set or clear the quote-level discount (`type: null` clears). Response carries the draft. */
+export function useSetQuoteDiscount(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({
+			quoteDraftId,
+			type,
+			value
+		}: {
+			quoteDraftId: string;
+			type: QuoteDiscountType | null;
+			value: string | null;
+		}) =>
+			api<QuoteDraft>(`/api/opportunities/${opportunityId}/quote-drafts/${quoteDraftId}/discount`, {
+				method: 'PATCH',
+				body: { type, value }
+			}),
 		onSuccess: updated => patchDraftInList(queryClient, opportunityId, updated)
 	});
 }
