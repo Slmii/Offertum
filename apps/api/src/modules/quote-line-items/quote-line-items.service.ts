@@ -19,7 +19,15 @@ import {
 } from '@/modules/quote-line-items/pricing-rule-narrative-gate';
 import { type ResolverCatalogEntry, resolveQuoteLines } from '@/modules/quote-line-items/quote-line-items.resolver';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { CATALOG_ITEM_UNIT_LABELS_NL, type OpportunityUrgency, type ProposedQuoteLine } from '@offertum/shared';
+import {
+	CATALOG_ITEM_UNIT_LABELS_NL,
+	DEFAULT_NL_VAT_CONFIG,
+	getDefaultVatRate,
+	type OpportunityUrgency,
+	type OrgVatConfig,
+	type ProposedQuoteLine,
+	type VatRateOption
+} from '@offertum/shared';
 
 /** Frozen snapshot of the opportunity inputs the proposer saw, persisted on the
  * `QuoteDraft` for reproducibility + the year-2 self-improvement story. */
@@ -80,9 +88,10 @@ export class QuoteLineItemsService {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
 
-		const [catalogRows, activeRuleRows] = await Promise.all([
+		const [catalogRows, activeRuleRows, defaultVatRate] = await Promise.all([
 			this.catalogItems.listForOrganization(organizationId),
-			this.loadActiveRules(organizationId)
+			this.loadActiveRules(organizationId),
+			this.loadDefaultVatRate(organizationId)
 		]);
 		const activeCatalog = catalogRows.filter(item => item.active);
 
@@ -154,7 +163,8 @@ export class QuoteLineItemsService {
 			catalogByRef,
 			rules,
 			urgency,
-			travelOneWayKm
+			travelOneWayKm,
+			defaultVatRate
 		});
 
 		return {
@@ -180,6 +190,24 @@ export class QuoteLineItemsService {
 		}
 		const rows = await this.pricingPlaybook.listRules(playbook.id);
 		return rows.filter(row => row.active);
+	}
+
+	/**
+	 * The org's configured default VAT rate, for lines the AI proposer/rule engine price without a
+	 * catalog match (catalog rows always carry their own `defaultVatRate`). Mirrors
+	 * `MeService.getVatSettings`'s read + NL-default fallback (a direct Prisma read here rather than
+	 * injecting `MeService`, which pulls in `BillingService`/`ConfigService`/attachment storage this
+	 * service has no other use for).
+	 */
+	private async loadDefaultVatRate(organizationId: string): Promise<number> {
+		const org = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { vatRates: true }
+		});
+		const rates = org.vatRates as unknown as VatRateOption[];
+		const config: OrgVatConfig =
+			Array.isArray(rates) && rates.length > 0 ? { ...DEFAULT_NL_VAT_CONFIG, rates } : DEFAULT_NL_VAT_CONFIG;
+		return getDefaultVatRate(config);
 	}
 
 	/**
