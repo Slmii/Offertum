@@ -1,32 +1,42 @@
 import { describe, expect, it } from '@jest/globals';
 import { daysUntilExpiry } from './expiry.repository';
 
+// NOW = 2026-06-09T08:00:00Z = 2026-06-09 10:00 Europe/Amsterdam (CEST, UTC+2).
 const NOW = new Date('2026-06-09T08:00:00.000Z');
 
-describe('daysUntilExpiry rounds partial days up', () => {
-	it('returns 2 when validUntil is 25h out', () => {
-		const validUntil = new Date(NOW.getTime() + 25 * 60 * 60 * 1000);
-		expect(daysUntilExpiry(validUntil, NOW)).toBe(2);
-	});
-
-	it('returns 1 when validUntil is exactly 24h out', () => {
-		const validUntil = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+describe('daysUntilExpiry diffs local calendar days in Europe/Amsterdam', () => {
+	it('returns 1 when validUntil lands on tomorrow’s local calendar day', () => {
+		// 2026-06-10T09:00:00Z = 11:00 Amsterdam on the 10th — one calendar day ahead of the 9th,
+		// even though it's only 25h of elapsed time.
+		const validUntil = new Date('2026-06-10T09:00:00.000Z');
 		expect(daysUntilExpiry(validUntil, NOW)).toBe(1);
 	});
 
-	it('returns 1 when validUntil is only 1h out (partial day rounds up)', () => {
-		const validUntil = new Date(NOW.getTime() + 1 * 60 * 60 * 1000);
+	it('returns 0 when validUntil lands on the same local calendar day as now', () => {
+		// End-of-day snap: 2026-06-09T21:59:59.999Z = 23:59:59.999 Amsterdam on the 9th — the same
+		// calendar day as NOW, so 0 days left (matches the web's toDaysUntil for the same instant).
+		const validUntil = new Date('2026-06-09T21:59:59.999Z');
+		expect(daysUntilExpiry(validUntil, NOW)).toBe(0);
+	});
+
+	it('returns 1 when validUntil is only 1h of elapsed time into tomorrow’s local calendar day', () => {
+		// 2026-06-09T22:30:00Z = 00:30 Amsterdam on the 10th — rolled onto the next calendar day.
+		const validUntil = new Date('2026-06-09T22:30:00.000Z');
 		expect(daysUntilExpiry(validUntil, NOW)).toBe(1);
 	});
 
-	it('returns 0 or negative when validUntil is already in the past', () => {
-		// The implementation uses Math.ceil without a floor-at-0 guard, so a past date
-		// returns a non-positive value. 2h in the past → Math.ceil(-2/24) = -0 (=== 0 in JS).
-		// A full day in the past → Math.ceil(-1.0) = -1.
-		const twoHoursAgo = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
-		expect(daysUntilExpiry(twoHoursAgo, NOW)).toBeLessThanOrEqual(0);
+	it('returns a negative count when validUntil’s local calendar day is already in the past', () => {
+		// 2026-06-08T21:59:59.999Z = 23:59:59.999 Amsterdam on the 8th — a full calendar day before NOW.
+		const yesterday = new Date('2026-06-08T21:59:59.999Z');
+		expect(daysUntilExpiry(yesterday, NOW)).toBe(-1);
+	});
 
-		const fullDayAgo = new Date(NOW.getTime() - 25 * 60 * 60 * 1000);
-		expect(daysUntilExpiry(fullDayAgo, NOW)).toBe(-1);
+	it('agrees across a DST boundary (CEST → CET) the same way the web’s toDaysUntil does', () => {
+		// now: 2026-10-24T08:00:00Z = 10:00 Amsterdam (still CEST, UTC+2) — the day before the
+		// clocks fall back. validUntil: 2026-10-26T21:59:59.999Z = 23:59:59.999 Amsterdam on the
+		// 26th, now CET (UTC+1). Two local calendar days later despite the DST shift.
+		const now = new Date('2026-10-24T08:00:00.000Z');
+		const validUntil = new Date('2026-10-26T21:59:59.999Z');
+		expect(daysUntilExpiry(validUntil, now)).toBe(2);
 	});
 });
