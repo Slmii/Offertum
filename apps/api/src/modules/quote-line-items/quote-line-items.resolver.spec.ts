@@ -45,7 +45,8 @@ function input(overrides: Partial<ResolveQuoteLinesInput>): ResolveQuoteLinesInp
 		catalogByRef: overrides.catalogByRef ?? new Map(),
 		rules: overrides.rules ?? [],
 		urgency: overrides.urgency ?? 'normal',
-		travelOneWayKm: overrides.travelOneWayKm
+		travelOneWayKm: overrides.travelOneWayKm,
+		defaultVatRate: overrides.defaultVatRate ?? 21
 	};
 }
 
@@ -580,7 +581,9 @@ describe('resolveQuoteLines', () => {
 		);
 
 		// Surcharge is 10% of €100 (catalog line only), not affected by the unpriced line.
-		expect(lines.find(line => line.description.startsWith('Spoedtoeslag'))).toMatchObject({ unitPriceEur: '10.00' });
+		expect(lines.find(line => line.description.startsWith('Spoedtoeslag'))).toMatchObject({
+			unitPriceEur: '10.00'
+		});
 	});
 
 	it('dedupes a catalog ref the model repeated (first wins, no doubled subtotal)', () => {
@@ -623,6 +626,57 @@ describe('resolveQuoteLines', () => {
 		);
 
 		expect(lines[0]?.quantity).toBe(3.33);
+	});
+
+	it('uses the org default VAT rate — not a hardcoded 21% — for an inferred line with no VAT rule', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({
+					inferredLines: [
+						{
+							description: 'Speciaal materiaal',
+							unit: 'piece',
+							quantity: 5,
+							lineKind: 'material',
+							category: null,
+							reason: 'x'
+						}
+					]
+				}),
+				defaultVatRate: 9
+			})
+		);
+
+		expect(lines[0]?.vatRate).toBe(9);
+	});
+
+	it('uses the org default VAT rate — not a hardcoded 21% — for every opp-wide rule line', () => {
+		const lines = resolveQuoteLines(
+			input({
+				proposal: proposal({ catalogLines: [{ ref: 'C1', quantity: 1, reason: 'x' }] }),
+				catalogByRef: catalog([
+					{ id: 'cat-1', name: 'Arbeid', unit: 'hour', unitPriceEur: '100.00', vatRate: 21 }
+				]),
+				urgency: 'emergency',
+				defaultVatRate: 9,
+				rules: [
+					makeRule({
+						ruleType: 'URGENCY',
+						condition: { urgency: 'emergency' },
+						effect: { type: 'surcharge_percent', value: 25 }
+					}),
+					makeRule({ ruleType: 'TRAVEL', effect: { type: 'flat_fee_eur', value: 35 } }),
+					makeRule({ ruleType: 'DISCOUNT', effect: { type: 'discount_percent', value: 10 } }),
+					makeRule({ ruleType: 'MINIMUM_ORDER', effect: { type: 'minimum_eur', value: 1000 } })
+				]
+			})
+		);
+
+		const ruleLines = lines.filter(line => line.source === 'rule_applied');
+		expect(ruleLines.length).toBeGreaterThan(0);
+		for (const line of ruleLines) {
+			expect(line.vatRate).toBe(9);
+		}
 	});
 
 	it('clamps an out-of-range VAT rule rate to a valid percentage', () => {
