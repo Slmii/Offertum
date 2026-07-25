@@ -64,6 +64,7 @@ export class PricingPlaybookCompileFunction {
 				name: 'Pricing playbook compile',
 				triggers: [{ event: InngestEvents.PricingPlaybookSaved }],
 				retries: 2,
+				concurrency: { limit: 1, key: 'event.data.organizationId' },
 				debounce: { period: '5s', key: 'event.data.organizationId' },
 				// All retries exhausted → record FAILED so the settings page shows "Verwerken
 				// mislukt" (and offers a retry). `event` here is the internal function.failed
