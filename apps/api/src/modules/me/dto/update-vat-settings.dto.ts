@@ -2,6 +2,7 @@ import {
 	VAT_RATE_KINDS,
 	VAT_RATE_LABEL_MAX_LENGTH,
 	VAT_RATE_MAX,
+	VAT_RATE_MAX_DECIMALS,
 	VAT_RATE_MIN,
 	VAT_RATES_MAX_COUNT,
 	VAT_REVERSE_CHARGE_LABEL_MAX_LENGTH,
@@ -17,8 +18,8 @@ import {
 	IsArray,
 	IsBoolean,
 	IsIn,
-	IsInt,
 	IsNotEmpty,
+	IsNumber,
 	IsString,
 	Max,
 	MaxLength,
@@ -46,7 +47,7 @@ export class VatRateOptionDto implements VatRateOption {
 	@IsIn(VAT_RATE_KINDS as string[])
 	kind!: VatRateKind;
 
-	@IsInt()
+	@IsNumber({ maxDecimalPlaces: VAT_RATE_MAX_DECIMALS })
 	@Min(VAT_RATE_MIN)
 	@Max(VAT_RATE_MAX)
 	rate!: number;

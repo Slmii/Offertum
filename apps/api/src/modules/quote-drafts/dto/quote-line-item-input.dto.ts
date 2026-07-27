@@ -7,12 +7,14 @@ import {
 } from '@/lib/validators/decimal-string';
 import {
 	QUOTE_LINE_DESCRIPTION_MAX_LENGTH,
+	VAT_RATE_MAX_DECIMALS,
 	type CreateQuoteLineItemInput,
 	type UpdateQuoteLineItemInput
 } from '@offertum/shared';
 import {
 	IsBoolean,
 	IsInt,
+	IsNumber,
 	IsOptional,
 	IsString,
 	Matches,
@@ -46,7 +48,7 @@ export class CreateQuoteLineItemDto implements CreateQuoteLineItemInput {
 	@Matches(MONEY_DECIMAL_PATTERN, { message: `unitPriceEur ${MONEY_DECIMAL_MESSAGE}` })
 	unitPriceEur!: string | null;
 
-	@IsInt()
+	@IsNumber({ maxDecimalPlaces: VAT_RATE_MAX_DECIMALS })
 	@Min(MIN_VAT_RATE)
 	@Max(MAX_VAT_RATE)
 	vatRate!: number;
@@ -80,7 +82,7 @@ export class UpdateQuoteLineItemDto implements UpdateQuoteLineItemInput {
 	unitPriceEur?: string | null;
 
 	@IsOptional()
-	@IsInt()
+	@IsNumber({ maxDecimalPlaces: VAT_RATE_MAX_DECIMALS })
 	@Min(MIN_VAT_RATE)
 	@Max(MAX_VAT_RATE)
 	vatRate?: number;
