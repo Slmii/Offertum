@@ -77,6 +77,19 @@ describe('toCalendarEvents', () => {
 		expect(events.find(e => e.type === 'expiry')).toMatchObject({ id: 'qd-3:expiry', at: '2026-07-01' });
 	});
 
+	it('computes expiry as a calendar-day (DST-safe) addition, not a fixed 24h*days offset', () => {
+		// 2026-03-01 23:30 Amsterdam (CET, UTC+1). +30 calendar days lands on 2026-03-31 — but the
+		// Amsterdam DST spring-forward on 2026-03-29 means a fixed `days * 24h` offset overshoots into
+		// 2026-04-01 (see #63).
+		const events = toCalendarEvents(
+			baseSource({
+				currentQuoteDraft: { id: 'qd-dst', createdAt: new Date('2026-03-01T22:30:00.000Z'), validUntil: null }
+			}),
+			CFG // quoteValidityDays: 30
+		);
+		expect(events.find(e => e.type === 'expiry')).toMatchObject({ id: 'qd-dst:expiry', at: '2026-03-31' });
+	});
+
 	it('suppresses expiry on terminal (WON/LOST) opportunities', () => {
 		for (const status of ['WON', 'LOST'] as const) {
 			const events = toCalendarEvents(
