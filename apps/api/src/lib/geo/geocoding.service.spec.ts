@@ -55,6 +55,47 @@ describe('GeocodingService', () => {
 		expect(await svc.geocode('throws')).toBeNull();
 	});
 
+	it('does not cache a transient failure (non-200) — retries on the next lookup', async () => {
+		const svc = new GeocodingService();
+
+		const failing = stubFetch(async () => ({ ok: false, status: 503, json: async () => ({}) }));
+		expect(await svc.geocode('Damrak 1, Amsterdam')).toBeNull();
+		expect(await svc.geocode('Damrak 1, Amsterdam')).toBeNull();
+		expect(failing).toHaveBeenCalledTimes(2);
+
+		const succeeding = stubFetch(async () => ({
+			ok: true,
+			json: async () => ({ response: { docs: [{ centroide_ll: 'POINT(4.9 52.37)' }] } })
+		}));
+		expect(await svc.geocode('Damrak 1, Amsterdam')).toEqual({ lat: 52.37, lng: 4.9 });
+		expect(succeeding).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not cache a thrown/aborted fetch — retries on the next lookup', async () => {
+		const svc = new GeocodingService();
+
+		global.fetch = jest.fn(async () => {
+			throw new Error('network down');
+		}) as unknown as typeof fetch;
+		expect(await svc.geocode('Damrak 1, Amsterdam')).toBeNull();
+
+		const mock = stubFetch(async () => ({
+			ok: true,
+			json: async () => ({ response: { docs: [{ centroide_ll: 'POINT(4.9 52.37)' }] } })
+		}));
+		expect(await svc.geocode('Damrak 1, Amsterdam')).toEqual({ lat: 52.37, lng: 4.9 });
+		expect(mock).toHaveBeenCalledTimes(1);
+	});
+
+	it('DOES cache a confirmed no-match (real "no docs" response) — does not retry', async () => {
+		const svc = new GeocodingService();
+
+		const mock = stubFetch(async () => ({ ok: true, json: async () => ({ response: { docs: [] } }) }));
+		expect(await svc.geocode('Nergensweg 1')).toBeNull();
+		expect(await svc.geocode('Nergensweg 1')).toBeNull();
+		expect(mock).toHaveBeenCalledTimes(1);
+	});
+
 	it('returns null for an empty address without fetching', async () => {
 		const mock = stubFetch(async () => ({ ok: true, json: async () => ({}) }));
 		expect(await new GeocodingService().geocode('   ')).toBeNull();
