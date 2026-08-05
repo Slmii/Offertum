@@ -18,7 +18,7 @@ export interface VatRateOption {
 	/** Human name as it appears on the settings row (e.g. "Standaardtarief"). */
 	label: string;
 	kind: VatRateKind;
-	/** Percentage, integer. `0` for the zero rate. */
+	/** Percentage, up to `VAT_RATE_MAX_DECIMALS` decimal places. `0` for the zero rate. */
 	rate: number;
 	/** Preselected on new quote / catalog lines. Exactly one active rate is the default. */
 	isDefault: boolean;
@@ -75,6 +75,8 @@ export const DEFAULT_NL_VAT_CONFIG: OrgVatConfig = {
 
 export const VAT_RATE_MIN = 0;
 export const VAT_RATE_MAX = 100;
+/** Matches the `Decimal(5, 2)` columns backing every persisted VAT rate. */
+export const VAT_RATE_MAX_DECIMALS = 2;
 /** Upper bound offered in the add/edit modal (well above any real-world VAT rate). */
 export const VAT_RATE_UI_MAX = 30;
 export const VAT_RATES_MAX_COUNT = 12;
@@ -170,7 +172,14 @@ function orphanRateOptions(config: OrgVatConfig, usedRates: number[]): VatRateOp
 			continue;
 		}
 		seen.add(rate);
-		orphans.push({ id: `orphan-${rate}`, label: formatVatRateLabel(rate), kind: 'standard', rate, isDefault: false, active: true });
+		orphans.push({
+			id: `orphan-${rate}`,
+			label: formatVatRateLabel(rate),
+			kind: 'standard',
+			rate,
+			isDefault: false,
+			active: true
+		});
 	}
 	return orphans;
 }
