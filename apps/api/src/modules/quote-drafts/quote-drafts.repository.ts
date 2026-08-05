@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import type { QuoteLineSource as PrismaQuoteLineSource } from '@/generated/prisma/enums';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
@@ -129,27 +129,34 @@ export class QuoteDraftsRepository {
 		});
 	}
 
-	/** Append an owner-authored line at the next position. Marked edited-by-user. */
+	/** Append an owner-authored line at the next position. Marked edited-by-user.
+	 *
+	 * Locks the parent `QuoteDraft` row for the duration of the transaction so two concurrent
+	 * `addLine` calls on the same draft serialize instead of both reading the same `MAX(position)`
+	 * and inserting duplicate ordinals. */
 	async addLine(quoteDraftId: string, input: AddQuoteLineRepoInput): Promise<void> {
-		const max = await this.prisma.quoteLineItem.aggregate({
-			where: { quoteDraftId },
-			_max: { position: true }
-		});
-		await this.prisma.quoteLineItem.create({
-			data: {
-				quoteDraftId,
-				position: (max._max.position ?? -1) + 1,
-				description: input.description,
-				unit: input.unit,
-				quantity: input.quantity,
-				unitPriceEur: input.unitPriceEur,
-				vatRate: input.vatRate,
-				vatReverseCharged: input.vatReverseCharged,
-				// Owner-authored lines are 'inferred' (not catalog/rule sourced) + count as
-				// edited for the year-2 AI-retention metric.
-				source: 'INFERRED',
-				wasEditedByUser: true
-			}
+		await this.prisma.$transaction(async tx => {
+			await tx.$executeRaw(Prisma.sql`SELECT "id" FROM "QuoteDraft" WHERE "id" = ${quoteDraftId} FOR UPDATE`);
+			const max = await tx.quoteLineItem.aggregate({
+				where: { quoteDraftId },
+				_max: { position: true }
+			});
+			await tx.quoteLineItem.create({
+				data: {
+					quoteDraftId,
+					position: (max._max.position ?? -1) + 1,
+					description: input.description,
+					unit: input.unit,
+					quantity: input.quantity,
+					unitPriceEur: input.unitPriceEur,
+					vatRate: input.vatRate,
+					vatReverseCharged: input.vatReverseCharged,
+					// Owner-authored lines are 'inferred' (not catalog/rule sourced) + count as
+					// edited for the year-2 AI-retention metric.
+					source: 'INFERRED',
+					wasEditedByUser: true
+				}
+			});
 		});
 	}
 
