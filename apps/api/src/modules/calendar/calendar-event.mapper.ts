@@ -1,6 +1,7 @@
 // apps/api/src/modules/calendar/calendar-event.mapper.ts
 import type { OpportunityStatus } from '@/generated/prisma/enums';
 import { BUSINESS_TIME_ZONE } from '@/lib/time/business-time-zone';
+import { endOfDayPlusDaysInTimeZone } from '@/lib/time/timezone';
 import type { CalendarEvent, CalendarEventType } from '@offertum/shared';
 import { CALENDAR_EVENT_TYPE_META } from './calendar-event-type';
 
@@ -21,12 +22,6 @@ export interface OrgCalendarConfig {
 	quoteValidityDays: number;
 	followUpCadenceDays: number;
 	followUpMaxCount: number;
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function addDays(date: Date, days: number): Date {
-	return new Date(date.getTime() + days * DAY_MS);
 }
 
 /**
@@ -102,7 +97,8 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 		// value) fall back to createdAt + the org window.
 		if (src.currentQuoteDraft) {
 			const draft = src.currentQuoteDraft;
-			const expiryAt = draft.validUntil ?? addDays(draft.createdAt, cfg.quoteValidityDays);
+			const expiryAt =
+				draft.validUntil ?? endOfDayPlusDaysInTimeZone(draft.createdAt, cfg.quoteValidityDays, BUSINESS_TIME_ZONE);
 			events.push(buildEvent(`${draft.id}:expiry`, src.opportunityId, 'expiry', label, expiryAt));
 		}
 	}
@@ -123,7 +119,7 @@ export function toCalendarEvents(src: CalendarEventSource, cfg: OrgCalendarConfi
 				src.opportunityId,
 				'follow_up',
 				label,
-				addDays(src.latestSentReplyDraftAt, cfg.followUpCadenceDays)
+				endOfDayPlusDaysInTimeZone(src.latestSentReplyDraftAt, cfg.followUpCadenceDays, BUSINESS_TIME_ZONE)
 			)
 		);
 	}
