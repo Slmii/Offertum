@@ -6,6 +6,8 @@ const line = (over: Partial<QuoteValueLine> = {}): QuoteValueLine => ({
 	unitPriceEur: '100.00',
 	vatRate: 21,
 	vatReverseCharged: false,
+	source: 'catalog_match',
+	ruleEffectType: null,
 	...over
 });
 
@@ -26,5 +28,18 @@ describe('quoteNetEuros', () => {
 
 	it('counts reverse-charge net but no VAT', () => {
 		expect(quoteNetEuros([line({ unitPriceEur: '100.00', vatReverseCharged: true })])).toBe(100);
+	});
+
+	it('applies a percent discount off the work-only subtotal, matching the PDF/editor', () => {
+		expect(quoteNetEuros([line({ unitPriceEur: '100.00' })], { type: 'percent', value: 10 })).toBe(90);
+	});
+
+	it('excludes order-level adjustment lines (e.g. a rule-applied surcharge) from the discount base', () => {
+		const lines = [
+			line({ unitPriceEur: '100.00' }),
+			line({ unitPriceEur: '10.00', source: 'rule_applied', ruleEffectType: 'surcharge_percent' })
+		];
+		// 10% of the €100 work subtotal only, not the €110 total.
+		expect(quoteNetEuros(lines, { type: 'percent', value: 10 })).toBe(100);
 	});
 });

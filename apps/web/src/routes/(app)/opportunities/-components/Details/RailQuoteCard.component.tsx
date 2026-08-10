@@ -2,10 +2,11 @@ import { AppIcon } from '@/components/AppIcon.component';
 import { quoteDraftsQueryOptions } from '@/lib/queries/quote-drafts.queries';
 import { toDaysUntil } from '@/lib/utils/date.utils';
 import { toReadableEuro } from '@/lib/utils/number.utils';
+import { draftDiscountInput } from '@/routes/(app)/opportunities/-components/Quote/QuotePanel.component';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import { useTheme } from '@mui/material/styles';
-import { computeQuoteTotals, pluralize } from '@offertum/shared';
+import { computeQuoteTotals, isOrderLevelAdjustmentLine, lineNetCents, pluralize } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
 /**
@@ -26,7 +27,14 @@ export function RailQuoteCard({ opportunityId, onOpen }: { opportunityId: string
 		return null;
 	}
 
-	const totals = computeQuoteTotals(draft.lineItems);
+	// Mirror QuotePanel's totals math: quote-level discount is taken off the work-only subtotal
+	// (order-level adjustment lines like Spoedtoeslag/minimum excluded), so the rail card matches
+	// the editor and the generated PDF.
+	const workNetCents = draft.lineItems
+		.filter(line => !isOrderLevelAdjustmentLine(line))
+		.reduce((sum, line) => sum + lineNetCents(line), 0);
+	const discount = draftDiscountInput(draft);
+	const totals = computeQuoteTotals(draft.lineItems, discount, workNetCents);
 	const total = toReadableEuro(totals.grossCents / 100);
 	const lineCount = draft.lineItems.length;
 	const unpricedCount = totals.unpricedLineCount;
