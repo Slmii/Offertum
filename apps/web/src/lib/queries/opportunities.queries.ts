@@ -1,5 +1,6 @@
 import { api, WrapperApiError } from '@/lib/api/client';
 import { getOpportunityDetailServer, listOpportunitiesServer } from '@/lib/api/opportunities.api';
+import { QuoteDraftKeys } from '@/lib/queries/quote-drafts.queries';
 import type {
 	AssignOpportunityInput,
 	DismissOpportunityInput,
@@ -383,6 +384,9 @@ export function useSendReplyDraft(opportunityId: string) {
 				};
 			});
 			void queryClient.invalidateQueries({ queryKey: OpportunityKeys.all });
+			// A sent reply with an attached quote flips that QuoteDraft to 'sent' server-side —
+			// refetch so the quote editor's locked-state check sees the current status.
+			void queryClient.invalidateQueries({ queryKey: QuoteDraftKeys.list(opportunityId) });
 		}
 	});
 }

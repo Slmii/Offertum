@@ -1503,6 +1503,11 @@ function QuoteDraftEditor({
 	const totals = computeQuoteTotals(draft.lineItems, discount, workNetCents);
 	const unpriced = totals.unpricedLineCount;
 
+	// The API locks a draft for edits once it's SENT (`assertEditable` in
+	// quote-drafts.service.ts). Mirror that here so add/edit/delete/discount controls disable
+	// instead of round-tripping to the server and failing.
+	const isEditable = draft.status !== 'sent';
+
 	// "Toevoegen" opens the add-catalog modal in place (no redirect).
 	const [addCatalogOpen, setAddCatalogOpen] = useState(false);
 
@@ -1521,6 +1526,22 @@ function QuoteDraftEditor({
 	const expiryDays = draft.validUntil === null ? null : toDaysUntil(draft.validUntil);
 
 	const notices: BannerStackItem[] = [];
+
+	// Already sent — every edit control below is disabled. Point at the existing regenerate flow,
+	// which creates a fresh, editable draft.
+	if (!isEditable) {
+		notices.push({
+			key: 'sent-locked',
+			tone: 'info',
+			title: 'Offerte verzonden — vergrendeld',
+			body: 'Deze offerte is al verstuurd en kan niet meer worden gewijzigd. Genereer een nieuwe versie om iets aan te passen.',
+			action: (
+				<Button color='inherit' size='small' onClick={onRegenerate} disabled={regenerating}>
+					Opnieuw genereren
+				</Button>
+			)
+		});
+	}
 
 	// Pricing rules changed after this draft was generated — offer a non-destructive regenerate.
 	if (pricingStale) {
@@ -1588,6 +1609,7 @@ function QuoteDraftEditor({
 					color='inherit'
 					startIcon={<AppIcon name='plus' size='small' />}
 					onClick={() => setAddCatalogOpen(true)}
+					disabled={!isEditable}
 				>
 					Toevoegen
 				</Button>
@@ -1603,9 +1625,17 @@ function QuoteDraftEditor({
 	const allSelected = workLines.length > 0 && selectedCount === workLines.length;
 	const someSelected = selectedCount > 0 && !allSelected;
 
-	const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(workLines.map(line => line.id)));
+	const toggleAll = () => {
+		if (!isEditable) {
+			return;
+		}
+		setSelectedIds(allSelected ? new Set() : new Set(workLines.map(line => line.id)));
+	};
 
-	const toggleOne = (lineId: string) =>
+	const toggleOne = (lineId: string) => {
+		if (!isEditable) {
+			return;
+		}
 		setSelectedIds(prev => {
 			const next = new Set(prev);
 			if (next.has(lineId)) {
@@ -1615,6 +1645,7 @@ function QuoteDraftEditor({
 			}
 			return next;
 		});
+	};
 
 	const clearSelection = () => setSelectedIds(new Set());
 
@@ -1657,6 +1688,7 @@ function QuoteDraftEditor({
 										checked={allSelected}
 										indeterminate={someSelected}
 										onChange={toggleAll}
+										disabled={!isEditable}
 										slotProps={{ input: { 'aria-label': 'Alle regels selecteren' } }}
 									/>
 								</TableCell>
@@ -1686,6 +1718,7 @@ function QuoteDraftEditor({
 									selected={selectedIds.has(line.id)}
 									onToggleSelect={() => toggleOne(line.id)}
 									onAddVatRate={goToVatSettings}
+									isEditable={isEditable}
 								/>
 							))}
 						</TableBody>
@@ -1719,7 +1752,7 @@ function QuoteDraftEditor({
 								}
 							)
 						}
-						disabled={addLine.isPending}
+						disabled={addLine.isPending || !isEditable}
 					>
 						Regel toevoegen
 					</Button>
@@ -1733,6 +1766,7 @@ function QuoteDraftEditor({
 					opportunityId={opportunityId}
 					quoteDraftId={draft.id}
 					reverseChargeLabel={vatConfig.reverseChargeLabel}
+					isEditable={isEditable}
 				/>
 			</Paper>
 
@@ -1771,11 +1805,13 @@ function QuoteTotalsLine({ label, value }: { label: string; value: string }) {
 function QuoteAdjustmentLine({
 	line,
 	opportunityId,
-	quoteDraftId
+	quoteDraftId,
+	isEditable
 }: {
 	line: QuoteLineItem;
 	opportunityId: string;
 	quoteDraftId: string;
+	isEditable: boolean;
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
@@ -1810,7 +1846,7 @@ function QuoteAdjustmentLine({
 				<IconButton
 					aria-label='Regel verwijderen'
 					size='small'
-					disabled={remove.isPending}
+					disabled={remove.isPending || !isEditable}
 					onClick={() =>
 						remove.mutate(
 							{ quoteDraftId, lineItemId: line.id },
@@ -1852,12 +1888,14 @@ function QuoteDiscountEditor({
 	draft,
 	opportunityId,
 	quoteDraftId,
-	discountCents
+	discountCents,
+	isEditable
 }: {
 	draft: QuoteDraft;
 	opportunityId: string;
 	quoteDraftId: string;
 	discountCents: number;
+	isEditable: boolean;
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
@@ -1871,6 +1909,9 @@ function QuoteDiscountEditor({
 	const hasDiscount = draft.discountType !== null && discountCents > 0;
 
 	const openEditor = () => {
+		if (!isEditable) {
+			return;
+		}
 		setType(draft.discountType ?? 'percent');
 		setValue(draft.discountValue ?? '');
 		setEditing(true);
@@ -1898,7 +1939,7 @@ function QuoteDiscountEditor({
 	};
 
 	const clear = () => {
-		if (setDiscount.isPending) {
+		if (setDiscount.isPending || !isEditable) {
 			return;
 		}
 		setDiscount.mutate(
@@ -1983,6 +2024,7 @@ function QuoteDiscountEditor({
 			>
 				<ButtonBase
 					onClick={openEditor}
+					disabled={!isEditable}
 					sx={{
 						gap: 0.5,
 						px: 0.5,
@@ -2005,7 +2047,7 @@ function QuoteDiscountEditor({
 					<IconButton
 						aria-label='Korting verwijderen'
 						size='small'
-						disabled={setDiscount.isPending}
+						disabled={setDiscount.isPending || !isEditable}
 						onClick={clear}
 						sx={{
 							p: 0.5,
@@ -2018,6 +2060,10 @@ function QuoteDiscountEditor({
 				</Stack>
 			</Stack>
 		);
+	}
+
+	if (!isEditable) {
+		return null;
 	}
 
 	return (
@@ -2046,7 +2092,8 @@ function QuoteTotals({
 	draft,
 	opportunityId,
 	quoteDraftId,
-	reverseChargeLabel
+	reverseChargeLabel,
+	isEditable
 }: {
 	totals: ReturnType<typeof computeQuoteTotals>;
 	workNetCents: number;
@@ -2055,6 +2102,7 @@ function QuoteTotals({
 	opportunityId: string;
 	quoteDraftId: string;
 	reverseChargeLabel: string;
+	isEditable: boolean;
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
@@ -2080,6 +2128,7 @@ function QuoteTotals({
 					opportunityId={opportunityId}
 					quoteDraftId={quoteDraftId}
 					discountCents={totals.discountCents}
+					isEditable={isEditable}
 				/>
 
 				{adjustments.map(line => (
@@ -2088,6 +2137,7 @@ function QuoteTotals({
 						line={line}
 						opportunityId={opportunityId}
 						quoteDraftId={quoteDraftId}
+						isEditable={isEditable}
 					/>
 				))}
 
@@ -2172,7 +2222,8 @@ function QuoteLineRow({
 	vatOptions,
 	selected,
 	onToggleSelect,
-	onAddVatRate
+	onAddVatRate,
+	isEditable
 }: {
 	line: QuoteLineItem;
 	opportunityId: string;
@@ -2181,6 +2232,7 @@ function QuoteLineRow({
 	selected: boolean;
 	onToggleSelect: () => void;
 	onAddVatRate: () => void;
+	isEditable: boolean;
 }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
@@ -2227,6 +2279,7 @@ function QuoteLineRow({
 				<Checkbox
 					checked={selected}
 					onChange={onToggleSelect}
+					disabled={!isEditable}
 					slotProps={{ input: { 'aria-label': 'Regel selecteren' } }}
 				/>
 			</TableCell>
@@ -2236,6 +2289,7 @@ function QuoteLineRow({
 					value={description}
 					fullWidth
 					size='small'
+					disabled={!isEditable}
 					onChange={e => setDescription(e.target.value)}
 					onBlur={() => {
 						const next = description.trim();
@@ -2256,6 +2310,7 @@ function QuoteLineRow({
 					name={`qty-${line.id}`}
 					value={quantity}
 					size='small'
+					disabled={!isEditable}
 					onChange={e => setQuantity(e.target.value)}
 					onBlur={() => {
 						if (quantity !== line.quantity && QUANTITY_PATTERN.test(quantity)) {
@@ -2269,7 +2324,8 @@ function QuoteLineRow({
 			<TableCell align='right'>
 				{unpriced && !editingPrice ? (
 					<ButtonBase
-						onClick={() => setEditingPrice(true)}
+						onClick={() => isEditable && setEditingPrice(true)}
+						disabled={!isEditable}
 						sx={{
 							display: 'inline-flex',
 							alignItems: 'center',
@@ -2297,6 +2353,7 @@ function QuoteLineRow({
 						size='small'
 						placeholder='0.00'
 						autoFocus={editingPrice}
+						disabled={!isEditable}
 						onChange={e => setUnitPrice(e.target.value)}
 						onBlur={() => {
 							const trimmed = unitPrice.trim();
@@ -2319,6 +2376,7 @@ function QuoteLineRow({
 					value={vatValue}
 					size='small'
 					fullWidth
+					disabled={!isEditable}
 					options={vatOptions}
 					onChange={event => {
 						if (event.target.value === VAT_ADD_OPTION_ID) {
@@ -2337,7 +2395,7 @@ function QuoteLineRow({
 			<TableCell align='right'>
 				<IconButton
 					aria-label='Regel verwijderen'
-					disabled={remove.isPending}
+					disabled={remove.isPending || !isEditable}
 					onClick={() =>
 						remove.mutate(
 							{ quoteDraftId, lineItemId: line.id },
