@@ -2,7 +2,9 @@ import { Vertical } from '@/generated/prisma/enums';
 import { MS_PER_HOUR } from '@/lib/time/duration';
 import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
+import { QUOTE_LINE_SOURCE_TO_WIRE } from '@/modules/quote-drafts/quote-line-source.mapper';
 import { Injectable } from '@nestjs/common';
+import type { QuoteDiscountInput } from '@offertum/shared';
 import type { RankableOpportunity } from './ranking';
 import { quoteNetEuros, type QuoteValueLine } from './quote-value';
 
@@ -51,12 +53,16 @@ export class DigestRepository {
 					take: 1,
 					select: {
 						validUntil: true,
+						discountType: true,
+						discountValue: true,
 						lineItems: {
 							select: {
 								quantity: true,
 								unitPriceEur: true,
 								vatRate: true,
-								vatReverseCharged: true
+								vatReverseCharged: true,
+								source: true,
+								ruleEffectType: true
 							}
 						}
 					}
@@ -79,9 +85,12 @@ export class DigestRepository {
 					quantity: line.quantity.toString(),
 					unitPriceEur: line.unitPriceEur === null ? null : line.unitPriceEur.toString(),
 					vatRate: line.vatRate.toNumber(),
-					vatReverseCharged: line.vatReverseCharged
+					vatReverseCharged: line.vatReverseCharged,
+					source: QUOTE_LINE_SOURCE_TO_WIRE[line.source],
+					ruleEffectType: line.ruleEffectType
 				})
 			);
+			const discount = toDiscountInput(latestQuote);
 
 			const firstSentAt = opp.replyDrafts[0]?.sentAt ?? null;
 			// Clamp to 0: a backfilled opp whose sent reply predates `createdAt` would
@@ -95,7 +104,7 @@ export class DigestRepository {
 				opportunityId: opp.id,
 				customerName: opp.customerName,
 				requestType: opp.requestType,
-				quoteNetEuros: latestQuote === null ? 0 : quoteNetEuros(lines),
+				quoteNetEuros: latestQuote === null ? 0 : quoteNetEuros(lines, discount),
 				firstResponseHours,
 				priorCheckInCount: opp._count.replyDrafts,
 				validUntil: latestQuote?.validUntil ?? null,
@@ -116,4 +125,17 @@ export class DigestRepository {
 		]);
 		return { wonCount, lostCount };
 	}
+}
+
+/** Build the totals-engine discount input from a persisted draft's discount columns (`null` = none). Mirrors
+ * `quote-drafts.service.ts`'s `draftDiscount` so the digest's "Waarde" figure agrees with the PDF + editor. */
+function toDiscountInput(quote: { discountType: string | null; discountValue: { toString(): string } | null } | null): QuoteDiscountInput | null {
+	if (quote === null || (quote.discountType !== 'percent' && quote.discountType !== 'eur') || quote.discountValue === null) {
+		return null;
+	}
+	const value = Number(quote.discountValue.toString());
+	if (!Number.isFinite(value) || value <= 0) {
+		return null;
+	}
+	return { type: quote.discountType, value };
 }

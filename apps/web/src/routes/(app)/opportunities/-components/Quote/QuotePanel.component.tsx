@@ -1833,7 +1833,7 @@ function QuoteAdjustmentLine({
 }
 
 /** Build the discount input the totals math expects from a draft's persisted discount fields. */
-function draftDiscountInput(draft: QuoteDraft): QuoteDiscountInput | null {
+export function draftDiscountInput(draft: QuoteDraft): QuoteDiscountInput | null {
 	if (!draft.discountType || draft.discountValue === null) {
 		return null;
 	}
