@@ -60,11 +60,11 @@ export function isEmailChannelAvailable(eventType: NotificationEventType): boole
 }
 
 // Default policy when no NotificationPreference row exists for a (user, event, channel).
-// In-app defaults ON for every event. Email defaults ON only for events where it's
-// available (see EMAIL_CHANNEL_ALLOWED_EVENTS).
+// Email defaults ON for every event where it's available (see EMAIL_CHANNEL_ALLOWED_EVENTS);
+// in-app defaults OFF (opt-in).
 export function defaultNotificationPreference(eventType: NotificationEventType, channel: NotificationChannel): boolean {
-	if (channel === 'in_app') {
-		return true;
+	if (channel === 'email') {
+		return isEmailChannelAvailable(eventType);
 	}
-	return isEmailChannelAvailable(eventType);
+	return false;
 }

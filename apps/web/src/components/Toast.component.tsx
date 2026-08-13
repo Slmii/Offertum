@@ -23,8 +23,12 @@ const TONE_ICON: Record<ToastTone, AppIconName> = {
 	error: 'alert-circle'
 };
 
-/** Resolve the accent color (left border + leading icon) for a tone from the theme tokens. */
-function toneAccent(tokens: AppTokens, tone: ToastTone): string {
+// White text/icons on the filled tone background — the same contrast pairing the DS uses for
+// filled 500 status surfaces (`statusColor(...).contrastText`).
+const TOAST_FG = '#FFFFFF';
+
+/** Resolve the filled background color for a tone from the theme tokens. */
+function toneBg(tokens: AppTokens, tone: ToastTone): string {
 	if (tone === 'success') {
 		return tokens.color.won[500];
 	}
@@ -36,8 +40,9 @@ function toneAccent(tokens: AppTokens, tone: ToastTone): string {
 
 /**
  * Transient notification surface. `role="status"` + `aria-live="polite"` so screen readers
- * announce the message without stealing focus; a left accent border keyed by `tone` mirrors
- * the design. Stacking, auto-dismiss, and enter/exit motion are owned by `ToastProvider`
+ * announce the message without stealing focus; the whole card is filled with the tone color
+ * (green success / red error / indigo info) and text/icons render in white for contrast.
+ * Stacking, auto-dismiss, and enter/exit motion are owned by `ToastProvider`
  * (`use-toast`, backed by react-toastify); this component is the presentational atom and is
  * exported separately so it can be previewed and reused in isolation.
  */
@@ -50,9 +55,8 @@ export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 				display: 'flex',
 				alignItems: 'flex-start',
 				gap: 1.25,
-				bgcolor: theme.tokens.color.surface,
-				border: `1px solid ${theme.tokens.color.line}`,
-				borderLeft: `4px solid ${toneAccent(theme.tokens, tone)}`,
+				bgcolor: toneBg(theme.tokens, tone),
+				color: TOAST_FG,
 				borderRadius: `${theme.tokens.radius.md}px`,
 				py: 1.5,
 				px: 2,
@@ -61,18 +65,19 @@ export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 				boxShadow: theme.tokens.shadow[2]
 			})}
 		>
-			<Box
-				component='span'
-				sx={theme => ({ display: 'inline-flex', mt: 0.25, color: toneAccent(theme.tokens, tone) })}
-			>
+			<Box component='span' sx={{ display: 'inline-flex', mt: 0.25, color: TOAST_FG }}>
 				<AppIcon name={TONE_ICON[tone]} size='medium' filled />
 			</Box>
 
 			<Box sx={{ flex: 1, minWidth: 0 }}>
-				<Body fontWeight='medium' color='text.primary' sx={{ fontSize: 13, lineHeight: 1.4 }}>
+				<Body fontWeight='medium' color={TOAST_FG} sx={{ fontSize: 13, lineHeight: 1.4 }}>
 					{title}
 				</Body>
-				{body && <BodySmall sx={{ fontSize: 12, mt: 0.25, lineHeight: 1.4 }}>{body}</BodySmall>}
+				{body && (
+					<BodySmall color={TOAST_FG} sx={{ fontSize: 12, mt: 0.25, lineHeight: 1.4, opacity: 0.9 }}>
+						{body}
+					</BodySmall>
+				)}
 			</Box>
 
 			{onDismiss && (
@@ -80,7 +85,7 @@ export function Toast({ tone = 'info', title, body, onDismiss }: ToastProps) {
 					aria-label='Melding sluiten'
 					size='small'
 					onClick={onDismiss}
-					sx={theme => ({ color: theme.tokens.color.ink3, m: '-4px -4px -4px 0', p: 0.5 })}
+					sx={{ color: TOAST_FG, opacity: 0.8, m: '-4px -4px -4px 0', p: 0.5, '&:hover': { opacity: 1 } }}
 				>
 					<AppIcon name='x' size='small' />
 				</IconButton>

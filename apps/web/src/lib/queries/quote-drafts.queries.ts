@@ -101,6 +101,18 @@ export function useReplaceQuoteLines(opportunityId: string) {
 	});
 }
 
+/** POST — renew only the draft's expiry (same lines/prices/quote number, fresh "Geldig tot"). */
+export function useRenewQuoteExpiry(opportunityId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		meta: { billingMessage: 'om offertes te vernieuwen' },
+		mutationFn: (quoteDraftId: string) =>
+			api<QuoteDraft>(`/api/opportunities/${opportunityId}/quote-drafts/${quoteDraftId}/renew`, { method: 'POST' }),
+		onSuccess: updated => patchDraftInList(queryClient, opportunityId, updated)
+	});
+}
+
 /** POST — add an owner-authored line to a draft. */
 export function useAddQuoteLineItem(opportunityId: string) {
 	const queryClient = useQueryClient();

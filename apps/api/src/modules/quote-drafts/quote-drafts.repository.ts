@@ -181,6 +181,14 @@ export class QuoteDraftsRepository {
 		await this.prisma.quoteLineItem.delete({ where: { id: lineItemId } });
 	}
 
+	/** Re-stamp ONLY the validity deadline ("Geldig tot"). Deliberately leaves `updatedAt`
+	 * untouched — the lines/prices are unchanged, so the "pricing changed since this quote"
+	 * staleness signal must be preserved (renewing an expiry must never silently clear a real
+	 * stale-pricing warning, unlike a full regenerate which does reset it). */
+	async renewValidUntil(quoteDraftId: string, validUntil: Date): Promise<void> {
+		await this.prisma.quoteDraft.update({ where: { id: quoteDraftId }, data: { validUntil } });
+	}
+
 	/** Set or clear the quote-level discount. Both fields move together. */
 	async updateDiscount(
 		quoteDraftId: string,

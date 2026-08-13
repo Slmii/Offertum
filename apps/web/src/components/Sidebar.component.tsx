@@ -137,6 +137,17 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 	// (e.g. /opportunities/:id, /settings/email) keep their parent nav item active.
 	const isActive = (to: string): boolean => (to === '/' ? pathname === '/' : pathname.startsWith(to));
 
+	// "Instellingen" is a submenu toggle, not a link — clicking it opens the children rather than
+	// navigating to E-mailaccounts. Open state is explicit but synced to the route: entering any
+	// /settings page auto-opens it, leaving auto-closes it (adjust-state-during-render, not an effect).
+	const onSettingsRoute = isActive('/settings');
+	const [settingsOpen, setSettingsOpen] = useState(onSettingsRoute);
+	const [prevOnSettingsRoute, setPrevOnSettingsRoute] = useState(onSettingsRoute);
+	if (onSettingsRoute !== prevOnSettingsRoute) {
+		setPrevOnSettingsRoute(onSettingsRoute);
+		setSettingsOpen(onSettingsRoute);
+	}
+
 	return (
 		<Box
 			component='aside'
@@ -234,11 +245,21 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 					const isSettingsParent = entry.to === SETTINGS_PARENT_ROUTE;
 					// The Instellingen parent stays active on ANY /settings subpage, not just /settings/email.
 					const active = !locked && isActive(isSettingsParent ? '/settings' : entry.to);
-					// Expand the settings children inline while on a settings route (design "Variant B").
-					const showSettingsSub = isSettingsParent && !collapsed && isActive('/settings');
+					// The parent acts as a submenu toggle only in the expanded sidebar; collapsed it stays a
+					// plain link to E-mailaccounts (no room to expand children).
+					const expandable = isSettingsParent && !collapsed;
+					const showSettingsSub = expandable && settingsOpen;
 					return (
 						<Fragment key={entry.to}>
-							<NavItem entry={entry} active={active} collapsed={collapsed} locked={locked} />
+							<NavItem
+								entry={entry}
+								active={active}
+								collapsed={collapsed}
+								locked={locked}
+								expandable={expandable}
+								expanded={settingsOpen}
+								onToggle={() => setSettingsOpen(open => !open)}
+							/>
 							{showSettingsSub && (
 								<SettingsSubNav pathname={pathname} isOwner={isOwner} isEntitled={isEntitled} />
 							)}
@@ -320,41 +341,47 @@ function NavItem({
 	entry,
 	active,
 	collapsed,
-	locked = false
+	locked = false,
+	expandable = false,
+	expanded = false,
+	onToggle
 }: {
 	entry: NavEntry;
 	active: boolean;
 	collapsed: boolean;
 	locked?: boolean;
+	// When true the item is a submenu toggle (button) instead of a navigation link.
+	expandable?: boolean;
+	expanded?: boolean;
+	onToggle?: () => void;
 }) {
 	const { tokens } = useTheme();
 	// A locked (entitlement-gated) item routes to /billing — the "you hit a wall" landing —
 	// instead of its own destination, and is never shown as the active page.
 	const to = locked ? BILLING_ROUTE : entry.to;
-	const item = (
-		<Box
-			component={Link}
-			to={to}
-			aria-current={active ? 'page' : undefined}
-			aria-label={locked ? `${entry.label} — vergrendeld, ga naar Abonnement` : undefined}
-			sx={{
-				position: 'relative',
-				display: 'flex',
-				alignItems: 'center',
-				gap: 1.25,
-				px: collapsed ? 0 : 1.5,
-				py: collapsed ? 1.25 : 1,
-				justifyContent: collapsed ? 'center' : 'flex-start',
-				textDecoration: 'none',
-				borderRadius: `${tokens.radius.md}px`,
-				fontSize: 13,
-				fontWeight: active ? 600 : 500,
-				color: active ? tokens.color.accent[700] : tokens.color.ink3,
-				backgroundColor: active ? tokens.color.accent[50] : 'transparent',
-				transition: `background ${tokens.motion.durBase}ms ${tokens.motion.easeOut}, color ${tokens.motion.durBase}ms ${tokens.motion.easeOut}`,
-				'&:hover': active ? {} : { backgroundColor: tokens.color.paper3, color: tokens.color.ink1 }
-			}}
-		>
+	const sharedSx = {
+		position: 'relative',
+		display: 'flex',
+		alignItems: 'center',
+		gap: 1.25,
+		width: '100%',
+		px: collapsed ? 0 : 1.5,
+		py: collapsed ? 1.25 : 1,
+		justifyContent: collapsed ? 'center' : 'flex-start',
+		textAlign: 'left',
+		textDecoration: 'none',
+		borderRadius: `${tokens.radius.md}px`,
+		fontSize: 13,
+		fontFamily: 'inherit',
+		fontWeight: active ? 600 : 500,
+		color: active ? tokens.color.accent[700] : tokens.color.ink3,
+		backgroundColor: active ? tokens.color.accent[50] : 'transparent',
+		transition: `background ${tokens.motion.durBase}ms ${tokens.motion.easeOut}, color ${tokens.motion.durBase}ms ${tokens.motion.easeOut}`,
+		'&:hover': active ? {} : { backgroundColor: tokens.color.paper3, color: tokens.color.ink1 }
+	} as const;
+
+	const inner = (
+		<>
 			{/* Left accent bar for the active item */}
 			<Box
 				aria-hidden='true'
@@ -380,6 +407,16 @@ function NavItem({
 					{entry.label}
 				</Box>
 			)}
+			{/* Expand/collapse chevron for the submenu-toggle item (expanded sidebar only). */}
+			{!collapsed && expandable && (
+				<Box
+					component='span'
+					aria-hidden='true'
+					sx={{ display: 'inline-flex', flexShrink: 0, color: tokens.color.ink4 }}
+				>
+					<AppIcon name={expanded ? 'chevron-down' : 'chevron-right'} size='small' />
+				</Box>
+			)}
 			{/* Premium padlock — expanded: trailing icon; collapsed: small corner badge. */}
 			{!collapsed && locked && (
 				<Box
@@ -399,6 +436,22 @@ function NavItem({
 					<AppIcon name='lock' size='small' />
 				</Box>
 			)}
+		</>
+	);
+
+	const item = expandable ? (
+		<ButtonBase aria-expanded={expanded} onClick={onToggle} sx={sharedSx}>
+			{inner}
+		</ButtonBase>
+	) : (
+		<Box
+			component={Link}
+			to={to}
+			aria-current={active ? 'page' : undefined}
+			aria-label={locked ? `${entry.label} — vergrendeld, ga naar Abonnement` : undefined}
+			sx={sharedSx}
+		>
+			{inner}
 		</Box>
 	);
 

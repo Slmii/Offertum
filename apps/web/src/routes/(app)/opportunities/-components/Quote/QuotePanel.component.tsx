@@ -5,6 +5,7 @@ import { FlowingGradient } from '@/components/FlowingGradient.component';
 import { StandaloneField } from '@/components/Form/Field/Field.component';
 import { StandaloneSelect } from '@/components/Form/Select/Select.component';
 import { type Option } from '@/components/Form/Select/Select.types';
+import { SplitButton } from '@/components/SplitButton.component';
 import { Tabs } from '@/components/Tabs.component';
 import { BodySmall, H1, H3 } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
@@ -17,6 +18,7 @@ import {
 	useGenerateQuoteDraft,
 	useGenerateQuotePdf,
 	useGenerateQuotePreview,
+	useRenewQuoteExpiry,
 	useReplaceQuoteLines,
 	useSetQuoteDiscount,
 	useUpdateQuoteLineItem
@@ -65,7 +67,7 @@ import {
 } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 // Leading `-` allowed for discount ("Korting") lines; quantity stays non-negative.
 const MONEY_PATTERN = /^-?\d{1,8}(\.\d{1,2})?$/;
@@ -269,6 +271,7 @@ export function QuotePanel({
 	const { data } = useSuspenseQuery(quoteDraftsQueryOptions(opportunityId));
 	const generate = useGenerateQuoteDraft(opportunityId);
 	const preview = useGenerateQuotePreview(opportunityId);
+	const renewExpiry = useRenewQuoteExpiry(opportunityId);
 	const generatePdf = useGenerateQuotePdf(opportunityId);
 	const [regenerateOpen, setRegenerateOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
@@ -291,6 +294,22 @@ export function QuotePanel({
 			onError: error =>
 				toast.error('Nieuw voorstel maken mislukt', error instanceof Error ? error.message : 'Onbekende fout')
 		});
+
+	const onRenewExpiry = () => {
+		if (!latest) {
+			return;
+		}
+
+		renewExpiry.mutate(latest.id, {
+			onSuccess: () =>
+				toast.success(
+					'Vervaldatum vernieuwd',
+					'Dezelfde regels en prijzen blijven staan — de offerte is weer geldig.'
+				),
+			onError: error =>
+				toast.error('Vervaldatum vernieuwen mislukt', error instanceof Error ? error.message : 'Onbekende fout')
+		});
+	};
 
 	const onGenerate = () =>
 		generate.mutate(undefined, {
@@ -354,47 +373,6 @@ export function QuotePanel({
 				</Box>
 				{latest && (
 					<Stack direction='row' useFlexGap spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
-						<Tooltip title='Offertum stelt de offerte opnieuw op aan de hand van de aanvraag en je huidige catalogusprijzen. Regels en bedragen kunnen hierdoor wijzigen.'>
-							<Button
-								variant='outlined'
-								size='large'
-								onClick={openRegenerate}
-								disabled={preview.isPending}
-								startIcon={
-									preview.isPending ? (
-										<CircularProgress size={14} />
-									) : (
-										<AppIcon name='refresh' size='small' />
-									)
-								}
-							>
-								{preview.isPending ? 'Bezig…' : 'Opnieuw genereren'}
-							</Button>
-						</Tooltip>
-						<Button
-							variant='contained'
-							size='large'
-							onClick={onGeneratePdf}
-							disabled={generatePdf.isPending || unpricedCount > 0 || lineCount === 0 || quoteExpired}
-							title={
-								lineCount === 0
-									? 'Voeg eerst een regel toe'
-									: unpricedCount > 0
-										? 'Vul eerst alle prijzen in'
-										: quoteExpired
-											? 'Deze offerte is verlopen — genereer hem opnieuw'
-											: undefined
-							}
-							startIcon={
-								generatePdf.isPending ? (
-									<CircularProgress size={14} color='inherit' />
-								) : (
-									<AppIcon name='file-text' size='small' />
-								)
-							}
-						>
-							{generatePdf.isPending ? 'PDF maken…' : 'Genereer PDF'}
-						</Button>
 						{data.pdfs.length > 0 && (
 							<Button
 								variant='outlined'
@@ -421,6 +399,53 @@ export function QuotePanel({
 								</Box>
 							</Button>
 						)}
+						<SplitButton
+							variant='outlined'
+							color='primary'
+							size='large'
+							fullWidth={false}
+							disabled={preview.isPending || renewExpiry.isPending}
+							ariaLabel='Meer offerte-opties'
+							primary={{
+								label: preview.isPending ? 'Bezig…' : 'Opnieuw genereren',
+								icon: 'refresh',
+								onClick: openRegenerate
+							}}
+							options={[
+								{
+									label: renewExpiry.isPending
+										? 'Vervaldatum vernieuwen…'
+										: 'Alleen vervaldatum vernieuwen',
+									icon: 'calendar-clock',
+									secondaryLabel: 'Zelfde regels en prijzen — nieuwe vervaldatum.',
+									onClick: onRenewExpiry
+								}
+							]}
+						/>
+						<Button
+							variant='contained'
+							size='large'
+							onClick={onGeneratePdf}
+							disabled={generatePdf.isPending || unpricedCount > 0 || lineCount === 0 || quoteExpired}
+							title={
+								lineCount === 0
+									? 'Voeg eerst een regel toe'
+									: unpricedCount > 0
+										? 'Vul eerst alle prijzen in'
+										: quoteExpired
+											? 'Deze offerte is verlopen — genereer hem opnieuw'
+											: undefined
+							}
+							startIcon={
+								generatePdf.isPending ? (
+									<CircularProgress size={14} color='inherit' />
+								) : (
+									<AppIcon name='file-text' size='small' />
+								)
+							}
+						>
+							{generatePdf.isPending ? 'PDF maken…' : 'Genereer PDF'}
+						</Button>
 					</Stack>
 				)}
 			</Stack>
@@ -1321,25 +1346,6 @@ function proposedLineToReplaceInput(line: ProposedQuoteLine): ReplaceQuoteLineIn
 	};
 }
 
-// Persisted collapse preference for the quote-notice bar (mirrors the opportunities-list insights bar).
-const QUOTE_NOTICES_OPEN_KEY = 'offertum.quoteNotices.open';
-
-function readQuoteNoticesOpen(): boolean {
-	try {
-		return localStorage.getItem(QUOTE_NOTICES_OPEN_KEY) === '1';
-	} catch {
-		return false;
-	}
-}
-
-function writeQuoteNoticesOpen(open: boolean): void {
-	try {
-		localStorage.setItem(QUOTE_NOTICES_OPEN_KEY, open ? '1' : '0');
-	} catch {
-		// localStorage unavailable (private mode / SSR) — the preference just won't persist.
-	}
-}
-
 const NOTICE_SEVERITY_ICON: Record<BannerTone, AppIconName> = {
 	info: 'info',
 	success: 'circle-check',
@@ -1351,29 +1357,20 @@ const NOTICE_SEVERITY_ICON: Record<BannerTone, AppIconName> = {
  * Collapsible wrapper around the quote's notice `BannerStack` — used when there are 2+ notices (a
  * single one renders inline), mirroring the opportunities list's `OppInsights` bar so a stack tucks
  * away above the table instead of pushing it down. The summary row (count + flowing accent gradient)
- * stays visible; expanding reveals the full framed stack. Collapsed by default, preference persisted.
+ * stays visible; expanding reveals the full framed stack. Always collapsed on load.
  */
 function CollapsibleQuoteNotices({ notices }: { notices: BannerStackItem[] }) {
 	const { tokens } = useTheme();
 	const c = tokens.color;
 
-	// Collapsed by default; the persisted preference is restored after mount so SSR + the first
-	// client render agree (no hydration mismatch).
+	// Always collapsed on load — the owner expands it when they want to act on the notices.
 	const [open, setOpen] = useState(false);
-	useEffect(() => {
-		// eslint-disable-next-line react-hooks/set-state-in-effect
-		setOpen(readQuoteNoticesOpen());
-	}, []);
 
 	if (notices.length === 0) {
 		return null;
 	}
 
-	const toggle = () => {
-		const next = !open;
-		setOpen(next);
-		writeQuoteNoticesOpen(next);
-	};
+	const toggle = () => setOpen(prev => !prev);
 
 	// Highest severity present only picks the leading icon; the summary always rides the flowing
 	// accent gradient (white text) — the same eye-catcher the opps-list insights bar uses.

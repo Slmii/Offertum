@@ -52,6 +52,18 @@ export class QuoteDraftsController {
 		return this.quoteDrafts.listForOpportunity(request.organizationId!, opportunityId);
 	}
 
+	@ApiOperation({ summary: 'Renew a quote draft validity deadline (same lines, new expiry)' })
+	@ApiOkResponse({ type: QuoteDraftResponseDto })
+	@MemberWrite()
+	@Post(':quoteDraftId/renew')
+	renew(
+		@Req() request: Request,
+		@Param('opportunityId', new ParseUUIDPipe()) opportunityId: string,
+		@Param('quoteDraftId', new ParseUUIDPipe()) quoteDraftId: string
+	): Promise<QuoteDraftResponseDto> {
+		return this.quoteDrafts.renewExpiry(request.organizationId!, opportunityId, quoteDraftId);
+	}
+
 	@ApiOperation({ summary: 'Set or clear the quote-level discount' })
 	@ApiOkResponse({ type: QuoteDraftResponseDto })
 	@MemberWrite()

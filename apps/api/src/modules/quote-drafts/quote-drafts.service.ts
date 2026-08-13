@@ -155,6 +155,25 @@ export class QuoteDraftsService {
 		return this.reload(organizationId, quoteDraftId);
 	}
 
+	/** Renew ONLY the validity deadline of a draft — same lines, same prices, same quote number,
+	 * fresh "Geldig tot" = now + org.quoteValidityDays. Powers the "Alleen vervaldatum vernieuwen"
+	 * action so an expired quote can be re-issued as-is without regenerating (which would re-price
+	 * against current catalog/rules). The pricing-staleness banner is intentionally left as-is. */
+	async renewExpiry(organizationId: string, opportunityId: string, quoteDraftId: string): Promise<QuoteDraft> {
+		const draft = await this.repository.findForOpportunity(organizationId, opportunityId, quoteDraftId);
+		if (!draft) {
+			throw new NotFoundException(QUOTE_DRAFT_NOT_FOUND);
+		}
+		this.assertEditable(draft);
+		const org = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { quoteValidityDays: true, timezone: true }
+		});
+		const validUntil = endOfDayPlusDaysInTimeZone(new Date(), org.quoteValidityDays, org.timezone);
+		await this.repository.renewValidUntil(quoteDraftId, validUntil);
+		return this.reload(organizationId, quoteDraftId);
+	}
+
 	private async loadCatalogItemIds(organizationId: string): Promise<Set<string>> {
 		const rows = await this.catalogItems.listForOrganization(organizationId);
 		return new Set(rows.map(row => row.id));
