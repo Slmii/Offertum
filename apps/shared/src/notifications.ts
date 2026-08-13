@@ -60,11 +60,13 @@ export function isEmailChannelAvailable(eventType: NotificationEventType): boole
 }
 
 // Default policy when no NotificationPreference row exists for a (user, event, channel).
-// Email defaults ON for every event where it's available (see EMAIL_CHANNEL_ALLOWED_EVENTS);
-// in-app defaults OFF (opt-in).
+// In-app defaults ON for every event — `opportunity_created` and `customer_reply` have no
+// email option at all (see EMAIL_CHANNEL_ALLOWED_EVENTS), so an OFF in-app default would leave
+// a user with zero notification for a brand-new quote request or a customer reply until they
+// visit settings. Email defaults ON only for events where it's available.
 export function defaultNotificationPreference(eventType: NotificationEventType, channel: NotificationChannel): boolean {
-	if (channel === 'email') {
-		return isEmailChannelAvailable(eventType);
+	if (channel === 'in_app') {
+		return true;
 	}
-	return false;
+	return isEmailChannelAvailable(eventType);
 }
