@@ -164,7 +164,8 @@ export class QuoteDraftsService {
 		if (!draft) {
 			throw new NotFoundException(QUOTE_DRAFT_NOT_FOUND);
 		}
-		this.assertEditable(draft);
+		// Renewing validUntil doesn't touch lines/pricing, so it's allowed on SENT drafts too —
+		// unlike assertEditable's other callers, which guard against mutating an already-sent quote's content.
 		const org = await this.prisma.organization.findUniqueOrThrow({
 			where: { id: organizationId },
 			select: { quoteValidityDays: true, timezone: true }
