@@ -132,6 +132,9 @@ export class ReplyDraftAttachmentsService {
 		if (!draft) {
 			throw new NotFoundException(OPPORTUNITY_NOT_FOUND);
 		}
+		if (!isReplyDraftEditable({ draftStatus: draft.status })) {
+			throw new ConflictException(REPLY_DRAFT_LOCKED);
+		}
 		await this.removeQuotePdfAttachment(draft.draftId);
 	}
 
