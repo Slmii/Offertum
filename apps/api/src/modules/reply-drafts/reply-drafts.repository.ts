@@ -582,6 +582,7 @@ export class ReplyDraftsRepository {
 					SELECT COUNT(*) FROM "ReplyDraft" rd3
 					WHERE rd3."opportunityId" = o."id"
 					  AND rd3."kind" = ${PrismaReplyDraftKind.CHECK_IN}::"ReplyDraftKind"
+					  AND rd3."status" = ${PrismaReplyDraftStatus.SENT}::"ReplyDraftStatus"
 				) AS "priorCheckInCount"
 			FROM "Opportunity" o
 			JOIN "Organization" org ON org."id" = o."organizationId"
