@@ -281,17 +281,28 @@ export class ExpiryRepository {
 	}
 
 	/**
-	 * Atomically bump a quote draft's validity to 14 days out. Anchors on
-	 * `GREATEST("validUntil", NOW())` so an already-expired quote becomes valid 14 days
-	 * from TODAY instead of e.g. 12 days from yesterday's stale date (Postgres GREATEST
-	 * ignores NULLs, so a missing validUntil also anchors on NOW()). Single statement so
-	 * even the race winner's update can't drift between a read and a write.
+	 * Atomically bump a quote draft's validity to end-of-local-day, 14 CALENDAR days out
+	 * in the owning org's timezone. Anchors on `GREATEST("validUntil", NOW())` so an
+	 * already-expired quote becomes valid 14 days from TODAY instead of e.g. 12 days from
+	 * yesterday's stale date (Postgres GREATEST ignores NULLs, so a missing validUntil
+	 * also anchors on NOW()). The day-math itself happens on the naive (zone-local)
+	 * timestamp — `AT TIME ZONE` in, plain interval arithmetic, `AT TIME ZONE` back out —
+	 * so it adds real calendar days rather than a fixed 336h offset that drifts a day
+	 * across a DST transition (matches `endOfDayPlusDaysInTimeZone`, used everywhere else
+	 * `validUntil` is stamped). Single statement, joined against `Organization` for the
+	 * timezone, so even the race winner's update can't drift between a read and a write.
 	 */
 	async extendValidUntil(quoteDraftId: string): Promise<void> {
 		await this.prisma.$executeRaw(Prisma.sql`
-			UPDATE "QuoteDraft"
-			SET "validUntil" = GREATEST("validUntil", NOW()) + INTERVAL '14 days'
-			WHERE "id" = ${quoteDraftId}::uuid
+			UPDATE "QuoteDraft" qd
+			SET "validUntil" = (
+				(date_trunc('day', (GREATEST(qd."validUntil", NOW()) AT TIME ZONE o."timezone"))
+					+ INTERVAL '15 days' - INTERVAL '1 millisecond')
+				AT TIME ZONE o."timezone"
+			)
+			FROM "Organization" o
+			WHERE qd."id" = ${quoteDraftId}::uuid
+			  AND o."id" = qd."organizationId"
 		`);
 	}
 
