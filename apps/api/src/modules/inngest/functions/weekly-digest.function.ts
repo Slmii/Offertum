@@ -97,8 +97,11 @@ export class WeeklyDigestFunction {
 					const byTimeZone = new Map<string, string[]>();
 					for (const org of orgs) {
 						const ids = byTimeZone.get(org.timezone);
-						if (ids) ids.push(org.id);
-						else byTimeZone.set(org.timezone, [org.id]);
+						if (ids) {
+							ids.push(org.id);
+						} else {
+							byTimeZone.set(org.timezone, [org.id]);
+						}
 					}
 
 					const recipients: Array<{
@@ -135,8 +138,11 @@ export class WeeklyDigestFunction {
 				const byOrg = new Map<string, typeof due>();
 				for (const row of due) {
 					const existing = byOrg.get(row.organizationId);
-					if (existing) existing.push(row);
-					else byOrg.set(row.organizationId, [row]);
+					if (existing) {
+						existing.push(row);
+					} else {
+						byOrg.set(row.organizationId, [row]);
+					}
 				}
 
 				let dispatched = 0;
