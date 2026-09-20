@@ -103,6 +103,21 @@ export class ReplyDraftAttachmentsService {
 			throw new BadRequestException(QUOTE_PDF_EXPIRED);
 		}
 
+		// Check the same caps upload() enforces, accounting for the slot/bytes the existing
+		// quote-PDF attachment (if any) will free up once replaced below.
+		const existingQuotePdf = await this.repository.findQuotePdfAttachment(draft.draftId);
+		const attachmentCountAfterRemoval = existingQuotePdf ? draft.attachmentCount - 1 : draft.attachmentCount;
+		const attachmentTotalBytesAfterRemoval = existingQuotePdf
+			? draft.attachmentTotalBytes - existingQuotePdf.sizeBytes
+			: draft.attachmentTotalBytes;
+		if (attachmentCountAfterRemoval >= ATTACHMENT_MAX_PER_DRAFT) {
+			throw new BadRequestException(attachmentCountExceeded(ATTACHMENT_MAX_PER_DRAFT));
+		}
+		const projectedTotal = attachmentTotalBytesAfterRemoval + pdf.sizeBytes;
+		if (projectedTotal > ATTACHMENT_MAX_TOTAL_BYTES) {
+			throw new PayloadTooLargeException(attachmentTotalTooLarge(projectedTotal, ATTACHMENT_MAX_TOTAL_BYTES));
+		}
+
 		await this.removeQuotePdfAttachment(draft.draftId);
 
 		// Copy the version's bytes into a draft-scoped attachment so the two have
