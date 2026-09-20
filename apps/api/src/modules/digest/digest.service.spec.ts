@@ -40,7 +40,13 @@ interface Fakes {
 	expiryRepository: jest.Mocked<Pick<ExpiryRepository, 'findExpiringCallouts'>>;
 	notifications: jest.Mocked<Pick<NotificationsService, 'notifyUsers' | 'webOrigin'>>;
 	notificationsRepository: jest.Mocked<
-		Pick<NotificationsRepository, 'findOrganizationUsers' | 'findUserIdsWithRecentDigest'>
+		Pick<
+			NotificationsRepository,
+			| 'findOrganizationUsers'
+			| 'findOrganizationTimeZone'
+			| 'claimDigestDeliveries'
+			| 'releaseDigestDeliveries'
+		>
 	>;
 	logService: jest.Mocked<Pick<LogService, 'logAction'>>;
 }
@@ -56,12 +62,21 @@ function makeFakes(): Fakes {
 			findExpiringCallouts: jest.fn(async () => [])
 		},
 		notifications: {
-			notifyUsers: jest.fn(async () => undefined),
+			notifyUsers: jest.fn(async (input: { userIds: ReadonlyArray<string> }) => ({
+				deliveredUserIds: [...input.userIds],
+				failedUserIds: []
+			})),
 			webOrigin: jest.fn(() => 'https://app.example.com')
 		},
 		notificationsRepository: {
 			findOrganizationUsers: jest.fn(),
-			findUserIdsWithRecentDigest: jest.fn()
+			findOrganizationTimeZone: jest.fn(async () => 'Europe/Amsterdam'),
+			// Default: every target is claimed (nobody has been delivered today yet).
+			claimDigestDeliveries: jest.fn(
+				async (_event, _periodKey, targets: ReadonlyArray<{ userId: string; organizationId: string }>) =>
+					new Set(targets.map(t => `${t.organizationId}:${t.userId}`))
+			),
+			releaseDigestDeliveries: jest.fn(async () => undefined)
 		},
 		logService: {
 			logAction: jest.fn()
@@ -94,7 +109,6 @@ describe('DigestService.runDailyDigest', () => {
 		fakes.digestRepository.findRankableOpportunities.mockResolvedValue([LOW, HIGH, MID]);
 		fakes.digestRepository.countClosedOutcomes.mockResolvedValue({ wonCount: 5, lostCount: 3 });
 		fakes.notificationsRepository.findOrganizationUsers.mockResolvedValue(USERS);
-		fakes.notificationsRepository.findUserIdsWithRecentDigest.mockResolvedValue(new Set());
 
 		const service = makeService(fakes);
 		const result = await service.runDailyDigest(NOW);
@@ -127,7 +141,6 @@ describe('DigestService.runDailyDigest', () => {
 			{ opportunityId: 'opp-expiring', customerName: 'Bakker', daysUntilExpiry: 3 }
 		]);
 		fakes.notificationsRepository.findOrganizationUsers.mockResolvedValue(USERS);
-		fakes.notificationsRepository.findUserIdsWithRecentDigest.mockResolvedValue(new Set());
 
 		const service = makeService(fakes);
 		await service.runDailyDigest(NOW);
@@ -139,14 +152,15 @@ describe('DigestService.runDailyDigest', () => {
 		expect(html).toContain('https://app.example.com/opportunities/opp-expiring');
 	});
 
-	it('skips users already notified within the idempotency window', async () => {
+	it('skips users whose delivery for this period was already claimed', async () => {
 		fakes.digestRepository.findEntitledOrganizations.mockResolvedValue([
 			{ id: 'org-1', vertical: 'OVERIG', followUpCadenceDays: 4 }
 		]);
 		fakes.digestRepository.findRankableOpportunities.mockResolvedValue([HIGH, MID]);
 		fakes.digestRepository.countClosedOutcomes.mockResolvedValue({ wonCount: 0, lostCount: 0 });
 		fakes.notificationsRepository.findOrganizationUsers.mockResolvedValue(USERS);
-		fakes.notificationsRepository.findUserIdsWithRecentDigest.mockResolvedValue(new Set(['user-1', 'user-2']));
+		// Both rows already exist for today's period key, so the claim insert returns nothing.
+		fakes.notificationsRepository.claimDigestDeliveries.mockResolvedValue(new Set());
 
 		const service = makeService(fakes);
 		const result = await service.runDailyDigest(NOW);
@@ -174,7 +188,6 @@ describe('DigestService.runDailyDigest', () => {
 		fakes.digestRepository.findRankableOpportunities.mockResolvedValue(SIX);
 		fakes.digestRepository.countClosedOutcomes.mockResolvedValue({ wonCount: 5, lostCount: 3 });
 		fakes.notificationsRepository.findOrganizationUsers.mockResolvedValue(USERS);
-		fakes.notificationsRepository.findUserIdsWithRecentDigest.mockResolvedValue(new Set());
 
 		const service = makeService(fakes);
 		await service.runDailyDigest(NOW);
@@ -202,7 +215,6 @@ describe('DigestService.runDailyDigest', () => {
 		fakes.digestRepository.findRankableOpportunities.mockResolvedValue([]);
 		fakes.digestRepository.countClosedOutcomes.mockResolvedValue({ wonCount: 0, lostCount: 0 });
 		fakes.notificationsRepository.findOrganizationUsers.mockResolvedValue([]);
-		fakes.notificationsRepository.findUserIdsWithRecentDigest.mockResolvedValue(new Set());
 
 		const service = makeService(fakes);
 		const result = await service.runDailyDigest(NOW);

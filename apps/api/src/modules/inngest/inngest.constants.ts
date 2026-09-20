@@ -17,6 +17,14 @@
  */
 
 export const InngestEvents = {
+	/**
+	 * Fired by `EmailAccountsService` when a mailbox soft-disconnects (its refresh token was
+	 * rejected upstream). Payload: `{ emailAccountId, organizationId, userId, mailboxEmail, provider }`.
+	 * Routed through Inngest rather than notified inline so delivery is retried — an alert that
+	 * the mailbox stopped working is worthless if one transient send failure drops it, and the
+	 * `disconnectedAt` guard means the disconnect path can never fire it a second time.
+	 */
+	MailboxIssueDetected: 'mailbox/issue.detected',
 	/** Fired by `EmailAccountsService.upsertEmailAccount` after a successful Gmail OAuth handshake. */
 	GmailAccountConnected: 'gmail/account.connected',
 	/** Fired by `EmailAccountsService.upsertEmailAccount` after a successful Microsoft OAuth handshake. */
@@ -108,6 +116,9 @@ export const InngestFunctionIds = {
 	 *  toward expiry without a customer reply + persists one AI-suggested ExpiryAction
 	 *  per candidate. */
 	ExpiryWatcher: 'expiry-watcher',
+	/** Mailbox issue — fires on `mailbox/issue.detected`. Delivers the critical alert that a
+	 *  connected inbox lost access, with Inngest retries behind it. */
+	MailboxIssueNotify: 'mailbox-issue-notify',
 	/** Pricing-playbook compile — fires on `pricing-playbook/saved` events. Debounced
 	 *  5s so rapid typed-saves collapse into one LLM call. Runs the prose through
 	 *  the AI client, applies the compiled rules with manual-override preservation. */
@@ -182,13 +193,21 @@ export const InngestSteps = {
 		/** Single step: re-validate eligibility + generate the check-in draft. */
 		Generate: 'follow-up-processor-generate'
 	},
+	MailboxIssueNotify: {
+		/** Single step: resolve recipients + deliver the critical mailbox alert. */
+		Notify: 'mailbox-issue-notify'
+	},
 	WeeklyDigest: {
-		/** Single step: enumerate orgs + their users + send digest emails. */
-		Dispatch: 'weekly-digest-dispatch'
+		/** Resolve which users are due this period, across every entitled org, in one query. */
+		Dispatch: 'weekly-digest-dispatch',
+		/** Per-org dispatch, memoized by org id so a retry skips orgs already sent. */
+		OrgPrefix: 'weekly-digest-org'
 	},
 	DailyDigest: {
-		/** Single step: invoke DigestService.runDailyDigest + log tick summary. */
-		Dispatch: 'daily-digest-dispatch'
+		/** Enumerate entitled orgs. */
+		Dispatch: 'daily-digest-dispatch',
+		/** Per-org dispatch, memoized by org id so a retry skips orgs already sent. */
+		OrgPrefix: 'daily-digest-org'
 	},
 	AutoColdScheduler: {
 		/** Step 1: query candidates + flip status + audit-log; returns the notify targets. */

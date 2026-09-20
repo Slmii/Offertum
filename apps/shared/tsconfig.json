@@ -9,5 +9,7 @@
 		"declarationMap": true,
 		"sourceMap": true
 	},
-	"include": ["src"]
+	"include": ["src"],
+	// Tests are run by vitest (esbuild), never emitted into dist/.
+	"exclude": ["src/**/*.test.ts"]
 }

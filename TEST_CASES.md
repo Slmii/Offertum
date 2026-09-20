@@ -1474,6 +1474,97 @@ Verifies that disconnecting a mailbox preserves `Opportunity` + `RawMessage` his
 - [ ] Open a `new` opp. Select `new` again from the dropdown.
 - [ ] **Expect** no DB write (the service short-circuits the same-status path). UI reflects the unchanged state.
 
+## Notification settings — cadence + quiet hours
+
+### NOTIF-SET-01: Defaults render without a stored row
+
+- [ ] Sign in as a user who has never opened `/settings/notifications`. `db:studio` shows no `NotificationSetting` row for them.
+- [ ] Open `/settings/notifications`. **Expect** the Cadans card reads Maandag / 08:00, quiet hours 19:00–07:30 with the toggle **off**.
+- [ ] Confirm still no row was written — reads fall back to `DEFAULT_NOTIFICATION_SETTINGS`, they are not persisted on view.
+
+### NOTIF-SET-02: Save snaps the digest time to the quarter hour
+
+- [ ] Set the weekly digest time to `08:55`, blur the field.
+- [ ] **Expect** it saves and settles on `09:00` — the nearest grid point, NOT `08:45`.
+- [ ] Repeat with `08:07` → `08:00`, `08:08` → `08:15`, `23:58` → `23:45` (clamps, never wraps to the next day).
+- [ ] `db:studio`: `weeklyDigestHour`/`weeklyDigestMinute` match, and minute ∈ {0,15,30,45}.
+
+### NOTIF-SET-03: Equal quiet-hours bounds are rejected
+
+- [ ] Enable quiet hours, set both start and end to `22:00`, save.
+- [ ] **Expect** `400` with "Begin- en eindtijd van stille uren mogen niet gelijk zijn." surfaced as a toast; nothing is persisted.
+- [ ] Set end to `22:15` → saves fine. (A zero-length window is empty, not "always quiet" — the toggle must never read enabled while every email still goes out.)
+
+### NOTIF-SET-04: Quiet hours suppress email but not the bell
+
+- [ ] Enable quiet hours covering now. Trigger an `opportunity_created` (live delta-sync, or fire the Inngest event).
+- [ ] **Expect** no email. **Expect** the bell entry IS written — in-app rows are passive and still persist.
+- [ ] `Log` shows no `notification.email.send_failed`; the email was suppressed, not failed.
+
+### NOTIF-SET-05: Digests and critical events ignore quiet hours
+
+- [ ] With quiet hours covering the configured digest slot, let the weekly digest fire.
+- [ ] **Expect** the digest email is delivered — the user chose that time deliberately.
+- [ ] Same for `mailbox_issue` (see MAILBOX-ISSUE-01): critical events always break through.
+
+## Digest scheduling (delivery claims)
+
+### DIGEST-SLOT-01: Digest arrives at the configured slot
+
+- [ ] Set the weekly digest to today, a few minutes from now. Ensure the org is entitled.
+- [ ] **Expect** within one 15-minute tick: one email + one bell entry, and one `DigestDelivery` row with `eventType=WEEKLY_DIGEST` and `periodKey` = the current ISO week (`2026-W38` shape).
+
+### DIGEST-SLOT-02: A late tick still delivers
+
+- [ ] Set a slot, then stop the Inngest dev server past that slot (simulating a missed tick). Restart within 6 hours.
+- [ ] **Expect** the next tick still delivers — the scheduler asks "is this slot due and unsent", not "does it equal this tick".
+- [ ] Repeat with a gap longer than `DIGEST_CATCH_UP_MINUTES` (6h): **expect** no delivery, and no row. (Deliberate: a mid-week user should not be blasted with a digest whose default slot already passed.)
+
+### DIGEST-SLOT-03: A second tick cannot double-send
+
+- [ ] After DIGEST-SLOT-01 delivers, Invoke `notifications-weekly-digest` manually from the Inngest UI several times within the same week.
+- [ ] **Expect** zero additional emails; the run reports `recipients: 0`. The `DigestDelivery` unique index is the guard, so this holds across separate runs, not just retries.
+
+### DIGEST-DST-01: Autumn repeated hour delivers once
+
+- [ ] In `db:studio`, set a user's slot to Sunday 02:30. Re-point the clock (or reason it through) at the last Sunday of October, when Amsterdam local 02:30 occurs twice.
+- [ ] **Expect** exactly one digest. Both occurrences resolve to the same `periodKey`, so the second claim conflicts and is skipped.
+
+### DIGEST-DST-02: Spring gap still delivers
+
+- [ ] Same slot (Sunday 02:30), last Sunday of March, when Amsterdam jumps 01:59 → 03:00 and 02:30 never occurs.
+- [ ] **Expect** the digest is delivered at the first tick after the gap (03:00), not skipped for the week.
+
+### DIGEST-CLAIM-01: A failed send releases the claim
+
+- [ ] Force `sendEmail` to throw (unset `RESEND_API_KEY` or point it at a bad host) and let a due slot fire.
+- [ ] **Expect** the step fails, and no `DigestDelivery` row survives for that (user, period) — so the retry can deliver.
+
+### DIGEST-DAILY-01: Daily digest claims per calendar day
+
+- [ ] Let the daily digest run. **Expect** one `DigestDelivery` row per recipient with `eventType=DAILY_DIGEST` and `periodKey` = today's local date.
+- [ ] Invoke `daily-digest` again the same day. **Expect** `recipients: 0`, `skippedDuplicate` equal to the org's member count, and no second email — including for users who never opted into in-app (the old 12h window only ever guarded in-app users).
+
+## Mailbox issue (critical notification)
+
+### MAILBOX-ISSUE-01: Disconnect alerts the connector and the owners
+
+- [ ] Connect a mailbox as a MEMBER. In `db:studio` corrupt the stored refresh token so the next refresh returns `invalid_grant`.
+- [ ] Load `/settings/email` to trigger the self-heal.
+- [ ] **Expect** `EmailAccount.disconnectedAt` set, a `mailbox/issue.detected` run in the Inngest UI, and an email + bell entry for BOTH the connecting member and every org OWNER.
+- [ ] **Expect** the HTTP request still returns the normal `EMAIL_ACCOUNT_NOT_FOUND` — notification failure must never mask it.
+
+### MAILBOX-ISSUE-02: Delivery is retried, not dropped
+
+- [ ] Break email sending (as in DIGEST-CLAIM-01), then trigger a disconnect.
+- [ ] **Expect** the `mailbox-issue-notify` run fails and Inngest retries it. Restore email sending; **expect** a retry to deliver.
+- [ ] (Pre-fix, the alert was sent inline exactly once — the `disconnectedAt: null` guard meant no later attempt could ever re-fire it, so a single transient failure lost it permanently.)
+
+### MAILBOX-ISSUE-03: Not user-configurable
+
+- [ ] Open `/settings/notifications`. **Expect** NO toggle row for mailbox issues — critical events are excluded from `PREFERENCE_EVENT_TYPES`.
+- [ ] Turn every other toggle off and enable quiet hours covering now, then trigger a disconnect. **Expect** the alert still arrives on both channels.
+
 ---
 
 ## How to maintain this doc

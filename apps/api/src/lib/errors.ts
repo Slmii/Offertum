@@ -279,3 +279,11 @@ export const EXPIRY_ACTION_ALREADY_RESOLVED = 'This expiry suggestion has alread
 export const ICAL_FEED_TOKEN_NOT_FOUND = 'Calendar feed not found.';
 export const ICAL_FEED_NO_ORGANIZATION = 'The calendar feed owner has no active organization.';
 export const CALENDAR_INVALID_DATE_RANGE = 'Query params `from` and `to` must be valid ISO dates.';
+
+// ── Notification settings ─────────────────────────────────────────────────────
+// User-facing — surfaced when the cadence/quiet-hours PUT carries a malformed time
+// ("HH:MM" expected) or an unknown weekday.
+export const INVALID_NOTIFICATION_SETTINGS_TIME = 'Tijd moet in het formaat UU:MM staan.';
+export const INVALID_NOTIFICATION_SETTINGS_DAY = 'Ongeldige dag voor de wekelijkse samenvatting.';
+// Quiet hours with identical start and end describe an empty window, not a full day.
+export const INVALID_QUIET_HOURS_RANGE = 'Begin- en eindtijd van stille uren mogen niet gelijk zijn.';

@@ -36,6 +36,7 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import Tooltip from '@mui/material/Tooltip';
 import { type Theme } from '@mui/material/styles';
 import {
 	isPricingEffectType,
@@ -760,43 +761,44 @@ function TypeBadge({ icon }: { icon: AppIconName }) {
 /** "Offertum controleert" — the AI verifies this free-text condition at quote time (dashed = probabilistic). */
 function AiConditionChip({ condition }: { condition: string }) {
 	return (
-		<Stack
-			direction='row'
-			useFlexGap
-			spacing={0.75}
-			title={`Offertum controleert deze conditie bij elke offerte: ${condition}`}
-			sx={theme => ({
-				display: 'inline-flex',
-				alignItems: 'center',
-				maxWidth: '100%',
-				py: 0.5,
-				pl: 1,
-				pr: 1.25,
-				borderRadius: `${theme.tokens.radius.sm}px`,
-				color: theme.tokens.color.accent[700],
-				backgroundColor: theme.tokens.color.accent[50],
-				border: `1px dashed ${theme.tokens.color.accent[300]}`
-			})}
-		>
-			<AppIcon name='sparkles' size='small' filled />
-			<BodySmall fontWeight='medium' sx={{ fontSize: 12, color: 'inherit', flexShrink: 0 }}>
-				Offertum controleert
-			</BodySmall>
-			<BodySmall
-				sx={{
-					fontSize: 12,
-					color: 'inherit',
-					fontStyle: 'italic',
-					opacity: 0.85,
-					overflow: 'hidden',
-					textOverflow: 'ellipsis',
-					whiteSpace: 'nowrap',
-					minWidth: 0
-				}}
+		<Tooltip title='Offertum controleert deze conditie bij elke offerte'>
+			<Stack
+				direction='row'
+				useFlexGap
+				spacing={0.75}
+				sx={theme => ({
+					display: 'inline-flex',
+					alignItems: 'center',
+					maxWidth: '100%',
+					py: 0.5,
+					pl: 1,
+					pr: 1.25,
+					borderRadius: `${theme.tokens.radius.sm}px`,
+					color: theme.tokens.color.accent[700],
+					backgroundColor: theme.tokens.color.accent[50],
+					border: `1px dashed ${theme.tokens.color.accent[300]}`
+				})}
 			>
-				{condition}
-			</BodySmall>
-		</Stack>
+				<AppIcon name='sparkles' size='small' filled />
+				<BodySmall fontWeight='medium' sx={{ fontSize: 12, color: 'inherit', flexShrink: 0 }}>
+					Offertum controleert
+				</BodySmall>
+				<BodySmall
+					sx={{
+						fontSize: 12,
+						color: 'inherit',
+						fontStyle: 'italic',
+						opacity: 0.85,
+						overflow: 'hidden',
+						textOverflow: 'ellipsis',
+						whiteSpace: 'nowrap',
+						minWidth: 0
+					}}
+				>
+					{condition}
+				</BodySmall>
+			</Stack>
+		</Tooltip>
 	);
 }
 
@@ -884,11 +886,10 @@ function FailedRulesPanel({ onRetry, isRetrying }: { onRetry: () => void; isRetr
 			</Box>
 			<Box sx={{ flex: 1, minWidth: 0 }}>
 				<BodySmall fontWeight='medium' sx={{ display: 'block', mb: 0.5 }}>
-					Verwerken is even niet gelukt.
+					Verwerken is niet gelukt.
 				</BodySmall>
 				<BodySmall color='textSecondary' sx={{ display: 'block', mb: 1.5, lineHeight: 1.5 }}>
-					Je tekst is veilig opgeslagen. We proberen het automatisch opnieuw — of probeer &apos;m zelf
-					nogmaals.
+					Je tekst is veilig opgeslagen. We proberen het automatisch opnieuw of probeer &apos;m zelf nogmaals.
 				</BodySmall>
 				<Button
 					variant='contained'

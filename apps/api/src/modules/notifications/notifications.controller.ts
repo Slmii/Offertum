@@ -1,12 +1,14 @@
 import { OrganizationGuard } from '@/common/guards/organization.guard';
 import { NOT_AUTHENTICATED } from '@/lib/errors';
 import { NotificationPreferencesResponseDto } from '@/modules/notifications/dto/notification-preferences.response.dto';
+import { NotificationSettingsResponseDto } from '@/modules/notifications/dto/notification-settings.response.dto';
 import {
 	MarkAllReadResponseDto,
 	NotificationListResponseDto,
 	NotificationResponseDto
 } from '@/modules/notifications/dto/notification.response.dto';
 import { UpdateNotificationPreferencesDto } from '@/modules/notifications/dto/update-notification-preferences.dto';
+import { UpdateNotificationSettingsDto } from '@/modules/notifications/dto/update-notification-settings.dto';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 import {
 	Body,
@@ -85,6 +87,37 @@ export class NotificationPreferencesController {
 	@Put()
 	async update(@Req() request: Request, @Body() body: UpdateNotificationPreferencesDto): Promise<void> {
 		await this.notifications.updatePreferences(this.userId(request), request.organizationId!, body);
+	}
+
+	private userId(request: Request): string {
+		const id = request.authSession?.user?.id;
+		if (!id) {
+			throw new UnauthorizedException(NOT_AUTHENTICATED);
+		}
+		return id;
+	}
+}
+
+@ApiTags('notifications')
+@Controller('me/notification-settings')
+@UseGuards(OrganizationGuard)
+export class NotificationSettingsController {
+	constructor(private readonly notifications: NotificationsService) {}
+
+	@ApiOperation({ summary: 'Read the current user’s cadence + quiet-hours settings' })
+	@ApiOkResponse({ type: NotificationSettingsResponseDto })
+	@Get()
+	async read(@Req() request: Request): Promise<NotificationSettingsResponseDto> {
+		const settings = await this.notifications.getSettings(this.userId(request));
+		return { settings };
+	}
+
+	@ApiOperation({ summary: 'Update the current user’s cadence + quiet-hours settings' })
+	@ApiNoContentResponse()
+	@HttpCode(HttpStatus.NO_CONTENT)
+	@Put()
+	async update(@Req() request: Request, @Body() body: UpdateNotificationSettingsDto): Promise<void> {
+		await this.notifications.updateSettings(this.userId(request), body);
 	}
 
 	private userId(request: Request): string {

@@ -61,6 +61,38 @@ export class EmailAccountsService {
 		private readonly logService: LogService
 	) {}
 
+	// Hand the critical mailbox alert to Inngest instead of delivering it here. The disconnect
+	// has already committed and the `disconnectedAt: null` guard means this path can never fire
+	// again for this mailbox — so an inline send that failed once lost the alert permanently.
+	// Publishing an event moves delivery behind Inngest's retries. Never throws: the self-heal
+	// path must still surface its NotFoundException.
+	private async emitMailboxIssueNotification(
+		userId: string | null,
+		organizationId: string,
+		mailboxEmail: string,
+		provider: EmailProvider
+	): Promise<void> {
+		try {
+			await inngest.send({
+				name: InngestEvents.MailboxIssueDetected,
+				data: { organizationId, userId, mailboxEmail, provider }
+			});
+		} catch (error) {
+			this.logService.logAction({
+				action: 'notification.mailbox_issue.emit_failed',
+				message: `Failed to publish mailbox_issue event for ${mailboxEmail}`,
+				metadata: {
+					userId,
+					organizationId,
+					mailboxEmail,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				level: 'warn',
+				context: 'EmailAccountsService'
+			});
+		}
+	}
+
 	private oauthFor(provider: EmailProvider): GoogleOAuthService | MicrosoftOAuthService {
 		switch (provider) {
 			case EmailProvider.GMAIL:
@@ -320,7 +352,7 @@ export class EmailAccountsService {
 				// `updateMany` is silent on zero rows so parallel self-heal attempts
 				// from the same page load (status + messages queries firing together)
 				// don't collide.
-				await this.prisma.emailAccount.updateMany({
+				const disconnected = await this.prisma.emailAccount.updateMany({
 					where: { id: row.id, disconnectedAt: null },
 					data: {
 						disconnectedAt: new Date(),
@@ -343,6 +375,11 @@ export class EmailAccountsService {
 					level: 'warn',
 					context: 'EmailAccountsService'
 				});
+				// Only the attempt that actually flipped the row (count > 0) fires the critical
+				// mailbox-issue notification — parallel self-heals from one page load can't double-send.
+				if (disconnected.count > 0) {
+					await this.emitMailboxIssueNotification(row.userId, row.organizationId, row.email, scope.provider);
+				}
 				throw new NotFoundException(EMAIL_ACCOUNT_NOT_FOUND);
 			}
 			throw error;

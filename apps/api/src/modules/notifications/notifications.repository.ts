@@ -6,6 +6,24 @@ import {
 import { ENTITLED_STRIPE_STATUSES } from '@/modules/billing/billing.constants';
 import { PrismaService } from '@/modules/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
+import {
+	DEFAULT_NOTIFICATION_SETTINGS,
+	MINUTES_PER_DAY,
+	WEEKLY_DIGEST_DAY_TO_ISO,
+	hhmmToMinutes
+} from '@offertum/shared';
+
+// The COALESCE fallbacks used by the due-recipient query, derived from the shared default
+// rather than repeated as SQL literals — the two drifting apart would silently reschedule
+// every user who has never opened the settings page.
+const DEFAULT_DIGEST_SLOT = (() => {
+	const minutes = hhmmToMinutes(DEFAULT_NOTIFICATION_SETTINGS.weeklyDigestTime) ?? 8 * 60;
+	return {
+		isoDay: WEEKLY_DIGEST_DAY_TO_ISO[DEFAULT_NOTIFICATION_SETTINGS.weeklyDigestDay],
+		hour: Math.floor(minutes / 60),
+		minute: minutes % 60
+	};
+})();
 
 export interface NotificationRecord {
 	id: string;
@@ -23,6 +41,17 @@ export interface NotificationPreferenceRecord {
 	eventType: PrismaNotificationEventType;
 	channel: PrismaNotificationChannel;
 	enabled: boolean;
+}
+
+// Storage shape for per-user cadence + quiet-hours. Times are minutes-from-midnight;
+// weeklyDigestDay is an ISO weekday (1=Mon..7=Sun).
+export interface NotificationSettingRecord {
+	weeklyDigestDay: number;
+	weeklyDigestHour: number;
+	weeklyDigestMinute: number;
+	quietHoursEnabled: boolean;
+	quietHoursStart: number;
+	quietHoursEnd: number;
 }
 
 interface CreateNotificationInput {
@@ -153,6 +182,18 @@ export class NotificationsRepository {
 		return memberships.map(m => m.user);
 	}
 
+	// OWNER user IDs of an org. Recipients of a critical mailbox_issue alongside whoever
+	// connected the mailbox — the business owner needs to know lead intake stopped even when a
+	// team member owns that inbox, and when the connecting user has been deleted (userId nulled
+	// by onDelete: SetNull) the OWNERs are the only recipients left.
+	async findOrganizationOwnerIds(organizationId: string): Promise<string[]> {
+		const rows = await this.prisma.membership.findMany({
+			where: { organizationId, role: 'OWNER' },
+			select: { userId: true }
+		});
+		return rows.map(r => r.userId);
+	}
+
 	async findUsersByIds(
 		userIds: ReadonlyArray<string>
 	): Promise<Array<{ id: string; email: string; name: string | null }>> {
@@ -165,45 +206,143 @@ export class NotificationsRepository {
 		});
 	}
 
-	// Returns orgs that are currently entitled to write — same STRICT predicate as
-	// `EntitlementGuard` / `DigestRepository.findEntitledOrganizations`: a Subscription row
-	// exists AND its status ∈ {trialing, active, past_due}. No-subscription / canceled orgs
-	// are excluded (INNER JOIN) so the weekly digest matches the W13 write gate exactly.
-	async findEntitledOrganizationIds(): Promise<string[]> {
-		const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
-			SELECT o."id"
+	// Entitled orgs + their timezone, for the per-user weekly-digest slot matcher — the
+	// timezone is what the user's chosen (day, time) is evaluated against. Same STRICT
+	// predicate as `EntitlementGuard`: a Subscription row exists AND its status ∈
+	// {trialing, active, past_due}. No-subscription / canceled orgs are excluded
+	// (INNER JOIN) so the digest matches the W13 write gate exactly.
+	async findEntitledOrganizationsWithTimeZone(): Promise<Array<{ id: string; timezone: string }>> {
+		return this.prisma.$queryRaw<Array<{ id: string; timezone: string }>>`
+			SELECT o."id", o."timezone"
 			FROM "Organization" o
 			JOIN "Subscription" s ON s."organizationId" = o."id"
 			WHERE s."status" = ANY(${ENTITLED_STRIPE_STATUSES as string[]}::text[])
 		`;
-		return rows.map(r => r.id);
 	}
 
-	// Idempotency check for digest crons. Returns the set of user IDs in `userIds`
-	// who already got a notification of `eventType` within the past `windowMs`, so the
-	// cron can skip them on retry/re-invoke without double-dispatching. Generalized over
-	// the event type so both the weekly and daily digests share one query.
-	async findUserIdsWithRecentDigest(
-		userIds: ReadonlyArray<string>,
-		organizationId: string,
+	// OWNER/MEMBER users across the given orgs whose weekly-digest slot is DUE — that is,
+	// the slot has already passed this week (and by no more than `catchUpMinutes`) and no
+	// DigestDelivery row exists for this week yet.
+	//
+	// This is an inequality, not an equality, on purpose. Matching the exact tick had no
+	// tolerance for clock skew, dropped a whole week if a tick ran late, sent twice during
+	// the repeated DST hour, and skipped the hour that does not exist in spring. "Due and
+	// unsent" absorbs all four. The catch-up bound stops a user created mid-week from being
+	// handed a digest the instant their already-past default slot is noticed.
+	//
+	// Users with no NotificationSetting row fall back to DEFAULT_NOTIFICATION_SETTINGS via
+	// COALESCE — the defaults are passed in rather than hardcoded so the SQL cannot drift
+	// away from the shared constant.
+	async findDueDigestRecipients(params: {
+		organizationIds: string[];
+		eventType: PrismaNotificationEventType;
+		periodKey: string;
+		nowOffsetMinutes: number;
+		catchUpMinutes: number;
+	}): Promise<Array<{ organizationId: string; id: string; email: string; name: string | null }>> {
+		if (params.organizationIds.length === 0) {
+			return [];
+		}
+		const lowerBound = params.nowOffsetMinutes - params.catchUpMinutes;
+		return this.prisma.$queryRaw<
+			Array<{ organizationId: string; id: string; email: string; name: string | null }>
+		>`
+			SELECT m."organizationId", u."id", u."email", u."name"
+			FROM "Membership" m
+			JOIN "User" u ON u."id" = m."userId"
+			LEFT JOIN "NotificationSetting" ns ON ns."userId" = u."id"
+			WHERE m."organizationId" = ANY(${params.organizationIds}::uuid[])
+			  AND m."role" IN ('OWNER', 'MEMBER')
+			  AND (
+			        (COALESCE(ns."weeklyDigestDay", ${DEFAULT_DIGEST_SLOT.isoDay}) - 1) * ${MINUTES_PER_DAY}
+			      + COALESCE(ns."weeklyDigestHour", ${DEFAULT_DIGEST_SLOT.hour}) * 60
+			      + COALESCE(ns."weeklyDigestMinute", ${DEFAULT_DIGEST_SLOT.minute})
+			      ) BETWEEN ${lowerBound} AND ${params.nowOffsetMinutes}
+			  AND NOT EXISTS (
+			        SELECT 1 FROM "DigestDelivery" dd
+			        WHERE dd."userId" = u."id"
+			          AND dd."organizationId" = m."organizationId"
+			          AND dd."eventType" = ${params.eventType}::"NotificationEventType"
+			          AND dd."periodKey" = ${params.periodKey}
+			      )
+		`;
+	}
+
+	// Claim delivery for this (user, org, event, period) BEFORE sending. The unique index is
+	// the real guard: two ticks racing the same slot both try to insert, exactly one wins, and
+	// only the winner sends. Returns the subset that was actually claimed, keyed `orgId:userId`.
+	async claimDigestDeliveries(
 		eventType: PrismaNotificationEventType,
-		windowMs: number
+		periodKey: string,
+		targets: ReadonlyArray<{ userId: string; organizationId: string }>
 	): Promise<Set<string>> {
-		if (userIds.length === 0) {
+		if (targets.length === 0) {
 			return new Set();
 		}
-		const cutoff = new Date(Date.now() - windowMs);
-		const rows = await this.prisma.notification.findMany({
-			where: {
-				userId: { in: userIds as string[] },
-				organizationId,
-				eventType,
-				createdAt: { gte: cutoff }
-			},
-			select: { userId: true }
-		});
-		return new Set(rows.map(r => r.userId));
+		const userIds = targets.map(t => t.userId);
+		const organizationIds = targets.map(t => t.organizationId);
+		const rows = await this.prisma.$queryRaw<Array<{ userId: string; organizationId: string }>>`
+			INSERT INTO "DigestDelivery" ("id", "userId", "organizationId", "eventType", "periodKey", "sentAt")
+			SELECT gen_random_uuid(), t.user_id, t.org_id, ${eventType}::"NotificationEventType", ${periodKey}, NOW()
+			FROM UNNEST(${userIds}::uuid[], ${organizationIds}::uuid[]) AS t(user_id, org_id)
+			ON CONFLICT DO NOTHING
+			RETURNING "userId", "organizationId"
+		`;
+		return new Set(rows.map(r => `${r.organizationId}:${r.userId}`));
 	}
+
+	// Undo claims when the send throws, so the next tick can retry instead of the period
+	// being silently marked delivered.
+	async releaseDigestDeliveries(
+		eventType: PrismaNotificationEventType,
+		periodKey: string,
+		targets: ReadonlyArray<{ userId: string; organizationId: string }>
+	): Promise<void> {
+		if (targets.length === 0) {
+			return;
+		}
+		const userIds = targets.map(t => t.userId);
+		const organizationIds = targets.map(t => t.organizationId);
+		await this.prisma.$executeRaw`
+			DELETE FROM "DigestDelivery" dd
+			USING UNNEST(${userIds}::uuid[], ${organizationIds}::uuid[]) AS t(user_id, org_id)
+			WHERE dd."userId" = t.user_id
+			  AND dd."organizationId" = t.org_id
+			  AND dd."eventType" = ${eventType}::"NotificationEventType"
+			  AND dd."periodKey" = ${periodKey}
+		`;
+	}
+
+	async findOrganizationTimeZone(organizationId: string): Promise<string> {
+		const org = await this.prisma.organization.findUnique({
+			where: { id: organizationId },
+			select: { timezone: true }
+		});
+		return org?.timezone ?? 'Europe/Amsterdam';
+	}
+
+	async findSettings(userId: string): Promise<NotificationSettingRecord | null> {
+		return this.prisma.notificationSetting.findUnique({
+			where: { userId },
+			select: {
+				weeklyDigestDay: true,
+				weeklyDigestHour: true,
+				weeklyDigestMinute: true,
+				quietHoursEnabled: true,
+				quietHoursStart: true,
+				quietHoursEnd: true
+			}
+		});
+	}
+
+	async upsertSettings(userId: string, data: NotificationSettingRecord): Promise<void> {
+		await this.prisma.notificationSetting.upsert({
+			where: { userId },
+			create: { userId, ...data },
+			update: data
+		});
+	}
+
 
 	// Counts the four metrics surfaced by the weekly digest:
 	//   - openCount       : non-dismissed opps in NEW / WAITING / COLD / REPLIED (anything

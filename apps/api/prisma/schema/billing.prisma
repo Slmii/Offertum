@@ -1,0 +1,56 @@
+// One row per Organization (1:1). Acts as the local "single source of truth" that we
+// sync from Stripe via webhooks + the post-checkout /sync endpoint. Avoids the split-
+// brain problem of trusting individual webhook payloads — every relevant event triggers
+// a full re-fetch via `BillingService.syncFromStripe(customerId)`.
+// `status` mirrors Stripe's Subscription.Status enum: "active" | "trialing" | "past_due"
+// | "canceled" | "incomplete" | "incomplete_expired" | "unpaid" | "paused" — kept as
+// String (not enum) so Stripe-side additions don't require a Prisma migration.
+model Subscription {
+  id                     String    @id @default(uuid()) @db.Uuid
+  organizationId         String    @unique @db.Uuid
+  stripeCustomerId       String    @unique
+  stripeSubscriptionId   String?   @unique
+  status                 String?
+  priceId                String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  // When set, Stripe has a `pending_update` on the subscription — a change (price
+  // swap, quantity change made via the Portal that requires payment confirmation,
+  // etc.) is staged and will be applied when the customer completes payment OR
+  // expire on this timestamp. Surfaced in the `/billing/status` response so the
+  // UI can render a "plan change scheduled / expires <date>" banner. NULL when
+  // no pending update exists (the common case).
+  pendingUpdateExpiresAt DateTime?
+  paymentMethodBrand     String?
+  paymentMethodLast4     String?
+  // True when the latest invoice's payment is still in flight (a delayed-notification
+  // method like SEPA Direct Debit, which can take days to clear) rather than failed. Lets
+  // the UI render `past_due` as "Payment processing" instead of "Payment failed". Set during
+  // `syncFromStripe` from the latest invoice; defaults false.
+  paymentProcessing      Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// Dedup ledger for Stripe webhook deliveries. Stripe retries the same `event.id`
+// with exponential backoff when our endpoint doesn't 2xx within ~10s. Without a
+// ledger, every retry would re-run `syncFromStripe` (idempotent on the local
+// write side, but burns Stripe API calls + log spam + amplifies any concurrent-
+// processing window). The handler inserts the row before processing — Postgres'
+// unique constraint on `eventId` rejects duplicate deliveries; we catch the
+// violation and respond 200 without processing.
+model StripeWebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  // `event.id` from Stripe (`evt_...`). The unique constraint is the dedup
+  // primitive — every webhook delivery races to insert this row.
+  eventId     String   @unique
+  // Event type for forensics / log filtering (`customer.subscription.updated`,
+  // `invoice.paid`, etc.). Not part of the dedup key.
+  type        String
+  processedAt DateTime @default(now())
+
+  @@index([type, processedAt(sort: Desc)])
+}

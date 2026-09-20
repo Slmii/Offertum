@@ -11,8 +11,8 @@ type Tokens = typeof tokens;
  * digest kinds (daily/weekly) onto their event types and reuses the closest visual
  * treatment for the events the backend actually emits.
  *
- * Design kinds with no backend event yet (`checkin-ready`, `mailbox-issue`) are kept in
- * the comment trail for when those notification types land, but are not reachable today.
+ * Design kinds with no backend event yet (`checkin-ready`) are kept in the comment trail
+ * for when those notification types land, but are not reachable today.
  */
 export interface NotificationKindStyle {
 	icon: AppIconName;
@@ -52,6 +52,12 @@ const NOTIFICATION_KIND_STYLES: Record<NotificationEventType, NotificationKindSt
 		icon: 'file-text',
 		bg: t => t.color.paper3,
 		fg: t => t.color.ink3
+	},
+	// mailbox-issue / alert-triangle — critical (lost/red) tint.
+	mailbox_issue: {
+		icon: 'alert-triangle',
+		bg: t => t.color.lost[50],
+		fg: t => t.color.lost[700]
 	}
 };
 

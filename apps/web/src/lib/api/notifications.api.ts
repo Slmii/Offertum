@@ -1,5 +1,9 @@
 import { serverFetch } from '@/lib/api/server-fetch';
-import type { NotificationListResponse, NotificationPreferencesResponse } from '@offertum/shared';
+import type {
+	NotificationListResponse,
+	NotificationPreferencesResponse,
+	NotificationSettingsResponse
+} from '@offertum/shared';
 import { createServerFn } from '@tanstack/react-start';
 
 export const listNotificationsServer = createServerFn({ method: 'GET' })
@@ -20,4 +24,14 @@ export const getNotificationPreferencesServer = createServerFn({ method: 'GET' }
 			throw new Error(`Failed to load notification preferences (${response.status})`);
 		}
 		return (await response.json()) as NotificationPreferencesResponse;
+	});
+
+export const getNotificationSettingsServer = createServerFn({ method: 'GET' })
+	.inputValidator((data: void) => data)
+	.handler(async () => {
+		const response = await serverFetch('/api/me/notification-settings');
+		if (!response.ok) {
+			throw new Error(`Failed to load notification settings (${response.status})`);
+		}
+		return (await response.json()) as NotificationSettingsResponse;
 	});

@@ -15,9 +15,13 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch --preserveWatchOutput",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run --passWithNoTests"
 	},
 	"dependencies": {
 		"dayjs": "1.11.21"
+	},
+	"devDependencies": {
+		"vitest": "^3.2.4"
 	}
 }

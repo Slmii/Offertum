@@ -1,0 +1,14 @@
+// Offertum Prisma schema.
+// - new `prisma-client` generator (Prisma 7+)
+// - custom output to ../generated/prisma (gitignored)
+// - pg driver adapter wires up the actual connection in src/prisma/prisma.service.ts.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

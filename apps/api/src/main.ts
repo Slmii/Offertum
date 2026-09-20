@@ -23,6 +23,7 @@ import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsof
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { PricingPlaybookCompileFunction } from '@/modules/inngest/functions/pricing-playbook-compile.function';
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
+import { MailboxIssueNotifyFunction } from '@/modules/inngest/functions/mailbox-issue-notify.function';
 import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { inngest } from '@/modules/inngest/inngest.client';
 import { LogService } from '@/modules/logger/log.service';
@@ -112,6 +113,7 @@ async function bootstrap() {
 	const replyDraftGenerate = app.get(ReplyDraftGenerateFunction);
 	const followUpScheduler = app.get(FollowUpSchedulerFunction);
 	const followUpProcessor = app.get(FollowUpProcessorFunction);
+	const mailboxIssueNotify = app.get(MailboxIssueNotifyFunction);
 	const weeklyDigest = app.get(WeeklyDigestFunction);
 	const dailyDigest = app.get(DailyDigestFunction);
 	const autoColdScheduler = app.get(AutoColdSchedulerFunction);
@@ -132,6 +134,7 @@ async function bootstrap() {
 				replyDraftGenerate.inngestFn,
 				followUpScheduler.inngestFn,
 				followUpProcessor.inngestFn,
+				mailboxIssueNotify.inngestFn,
 				weeklyDigest.inngestFn,
 				dailyDigest.inngestFn,
 				autoColdScheduler.inngestFn,

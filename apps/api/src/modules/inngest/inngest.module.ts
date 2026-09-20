@@ -14,6 +14,7 @@ import { MicrosoftBackfillFunction } from '@/modules/inngest/functions/microsoft
 import { MicrosoftDeltaSyncFunction } from '@/modules/inngest/functions/microsoft-delta-sync.function';
 import { MicrosoftSubscriptionRenewalFunction } from '@/modules/inngest/functions/microsoft-subscription-renewal.function';
 import { ReplyDraftGenerateFunction } from '@/modules/inngest/functions/reply-draft-generate.function';
+import { MailboxIssueNotifyFunction } from '@/modules/inngest/functions/mailbox-issue-notify.function';
 import { WeeklyDigestFunction } from '@/modules/inngest/functions/weekly-digest.function';
 import { Module } from '@nestjs/common';
 import { DigestModule } from '@/modules/digest/digest.module';
@@ -54,6 +55,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		ReplyDraftGenerateFunction,
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
+		MailboxIssueNotifyFunction,
 		WeeklyDigestFunction,
 		DailyDigestFunction,
 		AutoColdSchedulerFunction,
@@ -70,6 +72,7 @@ import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
 		ReplyDraftGenerateFunction,
 		FollowUpSchedulerFunction,
 		FollowUpProcessorFunction,
+		MailboxIssueNotifyFunction,
 		WeeklyDigestFunction,
 		DailyDigestFunction,
 		AutoColdSchedulerFunction,

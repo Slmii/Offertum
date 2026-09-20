@@ -1,5 +1,7 @@
 import { hoursToMs } from '@/lib/time/duration';
 import { EmailProvider } from '@/generated/prisma/enums';
+import { inngest } from '@/modules/inngest/inngest.client';
+import { InngestEvents } from '@/modules/inngest/inngest.constants';
 import { encrypt } from '@/lib/crypto/token-encryption';
 import { OAuthRefreshTokenInvalidException } from '@/lib/oauth/oauth-errors';
 import { EmailAccountsService, type MailboxScope } from '@/modules/email-accounts/email-accounts.service';
@@ -168,6 +170,33 @@ describe('EmailAccountsService — parallel self-heal race', () => {
 					})
 				})
 			);
+		});
+
+		it('publishes a mailbox/issue.detected event on self-heal', async () => {
+			// Instance-method spy, not jest.mock: @swc/jest gives no hoisting and the module's
+			// exports are non-configurable, so the seam has to be the object (see CLAUDE.md).
+			const sendSpy = jest.spyOn(inngest, 'send').mockResolvedValue(undefined as never);
+			try {
+				const { service } = makeService(provider);
+
+				await Promise.allSettled([service.getAccessToken(scope)]);
+
+				// Only the caller whose updateMany flipped the row (count > 0) publishes.
+				expect(sendSpy).toHaveBeenCalledTimes(1);
+				expect(sendSpy).toHaveBeenCalledWith(
+					expect.objectContaining({
+						name: InngestEvents.MailboxIssueDetected,
+						data: expect.objectContaining({
+							organizationId: 'org-1',
+							userId: 'user-1',
+							mailboxEmail: 'alice@offertum.dev',
+							provider
+						})
+					})
+				);
+			} finally {
+				sendSpy.mockRestore();
+			}
 		});
 	});
 });

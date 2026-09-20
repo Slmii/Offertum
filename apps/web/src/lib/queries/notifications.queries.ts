@@ -1,11 +1,21 @@
 import { api } from '@/lib/api/client';
-import { getNotificationPreferencesServer, listNotificationsServer } from '@/lib/api/notifications.api';
-import type { NotificationPreferencesResponse, UpdateNotificationPreferencesInput } from '@offertum/shared';
+import {
+	getNotificationPreferencesServer,
+	getNotificationSettingsServer,
+	listNotificationsServer
+} from '@/lib/api/notifications.api';
+import type {
+	NotificationPreferencesResponse,
+	NotificationSettingsResponse,
+	UpdateNotificationPreferencesInput,
+	UpdateNotificationSettingsInput
+} from '@offertum/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const NotificationsKeys = {
 	list: ['me', 'notifications'] as const,
-	preferences: ['me', 'notification-preferences'] as const
+	preferences: ['me', 'notification-preferences'] as const,
+	settings: ['me', 'notification-settings'] as const
 };
 
 // Bell-icon list query. Background-polls every 30s while the tab is focused so the
@@ -24,6 +34,12 @@ export const notificationsListQueryOptions = queryOptions({
 export const notificationPreferencesQueryOptions = queryOptions({
 	queryKey: NotificationsKeys.preferences,
 	queryFn: () => getNotificationPreferencesServer(),
+	staleTime: 60_000
+});
+
+export const notificationSettingsQueryOptions = queryOptions({
+	queryKey: NotificationsKeys.settings,
+	queryFn: () => getNotificationSettingsServer(),
 	staleTime: 60_000
 });
 
@@ -62,6 +78,24 @@ export function useUpdateNotificationPreferences() {
 				preferences: variables.preferences
 			}));
 			queryClient.invalidateQueries({ queryKey: NotificationsKeys.preferences });
+		}
+	});
+}
+
+export function useUpdateNotificationSettings() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: UpdateNotificationSettingsInput) =>
+			api<void>('/api/me/notification-settings', { method: 'PUT', body: input }),
+		onSuccess: (_data, variables) => {
+			// PUT returns 204; merge the optimistic state into the cache. Spread `current`
+			// first so the new `settings` wins — the reverse order let the stale value
+			// clobber the optimistic write.
+			queryClient.setQueryData<NotificationSettingsResponse>(NotificationsKeys.settings, current => ({
+				...(current ?? {}),
+				settings: variables
+			}));
+			queryClient.invalidateQueries({ queryKey: NotificationsKeys.settings });
 		}
 	});
 }

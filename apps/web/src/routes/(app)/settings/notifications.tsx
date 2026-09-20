@@ -10,23 +10,26 @@ import { useToast } from '@/lib/hooks/use-toast';
 import { sessionQueryOptions } from '@/lib/queries/auth.queries';
 import {
 	notificationPreferencesQueryOptions,
-	useUpdateNotificationPreferences
+	notificationSettingsQueryOptions,
+	useUpdateNotificationPreferences,
+	useUpdateNotificationSettings
 } from '@/lib/queries/notifications.queries';
 import { preferenceKey } from '@/lib/schemas/notification-preferences.schema';
 import { formatTimeInput, normalizeTime } from '@/lib/utils/time.utils';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import { useTheme } from '@mui/material/styles';
 import {
 	NOTIFICATION_CHANNELS,
-	NOTIFICATION_EVENT_TYPES,
+	PREFERENCE_EVENT_TYPES,
 	defaultNotificationPreference,
 	isEmailChannelAvailable,
 	type NotificationChannel,
 	type NotificationEventType,
-	type UpdateNotificationPreferencesInput
+	type NotificationSettings,
+	type UpdateNotificationPreferencesInput,
+	type WeeklyDigestDay
 } from '@offertum/shared';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -36,6 +39,7 @@ export const Route = createFileRoute('/(app)/settings/notifications')({
 	loader: ({ context }) =>
 		Promise.all([
 			context.queryClient.ensureQueryData(notificationPreferencesQueryOptions),
+			context.queryClient.ensureQueryData(notificationSettingsQueryOptions),
 			context.queryClient.ensureQueryData(sessionQueryOptions)
 		]),
 	component: NotificationsSettingsPage,
@@ -43,8 +47,8 @@ export const Route = createFileRoute('/(app)/settings/notifications')({
 });
 
 // ── Backend-backed preferences ──────────────────────────────────────────────
-// The real notification matrix the API models. Only three cells in the design
-// map onto it today (see ROWS); the rest are FE-only mocks pending backend work.
+// Every matrix cell maps onto a real backend (event, channel) preference except the
+// critical, always-on Mailbox-probleem row (rendered as a locked toggle, no preference).
 
 // Flat map of every real (event, channel) → enabled, seeded from stored prefs.
 type RealPrefs = Record<string, boolean>;
@@ -58,7 +62,7 @@ function seedRealPrefs(
 	}
 
 	const map: RealPrefs = {};
-	for (const event of NOTIFICATION_EVENT_TYPES) {
+	for (const event of PREFERENCE_EVENT_TYPES) {
 		for (const channel of NOTIFICATION_CHANNELS) {
 			if (channel === 'email' && !isEmailChannelAvailable(event)) {
 				continue;
@@ -74,7 +78,7 @@ function seedRealPrefs(
 // unsurfaced events (auto-cold, daily digest) keep their stored values.
 function buildRealPayload(real: RealPrefs): UpdateNotificationPreferencesInput {
 	return {
-		preferences: NOTIFICATION_EVENT_TYPES.flatMap(event =>
+		preferences: PREFERENCE_EVENT_TYPES.flatMap(event =>
 			NOTIFICATION_CHANNELS.flatMap(channel =>
 				channel === 'email' && !isEmailChannelAvailable(event)
 					? []
@@ -84,16 +88,6 @@ function buildRealPayload(real: RealPrefs): UpdateNotificationPreferencesInput {
 	};
 }
 
-// ── FE-only mock toggles ─────────────────────────────────────────────────────
-// Events / channels the backend doesn't model yet. Local state only; defaults
-// mirror the design. Persistence lands once the backend catches up.
-type MockKey = 'emailNewQuote' | 'emailCustomerReply';
-
-const MOCK_DEFAULTS: Record<MockKey, boolean> = {
-	emailNewQuote: true,
-	emailCustomerReply: true
-};
-
 interface CadenceState {
 	digestDay: string;
 	digestTime: string;
@@ -102,18 +96,29 @@ interface CadenceState {
 	quietHours: boolean;
 }
 
-const CADENCE_DEFAULTS: CadenceState = {
-	digestDay: 'monday',
-	digestTime: '08:00',
-	quietFrom: '19:00',
-	quietTo: '07:30',
-	quietHours: true
-};
+function cadenceFromSettings(settings: NotificationSettings): CadenceState {
+	return {
+		digestDay: settings.weeklyDigestDay,
+		digestTime: settings.weeklyDigestTime,
+		quietFrom: settings.quietHoursStart,
+		quietTo: settings.quietHoursEnd,
+		quietHours: settings.quietHoursEnabled
+	};
+}
+
+function cadenceToSettings(cadence: CadenceState): NotificationSettings {
+	return {
+		weeklyDigestDay: cadence.digestDay as WeeklyDigestDay,
+		weeklyDigestTime: cadence.digestTime,
+		quietHoursStart: cadence.quietFrom,
+		quietHoursEnd: cadence.quietTo,
+		quietHoursEnabled: cadence.quietHours
+	};
+}
 
 // ── Matrix descriptor ────────────────────────────────────────────────────────
 type CellSpec =
 	| { type: 'real'; event: NotificationEventType; channel: NotificationChannel }
-	| { type: 'mock'; key: MockKey }
 	| { type: 'unavailable' }
 	| { type: 'locked' };
 
@@ -131,14 +136,14 @@ const ROWS: RowSpec[] = [
 	{
 		title: 'Nieuwe offerteaanvraag binnengekomen',
 		description: 'Zodra Offertum een nieuwe aanvraag in je mailbox herkent.',
-		email: { type: 'mock', key: 'emailNewQuote' },
+		email: { type: 'real', event: 'opportunity_created', channel: 'email' },
 		app: { type: 'real', event: 'opportunity_created', channel: 'in_app' }
 	},
 	{
 		title: 'Klant heeft geantwoord',
 		description:
 			'Als een klant reageert op een verzonden concept — meerdere antwoorden in korte tijd worden gegroepeerd.',
-		email: { type: 'mock', key: 'emailCustomerReply' },
+		email: { type: 'real', event: 'customer_reply', channel: 'email' },
 		app: { type: 'real', event: 'customer_reply', channel: 'in_app' }
 	},
 	{
@@ -165,20 +170,23 @@ const DIGEST_DAY_OPTIONS = [
 	{ id: 'tuesday', label: 'Dinsdag' },
 	{ id: 'wednesday', label: 'Woensdag' },
 	{ id: 'thursday', label: 'Donderdag' },
-	{ id: 'friday', label: 'Vrijdag' }
+	{ id: 'friday', label: 'Vrijdag' },
+	{ id: 'saturday', label: 'Zaterdag' },
+	{ id: 'sunday', label: 'Zondag' }
 ];
 
 function NotificationsSettingsPage() {
 	const { data: prefs } = useSuspenseQuery(notificationPreferencesQueryOptions);
+	const { data: settings } = useSuspenseQuery(notificationSettingsQueryOptions);
 	const { data: session } = useSuspenseQuery(sessionQueryOptions);
 	const update = useUpdateNotificationPreferences();
+	const updateSettings = useUpdateNotificationSettings();
 	const toast = useToast();
 
 	const accountEmail = session?.user?.email ?? null;
 
 	const [real, setReal] = useState<RealPrefs>(() => seedRealPrefs(prefs.preferences));
-	const [mock, setMock] = useState<Record<MockKey, boolean>>(MOCK_DEFAULTS);
-	const [cadence, setCadence] = useState<CadenceState>(CADENCE_DEFAULTS);
+	const [cadence, setCadence] = useState<CadenceState>(() => cadenceFromSettings(settings.settings));
 
 	// Toggling a real cell autosaves immediately; the payload carries every real cell so the
 	// events this UI doesn't surface (auto-cold, daily digest) keep their stored values.
@@ -190,15 +198,23 @@ function NotificationsSettingsPage() {
 		});
 	};
 
-	const setMockCell = (key: MockKey, value: boolean) => setMock(prev => ({ ...prev, [key]: value }));
-
-	const restoreDefaults = () => {
-		const realDefaults = seedRealPrefs([]);
-		setReal(realDefaults);
-		setMock(MOCK_DEFAULTS);
-		setCadence(CADENCE_DEFAULTS);
-		update.mutate(buildRealPayload(realDefaults), {
-			onError: () => toast.error('Opslaan mislukt', 'Herstellen is niet gelukt. Probeer het opnieuw.')
+	// Day-select / quiet-hours-toggle changes and time-field blur commits all go through
+	// here — the masked time fields' keystroke-by-keystroke onChange updates local state
+	// only (see `setCadence` passed as `onFieldChange` below) and does not autosave.
+	const commitCadence = (next: CadenceState) => {
+		// A cleared time field normalizes to '' — never persist that (the DTO would 400 and the
+		// bad value would poison every later save). Revert any invalid time to the last-saved value.
+		const saved = cadenceFromSettings(settings.settings);
+		const validTime = (value: string, fallback: string) => (/^\d{1,2}:\d{2}$/.test(value) ? value : fallback);
+		const sanitized: CadenceState = {
+			...next,
+			digestTime: validTime(next.digestTime, saved.digestTime),
+			quietFrom: validTime(next.quietFrom, saved.quietFrom),
+			quietTo: validTime(next.quietTo, saved.quietTo)
+		};
+		setCadence(sanitized);
+		updateSettings.mutate(cadenceToSettings(sanitized), {
+			onError: () => toast.error('Opslaan mislukt', 'Je instelling is niet opgeslagen. Probeer het opnieuw.')
 		});
 	};
 
@@ -210,22 +226,13 @@ function NotificationsSettingsPage() {
 		if (cell.type === 'locked') {
 			return { kind: 'locked', name: `${rowTitle}-${channelLabel}`, ariaLabel: `${rowTitle} (${channelLabel})` };
 		}
-		if (cell.type === 'real') {
-			const key = preferenceKey(cell.event, cell.channel);
-			return {
-				kind: 'switch',
-				name: key,
-				ariaLabel: `${rowTitle} (${channelLabel})`,
-				checked: real[key] === true,
-				onChange: value => setRealCell(cell.event, cell.channel, value)
-			};
-		}
+		const key = preferenceKey(cell.event, cell.channel);
 		return {
 			kind: 'switch',
-			name: cell.key,
+			name: key,
 			ariaLabel: `${rowTitle} (${channelLabel})`,
-			checked: mock[cell.key],
-			onChange: value => setMockCell(cell.key, value)
+			checked: real[key] === true,
+			onChange: value => setRealCell(cell.event, cell.channel, value)
 		};
 	};
 
@@ -266,14 +273,7 @@ function NotificationsSettingsPage() {
 				</SectionCard>
 
 				{/* Cadans */}
-				<CadenceCard cadence={cadence} onChange={setCadence} />
-
-				{/* Save bar — real cells autosave on toggle; this only restores defaults. */}
-				<Stack direction='row' useFlexGap spacing={2} sx={{ justifyContent: 'flex-end' }}>
-					<Button type='button' variant='outlined' disabled={update.isPending} onClick={restoreDefaults}>
-						Standaardwaarden herstellen
-					</Button>
-				</Stack>
+				<CadenceCard cadence={cadence} onFieldChange={setCadence} onCommit={commitCadence} />
 			</Stack>
 		</Stack>
 	);
@@ -430,7 +430,15 @@ function NotifCell(props: CellRenderProps) {
 	);
 }
 
-function CadenceCard({ cadence, onChange }: { cadence: CadenceState; onChange: (next: CadenceState) => void }) {
+function CadenceCard({
+	cadence,
+	onFieldChange,
+	onCommit
+}: {
+	cadence: CadenceState;
+	onFieldChange: (next: CadenceState) => void;
+	onCommit: (next: CadenceState) => void;
+}) {
 	const { tokens } = useTheme();
 	return (
 		<SectionCard title='Cadans' caption='Wanneer Offertum je dingen mag sturen — en wanneer juist niet.'>
@@ -448,7 +456,7 @@ function CadenceCard({ cadence, onChange }: { cadence: CadenceState; onChange: (
 					label='Wekelijkse samenvatting op'
 					value={cadence.digestDay}
 					options={DIGEST_DAY_OPTIONS}
-					onChange={event => onChange({ ...cadence, digestDay: event.target.value })}
+					onChange={event => onCommit({ ...cadence, digestDay: event.target.value })}
 					fullWidth
 				/>
 				<TimeField
@@ -456,7 +464,8 @@ function CadenceCard({ cadence, onChange }: { cadence: CadenceState; onChange: (
 					label='Tijdstip'
 					icon='clock'
 					value={cadence.digestTime}
-					onChange={value => onChange({ ...cadence, digestTime: value })}
+					onChange={value => onFieldChange({ ...cadence, digestTime: value })}
+					onCommit={value => onCommit({ ...cadence, digestTime: value })}
 				/>
 			</Box>
 			<Stack
@@ -484,7 +493,7 @@ function CadenceCard({ cadence, onChange }: { cadence: CadenceState; onChange: (
 					<StandaloneSwitch
 						name='cadence-quiet-hours'
 						checked={cadence.quietHours}
-						onChange={value => onChange({ ...cadence, quietHours: value })}
+						onChange={value => onCommit({ ...cadence, quietHours: value })}
 						slotProps={{ input: { 'aria-label': 'Stille uren' } }}
 					/>
 				</Box>
@@ -506,14 +515,16 @@ function CadenceCard({ cadence, onChange }: { cadence: CadenceState; onChange: (
 						label='Stil vanaf'
 						icon='moon'
 						value={cadence.quietFrom}
-						onChange={value => onChange({ ...cadence, quietFrom: value })}
+						onChange={value => onFieldChange({ ...cadence, quietFrom: value })}
+						onCommit={value => onCommit({ ...cadence, quietFrom: value })}
 					/>
 					<TimeField
 						name='quiet-to'
 						label='Weer meldingen vanaf'
 						icon='sunrise'
 						value={cadence.quietTo}
-						onChange={value => onChange({ ...cadence, quietTo: value })}
+						onChange={value => onFieldChange({ ...cadence, quietTo: value })}
+						onCommit={value => onCommit({ ...cadence, quietTo: value })}
 					/>
 				</Box>
 			)}
@@ -521,19 +532,23 @@ function CadenceCard({ cadence, onChange }: { cadence: CadenceState; onChange: (
 	);
 }
 
-// A masked HH:MM text field — only ever holds a valid time (see formatTimeInput).
+// A masked HH:MM text field — only ever holds a valid time (see formatTimeInput). Every
+// keystroke goes through `onChange` (local state only); the normalized value on blur goes
+// through `onCommit` (autosave) so callers don't persist mid-typed, potentially-invalid input.
 function TimeField({
 	name,
 	label,
 	icon,
 	value,
-	onChange
+	onChange,
+	onCommit
 }: {
 	name: string;
 	label: string;
 	icon: AppIconName;
 	value: string;
 	onChange: (value: string) => void;
+	onCommit: (value: string) => void;
 }) {
 	return (
 		<StandaloneField
@@ -541,7 +556,7 @@ function TimeField({
 			label={label}
 			value={value}
 			onChange={event => onChange(formatTimeInput(event.target.value))}
-			onBlur={() => onChange(normalizeTime(value))}
+			onBlur={() => onCommit(normalizeTime(value))}
 			startElement={<AppIcon name={icon} size='small' />}
 			placeholder='00:00'
 			fullWidth

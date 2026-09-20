@@ -1,0 +1,120 @@
+// Pre-Sentry stand-in. `warn`/`error`/`fatal` events from NestJS's Logger are
+// persisted here in addition to the console.
+enum LogLevel {
+  FATAL
+  ERROR
+  WARN
+  INFO
+  DEBUG
+}
+
+// Per-call log of every AI provider invocation.
+// One row per `AIClient.generate(...)` call. Used for:
+//  - **Replay**: rerun the same prompt against a different model when the prompt is iterated.
+//    The `prompt` + `parsed` columns together let us reconstruct what the AI saw and what
+//    it produced without needing to re-fetch the original `RawMessage`.
+//  - **Cost tracking**: sum `promptTokens` + `completionTokens` per org per month.
+//  - **Debugging**: filter by `status = 'schema_invalid'` to see which prompts produce
+//    malformed outputs (signals a prompt that needs tightening).
+//  - **Year-2 self-improvement**: when classifier accuracy improves later, re-run the new
+//    prompt over historical `AICall` rows to see how many false negatives the old version
+//    missed.
+// We persist the full prompt + response as text — for a typical email + structured output,
+// this is ~2-5kB per row. At 10k emails/month/org that's ~30MB/month — Postgres handles
+// fine, and the value of being able to debug + replay is high.
+enum AICallStatus {
+  SUCCESS
+  FAILED
+  SCHEMA_INVALID
+  TIMEOUT
+}
+
+model Log {
+  id        String   @id @default(uuid()) @db.Uuid
+  level     LogLevel
+  message   String   @db.Text
+  context   String?
+  stack     String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  // Correlation fields — populated once auth + request tracing land.
+  requestId      String?
+  userId         String? @db.Uuid
+  organizationId String? @db.Uuid
+
+  @@index([level, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([requestId])
+}
+
+model AICall {
+  id               String       @id @default(uuid()) @db.Uuid
+  // 'openai' | 'azure-openai' | 'mistral' | 'anthropic' (string, not enum, so adding a
+  // provider doesn't require a Prisma migration).
+  provider         String
+  // The actual model identifier sent to the provider (e.g. 'gpt-4o-mini', 'gpt-4o',
+  // 'mistral-large-latest', 'claude-sonnet-4-5'). Free text — providers add SKUs faster
+  // than we'd want to migrate the schema for.
+  model            String
+  // The application-level intent: 'classifier' | 'extractor' | 'tone-learn' | 'reply-draft'
+  // | etc. Driven by the caller — used for grouping in debug queries ("show me all
+  // classifier calls that returned schema_invalid").
+  purpose          String
+  // The full prompt sent to the provider. May be large (~1-5kB typical). Stored verbatim
+  // so we can replay against a different model later.
+  prompt           String       @db.Text
+  // Raw text response from the provider. Null if the call failed before a response was
+  // received (network error, 5xx after retries exhausted).
+  response         String?      @db.Text
+  // Parsed structured output (Zod-validated). Null if the response wasn't valid against
+  // the schema OR if no response was received. Lets services skip re-parsing.
+  parsed           Json?
+  status           AICallStatus
+  errorMessage     String?      @db.Text
+  promptTokens     Int?
+  completionTokens Int?
+  // Wall-clock duration of the call including retries. Useful for SLA tracking.
+  latencyMs        Int
+  // Correlation fields — auto-populated by `AICallLogger` from `RequestContext`
+  // AsyncLocalStorage. May be null when the call originates outside a request (e.g.
+  // an Inngest function running on a cron).
+  requestId        String?
+  userId           String?      @db.Uuid
+  organizationId   String?      @db.Uuid
+  createdAt        DateTime     @default(now())
+
+  // Opportunities link to their originating classifier + extractor calls so we
+  // can drill from a row in the product UI back to the exact prompt/response that
+  // produced it. Two named relations because one Opportunity has two AICalls.
+  classifiedOpportunities Opportunity[]  @relation("OpportunityClassifiedAICall")
+  extractedOpportunities  Opportunity[]  @relation("OpportunityExtractedAICall")
+  quoteDrafts             QuoteDraft[]   @relation("QuoteDraftAICall")
+  // Reply-draft generation call. Named so it doesn't collide with the
+  // classifier / extractor relations above.
+  replyDrafts             ReplyDraft[]   @relation("ReplyDraftAICall")
+  // W13 expiry-suggestion call (the AI read of the customer's last message).
+  expiryActions           ExpiryAction[] @relation("ExpiryActionAICall")
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([purpose, status, createdAt(sort: Desc)])
+  @@index([requestId])
+}
+
+// W13 — per-user dismissal of a dashboard pattern banner. A pattern re-shows once 30
+// days have elapsed since `dismissedAt` (see patterns/pattern-visibility.ts). Keyed by
+// (org, user, patternKey) so each teammate dismisses independently.
+model PatternDismissal {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  // Stable banner identity: 'reply_speed' | 'win_rate_by_speed'.
+  patternKey     String
+  dismissedAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, patternKey])
+  @@index([userId, organizationId])
+}
