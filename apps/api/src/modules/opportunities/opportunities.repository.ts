@@ -124,7 +124,19 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 			fromName: true,
 			threadId: true,
 			raw: true,
-			emailAccount: { select: { provider: true } }
+			emailAccount: { select: { provider: true } },
+			// Metadata only — `extractedText` never leaves the server.
+			attachments: {
+				orderBy: { createdAt: 'asc' },
+				select: {
+					id: true,
+					filename: true,
+					mimeType: true,
+					sizeBytes: true,
+					status: true,
+					isTruncated: true
+				}
+			}
 		}
 	},
 	// include the linked AICall's `createdAt` so the FE banner can compare

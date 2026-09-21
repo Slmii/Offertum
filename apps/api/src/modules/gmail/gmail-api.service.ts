@@ -3,6 +3,24 @@ import { MailboxUnauthorizedException } from '@/lib/oauth/oauth-errors';
 import { GMAIL_API_BASE } from '@/modules/gmail/gmail.constants';
 import { LogService } from '@/modules/logger/log.service';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	InboundAttachmentTooLargeError,
+	type InboundAttachmentDownloadLimits
+} from '@/lib/email/raw-message-attachments';
+
+// Refuse an oversized attachment from the response HEADER, before its body is buffered.
+// Provider metadata can omit the size, so the pre-download check alone is not enough.
+// `overhead` covers transport encoding: Gmail wraps the bytes as base64 (x4/3) inside JSON.
+function assertWithinDownloadLimit(
+	response: Response,
+	limits: InboundAttachmentDownloadLimits | undefined,
+	overhead: number
+): void {
+	const announced = Number(response.headers?.get('content-length') ?? Number.NaN);
+	if (limits && Number.isFinite(announced) && announced > limits.maxBytes * overhead + 1024) {
+		throw new InboundAttachmentTooLargeError();
+	}
+}
 
 export interface GmailMessageHeader {
 	name: string;
@@ -166,6 +184,54 @@ export class GmailApiService {
 		}
 
 		return (await response.json()) as GmailFullMessage;
+	}
+
+	/**
+	 * Fetch a single attachment's bytes by `messageId` + `attachmentId` (both obtained from
+	 * a previously-persisted `GmailFullMessage` payload — see `listGmailAttachmentsFromRaw`
+	 * in `lib/email/raw-message-attachments.ts`). Gmail returns `{ size, data }` where
+	 * `data` is base64url-encoded; we decode it into a Buffer for the caller to persist.
+	 *
+	 * Returns `null` on 404. Real scenario: the message or the specific attachment was
+	 * deleted between when we synced the message and when the parser fetches the bytes.
+	 */
+	async getAttachment(
+		accessToken: string,
+		messageId: string,
+		attachmentId: string,
+		limits?: InboundAttachmentDownloadLimits
+	): Promise<Buffer | null> {
+		const url = `${GMAIL_API_BASE}/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+		// A stalled response would otherwise hold the pipeline step open indefinitely — the parse
+		// timeout only starts once the bytes are already here.
+		const response = await fetch(url, {
+			headers: { authorization: `Bearer ${accessToken}` },
+			signal: limits ? AbortSignal.timeout(limits.timeoutMs) : undefined
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			return null;
+		}
+		if (!response.ok) {
+			const text = await response.text();
+			this.logApiError('messages.attachments.get', response.status, text);
+			throw new InternalServerErrorException(GMAIL_API_CALL_FAILED('messages.attachments.get'));
+		}
+
+		assertWithinDownloadLimit(response, limits, 1.4);
+
+		const data = (await response.json()) as { size?: number; data?: string };
+		const encoded = data.data ?? '';
+		const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+		const bytes = Buffer.from(normalized, 'base64');
+		// Belt and braces: a response without a content-length header slips past the check above.
+		if (limits && bytes.length > limits.maxBytes) {
+			throw new InboundAttachmentTooLargeError();
+		}
+		return bytes;
 	}
 
 	/**

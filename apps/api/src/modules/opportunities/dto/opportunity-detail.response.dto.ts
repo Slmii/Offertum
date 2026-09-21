@@ -1,6 +1,8 @@
 import type {
 	CustomerReplyEntry,
+	InboundAttachmentStatus,
 	OpportunityDetail,
+	OpportunityInboundAttachment,
 	OpportunityTimelineEvent,
 	ReplyDraft,
 	ReplyDraftKind,
@@ -40,10 +42,20 @@ export class ReplyDraftResponseDto implements ReplyDraft {
 	attachments!: ReplyDraftAttachmentResponseDto[];
 }
 
+export class OpportunityInboundAttachmentResponseDto implements OpportunityInboundAttachment {
+	id!: string;
+	filename!: string;
+	mimeType!: string;
+	sizeBytes!: number | null;
+	status!: InboundAttachmentStatus;
+	isTruncated!: boolean;
+}
+
 export class OpportunityDetailResponseDto extends OpportunityResponseDto implements OpportunityDetail {
 	originalEmailBody!: string;
 	replyDraft!: ReplyDraftResponseDto | null;
 	replyDraftHistory!: ReplyDraftResponseDto[];
 	customerReplies!: CustomerReplyEntryResponseDto[];
 	timeline!: OpportunityTimelineEvent[];
+	inboundAttachments!: OpportunityInboundAttachmentResponseDto[];
 }

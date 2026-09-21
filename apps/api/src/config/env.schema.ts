@@ -93,8 +93,8 @@ export const envSchema = z
 		// Both keys optional in dev — when missing, the AI module's `generate` throws a clear
 		// "OpenAI not configured" error rather than silently using a fake.
 		OPENAI_API_KEY: z.string().optional(),
-		OPENAI_MODEL_CLASSIFIER: z.string().default('gpt-4o-mini'),
-		OPENAI_MODEL_EXTRACTOR: z.string().default('gpt-4o'),
+		OPENAI_MODEL_CLASSIFIER: z.string().default('gpt-4o-mini-2024-07-18'),
+		OPENAI_MODEL_EXTRACTOR: z.string().default('gpt-4o-2024-08-06'),
 		AZURE_OPENAI_ENDPOINT: z.string().optional(),
 		AZURE_OPENAI_API_KEY: z.string().optional(),
 		// Azure pins the API version per request. We use OpenAI's Responses API (recommended

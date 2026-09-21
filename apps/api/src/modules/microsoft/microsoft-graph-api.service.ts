@@ -1,8 +1,27 @@
 import { MICROSOFT_GRAPH_API_CALL_FAILED } from '@/lib/errors';
+import type { InboundAttachmentMeta } from '@/lib/email/raw-message-attachments';
 import { MailboxUnauthorizedException } from '@/lib/oauth/oauth-errors';
 import { MICROSOFT_GRAPH_BASE } from '@/modules/microsoft/microsoft.constants';
 import { LogService } from '@/modules/logger/log.service';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	InboundAttachmentTooLargeError,
+	type InboundAttachmentDownloadLimits
+} from '@/lib/email/raw-message-attachments';
+
+// Refuse an oversized attachment from the response HEADER, before its body is buffered.
+// Provider metadata can omit the size, so the pre-download check alone is not enough.
+// `overhead` covers transport encoding: Gmail wraps the bytes as base64 (x4/3) inside JSON.
+function assertWithinDownloadLimit(
+	response: Response,
+	limits: InboundAttachmentDownloadLimits | undefined,
+	overhead: number
+): void {
+	const announced = Number(response.headers?.get('content-length') ?? Number.NaN);
+	if (limits && Number.isFinite(announced) && announced > limits.maxBytes * overhead + 1024) {
+		throw new InboundAttachmentTooLargeError();
+	}
+}
 
 export interface MicrosoftMessageStub {
 	id: string;
@@ -24,6 +43,7 @@ export interface MicrosoftFullMessage {
 	from?: { emailAddress?: { name?: string | null; address?: string | null } | null } | null;
 	toRecipients?: Array<{ emailAddress?: { name?: string | null; address?: string | null } | null }>;
 	body?: { contentType?: 'text' | 'html'; content?: string };
+	hasAttachments?: boolean;
 	[key: string]: unknown;
 }
 
@@ -183,7 +203,7 @@ export class MicrosoftGraphApiService {
 		params.set('$top', String(opts.top ?? 50));
 		params.set(
 			'$select',
-			'id,conversationId,internetMessageId,subject,from,toRecipients,receivedDateTime,bodyPreview,body'
+			'id,conversationId,internetMessageId,subject,from,toRecipients,receivedDateTime,bodyPreview,body,hasAttachments'
 		);
 		params.set('$orderby', 'receivedDateTime desc');
 		if (opts.filter) {
@@ -240,6 +260,100 @@ export class MicrosoftGraphApiService {
 			nextLink: data['@odata.nextLink'] ?? null,
 			deltaLink: data['@odata.deltaLink'] ?? null
 		};
+	}
+
+	/**
+	 * List a message's attachments. Only `#microsoft.graph.fileAttachment` entries are
+	 * kept — `itemAttachment` (a forwarded message) and `referenceAttachment` (a OneDrive
+	 * link) carry no downloadable bytes via `$value`, so the parser has nothing to do
+	 * with them.
+	 * Returns `[]` on 404 — the message was deleted between sync and fetch.
+	 */
+	async listMessageAttachments(
+		accessToken: string,
+		messageId: string,
+		timeoutMs?: number
+	): Promise<InboundAttachmentMeta[]> {
+		const url = `${MICROSOFT_GRAPH_BASE}/me/messages/${encodeURIComponent(messageId)}/attachments?$select=id,name,contentType,size,isInline`;
+		// Runs for every Microsoft message that reaches the classifier with attachments; a stalled
+		// response must not hold the pipeline step open.
+		const response = await fetch(url, {
+			headers: { authorization: `Bearer ${accessToken}` },
+			signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			return [];
+		}
+		if (!response.ok) {
+			const text = await response.text();
+
+			this.throwGraphError('attachments.list', response.status, text);
+		}
+
+		const data = (await response.json()) as {
+			value?: Array<{
+				'@odata.type'?: string;
+				id?: string;
+				name?: string;
+				contentType?: string;
+				size?: number;
+				isInline?: boolean;
+			}>;
+		};
+
+		return (data.value ?? [])
+			.filter(entry => entry['@odata.type'] === '#microsoft.graph.fileAttachment')
+			.map(entry => ({
+				providerAttachmentId: entry.id ?? '',
+				filename: entry.name ?? '',
+				mimeType: typeof entry.contentType === 'string' ? entry.contentType.toLowerCase() : '',
+				sizeBytes: typeof entry.size === 'number' && Number.isFinite(entry.size) ? entry.size : null,
+				isInline: entry.isInline === true
+			}));
+	}
+
+	/**
+	 * Fetch a single attachment's raw bytes via Graph's `$value` endpoint. `messageId` +
+	 * `attachmentId` come from a prior `listMessageAttachments` call.
+	 * Returns `null` on 404 — the message or the specific attachment was deleted between
+	 * sync and fetch.
+	 */
+	async getAttachmentContent(
+		accessToken: string,
+		messageId: string,
+		attachmentId: string,
+		limits?: InboundAttachmentDownloadLimits
+	): Promise<Buffer | null> {
+		const url = `${MICROSOFT_GRAPH_BASE}/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}/$value`;
+		// A stalled response would otherwise hold the pipeline step open indefinitely.
+		const response = await fetch(url, {
+			headers: { authorization: `Bearer ${accessToken}` },
+			signal: limits ? AbortSignal.timeout(limits.timeoutMs) : undefined
+		});
+
+		if (response.status === 401) {
+			throw new MailboxUnauthorizedException();
+		}
+		if (response.status === 404) {
+			return null;
+		}
+		if (!response.ok) {
+			const text = await response.text();
+
+			this.throwGraphError('attachments.get', response.status, text);
+		}
+
+		assertWithinDownloadLimit(response, limits, 1);
+
+		const bytes = Buffer.from(await response.arrayBuffer());
+		if (limits && bytes.length > limits.maxBytes) {
+			throw new InboundAttachmentTooLargeError();
+		}
+		return bytes;
 	}
 
 	/**
@@ -432,9 +546,14 @@ export class MicrosoftGraphApiService {
 
 	private buildInitialDeltaUrl(): string {
 		const params = new URLSearchParams();
+		// NOTE: this $select is baked into every deltaLink Graph hands back — mailboxes that
+		// connected before `hasAttachments` was added here keep resuming with the OLD
+		// deltaLink (and therefore the old field set) until they reconnect. That's why
+		// `hasMicrosoftAttachments` in raw-message-attachments.ts must treat "field absent"
+		// as unknown rather than false.
 		params.set(
 			'$select',
-			'id,conversationId,internetMessageId,subject,from,toRecipients,receivedDateTime,bodyPreview,body'
+			'id,conversationId,internetMessageId,subject,from,toRecipients,receivedDateTime,bodyPreview,body,hasAttachments'
 		);
 		// Graph defaults `/me/messages/delta` to 10 messages per page. With a 500+ message
 		// inbox that means 50+ round-trips just to walk a snapshot. `$top=999` (the per-

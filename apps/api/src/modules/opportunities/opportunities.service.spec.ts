@@ -87,6 +87,7 @@ function makeService(
 		repository?: FakeRepository;
 		classifier?: unknown;
 		extractor?: unknown;
+		inboundAttachments?: unknown;
 		configValues?: Record<string, unknown>;
 	} = {}
 ): OpportunitiesService {
@@ -142,7 +143,12 @@ function makeService(
 					callId: 'should-reply-call-1'
 				})
 			)
-		} as unknown as ConstructorParameters<typeof OpportunitiesService>[7]
+		} as unknown as ConstructorParameters<typeof OpportunitiesService>[7],
+		// Default: the message has no attachments, so the pipeline behaves exactly as before.
+		(opts.inboundAttachments ?? {
+			listMetadata: jest.fn().mockReturnValue(Promise.resolve([])),
+			readText: jest.fn().mockReturnValue(Promise.resolve(null))
+		}) as unknown as ConstructorParameters<typeof OpportunitiesService>[8]
 	);
 }
 
@@ -609,5 +615,135 @@ describe('OpportunitiesService.updateStatus', () => {
 		await expect(service.updateStatus('org-1', 'missing', 'cold', 'user-1')).rejects.toBeInstanceOf(
 			NotFoundException
 		);
+	});
+});
+
+describe('OpportunitiesService — inbound attachments', () => {
+	const PDF = { filename: 'Bestek_Kerkstraat_12.pdf', mimeType: 'application/pdf' };
+	const PHOTO = { filename: 'foto.jpg', mimeType: 'image/jpeg' };
+	const NEGATIVE = wrapClassifier({ isQuote: false, confidence: 0.8, reason: 'Geen offerte' });
+	const POSITIVE = wrapClassifier({ isQuote: true, confidence: 0.95, reason: 'Offerte' });
+
+	const pendingOnce = () =>
+		makeRepository({
+			findPendingRawMessagesForAccount: jest
+				.fn()
+				.mockReturnValueOnce(Promise.resolve([RAW_MESSAGE]))
+				.mockReturnValueOnce(Promise.resolve([]))
+		});
+	const extractorFake = () => ({
+		extract: jest.fn().mockReturnValue(
+			Promise.resolve(
+				wrapExtractor({
+					customerName: 'Alice',
+					customerEmail: 'alice@example.com',
+					customerPhone: null,
+					address: null,
+					requestType: 'Dakrenovatie',
+					urgency: 'normal',
+					customerDeadline: null,
+					customerAppointment: null,
+					deliverableHints: []
+				})
+			)
+		)
+	});
+
+	it('hands the extractor the attachment text when the message is a quote request', async () => {
+		const classifier = { classify: jest.fn().mockReturnValue(Promise.resolve(POSITIVE)) };
+		const extractor = extractorFake();
+		const inboundAttachments = {
+			listMetadata: jest.fn().mockReturnValue(Promise.resolve([PDF])),
+			readText: jest.fn().mockReturnValue(Promise.resolve('=== Bijlage: Bestek ===\n120 m2 dakpannen'))
+		};
+		const service = makeService({ repository: pendingOnce(), classifier, extractor, inboundAttachments });
+
+		await service.processRawMessagesForAccount('email-account-1');
+
+		// Already positive: one classifier call, no second look needed.
+		expect(classifier.classify).toHaveBeenCalledTimes(1);
+		expect(classifier.classify.mock.calls[0]![0]).toMatchObject({ attachments: [PDF] });
+		expect(extractor.extract.mock.calls[0]![0]).toMatchObject({
+			attachments: [PDF],
+			attachmentText: expect.stringContaining('120 m2 dakpannen')
+		});
+	});
+
+	// The mail this feature exists for: "Graag een prijs, zie bijlage."
+	it('gives a thin-bodied negative a second look with the attachment text', async () => {
+		const classifier = {
+			classify: jest.fn().mockReturnValueOnce(Promise.resolve(NEGATIVE)).mockReturnValueOnce(Promise.resolve(POSITIVE))
+		};
+		const extractor = extractorFake();
+		const inboundAttachments = {
+			listMetadata: jest.fn().mockReturnValue(Promise.resolve([PDF])),
+			readText: jest.fn().mockReturnValue(Promise.resolve('=== Bijlage: Bestek ===\nGraag offerte voor dakrenovatie'))
+		};
+		const repository = pendingOnce();
+		const service = makeService({ repository, classifier, extractor, inboundAttachments });
+
+		const result = await service.processRawMessagesForAccount('email-account-1');
+
+		expect(classifier.classify).toHaveBeenCalledTimes(2);
+		expect(classifier.classify.mock.calls[1]![0]).toMatchObject({
+			attachmentText: expect.stringContaining('dakrenovatie')
+		});
+		expect(extractor.extract).toHaveBeenCalledTimes(1);
+		expect(repository.markRawMessageNegative).not.toHaveBeenCalled();
+		expect(result.classifiedNegative).toBe(0);
+	});
+
+	it('does not fetch attachments for a negative message with a substantial body', async () => {
+		const longBody = 'Wij willen u graag informeren over onze nieuwe dienstverlening. '.repeat(12);
+		const message = { ...RAW_MESSAGE, raw: { body: { contentType: 'text', content: longBody } } };
+		const classifier = { classify: jest.fn().mockReturnValue(Promise.resolve(NEGATIVE)) };
+		const inboundAttachments = {
+			listMetadata: jest.fn().mockReturnValue(Promise.resolve([PDF])),
+			readText: jest.fn()
+		};
+		const repository = makeRepository({
+			findPendingRawMessagesForAccount: jest
+				.fn()
+				.mockReturnValueOnce(Promise.resolve([message]))
+				.mockReturnValueOnce(Promise.resolve([]))
+		});
+		const service = makeService({ repository, classifier, inboundAttachments });
+
+		await service.processRawMessagesForAccount('email-account-1');
+
+		expect(inboundAttachments.readText).not.toHaveBeenCalled();
+		expect(classifier.classify).toHaveBeenCalledTimes(1);
+		expect(repository.markRawMessageNegative).toHaveBeenCalledWith('raw-1');
+	});
+
+	// A photo cannot be read, so fetching it could never change the verdict.
+	it('does not attempt a rescue when no attachment is a readable document', async () => {
+		const classifier = { classify: jest.fn().mockReturnValue(Promise.resolve(NEGATIVE)) };
+		const inboundAttachments = {
+			listMetadata: jest.fn().mockReturnValue(Promise.resolve([PHOTO])),
+			readText: jest.fn()
+		};
+		const service = makeService({ repository: pendingOnce(), classifier, inboundAttachments });
+
+		await service.processRawMessagesForAccount('email-account-1');
+
+		expect(inboundAttachments.readText).not.toHaveBeenCalled();
+		expect(classifier.classify).toHaveBeenCalledTimes(1);
+	});
+
+	// Org switched AI attachment reading off, or every file was unreadable.
+	it('keeps the first verdict when no attachment text comes back', async () => {
+		const classifier = { classify: jest.fn().mockReturnValue(Promise.resolve(NEGATIVE)) };
+		const inboundAttachments = {
+			listMetadata: jest.fn().mockReturnValue(Promise.resolve([PDF])),
+			readText: jest.fn().mockReturnValue(Promise.resolve(null))
+		};
+		const repository = pendingOnce();
+		const service = makeService({ repository, classifier, inboundAttachments });
+
+		await service.processRawMessagesForAccount('email-account-1');
+
+		expect(classifier.classify).toHaveBeenCalledTimes(1);
+		expect(repository.markRawMessageNegative).toHaveBeenCalledWith('raw-1');
 	});
 });

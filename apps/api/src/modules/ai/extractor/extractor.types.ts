@@ -13,6 +13,19 @@ export interface ExtractorInput {
 	 *  classifier (it's pulling specific fields like address + deliverables out of the email)
 	 *  but unbounded inputs blow up cost on long forwarded threads. */
 	bodyText: string;
+	/**
+	 * Filename + MIME type of each non-inline attachment. Metadata only and free to obtain, so
+	 * it is always passed when known: "Bestek_Renovatie_Kerkstraat_12.pdf" says a great deal
+	 * about both whether this is a request and what the job is. Optional so synthetic fixtures
+	 * and any channel without attachments need not supply it.
+	 */
+	attachments?: ReadonlyArray<{ filename: string; mimeType: string }>;
+	/**
+	 * Text extracted locally from readable attachments (PDF, Word, Excel, plain text), already
+	 * budgeted by the caller. Absent until attachments have actually been fetched — which the
+	 * pipeline only does for promising messages. The file itself is never sent to the model.
+	 */
+	attachmentText?: string | null;
 }
 
 /**

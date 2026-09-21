@@ -85,7 +85,8 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 			// "In de week van 25 mei zou wat ons betreft kunnen" → opname appointment
 			// window. Friday of that week = 2026-05-29.
 			customerDeadline: null,
-			customerAppointment: '2026-05-29',
+			// "In de week van 25 mei" → the Monday of the named week.
+			customerAppointment: '2026-05-25',
 			deliverableHints: ['120 m² wandvlak', '12 kozijnen', 'opname']
 		},
 		notes: 'customerName comes from the signature ("Henk"), not fromName ("Familie de Vries" is a household label). Inspection-window date → customerAppointment.'
@@ -146,7 +147,8 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 			// week" relative to Sat 2026-05-16 → Fri 2026-05-22 (next Friday in the week
 			// the customer is referencing).
 			customerDeadline: null,
-			customerAppointment: '2026-05-22',
+			// "Deze week nog", mailed on a Saturday: vague term landing on a weekend → next working day.
+			customerAppointment: '2026-05-18',
 			deliverableHints: ['lekkage badkamer', 'aansluiting wastafel', 'nieuwe wastafel', 'vervanging']
 		},
 		notes: 'Urgency: high (no acute-damage/safety language — emergency reserved for actively leaking / no-heat). Appointment date populates customerAppointment, no project deadline in body.'
@@ -293,7 +295,9 @@ export const NL_EXTRACTOR_EXPECTED: ExpectedExtraction[] = [
 			customerEmail: 'facility@example.nl',
 			customerPhone: null,
 			address: null,
-			requestType: 'Werkomschrijving uit bijlage',
+			// The classifier fixture now carries the filename `Werkomschrijving_onderhoud_2026.pdf`
+			// (attachment metadata reaches the prompts), and the model reads the job type off it.
+			requestType: 'Onderhoud',
 			urgency: 'normal',
 			customerDeadline: null,
 			customerAppointment: null,

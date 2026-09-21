@@ -35,6 +35,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { DEFAULT_NL_VAT_CONFIG, vatEnsureDefault } from '@offertum/shared';
 import type {
+	AiAttachmentReadingSettings,
 	BusinessDetails,
 	FollowUpSettings,
 	OrgVatConfig,
@@ -286,6 +287,69 @@ export class MeService {
 			maxCount: updated.followUpMaxCount,
 			coldAfterDays: updated.coldAfterDays
 		};
+	}
+
+	/**
+	 * Read the active org's "read attachments with AI" toggle. Surfaced to any member;
+	 * only the OWNER can flip it (enforced at the controller layer).
+	 */
+	async getAiAttachmentReadingSettings(organizationId: string): Promise<AiAttachmentReadingSettings> {
+		const row = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { aiAttachmentReadingEnabled: true }
+		});
+		return { enabled: row.aiAttachmentReadingEnabled };
+	}
+
+	/**
+	 * Update the active org's "read attachments with AI" toggle. Owner-only at the
+	 * controller layer. Skips the write (and the audit-log entry) when the value
+	 * already matches — same no-op guard as the follow-up settings' sibling fields.
+	 */
+	async updateAiAttachmentReadingSettings(
+		actingUserId: string,
+		organizationId: string,
+		input: { enabled: boolean }
+	): Promise<AiAttachmentReadingSettings> {
+		const current = await this.prisma.organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { aiAttachmentReadingEnabled: true }
+		});
+		if (current.aiAttachmentReadingEnabled === input.enabled) {
+			return { enabled: current.aiAttachmentReadingEnabled };
+		}
+
+		const updated = await this.prisma.organization.update({
+			where: { id: organizationId },
+			data: { aiAttachmentReadingEnabled: input.enabled },
+			select: { aiAttachmentReadingEnabled: true }
+		});
+
+		// OFF means "stop holding my customers' documents", not just "stop reading new ones". The
+		// extracted text is only ever an input to the AI calls, so once those are switched off
+		// there is nothing left that needs it. Metadata (filename, status) stays for the UI.
+		let clearedAttachments = 0;
+		if (!input.enabled) {
+			const cleared = await this.prisma.rawMessageAttachment.updateMany({
+				where: { organizationId, extractedText: { not: null } },
+				data: { extractedText: null }
+			});
+			clearedAttachments = cleared.count;
+		}
+
+		this.logService.logAction({
+			action: 'organization.ai_attachment_reading.updated',
+			message: `AI attachment reading ${input.enabled ? 'enabled' : 'disabled'} for org ${organizationId}`,
+			metadata: {
+				organizationId,
+				actorUserId: actingUserId,
+				enabled: input.enabled,
+				clearedAttachments
+			},
+			context: 'MeService'
+		});
+
+		return { enabled: updated.aiAttachmentReadingEnabled };
 	}
 
 	/**

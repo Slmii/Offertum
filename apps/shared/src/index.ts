@@ -26,6 +26,7 @@ export * from './common.js';
 export * from './email.js';
 export * from './expiry.js';
 export * from './follow-up-settings.js';
+export * from './ai-attachment-reading-settings.js';
 export * from './invitations.js';
 export * from './notifications.js';
 export * from './business-details.js';

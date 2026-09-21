@@ -31,7 +31,9 @@
 		"test:ai:extractor": "node scripts/run-jest-with-env.cjs --testPathPatterns='extractor.accuracy'",
 		"test:ai:pricing": "node scripts/run-jest-with-env.cjs --testPathPatterns='pricing.*accuracy'",
 		"test:ai:compile": "node scripts/run-jest-with-env.cjs --testPathPatterns='compile.accuracy'",
-		"test:ai:narrative": "node scripts/run-jest-with-env.cjs --testPathPatterns='pricing-narrative-verifier.accuracy'"
+		"test:ai:narrative": "node scripts/run-jest-with-env.cjs --testPathPatterns='pricing-narrative-verifier.accuracy'",
+		"test:ai:attachments": "node scripts/run-jest-with-env.cjs --testPathPatterns='attachments.accuracy'",
+		"fixtures:attachments": "node scripts/build-attachment-fixtures.cjs"
 	},
 	"dependencies": {
 		"@auth/core": "^0.41.2",
@@ -54,12 +56,16 @@
 		"disposable-email-domains": "^1.0.62",
 		"dotenv": "^16.4.7",
 		"inngest": "^4.4.0",
+		"mammoth": "1.12.3",
 		"openai": "6.38.0",
 		"pg": "^8.20.0",
 		"react": "^19.2.6",
 		"reflect-metadata": "^0.2.2",
 		"rxjs": "^7.8.1",
 		"stripe": "^22.1.1",
+		"unpdf": "1.8.1",
+		"word-extractor": "1.0.4",
+		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
@@ -71,6 +77,7 @@
 		"@types/jest": "^30.0.0",
 		"@types/node": "^22.10.2",
 		"@types/pg": "^8.11.10",
+		"@types/word-extractor": "1.0.6",
 		"dotenv-cli": "^8.0.0",
 		"inngest-cli": "1.19.2",
 		"jest": "^30.4.2",

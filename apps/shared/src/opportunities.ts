@@ -231,8 +231,38 @@ export interface UpdateOpportunityFieldsInput {
  *    hasn't completed yet (the FE polls or surfaces a "draft is being prepared" state
  *    when null).
  */
+export const INBOUND_ATTACHMENT_STATUSES = [
+	'pending',
+	'parsed',
+	'empty',
+	'unsupported',
+	'too_large',
+	'encrypted',
+	'failed'
+] as const;
+export type InboundAttachmentStatus = (typeof INBOUND_ATTACHMENT_STATUSES)[number];
+
+/**
+ * Inbound attachment on the opportunity's originating customer message. `extractedText`
+ * is intentionally NEVER exposed to the client — only metadata + parse status.
+ */
+export interface OpportunityInboundAttachment {
+	id: string;
+	filename: string;
+	mimeType: string;
+	sizeBytes: number | null;
+	status: InboundAttachmentStatus;
+	isTruncated: boolean;
+}
+
 export interface OpportunityDetail extends Opportunity {
 	originalEmailBody: string;
+	/**
+	 * Attachments found on the opportunity's originating customer message, in the
+	 * order they were parsed. Empty when the message had none. Detail-only — not
+	 * surfaced on the list shape.
+	 */
+	inboundAttachments: OpportunityInboundAttachment[];
 	replyDraft: ReplyDraft | null;
 	/**
 	 * Prior drafts for this opportunity, newest-first. Includes the current

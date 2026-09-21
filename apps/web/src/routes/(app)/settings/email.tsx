@@ -1,9 +1,14 @@
 import { AppIcon, type AppIconName } from '@/components/AppIcon.component';
 import { Banner } from '@/components/Banner.component';
+import { StandaloneSwitch } from '@/components/Form/Switch/Switch.component';
 import { PageHeader } from '@/components/PageHeader.component';
 import { SectionError } from '@/components/SectionError.component';
 import { Body, BodySmall, Label } from '@/components/Text.component';
 import { useToast } from '@/lib/hooks/use-toast';
+import {
+	aiAttachmentReadingSettingsQueryOptions,
+	useUpdateAiAttachmentReadingSettings
+} from '@/lib/queries/ai-attachment-reading-settings.queries';
 import { billingStatusQueryOptions } from '@/lib/queries/billing.queries';
 import {
 	gmailStatusQueryOptions,
@@ -39,7 +44,8 @@ export const Route = createFileRoute('/(app)/settings/email')({
 			context.queryClient.ensureQueryData(gmailStatusQueryOptions),
 			context.queryClient.ensureQueryData(microsoftStatusQueryOptions),
 			context.queryClient.ensureQueryData(billingStatusQueryOptions),
-			context.queryClient.ensureQueryData(myMembershipQueryOptions)
+			context.queryClient.ensureQueryData(myMembershipQueryOptions),
+			context.queryClient.ensureQueryData(aiAttachmentReadingSettingsQueryOptions)
 		]),
 	component: EmailSettingsPage,
 	errorComponent: SectionError
@@ -53,6 +59,8 @@ function EmailSettingsPage() {
 	const { data: msStatus } = useSuspenseQuery(microsoftStatusQueryOptions);
 	const { data: billing } = useSuspenseQuery(billingStatusQueryOptions);
 	const { data: me } = useSuspenseQuery(myMembershipQueryOptions);
+	const { data: attachmentReadingSettings } = useSuspenseQuery(aiAttachmentReadingSettingsQueryOptions);
+	const updateAttachmentReading = useUpdateAiAttachmentReadingSettings();
 	const toast = useToast();
 
 	// Mirror the API's EntitlementGuard set: connect/disconnect will 402 outside this set.
@@ -159,8 +167,67 @@ function EmailSettingsPage() {
 						</>
 					}
 				/>
+
+				<AttachmentReadingSection
+					enabled={attachmentReadingSettings.enabled}
+					isOwner={isOwner}
+					isSaving={updateAttachmentReading.isPending}
+					onChange={enabled =>
+						updateAttachmentReading.mutate(
+							{ enabled },
+							{
+								onError: err =>
+									toast.error(
+										'Bijwerken mislukt',
+										err instanceof Error ? err.message : 'Probeer het opnieuw.'
+									)
+							}
+						)
+					}
+				/>
 			</Stack>
 		</Stack>
+	);
+}
+
+interface AttachmentReadingSectionProps {
+	enabled: boolean;
+	isOwner: boolean;
+	isSaving: boolean;
+	onChange: (enabled: boolean) => void;
+}
+
+function AttachmentReadingSection({ enabled, isOwner, isSaving, onChange }: AttachmentReadingSectionProps) {
+	return (
+		<Card variant='outlined' sx={{ p: 3 }}>
+			<Stack direction='row' useFlexGap spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+				<Box sx={{ flex: 1, minWidth: 0 }}>
+					<Label fontWeight='bold' sx={{ fontSize: 16, fontFamily: 'Playfair Display', display: 'block' }}>
+						Bijlagen
+					</Label>
+					<Body fontWeight='medium' sx={{ display: 'block', mt: 1.5 }}>
+						Bijlagen laten lezen door AI
+					</Body>
+					<BodySmall color='textSecondary' sx={{ display: 'block', mt: 0.5 }}>
+						Offertum leest de tekst uit PDF-, Word- en Excel-bijlagen bij nieuwe aanvragen, zodat details als
+						hoeveelheden en deadlines meekomen. Alleen de tekst gaat naar de AI — nooit het bestand zelf — en
+						we vragen de AI-aanbieder die niet te bewaren. De uitgelezen tekst bewaart Offertum bij de aanvraag.
+						Scans, foto's en tekeningen kunnen niet worden gelezen; bij lange documenten wordt alleen het begin
+						gelezen. Staat dit uit, dan wist Offertum de bewaarde bijlagetekst en ziet het alleen nog de
+						bestandsnamen.
+					</BodySmall>
+				</Box>
+				<Box sx={{ flexShrink: 0 }}>
+					<StandaloneSwitch
+						name='ai-attachment-reading-enabled'
+						checked={enabled}
+						disabled={!isOwner || isSaving}
+						onChange={onChange}
+						slotProps={{ input: { 'aria-label': 'Bijlagen laten lezen door AI' } }}
+					/>
+				</Box>
+			</Stack>
+		</Card>
 	);
 }
 

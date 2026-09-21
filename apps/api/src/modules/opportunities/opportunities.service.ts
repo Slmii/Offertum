@@ -6,6 +6,7 @@ import {
 	ReplyDraftStatus as PrismaReplyDraftStatus
 } from '@/generated/prisma/enums';
 import { detectBulkMail } from '@/lib/email/bulk-mail-filter';
+import { isAttachmentRescueCandidate } from '@/lib/attachments/attachment-prompt-text';
 import { buildRawMessageAIInput } from '@/lib/email/raw-message-ai-input';
 import {
 	OPPORTUNITY_ASSIGNEE_NOT_IN_ORG,
@@ -19,6 +20,9 @@ import {
 import { buildCustomerReplyEmail } from '@/lib/mails/notifications/customer-reply.email';
 import { buildOpportunityCreatedEmail } from '@/lib/mails/notifications/opportunity-created.email';
 import { ClassifierService } from '@/modules/ai/classifier/classifier.service';
+import type { ClassifierInput, ClassifierResult } from '@/modules/ai/classifier/classifier.types';
+import type { AIGenerateResult } from '@/modules/ai/clients/ai-client.interface';
+import { InboundAttachmentsService } from '@/modules/inbound-attachments/inbound-attachments.service';
 import { AINotConfiguredError } from '@/modules/ai/clients/ai-client.interface';
 import { ExtractorService } from '@/modules/ai/extractor/extractor.service';
 import { ShouldReplyClassifier } from '@/modules/ai/should-reply/should-reply.service';
@@ -49,6 +53,7 @@ import {
 	OPPORTUNITY_DISMISS_REASON_FROM_WIRE,
 	OPPORTUNITY_DISMISS_REASON_TO_WIRE
 } from '@/modules/opportunities/opportunity-dismiss-reason.mapper';
+import { INBOUND_ATTACHMENT_STATUS_TO_WIRE } from '@/modules/opportunities/inbound-attachment-status.mapper';
 import {
 	decodeOpportunityListCursor,
 	encodeOpportunityListCursor
@@ -125,7 +130,8 @@ export class OpportunitiesService {
 		private readonly logService: LogService,
 		private readonly replyDrafts: ReplyDraftsService,
 		private readonly notifications: NotificationsService,
-		private readonly shouldReply: ShouldReplyClassifier
+		private readonly shouldReply: ShouldReplyClassifier,
+		private readonly inboundAttachments: InboundAttachmentsService
 	) {}
 
 	/**
@@ -1249,14 +1255,7 @@ export class OpportunitiesService {
 					continue;
 				}
 
-				const input = buildRawMessageAIInput({
-					provider: candidate.provider,
-					subject: candidate.subject,
-					fromName: candidate.fromName,
-					fromEmail: candidate.fromEmail,
-					raw: candidate.raw
-				});
-				const classification = await this.classifier.classify(input);
+				const { input, classification } = await this.classifyWithAttachments(candidate);
 
 				if (!classification.value.isQuote) {
 					await this.repository.markRawMessageNegative(candidate.id);
@@ -1348,6 +1347,10 @@ export class OpportunitiesService {
 			} catch (error) {
 				result.failed += 1;
 				failedRawMessageIds.add(candidate.id);
+				// Same poison-message accounting as the live path. Without it a candidate that fails
+				// on every run — now including a mailbox API that keeps refusing its attachment — was
+				// retried without bound in backfill mode. Best-effort.
+				await this.repository.incrementClassifyAttempts(candidate.id).catch(() => undefined);
 				this.logService.logAction({
 					action: 'opportunity.pipeline.raw_message_failed',
 					message: `Failed to process RawMessage ${candidate.id} within thread ${threadId}: ${error instanceof Error ? error.message : 'unknown'}`,
@@ -1461,6 +1464,83 @@ export class OpportunitiesService {
 		});
 
 		return true;
+	}
+
+	/**
+	 * Classify a message with its attachments taken into account. Shared by the live and the
+	 * backfill path so the two can never drift apart on how attachments are treated.
+	 *
+	 * Cost-ordered on purpose:
+	 *  1. Filenames are always included — free on Gmail, one cheap call on Microsoft.
+	 *  2. Attachment CONTENT is fetched only when it can change an outcome: the message is a
+	 *     quote request (the extractor needs the specs), or it was classified negative but has a
+	 *     thin body and a readable document — the "Graag een prijs, zie bijlage" mail, which
+	 *     would otherwise be lost silently into the RawMessage archive.
+	 *
+	 * The rescue deliberately does NOT key off the classifier's `confidence`: that number is
+	 * self-reported by the model and uncalibrated, so a threshold on it would be arbitrary.
+	 *
+	 * The returned `input` carries the attachment text, so handing it to the extractor is all
+	 * the caller has to do.
+	 *
+	 * Can throw exactly one thing: `InboundAttachmentRetryableError`, when a provider call failed
+	 * transiently. That is deliberate — both callers' catch blocks leave the message unclassified,
+	 * so the next run retries it instead of classifying it for good without its attachment.
+	 */
+	private async classifyWithAttachments(
+		message: RawMessageForOpportunityProcessing
+	): Promise<{ input: ClassifierInput; classification: AIGenerateResult<ClassifierResult> }> {
+		const base = buildRawMessageAIInput({
+			provider: message.provider,
+			subject: message.subject,
+			fromName: message.fromName,
+			fromEmail: message.fromEmail,
+			raw: message.raw
+		});
+
+		const attachments = await this.inboundAttachments.listMetadata(message);
+		if (attachments.length === 0) {
+			return { input: base, classification: await this.classifier.classify(base) };
+		}
+
+		const withFilenames: ClassifierInput = { ...base, attachments };
+		const first = await this.classifier.classify(withFilenames);
+
+		const isRescueCandidate = isAttachmentRescueCandidate({
+			isQuote: first.value.isQuote,
+			bodyLength: base.bodyText.length,
+			attachments
+		});
+		if (!first.value.isQuote && !isRescueCandidate) {
+			return { input: withFilenames, classification: first };
+		}
+
+		const attachmentText = await this.inboundAttachments.readText(message);
+		if (!attachmentText) {
+			return { input: withFilenames, classification: first };
+		}
+
+		const withText: ClassifierInput = { ...withFilenames, attachmentText };
+		if (!isRescueCandidate) {
+			return { input: withText, classification: first };
+		}
+
+		const second = await this.classifier.classify(withText);
+		// Logged either way: whether the second look ever flips anything is exactly what decides
+		// if this rule earns its extra classifier call.
+		this.logService.logAction({
+			action: 'opportunity.pipeline.attachment_rescue',
+			message: `Thin-body message ${message.id} re-classified with attachment text: ${second.value.isQuote ? 'now a quote request' : 'still negative'}`,
+			metadata: { rawMessageId: message.id, organizationId: message.organizationId, flipped: second.value.isQuote },
+			level: 'log',
+			context: 'OpportunitiesService'
+		});
+		if (!second.value.isQuote) {
+			// We read a stranger's document on suspicion and it turned out not to be a request —
+			// an invoice, a contract, whatever was attached to a two-line mail. Do not keep a copy.
+			await this.inboundAttachments.discardText(message.id);
+		}
+		return { input: withText, classification: second };
 	}
 
 	private async processOneRawMessage(
@@ -1716,14 +1796,7 @@ export class OpportunitiesService {
 				return true;
 			}
 
-			const input = buildRawMessageAIInput({
-				provider: rawMessage.provider,
-				subject: rawMessage.subject,
-				fromName: rawMessage.fromName,
-				fromEmail: rawMessage.fromEmail,
-				raw: rawMessage.raw
-			});
-			const classification = await this.classifier.classify(input);
+			const { input, classification } = await this.classifyWithAttachments(rawMessage);
 
 			if (!classification.value.isQuote) {
 				await this.repository.markRawMessageNegative(rawMessage.id);
@@ -2188,7 +2261,15 @@ function toOpportunityDetailResponseDto(
 				m.fromEmail !== null && orgEmailAddresses.has(m.fromEmail.toLowerCase()) ? 'outbound' : 'inbound',
 			wasDetectedAsCloser: m.wasDetectedAsCloser
 		})),
-		timeline
+		timeline,
+		inboundAttachments: opportunity.rawMessage.attachments.map(a => ({
+			id: a.id,
+			filename: a.filename,
+			mimeType: a.mimeType,
+			sizeBytes: a.sizeBytes,
+			status: INBOUND_ATTACHMENT_STATUS_TO_WIRE[a.status],
+			isTruncated: a.isTruncated
+		}))
 	};
 }
 

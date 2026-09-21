@@ -14,6 +14,7 @@ import {
 import { AICallLogger } from '@/modules/ai/logging/ai-call-logger.service';
 import { LogService } from '@/modules/logger/log.service';
 import { appendAiReportEntry } from '@/modules/ai/__test-utils/ai-report-writer';
+import { dateMatch, fuzzyMatch, hintsMatch } from '@/modules/ai/__test-utils/extraction-grading';
 import { describe, expect, it, jest } from '@jest/globals';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -33,6 +34,8 @@ import { Test } from '@nestjs/testing';
  * Target: ≥25/30 cases produce stable, schema-valid extractions. Our corpus
  * is 18 positives, so the equivalent gate is ≥0.85 pass rate (~15/18).
  */
+
+const DATE_FIELDS = new Set(['customerDeadline', 'customerAppointment']);
 
 const hasApiKey = !!process.env.OPENAI_API_KEY;
 const describeIfKey = hasApiKey ? describe : describe.skip;
@@ -150,7 +153,11 @@ describeIfKey('ExtractorService — live OpenAI accuracy', () => {
 				continue;
 			}
 			const grade = gradeExtraction(r.result, r.expected.expected);
-			const acceptable = grade.fieldsPassing >= MIN_FIELDS_PASSING;
+			// Dates are HARD: a fixture cannot pass with a wrong deadline or appointment, however
+			// many other fields are right. "6 of 8" let an appointment a full week off still read as
+			// a pass — and a date is the one error the owner physically acts on.
+			const datesOk = grade.fields.filter(f => DATE_FIELDS.has(f.name)).every(f => f.ok);
+			const acceptable = datesOk && grade.fieldsPassing >= MIN_FIELDS_PASSING;
 			if (acceptable) {
 				passed += 1;
 			}
@@ -260,65 +267,4 @@ function exactNullable(actual: string | null, expected: string | null): boolean 
 
 function exactUrgency(actual: Urgency, expected: Urgency): boolean {
 	return actual === expected;
-}
-
-/** Tokenized overlap — accept if ≥50% of expected's tokens appear in actual (case-insensitive). */
-function fuzzyMatch(actual: string | null, expected: string | null): boolean {
-	if (actual === null && expected === null) {
-		return true;
-	}
-	if (actual === null || expected === null) {
-		return false;
-	}
-	const tokenize = (s: string) =>
-		s
-			.toLowerCase()
-			.replace(/[^a-z0-9À-ſ\s]/g, ' ')
-			.split(/\s+/)
-			.filter(t => t.length >= 3);
-	const actualTokens = new Set(tokenize(actual));
-	const expectedTokens = tokenize(expected);
-	if (expectedTokens.length === 0) {
-		// Expected was punctuation-only or all stopwords; if actual is similarly minimal accept.
-		return actual.trim().length === 0 || actual === expected;
-	}
-	const hits = expectedTokens.filter(t => actualTokens.has(t)).length;
-	return hits / expectedTokens.length >= 0.5;
-}
-
-/** ±2 days, or both null. */
-function dateMatch(actual: string | null, expected: string | null): boolean {
-	if (actual === null && expected === null) {
-		return true;
-	}
-	if (actual === null || expected === null) {
-		return false;
-	}
-	const a = Date.parse(actual);
-	const e = Date.parse(expected);
-	if (Number.isNaN(a) || Number.isNaN(e)) {
-		return false;
-	}
-	const diffDays = Math.abs(a - e) / (1000 * 60 * 60 * 24);
-	return diffDays <= 2;
-}
-
-/**
- * ≥50% of expected hints have at least one extracted hint that contains them as a
- * case-insensitive substring (or vice-versa). Lenient on purpose — phrasings vary.
- */
-function hintsMatch(actual: string[], expected: string[]): boolean {
-	if (expected.length === 0) {
-		return true; // Nothing required; pass.
-	}
-	const lowerActual = actual.map(h => h.toLowerCase());
-	let hits = 0;
-	for (const e of expected) {
-		const expectedLower = e.toLowerCase();
-		const found = lowerActual.some(a => a.includes(expectedLower) || expectedLower.includes(a));
-		if (found) {
-			hits += 1;
-		}
-	}
-	return hits / expected.length >= 0.5;
 }

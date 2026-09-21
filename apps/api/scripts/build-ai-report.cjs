@@ -62,6 +62,7 @@ for (const e of entries) {
 	if (e.kind === 'extractor') run.extractor = e;
 	if (e.kind === 'compile') run.compile = e;
 	if (e.kind === 'narrative-verify') run.narrative = e;
+	if (e.kind === 'attachments') run.attachments = e;
 	if (e.timestamp > run.timestamp) run.timestamp = e.timestamp;
 }
 
@@ -450,18 +451,91 @@ function narrativeSection(narrative) {
 	`;
 }
 
+function attachmentsSummaryLine(a) {
+	if (!a) return '';
+	const s = a.summary;
+	return `<span><strong>Bijlagen:</strong> ${fmtPct(s.overall)} <span class="muted">(${s.fixturesPassed}/${s.fixturesTotal} fixtures · ${s.rescued} gered door bijlagetekst)</span></span>`;
+}
+
+function attachmentsFixtureBlock(f) {
+	const failed = f.acceptable === false;
+	const checks = f.checks || [];
+	const passCount = checks.filter(c => c.ok).length;
+	const mark = f.error
+		? `<span class="fail">${escapeHtml(f.error)}</span>`
+		: failed
+			? `<span class="fail">✗ ${passCount}/${checks.length}</span>`
+			: `<span class="pass">✓ ${passCount}/${checks.length}</span>`;
+	const rescue = f.isRescueCandidate
+		? f.wasRescued
+			? ' <span class="pass">· gered door bijlagetekst</span>'
+			: ' <span class="fail">· tweede blik bleef negatief</span>'
+		: '';
+	const verdict = v => (v ? `${v.isQuote ? 'offerte' : 'geen offerte'} (${v.confidence}) — ${escapeHtml(v.reason || '')}` : '—');
+	const checkRows = checks
+		.map(c => {
+			const m = c.ok ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>';
+			return `<tr><td>${escapeHtml(c.label)}${c.isHard ? '' : ' <span class="muted">(zacht)</span>'}</td><td>${escapeHtml(JSON.stringify(c.expected))}</td><td>${escapeHtml(JSON.stringify(c.actual))}</td><td>${m}</td></tr>`;
+		})
+		.join('');
+	const email = f.email || {};
+
+	return `
+		<details class="${failed ? 'fixture row-fail' : 'fixture'}" ${failed ? 'open' : ''}>
+			<summary>
+				<div class="fixture-summary">
+					<span class="marks"><span class="mark-group">bijlagen ${mark}</span></span>
+					<span class="subject">${escapeHtml(f.name || '(unnamed)')}${rescue}</span>
+				</div>
+			</summary>
+			<div class="fixture-detail">
+				${f.notes ? `<p class="muted">${escapeHtml(f.notes)}</p>` : ''}
+				<div class="email-input">
+					<div class="meta-row"><span class="meta-label">Onderwerp:</span> ${escapeHtml(email.subject || '')}</div>
+					<div class="meta-row"><span class="meta-label">Van:</span> ${escapeHtml(email.fromName || '')} &lt;${escapeHtml(email.fromEmail || '')}&gt;</div>
+					<div class="meta-row"><span class="meta-label">Bijlagen:</span> ${escapeHtml((f.files || []).join(', '))}</div>
+					<pre class="body">${escapeHtml(email.bodyText || '')}</pre>
+				</div>
+				<div class="result-block">
+					<div class="meta-row"><span class="meta-label">1e oordeel (alleen bestandsnamen):</span> ${verdict(f.firstVerdict)}</div>
+					<div class="meta-row"><span class="meta-label">Eindoordeel:</span> ${verdict(f.finalVerdict)}</div>
+					<table class="result-table">
+						<thead><tr><th>check</th><th>expected</th><th>actual</th><th></th></tr></thead>
+						<tbody>${checkRows}</tbody>
+					</table>
+				</div>
+				<details><summary class="muted">Tekst uit bijlagen zoals die naar het model ging</summary><pre class="body">${escapeHtml(f.attachmentText || '(geen leesbare tekst)')}</pre></details>
+				${f.extraction ? `<details><summary class="muted">Volledige extractie</summary><pre class="body">${escapeHtml(JSON.stringify(f.extraction, null, 2))}</pre></details>` : ''}
+			</div>
+		</details>
+	`;
+}
+
+function attachmentsSection(attachments) {
+	return `
+		<div class="sub-section">
+			<h4>Bijlagen (PDF / Word / Excel → classifier + extractor)</h4>
+			<p class="run-summary">${attachmentsSummaryLine(attachments)}</p>
+			<div class="fixtures">
+				${(attachments.fixtures || []).map(attachmentsFixtureBlock).join('')}
+			</div>
+		</div>
+	`;
+}
+
 function runBlock(run) {
 	const fixtures = buildUnifiedFixtures(run);
 	const compilePart = run.compile ? ` &nbsp;·&nbsp;\n\t\t\t\t\t${compileSummaryLine(run.compile)}` : '';
 	const narrativePart = run.narrative ? ` &nbsp;·&nbsp;\n\t\t\t\t\t${narrativeSummaryLine(run.narrative)}` : '';
-	const extraSections = `${run.compile ? compileSection(run.compile) : ''}${run.narrative ? narrativeSection(run.narrative) : ''}`;
+	const attachmentsPart = run.attachments ? ` &nbsp;·&nbsp;\n\t\t\t\t\t${attachmentsSummaryLine(run.attachments)}` : '';
+	const extraSections = `${run.compile ? compileSection(run.compile) : ''}${run.narrative ? narrativeSection(run.narrative) : ''}${run.attachments ? attachmentsSection(run.attachments) : ''}`;
 	return `
 		<section class="run">
 			<header>
 				<h3>Run @ ${fmtTime(run.timestamp)} <span class="muted">(${escapeHtml(run.runId)})</span></h3>
 				<p class="run-summary">
 					${classifierSummaryLine(run.classifier)} &nbsp;·&nbsp;
-					${extractorSummaryLine(run.extractor)}${compilePart}${narrativePart}
+					${extractorSummaryLine(run.extractor)}${compilePart}${narrativePart}${attachmentsPart}
 				</p>
 			</header>
 			<div class="fixtures">

@@ -5,10 +5,11 @@ import { OpportunitiesRepository } from '@/modules/opportunities/opportunities.r
 import { OpportunitiesService } from '@/modules/opportunities/opportunities.service';
 import { ReplyDraftAttachmentsModule } from '@/modules/reply-draft-attachments/reply-draft-attachments.module';
 import { ReplyDraftsModule } from '@/modules/reply-drafts/reply-drafts.module';
+import { InboundAttachmentsModule } from '@/modules/inbound-attachments/inbound-attachments.module';
 import { Module } from '@nestjs/common';
 
 @Module({
-	imports: [AiModule, ReplyDraftsModule, ReplyDraftAttachmentsModule, NotificationsModule],
+	imports: [AiModule, ReplyDraftsModule, ReplyDraftAttachmentsModule, NotificationsModule, InboundAttachmentsModule],
 	controllers: [OpportunitiesController],
 	providers: [OpportunitiesRepository, OpportunitiesService],
 	// `OpportunitiesRepository` exported so InngestModule's `AutoColdSchedulerFunction`

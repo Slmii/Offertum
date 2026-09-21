@@ -127,16 +127,72 @@ model RawMessage {
   // populate this column. SetNull on delete so AICall retention purges don't cascade.
   opportunityId       String?   @db.Uuid
 
-  emailAccount         EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-  opportunity          Opportunity? @relation("OpportunityOriginatingRawMessage")
-  threadOpportunity    Opportunity? @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
+  emailAccount         EmailAccount           @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  opportunity          Opportunity?           @relation("OpportunityOriginatingRawMessage")
+  threadOpportunity    Opportunity?           @relation("OpportunityThreadMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
   // Inverse for `Opportunity.latestCustomerRawMessage`. Same RawMessage can be the
   // originating AND the latest-customer (single-message threads) or only the
   // latest-customer (followup message later in the thread).
-  latestForOpportunity Opportunity? @relation("OpportunityLatestCustomerRawMessage")
+  latestForOpportunity Opportunity?           @relation("OpportunityLatestCustomerRawMessage")
+  attachments          RawMessageAttachment[]
 
   // Idempotency on backfill + delta sync: re-fetching the same message ID is a no-op.
   @@unique([emailAccountId, providerMessageId])
   @@index([organizationId, internalDate(sort: Desc)])
   @@index([opportunityId])
+}
+
+// What happened when we tried to read an inbound attachment. Everything except PARSED is
+// owner-visible on the opportunity: "we could not read the PDF" must never look the same as
+// "there was nothing in the PDF".
+enum InboundAttachmentStatus {
+  // Metadata known, content never fetched — the message was not promising enough to spend a
+  // provider call on, or the org has AI attachment reading switched off.
+  PENDING
+  PARSED
+  // Parsed fine but no text layer: a scan, a photo, a drawing. Would need OCR.
+  EMPTY
+  UNSUPPORTED
+  TOO_LARGE
+  ENCRYPTED
+  FAILED
+}
+
+// One row per non-inline attachment on an inbound message. Holds metadata plus the TEXT we
+// extracted locally — never the bytes. The owner opens the original mail for the file itself;
+// not storing it keeps both the storage bill and the AVG surface small, and means the only
+// thing that ever reaches the AI provider is text.
+model RawMessageAttachment {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  rawMessageId         String                  @db.Uuid
+  // Denormalized for tenant-scoped reads, same reasoning as RawMessage.organizationId.
+  organizationId       String                  @db.Uuid
+  // Gmail `attachmentId` / Graph attachment `id`. Opaque, provider-scoped.
+  providerAttachmentId String
+  filename             String
+  mimeType             String
+  sizeBytes            Int?
+  status               InboundAttachmentStatus @default(PENDING)
+  // True when the file held more than we kept (page, row, sheet or character cap).
+  isTruncated          Boolean                 @default(false)
+  extractedText        String?
+  // Order of the part inside the original message. `createMany` stamps every row of one message
+  // with the same createdAt, so without this the prompt and the UI order would be arbitrary.
+  position             Int                     @default(0)
+  // Write-AHEAD counter: incremented BEFORE each download + parse, not after. It bounds two
+  // different things. Retries: a transient provider failure leaves the row PENDING and the
+  // message unclassified so the next run tries again — this is what stops that being forever
+  // (the backfill path does not count RawMessage.classifyAttempts). Poison files: if parsing a
+  // hostile archive gets the whole process OOM-killed, no catch block ever runs — but the
+  // increment is already committed, so the file is refused after a few tries instead of
+  // crash-looping the API for every tenant.
+  fetchAttempts        Int                     @default(0)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  rawMessage RawMessage @relation(fields: [rawMessageId], references: [id], onDelete: Cascade)
+
+  // Idempotency: re-processing a message (retry, overlapping sync) must not duplicate rows.
+  @@unique([rawMessageId, providerAttachmentId])
+  @@index([organizationId])
 }

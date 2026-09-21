@@ -49,6 +49,7 @@ import { ContextRailCard } from './-components/Details/ContextRailCard.component
 import { conversationMessageCount, ConversationThread } from './-components/Details/ConversationThread.component';
 import { DraftEditor } from './-components/Details/DraftEditor.component';
 import { ExtractedFieldsPanel } from './-components/Details/ExtractedFieldsPanel.component';
+import { InboundAttachmentsCard } from './-components/Details/InboundAttachmentsCard.component';
 import { LockedReplyPanel } from './-components/Details/LockedReplyPanel.component';
 import { RailQuoteCard } from './-components/Details/RailQuoteCard.component';
 import { RailQuoteEmptyCard } from './-components/Details/RailQuoteEmptyCard.component';
@@ -688,6 +689,7 @@ function OpportunityDetailPage() {
 							/>
 						)}
 						<ExtractedFieldsPanel opportunityId={id} opportunity={opportunity} disabled={!isEntitled} />
+						<InboundAttachmentsCard attachments={opportunity.inboundAttachments} />
 						<AssigneePicker
 							opportunityId={id}
 							assignedToUserId={opportunity.assignedToUserId}

@@ -287,3 +287,8 @@ export const INVALID_NOTIFICATION_SETTINGS_TIME = 'Tijd moet in het formaat UU:M
 export const INVALID_NOTIFICATION_SETTINGS_DAY = 'Ongeldige dag voor de wekelijkse samenvatting.';
 // Quiet hours with identical start and end describe an empty window, not a full day.
 export const INVALID_QUIET_HOURS_RANGE = 'Begin- en eindtijd van stille uren mogen niet gelijk zijn.';
+
+// ── Inbound attachments ───────────────────────────────────────────────────────
+// Internal (never user-facing): carried by the typed errors in lib/email/raw-message-attachments.
+export const INBOUND_ATTACHMENT_TOO_LARGE = 'Inbound attachment exceeds the download size limit.';
+export const INBOUND_ATTACHMENT_RETRYABLE = 'Inbound attachment could not be fetched right now; the message will be retried.';

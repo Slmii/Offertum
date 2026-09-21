@@ -41,8 +41,14 @@ export const MODEL_RATES: Record<string, ModelRate> = {
  */
 export const UNKNOWN_MODEL_RATE: ModelRate = { inputPerMillionUsd: 2.5, outputPerMillionUsd: 10.0 };
 
+// OpenAI's dated snapshots ("gpt-4o-2024-08-06") are priced exactly like their alias. We PIN
+// snapshots in env (so a harness result that moves means our prompt moved, not OpenAI's alias),
+// which means the exact-name lookup alone would send every pinned call to the unknown-model
+// rate — overstating gpt-4o-mini spend roughly 17x on the dashboard.
+const SNAPSHOT_DATE_SUFFIX = /-\d{4}-\d{2}-\d{2}$/;
+
 export function rateFor(model: string): { rate: ModelRate; known: boolean } {
-	const rate = MODEL_RATES[model];
+	const rate = MODEL_RATES[model] ?? MODEL_RATES[model.replace(SNAPSHOT_DATE_SUFFIX, '')];
 	if (rate) {
 		return { rate, known: true };
 	}

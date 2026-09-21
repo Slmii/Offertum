@@ -32,3 +32,30 @@ describe('GmailApiService.listHistoryPage', () => {
 		expect(calledUrl).toContain('startHistoryId=42');
 	});
 });
+
+describe('GmailApiService.getAttachment', () => {
+	afterEach(() => {
+		jest.restoreAllMocks();
+	});
+
+	it('decodes the base64url attachment payload into a Buffer', async () => {
+		// base64url for "hello"
+		jest.spyOn(global, 'fetch').mockImplementation(() =>
+			Promise.resolve(makeJsonResponse({ size: 5, data: 'aGVsbG8' }))
+		);
+
+		const service = new GmailApiService(logServiceStub);
+		const buffer = await service.getAttachment('TOKEN', 'msg-1', 'att-1');
+
+		expect(buffer?.toString('utf8')).toBe('hello');
+	});
+
+	it('returns null on 404 (message or attachment deleted between sync and fetch)', async () => {
+		jest.spyOn(global, 'fetch').mockImplementation(() => Promise.resolve(makeJsonResponse({}, { status: 404 })));
+
+		const service = new GmailApiService(logServiceStub);
+		const buffer = await service.getAttachment('TOKEN', 'msg-1', 'att-1');
+
+		expect(buffer).toBeNull();
+	});
+});

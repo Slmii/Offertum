@@ -1,4 +1,6 @@
 import { OwnerWrite } from '@/common/decorators/owner-write.decorator';
+import { AiAttachmentReadingSettingsResponseDto } from '@/modules/me/dto/ai-attachment-reading-settings.response.dto';
+import { UpdateAiAttachmentReadingSettingsDto } from '@/modules/me/dto/update-ai-attachment-reading-settings.dto';
 import { TenantWrite } from '@/common/decorators/tenant-write.decorator';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { OrganizationGuard } from '@/common/guards/organization.guard';
@@ -128,6 +130,31 @@ export class MeController {
 			cadenceDays: body.cadenceDays,
 			maxCount: body.maxCount,
 			coldAfterDays: body.coldAfterDays
+		});
+	}
+
+	@ApiOperation({ summary: 'Read the active organization’s "AI reads attachments" setting' })
+	@ApiOkResponse({ type: AiAttachmentReadingSettingsResponseDto })
+	@UseGuards(OrganizationGuard)
+	@Get('ai-attachment-reading-settings')
+	getAiAttachmentReadingSettings(@Req() request: Request): Promise<AiAttachmentReadingSettingsResponseDto> {
+		return this.me.getAiAttachmentReadingSettings(request.organizationId!);
+	}
+
+	@ApiOperation({ summary: 'Update the active organization’s "AI reads attachments" setting (owner-only)' })
+	@ApiOkResponse({ type: AiAttachmentReadingSettingsResponseDto })
+	// OwnerGuard WITHOUT the entitlement check, on purpose. The mailbox pipeline is not gated on
+	// entitlement, so an org whose subscription lapsed still has its mail processed — and must
+	// still be able to switch attachment reading OFF rather than being bounced to /billing.
+	// Same reasoning as the purge endpoint below.
+	@UseGuards(OwnerGuard)
+	@Patch('ai-attachment-reading-settings')
+	updateAiAttachmentReadingSettings(
+		@Req() request: Request,
+		@Body() body: UpdateAiAttachmentReadingSettingsDto
+	): Promise<AiAttachmentReadingSettingsResponseDto> {
+		return this.me.updateAiAttachmentReadingSettings(this.userId(request), request.organizationId!, {
+			enabled: body.enabled
 		});
 	}
 

@@ -718,11 +718,12 @@ export const NL_CLASSIFIER_FIXTURES: ClassifierFixture[] = [
 	{
 		category: 'edge',
 		expectedIsQuote: true,
-		notes: 'EDGE — attachment-only quote request. Body is minimal; the actual work description lives in a PDF attachment the classifier never sees. Body text alone is enough: explicit ask for offerte.',
+		notes: 'EDGE — attachment-only quote request. Body is minimal; the work description lives in the PDF. The classifier now sees the FILENAME (free metadata) but deliberately not the text here — this pins that an explicit ask plus a telling filename is enough on its own.',
 		input: {
 			subject: 'Offerte aanvraag zie bijlage',
 			fromName: 'Facility Team',
 			fromEmail: 'facility@example.nl',
+			attachments: [{ filename: 'Werkomschrijving_onderhoud_2026.pdf', mimeType: 'application/pdf' }],
 			bodyText: dedent`
 				Goedemiddag,
 
@@ -730,6 +731,57 @@ export const NL_CLASSIFIER_FIXTURES: ClassifierFixture[] = [
 
 				Met vriendelijke groet,
 				Facility Team
+			`
+		}
+	},
+	{
+		category: 'edge',
+		expectedIsQuote: true,
+		notes: 'EDGE — the thin-body rescue. The body never says offerte or prijs; on its own it reads as a courtesy note. Only the attachment text reveals a concrete request for pricing. This is the mail that used to be lost silently into the RawMessage archive.',
+		input: {
+			subject: 'NetSuite koppeling',
+			fromName: 'Pieter de Wit',
+			fromEmail: 'p.dewit@example.nl',
+			bodyText: dedent`
+				Hoi,
+
+				Zie bijlage.
+
+				Groet,
+				Pieter
+			`,
+			attachments: [{ filename: 'Programma_van_eisen_NetSuite.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }],
+			attachmentText: dedent`
+				=== Bijlage: Programma_van_eisen_NetSuite.docx ===
+				Programma van eisen — NetSuite integratie
+				Wij zoeken een partij voor drie koppelingen: webshop orders naar NetSuite, voorraad terug
+				naar de webshop, en facturen naar de boekhouding. Graag ontvangen wij uw prijsopgave en
+				planning uiterlijk 15 oktober. Oplevering gewenst voor 1 december.
+			`
+		}
+	},
+	{
+		category: 'edge',
+		expectedIsQuote: false,
+		notes: 'EDGE — attachment present but it is THEIR offer to US. A supplier sends a price list as PDF. The attachment text is full of prices and the word offerte; direction is still reversed. Guards against attachment text making every mail with a PDF look like a lead.',
+		input: {
+			subject: 'Prijslijst 2026',
+			fromName: 'Groothandel Van Dijk',
+			fromEmail: 'verkoop@example.nl',
+			bodyText: dedent`
+				Beste relatie,
+
+				In de bijlage vindt u onze nieuwe prijslijst voor 2026.
+
+				Met vriendelijke groet,
+				Verkoop binnendienst
+			`,
+			attachments: [{ filename: 'Prijslijst_2026.pdf', mimeType: 'application/pdf' }],
+			attachmentText: dedent`
+				=== Bijlage: Prijslijst_2026.pdf ===
+				Prijslijst 2026 — Groothandel Van Dijk
+				Koperen buis 22mm per meter 8,40. HR-ketel vanaf 1.150,00. Offertes op aanvraag voor
+				afname boven 5.000 euro. Prijzen exclusief btw, geldig tot 31 december 2026.
 			`
 		}
 	},
