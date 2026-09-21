@@ -125,9 +125,12 @@ const OPPORTUNITY_DETAIL_INCLUDE = {
 			threadId: true,
 			raw: true,
 			emailAccount: { select: { provider: true } },
-			// Metadata only — `extractedText` never leaves the server.
+			// Metadata only — `extractedText` never leaves the server. Ordered by `position`, not
+			// `createdAt`: `createMany` stamps every attachment row of one message with the same
+			// `createdAt`, so sorting by it leaves the UI's attachment order arbitrary (see the
+			// `position` field comment on `RawMessageAttachment` in the schema).
 			attachments: {
-				orderBy: { createdAt: 'asc' },
+				orderBy: [{ position: 'asc' }, { id: 'asc' }],
 				select: {
 					id: true,
 					filename: true,
